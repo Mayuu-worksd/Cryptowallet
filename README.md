@@ -24,15 +24,15 @@
 
 ---
 
-## ✨ Features
+##  Features
 
-*   🔐 **Secure Key Management**: Seed phrase generation and encrypted local storage via iOS/Android Keychain.
-*   🏠 **Intuitive Dashboard**: Portfolio overview with real-time balance tracking and glassmorphic UI cards.
-*   📤 **Effortless Transfers**: Send ETH and ERC-20 tokens with QR code scanning and gas estimaton.
-*   📥 **Instant Receiving**: Modern Receive screen with high-resolution QR codes and one-tap address copying.
-*   📊 **Live Market Data**: Real-time coin price charts powered by optimized WebSocket streams.
-*   🔄 **Token Exchange**: Seamless in-app token swap functionality with liquidity analysis.
-*   🚀 **High Performance**: Silky-smooth animations powered by React Native Reanimated.
+*   **Secure Key Management**: Seed phrase generation and encrypted local storage via iOS/Android Keychain.
+*   **Intuitive Dashboard**: Portfolio overview with real-time balance tracking and glassmorphic UI cards.
+*   **Effortless Transfers**: Send ETH and ERC-20 tokens with QR code scanning and gas estimaton.
+*   **Instant Receiving**: Modern Receive screen with high-resolution QR codes and one-tap address copying.
+*   **Live Market Data**: Real-time coin price charts powered by optimized WebSocket streams.
+*   **Token Exchange**: Seamless in-app token swap functionality with liquidity analysis.
+*   **High Performance**: Silky-smooth animations powered by React Native Reanimated.
 
 ---
 
