@@ -1,0 +1,245 @@
+import React, { useState, memo } from 'react';
+import {
+  View, Text, StyleSheet, TouchableOpacity,
+  ScrollView, TextInput, Platform, Linking, Modal,
+} from 'react-native';
+import { Feather } from '@expo/vector-icons';
+import { useWallet, Transaction } from '../store/WalletContext';
+import { Theme } from '../constants';
+
+const TYPE_CONFIG = (T: any): Record<string, { label: string; color: string; icon: string; bg: string }> => ({
+  sent:       { label: 'Sent',        color: T.error,   icon: 'arrow-up-right',  bg: T.error   + '18' },
+  received:   { label: 'Received',    color: T.success, icon: 'arrow-down-left', bg: T.success + '18' },
+  card_topup: { label: 'Card Top-up', color: '#2563EB', icon: 'credit-card',     bg: '#2563EB18' },
+  card_spend: { label: 'Card Spend',  color: '#7C3AED', icon: 'shopping-cart',   bg: '#7C3AED18' },
+  swap:       { label: 'Swap',        color: '#0891B2', icon: 'repeat',          bg: '#0891B218' },
+});
+
+const FILTERS = ['All', 'Sent', 'Received', 'Card', 'Swap'];
+
+const EXPLORER: Record<string, string> = {
+  Sepolia:  'https://sepolia.etherscan.io/tx/',
+  Ethereum: 'https://etherscan.io/tx/',
+  Polygon:  'https://polygonscan.com/tx/',
+  Arbitrum: 'https://arbiscan.io/tx/',
+};
+
+const TxDetailModal = memo(({ tx, T, network, onClose }: { tx: Transaction | null; T: any; network: string; onClose: () => void }) => {
+  if (!tx) return null;
+  const cfg     = TYPE_CONFIG(T)[tx.type] ?? { label: tx.type, color: T.primary, icon: 'activity', bg: T.primary + '18' };
+  const isDebit = tx.type === 'sent' || tx.type === 'card_spend';
+  const explorerBase = EXPLORER[network] ?? EXPLORER.Sepolia;
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
+        <View style={{ backgroundColor: T.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 28, paddingBottom: 48 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: T.text }}>Transaction Detail</Text>
+            <TouchableOpacity onPress={onClose}><Feather name="x" size={22} color={T.textMuted} /></TouchableOpacity>
+          </View>
+          {/* Icon + amount */}
+          <View style={{ alignItems: 'center', marginBottom: 24 }}>
+            <View style={[{ width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', marginBottom: 12 }, { backgroundColor: cfg.bg }]}>
+              <Feather name={cfg.icon as any} size={28} color={cfg.color} />
+            </View>
+            <Text style={{ fontSize: 28, fontWeight: '800', color: isDebit ? T.error : T.success }}>
+              {isDebit ? '-' : '+'}{tx.amount} {tx.coin}
+            </Text>
+            <Text style={{ fontSize: 15, color: T.textMuted, marginTop: 4 }}>${parseFloat(tx.usdValue || '0').toFixed(2)} USD</Text>
+          </View>
+          {/* Details */}
+          {[
+            { label: 'Type',   value: cfg.label },
+            { label: 'Status', value: tx.status.toUpperCase() },
+            { label: 'Date',   value: tx.date },
+            { label: tx.type === 'sent' ? 'To' : 'From/Label', value: tx.address.length > 24 ? `${tx.address.slice(0, 12)}...${tx.address.slice(-8)}` : tx.address },
+          ].map(row => (
+            <View key={row.label} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: T.border }}>
+              <Text style={{ color: T.textMuted, fontSize: 14 }}>{row.label}</Text>
+              <Text style={{ color: T.text, fontSize: 14, fontWeight: '600', maxWidth: '60%', textAlign: 'right' }}>{row.value}</Text>
+            </View>
+          ))}
+          {/* Explorer link */}
+          {tx.txHash && (
+            <TouchableOpacity
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 20, padding: 14, borderRadius: 14, backgroundColor: T.primary + '18' }}
+              onPress={() => Linking.openURL(`${explorerBase}${tx.txHash}`)}
+              activeOpacity={0.8}
+            >
+              <Feather name="external-link" size={16} color={T.primary} />
+              <Text style={{ color: T.primary, fontWeight: '700', fontSize: 14 }}>View on Explorer</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+});
+
+export default function HistoryScreen({ navigation }: any) {
+  const { transactions, isDarkMode, network } = useWallet();
+  const T      = isDarkMode ? Theme.colors : Theme.lightColors;
+  const styles = makeStyles(T);
+  const cfgMap = TYPE_CONFIG(T);
+
+  const [search, setSearch]             = useState('');
+  const [activeFilter, setActiveFilter] = useState('All');
+  const [selectedTx, setSelectedTx]     = useState<Transaction | null>(null);
+
+  const filtered = transactions.filter(tx => {
+    const matchFilter =
+      activeFilter === 'All'      ||
+      (activeFilter === 'Sent'     && tx.type === 'sent')      ||
+      (activeFilter === 'Received' && tx.type === 'received')  ||
+      (activeFilter === 'Card'     && (tx.type === 'card_topup' || tx.type === 'card_spend')) ||
+      (activeFilter === 'Swap'     && tx.type === 'swap');
+    const matchSearch =
+      search === '' ||
+      tx.address.toLowerCase().includes(search.toLowerCase()) ||
+      tx.coin.toLowerCase().includes(search.toLowerCase());
+    return matchFilter && matchSearch;
+  });
+
+  return (
+    <View style={styles.container}>
+      <TxDetailModal tx={selectedTx} T={T} network={network} onClose={() => setSelectedTx(null)} />
+
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
+          <Feather name="arrow-left" size={24} color={T.text} />
+        </TouchableOpacity>
+        <Text style={styles.navTitle}>History</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <Text style={styles.pageTitle}>Transactions</Text>
+        <Text style={[styles.pageSub, { color: T.textMuted }]}>Tap any transaction for details</Text>
+
+        {/* Search */}
+        <View style={[styles.searchBox, { backgroundColor: T.surface, borderColor: T.border }]}>
+          <Feather name="search" size={16} color={T.textMuted} />
+          <TextInput
+            style={[styles.searchInput, { color: T.text }]}
+            placeholder="Search by address or coin"
+            placeholderTextColor={T.textDim}
+            value={search}
+            onChangeText={setSearch}
+          />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch('')}>
+              <Feather name="x" size={16} color={T.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Filters */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
+          <View style={styles.filterRow}>
+            {FILTERS.map(f => (
+              <TouchableOpacity
+                key={f}
+                style={[styles.filterPill, { backgroundColor: T.surface, borderColor: T.border },
+                  activeFilter === f && { backgroundColor: T.primary, borderColor: T.primary }]}
+                onPress={() => setActiveFilter(f)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.filterText, { color: activeFilter === f ? '#FFF' : T.textMuted }]}>{f}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
+
+        {filtered.length > 0 && (
+          <Text style={[styles.countText, { color: T.textMuted }]}>{filtered.length} transaction{filtered.length !== 1 ? 's' : ''}</Text>
+        )}
+
+        {filtered.length === 0 ? (
+          <View style={styles.emptyBox}>
+            <View style={[styles.emptyIcon, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
+              <Feather name="inbox" size={28} color={T.textMuted} />
+            </View>
+            <Text style={[styles.emptyTitle, { color: T.text }]}>No transactions found</Text>
+            <Text style={[styles.emptySub, { color: T.textMuted }]}>
+              {search || activeFilter !== 'All' ? 'Try adjusting your search or filter' : 'Your transaction history will appear here'}
+            </Text>
+          </View>
+        ) : (
+          filtered.map(tx => {
+            const cfg     = cfgMap[tx.type] ?? { label: tx.type, color: T.primary, icon: 'activity', bg: T.primary + '18' };
+            const isDebit = tx.type === 'sent' || tx.type === 'card_spend';
+            return (
+              <TouchableOpacity key={tx.id} style={[styles.txCard, { backgroundColor: T.surface, borderColor: T.border }]} onPress={() => setSelectedTx(tx)} activeOpacity={0.8}>
+                <View style={[styles.txIconBox, { backgroundColor: cfg.bg }]}>
+                  <Feather name={cfg.icon as any} size={18} color={cfg.color} />
+                </View>
+                <View style={styles.txMid}>
+                  <Text style={[styles.txLabel, { color: T.text }]}>{cfg.label}</Text>
+                  <Text style={[styles.txAddr, { color: T.textMuted }]} numberOfLines={1}>
+                    {tx.address.length > 22 ? `${tx.address.slice(0, 10)}...${tx.address.slice(-6)}` : tx.address}
+                  </Text>
+                  <Text style={[styles.txDate, { color: T.textDim }]}>{tx.date}</Text>
+                </View>
+                <View style={styles.txRight}>
+                  <Text style={[styles.txAmount, { color: isDebit ? T.error : T.success }]}>
+                    {isDebit ? '-' : '+'}{tx.amount} {tx.coin}
+                  </Text>
+                  <Text style={[styles.txUsd, { color: T.textMuted }]}>${parseFloat(tx.usdValue || '0').toFixed(2)}</Text>
+                  <View style={styles.statusRow}>
+                    <View style={[styles.statusDot, {
+                      backgroundColor: tx.status === 'success' ? T.success : tx.status === 'pending' ? T.pending : T.error,
+                    }]} />
+                    <Text style={[styles.statusText, {
+                      color: tx.status === 'success' ? T.success : tx.status === 'pending' ? T.pending : T.error,
+                    }]}>{tx.status}</Text>
+                  </View>
+                </View>
+                <Feather name="chevron-right" size={14} color={T.border} style={{ marginLeft: 6 }} />
+              </TouchableOpacity>
+            );
+          })
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
+const makeStyles = (T: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: T.background },
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingTop: Platform.OS === 'web' ? 20 : 56, paddingBottom: 14,
+  },
+  backBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+  navTitle: { fontSize: 18, fontWeight: '700', color: T.text },
+  scroll: { paddingHorizontal: 20, paddingBottom: 40 },
+  pageTitle: { fontSize: 26, fontWeight: '800', color: T.text, marginBottom: 4 },
+  pageSub: { fontSize: 13, marginBottom: 18 },
+
+  searchBox: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 12, paddingHorizontal: 14, height: 48, borderWidth: 1, marginBottom: 14 },
+  searchInput: { flex: 1, fontSize: 14 },
+
+  filterRow: { flexDirection: 'row', gap: 8 },
+  filterPill: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+  filterText: { fontSize: 13, fontWeight: '600' },
+
+  countText: { fontSize: 12, fontWeight: '600', marginBottom: 10 },
+
+  emptyBox: { alignItems: 'center', paddingVertical: 60, gap: 12 },
+  emptyIcon: { width: 64, height: 64, borderRadius: 32, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  emptyTitle: { fontSize: 17, fontWeight: '700' },
+  emptySub: { fontSize: 13, textAlign: 'center', paddingHorizontal: 32 },
+
+  txCard: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 14, marginBottom: 8, borderWidth: 1 },
+  txIconBox: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  txMid: { flex: 1 },
+  txLabel: { fontSize: 14, fontWeight: '700', marginBottom: 2 },
+  txAddr: { fontSize: 11, marginBottom: 2 },
+  txDate: { fontSize: 10 },
+  txRight: { alignItems: 'flex-end' },
+  txAmount: { fontSize: 13, fontWeight: '800', marginBottom: 2 },
+  txUsd: { fontSize: 11, marginBottom: 4 },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  statusDot: { width: 6, height: 6, borderRadius: 3 },
+  statusText: { fontSize: 10, fontWeight: '700' },
+});
