@@ -5,7 +5,14 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialIcons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
+
+const AsyncStorage = Platform.OS === 'web'
+  ? {
+      getItem: async (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
+      setItem: async (k: string, v: string) => { try { localStorage.setItem(k, v); } catch {} },
+    }
+  : require('@react-native-async-storage/async-storage').default;
 import { useWallet } from '../store/WalletContext';
 import { Theme } from '../constants';
 

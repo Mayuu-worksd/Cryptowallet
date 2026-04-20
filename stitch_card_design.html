@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-surface-variant": "#e6bdb9",
+                    "surface-container-high": "#2a2a2a",
+                    "on-tertiary-fixed": "#002022",
+                    "secondary-fixed-dim": "#ffb3ac",
+                    "primary-fixed-dim": "#ffb3ac",
+                    "primary": "#ffb3ac",
+                    "surface-container-highest": "#353534",
+                    "surface": "#131313",
+                    "on-secondary-fixed-variant": "#881e1d",
+                    "error": "#ffb4ab",
+                    "secondary-fixed": "#ffdad6",
+                    "on-background": "#e5e2e1",
+                    "on-secondary-container": "#ff9e96",
+                    "primary-container": "#ff544e",
+                    "tertiary-fixed": "#85f3fe",
+                    "on-tertiary": "#00363b",
+                    "on-tertiary-container": "#002f33",
+                    "on-primary": "#680008",
+                    "surface-container": "#201f1f",
+                    "on-secondary": "#680209",
+                    "outline": "#ad8884",
+                    "primary-fixed": "#ffdad6",
+                    "surface-bright": "#3a3939",
+                    "surface-container-low": "#1c1b1b",
+                    "surface-dim": "#131313",
+                    "surface-tint": "#ffb3ac",
+                    "on-primary-container": "#5c0006",
+                    "inverse-on-surface": "#313030",
+                    "inverse-surface": "#e5e2e1",
+                    "on-primary-fixed": "#410003",
+                    "on-tertiary-fixed-variant": "#004f55",
+                    "inverse-primary": "#c00018",
+                    "tertiary-fixed-dim": "#67d7e1",
+                    "secondary": "#ffb3ac",
+                    "tertiary": "#67d7e1",
+                    "on-primary-fixed-variant": "#930010",
+                    "secondary-container": "#8b201f",
+                    "on-secondary-fixed": "#410003",
+                    "tertiary-container": "#1ca0aa",
+                    "background": "#131313",
+                    "outline-variant": "#5d3f3c",
+                    "surface-container-lowest": "#0e0e0e",
+                    "on-error": "#690005",
+                    "error-container": "#93000a",
+                    "on-error-container": "#ffdad6",
+                    "surface-variant": "#353534",
+                    "on-surface": "#e5e2e1"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "2xl": "1.5rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Manrope"],
+                    "body": ["Inter"],
+                    "label": ["Inter"]
+            }
+          },
+        }
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .premium-card-gradient {
+            background: linear-gradient(135deg, #2a2a2a 0%, #131313 100%);
+        }
+        .active-glow {
+            box-shadow: 0 0 20px rgba(255, 84, 78, 0.3);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface font-body selection:bg-primary-container/30">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-[#131313]/70 backdrop-blur-xl flex justify-between items-center px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-container-high overflow-hidden">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="high-end editorial studio portrait of a sophisticated person with warm dramatic lighting and deep shadows" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC5xtMkLOeaQ9nb1TtM0wAyktks_pnXCGgqQg495yOnGud-Va8u0kEexoDyOwphZs4mV4cj-KMMn_hRGfoxXO9IZjiQJuWpmtIUspqTenCr-lTA4a2UJt2yRQs22wNK1tZHLvLGmtcqdcP6mgBsyUWZYUEj_XIwFF4UDOCilXtxw3RgXW1avJbjBOehXFj0s4Ho6C2W6B350Z8uBn-YaDqyi_GuocXU5D0UNwpFFDua6W3f5WTcSkmXTe8VdwsCMISADGfJfqiTXf64"/>
+</div>
+</div>
+<h1 class="text-xl font-black tracking-tighter text-[#FF3B3B] font-headline">Crimson Capital</h1>
+<button class="w-10 h-10 flex items-center justify-center text-on-surface active:scale-95 transition-transform">
+<span class="material-symbols-outlined" data-icon="qr_code_scanner">qr_code_scanner</span>
+</button>
+</header>
+<main class="pt-24 pb-32 px-6 flex flex-col min-h-screen max-w-lg mx-auto">
+<!-- Title Section -->
+<div class="mb-8">
+<h2 class="text-3xl font-headline font-extrabold tracking-tight">Cards</h2>
+</div>
+<!-- Segmented Control -->
+<div class="bg-surface-container-low p-1.5 rounded-2xl flex mb-12">
+<button class="flex-1 py-3 text-sm font-semibold rounded-xl bg-surface-container-high text-on-surface transition-all">
+                Virtual card
+            </button>
+<button class="flex-1 py-3 text-sm font-semibold text-on-surface-variant transition-all hover:text-on-surface">
+                Physical card
+            </button>
+</div>
+<!-- Hero Card Section -->
+<div class="relative group mb-12">
+<div class="aspect-[1.586/1] w-full rounded-2xl premium-card-gradient p-8 flex flex-col justify-between shadow-2xl relative overflow-hidden active:scale-[0.98] transition-transform duration-200">
+<!-- Card Aesthetic Overlays -->
+<div class="absolute top-0 right-0 w-64 h-64 bg-primary-container/10 blur-[80px] -mr-32 -mt-32"></div>
+<div class="flex justify-between items-start relative z-10">
+<div class="flex flex-col gap-1">
+<span class="text-[#FF3B3B] font-headline font-black text-xl tracking-tighter">CRIMSON</span>
+<span class="text-[10px] text-on-surface-variant font-label uppercase tracking-widest opacity-60">Elite Reserve</span>
+</div>
+<div class="w-12 h-12 opacity-80">
+<svg class="w-full h-full" fill="none" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M15.5 12C15.5 13.9 14.5 15.6 13 16.5C14.5 17.4 15.5 19.1 15.5 21C15.5 22.9 14.5 24.6 13 25.5" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"></path>
+<circle cx="9" cy="12" fill="#eb001b" fill-opacity="0.8" r="6"></circle>
+<circle cx="15" cy="12" fill="#f79e1b" fill-opacity="0.8" r="6"></circle>
+</svg>
+</div>
+</div>
+<div class="relative z-10">
+<div class="flex flex-col gap-6">
+<p class="text-2xl font-headline font-bold tracking-[0.2em] text-on-surface/90">•••• •••• •••• 8812</p>
+<div class="flex justify-between items-end">
+<div class="flex flex-col">
+<span class="text-[8px] uppercase tracking-tighter text-on-surface-variant mb-1 opacity-50">Card Holder</span>
+<span class="text-sm font-medium tracking-wide uppercase">ALEXANDER VANCE</span>
+</div>
+<div class="flex flex-col items-end">
+<span class="text-[8px] uppercase tracking-tighter text-on-surface-variant mb-1 opacity-50">Expires</span>
+<span class="text-sm font-medium tracking-wide">09/28</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Color Selection -->
+<div class="flex justify-center gap-4 mb-10">
+<button class="w-8 h-8 rounded-full bg-[#1c1b1b] ring-2 ring-primary ring-offset-4 ring-offset-background transition-all"></button>
+<button class="w-8 h-8 rounded-full bg-[#8b201f] hover:scale-110 transition-transform"></button>
+<button class="w-8 h-8 rounded-full bg-[#201f1f] hover:scale-110 transition-transform"></button>
+</div>
+<!-- Info Description -->
+<div class="text-center space-y-2 mb-12">
+<p class="text-on-surface font-medium">Works with Apple &amp; Google Pay</p>
+<p class="text-on-surface-variant text-sm px-8">Issue your virtual card instantly and start spending worldwide with elite security.</p>
+</div>
+<!-- Spacer -->
+<div class="flex-grow"></div>
+<!-- CTA Action -->
+<div class="mb-4">
+<button class="w-full py-5 rounded-2xl bg-gradient-to-br from-primary-container to-secondary-container text-on-primary font-headline font-extrabold text-lg flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-primary-container/20">
+                Apply for card <span class="opacity-40">·</span> 10 USD
+            </button>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center pt-3 pb-8 px-4 bg-[#131313]/80 backdrop-blur-2xl rounded-t-[1.5rem] shadow-[0_-8px_30px_rgb(0,0,0,0.12)] z-50">
+<a class="flex flex-col items-center justify-center text-gray-500 opacity-60 hover:text-[#FF3B3B] transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="font-['Inter'] text-[10px] font-medium uppercase tracking-widest mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#FF3B3B] font-bold scale-110 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="credit_card">credit_card</span>
+<span class="font-['Inter'] text-[10px] font-medium uppercase tracking-widest mt-1">Card</span>
+</a>
+<a class="flex flex-col items-center justify-center text-gray-500 opacity-60 hover:text-[#FF3B3B] transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="send">send</span>
+<span class="font-['Inter'] text-[10px] font-medium uppercase tracking-widest mt-1">Send</span>
+</a>
+<a class="flex flex-col items-center justify-center text-gray-500 opacity-60 hover:text-[#FF3B3B] transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="account_balance_wallet">account_balance_wallet</span>
+<span class="font-['Inter'] text-[10px] font-medium uppercase tracking-widest mt-1">Assets</span>
+</a>
+</nav>
+</body></html>

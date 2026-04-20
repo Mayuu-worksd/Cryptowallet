@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Alert, Platform, Switch, TextInput, Modal, Image, ActivityIndicator,
@@ -9,6 +9,7 @@ import { useWallet } from '../store/WalletContext';
 import { storageService } from '../services/storageService';
 import { Theme, COIN_META, COIN_COLORS } from '../constants';
 import Toast from '../components/Toast';
+import { usePinSetup } from '../store/PinSetupContext';
 
 const NETWORKS = [
   { name: 'Sepolia',  type: 'Testnet', color: '#F59E0B', iconUrl: 'https://assets.coingecko.com/coins/images/279/large/ethereum.png' },
@@ -35,9 +36,15 @@ export default function SettingsScreen({ navigation }: any) {
   const {
     network, switchNetwork, walletAddress, walletName, setWalletName,
     deleteWallet, isDarkMode, toggleTheme, balances, ethBalance, prices,
-    pinEnabled, setupPin,
+    pinEnabled, refreshPinEnabled,
   } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
+  const triggerPinSetup = usePinSetup();
+
+  // Refresh pin badge whenever screen comes into focus
+  React.useEffect(() => {
+    refreshPinEnabled();
+  }, []);
 
   const [renameModal, setRenameModal]   = useState(false);
   const [nameInput, setNameInput]       = useState(walletName);
@@ -283,11 +290,29 @@ export default function SettingsScreen({ navigation }: any) {
         <Text style={[styles.sectionTitle, { color: T.textMuted }]}>General</Text>
         <View style={[styles.cardBlock, { backgroundColor: T.surface }]}>
 
+          {/* Virtual Card */}
+          <TouchableOpacity
+            style={[styles.menuRow, { borderBottomWidth: 1, borderBottomColor: T.border }]}
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate('Card')}
+          >
+            <View style={styles.menuLeft}>
+              <View style={[styles.menuIconBox, { backgroundColor: T.background }]}>
+                <Feather name="credit-card" size={18} color={T.primary} />
+              </View>
+              <View>
+                <Text style={[styles.menuLabel, { color: T.text }]}>Virtual Card</Text>
+                <Text style={[styles.menuSub, { color: T.textMuted }]}>Manage your premium debit card</Text>
+              </View>
+            </View>
+            <Feather name="chevron-right" size={20} color={T.textMuted} />
+          </TouchableOpacity>
+
           {/* PIN Lock */}
           <TouchableOpacity
             style={[styles.menuRow, { borderBottomWidth: 1, borderBottomColor: T.border }]}
             activeOpacity={0.7}
-            onPress={setupPin}
+            onPress={triggerPinSetup}
           >
             <View style={styles.menuLeft}>
               <View style={[styles.menuIconBox, { backgroundColor: T.background }]}>

@@ -36,6 +36,38 @@
 
 ---
 
+## 🔌 APIs Used
+
+| API | Purpose | Endpoint | Key Required |
+| :--- | :--- | :--- | :--- |
+| **Alchemy RPC** | Ethereum node provider for all blockchain interactions (balance, gas, transactions) | `https://eth-sepolia.g.alchemy.com/v2/{KEY}` | ✅ Yes — `EXPO_PUBLIC_ALCHEMY_KEY` |
+| **CoinGecko API** | Live crypto prices (ETH, BTC, USDT, SOL, MATIC) with 24h change | `https://api.coingecko.com/api/v3/simple/price` | ❌ Free, no key |
+| **CoinGecko News** | Latest crypto news feed | `https://api.coingecko.com/api/v3/news` | ❌ Free, no key |
+| **0x Swap API** | DEX aggregator for token swaps (Ethereum, Polygon, Arbitrum) | `https://api.0x.org/swap/v1/` | ❌ Free, no key |
+| **RSS2JSON** | Fallback news feed from CoinTelegraph & Bitcoinist RSS | `https://api.rss2json.com/v1/api.json` | ❌ Free, no key |
+
+### 🔑 Environment Variables
+
+Create a `.env` file in the root directory:
+
+```env
+EXPO_PUBLIC_ALCHEMY_KEY=your_alchemy_key_here
+EXPO_PUBLIC_WEB_SALT=your_salt_here
+```
+
+Get your free Alchemy API key at [alchemy.com](https://www.alchemy.com) — supports Sepolia testnet, Ethereum, Polygon, and Arbitrum mainnet.
+
+### 🌐 RPC Networks Supported
+
+| Network | Type | RPC (with Alchemy) | RPC (fallback) |
+| :--- | :--- | :--- | :--- |
+| Sepolia | Testnet | `eth-sepolia.g.alchemy.com` | `rpc.sepolia.org` |
+| Ethereum | Mainnet | `eth-mainnet.g.alchemy.com` | `cloudflare-eth.com` |
+| Polygon | Mainnet | `polygon-mainnet.g.alchemy.com` | `polygon-rpc.com` |
+| Arbitrum | Mainnet | `arb-mainnet.g.alchemy.com` | `arb1.arbitrum.io/rpc` |
+
+---
+
 ## 🛠️ Tech Stack
 
 | Library | Purpose |
@@ -74,9 +106,10 @@
 3.  **Environment Setup**
     Create a `.env` file in the root directory:
     ```env
-    INFURA_PROJECT_ID=your_id_here
-    COINGECKO_API_KEY=your_key_here
+    EXPO_PUBLIC_ALCHEMY_KEY=your_alchemy_key_here
+    EXPO_PUBLIC_WEB_SALT=your_salt_here
     ```
+    Get your free Alchemy key at [alchemy.com](https://www.alchemy.com)
 
 4.  **Start Development**
     ```bash

@@ -68,6 +68,13 @@ const storage = {
 
 export const storageService = {
   async saveWallet(privateKey: string, mnemonic: string, address: string): Promise<void> {
+    // Validate before storing — never store malformed keys
+    if (!privateKey || !privateKey.startsWith('0x') || privateKey.length !== 66)
+      throw new Error('Invalid private key format');
+    if (!address || !address.startsWith('0x') || address.length !== 42)
+      throw new Error('Invalid address format');
+    if (!mnemonic || mnemonic.trim().split(/\s+/).length < 12)
+      throw new Error('Invalid mnemonic format');
     await storage.set(KEYS.PRIVATE_KEY,    privateKey, true);
     await storage.set(KEYS.MNEMONIC,       mnemonic,   true);
     await storage.set(KEYS.WALLET_ADDRESS, address,    false);

@@ -6,14 +6,21 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.karthick.cryptowallet",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "CryptoWallet uses the camera to scan QR codes for sending crypto.",
+        "NSPhotoLibraryUsageDescription": "CryptoWallet may access your photo library for QR code images.",
+        "NSFaceIDUsageDescription": "CryptoWallet uses Face ID to secure your wallet access."
+      }
     },
     "android": {
       "package": "com.karthick.cryptowallet",
@@ -32,6 +39,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "expo-system-ui",
       "expo-secure-store",
       "expo-font",
       [

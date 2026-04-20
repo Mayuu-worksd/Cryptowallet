@@ -147,9 +147,9 @@ export default function LandingScreen({ navigation }: any) {
           </LinearGradient>
         </View>
 
-        <Text style={[styles.title, { color: T.text }]}>Your Gateway to{'\n'}Institutional Finance</Text>
+        <Text style={[styles.title, { color: T.text }]}>Your Crypto,{'\n'}Your Control</Text>
         <Text style={[styles.subtitle, { color: T.textMuted }]}>
-          Secure, transparent, and high-limit digital asset management.
+          A non-custodial wallet — only you hold your keys. No bank, no middleman.
         </Text>
 
         <View style={styles.pillRow}>
@@ -165,14 +165,14 @@ export default function LandingScreen({ navigation }: any) {
             style={[styles.getStartedBtn, { backgroundColor: T.primary }]}
             onPress={() => navigation.navigate('CreateWallet')}
           >
-            <Text style={styles.getStartedText}>Create New Vault</Text>
+            <Text style={styles.getStartedText}>Create Wallet</Text>
             <Feather name="arrow-right" size={18} color="#FFF" />
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.restoreBtn, { backgroundColor: T.surface, borderColor: T.border }]}
             onPress={() => navigation.navigate('ImportWallet')}
           >
-            <Text style={[styles.restoreText, { color: T.text }]}>Restore Vault</Text>
+            <Text style={[styles.restoreText, { color: T.text }]}>Import Existing Wallet</Text>
           </TouchableOpacity>
         </View>
       </View>

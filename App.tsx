@@ -8,6 +8,7 @@ import { Feather } from '@expo/vector-icons';
 
 import { WalletProvider, useWallet } from './store/WalletContext';
 import { Theme } from './constants';
+import { PinSetupContext } from './store/PinSetupContext';
 
 import HomeScreen         from './screens/HomeScreen';
 import SendScreen         from './screens/SendScreen';
@@ -23,7 +24,7 @@ import LandingScreen      from './screens/LandingScreen';
 import SupportScreen      from './screens/SupportScreen';
 import ScanScreen         from './screens/ScanScreen';
 import SplashScreen       from './screens/SplashScreen';
-import PinScreen, { hasPinSetup, clearPin } from './screens/PinScreen';
+import PinScreen, { hasPinSetup } from './screens/PinScreen';
 import CoinChartScreen    from './screens/CoinChartScreen';
 import OnboardingScreen, { shouldShowOnboarding } from './screens/OnboardingScreen';
 import WebLayout          from './components/WebLayout';
@@ -31,6 +32,7 @@ import WebLayout          from './components/WebLayout';
 const Tab   = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 const T     = Theme.colors;
+
 
 function TabIcon({ name, color, focused }: { name: any; color: string; focused: boolean }) {
   const scale = React.useRef(new Animated.Value(1)).current;
@@ -99,8 +101,11 @@ function Tabs() {
 }
 
 function MobileNavigator() {
-  const { hasWallet, isLoadingWallet, pinEnabled } = useWallet();
+  const { hasWallet, isLoadingWallet } = useWallet();
   const [pinState, setPinState] = React.useState<'checking' | 'setup' | 'verify' | 'unlocked'>('checking');
+
+  // ✅ All hooks before any conditional returns
+  const triggerPinSetup = React.useCallback(() => setPinState('setup'), []);
 
   React.useEffect(() => {
     if (isLoadingWallet) return;
@@ -109,12 +114,14 @@ function MobileNavigator() {
     hasPinSetup().then(has => setPinState(has ? 'verify' : 'unlocked'));
   }, [isLoadingWallet, hasWallet]);
 
-  // Watch for PIN setup trigger from SettingsScreen
-  React.useEffect(() => {
-    if (pinEnabled && pinState === 'unlocked') {
-      hasPinSetup().then(has => { if (!has) setPinState('setup'); });
-    }
-  }, [pinEnabled]);
+  // After PIN setup completes, re-check so pinEnabled badge updates in Settings
+  const handlePinSetupSuccess = React.useCallback(() => {
+    setPinState('unlocked');
+  }, []);
+
+  const handlePinSetupCancel = React.useCallback(() => {
+    setPinState('unlocked');
+  }, []);
 
   if (isLoadingWallet || pinState === 'checking') {
     return (
@@ -129,35 +136,43 @@ function MobileNavigator() {
   }
 
   if (pinState === 'setup') {
-    return <PinScreen mode="setup" onSuccess={() => setPinState('unlocked')} onCancel={() => setPinState('unlocked')} />;
+    return (
+      <PinScreen
+        mode="setup"
+        onSuccess={handlePinSetupSuccess}
+        onCancel={handlePinSetupCancel}
+      />
+    );
   }
 
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
-      {!hasWallet ? (
-        <>
-          <Stack.Screen name="Landing"      component={LandingScreen} />
-          <Stack.Screen name="CreateWallet" component={CreateWalletScreen} />
-          <Stack.Screen name="ImportWallet" component={ImportWalletScreen} />
-        </>
-      ) : (
-        <>
-          <Stack.Screen name="Main"      component={Tabs} />
-          <Stack.Screen name="Send"      component={SendScreen} />
-          <Stack.Screen name="Receive"   component={ReceiveScreen} />
-          <Stack.Screen name="Swap"      component={SwapScreen} />
-          <Stack.Screen name="History"   component={HistoryScreen} />
-          <Stack.Screen name="Portfolio" component={PortfolioScreen} />
-          <Stack.Screen name="Settings"  component={SettingsScreen} />
-          <Stack.Screen name="Profile"   component={SettingsScreen} />
-          <Stack.Screen name="Support"   component={SupportScreen} />
-          <Stack.Screen name="Scan"      component={ScanScreen} />
-          <Stack.Screen name="CoinChart"  component={CoinChartScreen} />
-          <Stack.Screen name="CreateWallet" component={CreateWalletScreen} />
-          <Stack.Screen name="ImportWallet" component={ImportWalletScreen} />
-        </>
-      )}
-    </Stack.Navigator>
+    <PinSetupContext.Provider value={triggerPinSetup}>
+      <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+        {!hasWallet ? (
+          <>
+            <Stack.Screen name="Landing"      component={LandingScreen} />
+            <Stack.Screen name="CreateWallet" component={CreateWalletScreen} />
+            <Stack.Screen name="ImportWallet" component={ImportWalletScreen} />
+          </>
+        ) : (
+          <>
+            <Stack.Screen name="Main"      component={Tabs} />
+            <Stack.Screen name="Send"      component={SendScreen} />
+            <Stack.Screen name="Receive"   component={ReceiveScreen} />
+            <Stack.Screen name="Swap"      component={SwapScreen} />
+            <Stack.Screen name="History"   component={HistoryScreen} />
+            <Stack.Screen name="Portfolio" component={PortfolioScreen} />
+            <Stack.Screen name="Settings"  component={SettingsScreen} />
+            <Stack.Screen name="Profile"   component={SettingsScreen} />
+            <Stack.Screen name="Support"   component={SupportScreen} />
+            <Stack.Screen name="Scan"      component={ScanScreen} />
+            <Stack.Screen name="CoinChart"  component={CoinChartScreen} />
+            <Stack.Screen name="CreateWallet" component={CreateWalletScreen} />
+            <Stack.Screen name="ImportWallet" component={ImportWalletScreen} />
+          </>
+        )}
+      </Stack.Navigator>
+    </PinSetupContext.Provider>
   );
 }
 
@@ -231,11 +246,20 @@ export default function App() {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 800;
   const [showSplash, setShowSplash]           = React.useState(true);
-  const [showOnboarding, setShowOnboarding]   = React.useState(false);
+  const [showOnboarding, setShowOnboarding]   = React.useState<boolean | null>(null);
 
   React.useEffect(() => {
     shouldShowOnboarding().then(show => setShowOnboarding(show));
   }, []);
+
+  if (showOnboarding === null) {
+    // Wait for onboarding check before rendering anything
+    return (
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <View style={{ flex: 1, backgroundColor: T.background }} />
+      </GestureHandlerRootView>
+    );
+  }
 
   if (Platform.OS === 'web' && isDesktop) {
     return (

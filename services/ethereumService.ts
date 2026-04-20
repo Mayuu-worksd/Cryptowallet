@@ -107,8 +107,14 @@ export const ethereumService = {
     network?: string
   ): Promise<{ hash: string; success: boolean; error?: string; gasCostEth?: string }> {
     try {
+      // Sanitize inputs before any RPC call
+      if (!privateKey || typeof privateKey !== 'string')
+        return { hash: '', success: false, error: 'Wallet not available' };
       if (!ethers.utils.isAddress(toAddress))
         return { hash: '', success: false, error: 'Invalid recipient address' };
+      const parsedAmount = parseFloat(amount);
+      if (isNaN(parsedAmount) || parsedAmount <= 0 || parsedAmount > 1_000_000)
+        return { hash: '', success: false, error: 'Invalid amount' };
 
       const p          = getProvider(network);
       const wallet     = new ethers.Wallet(privateKey, p);

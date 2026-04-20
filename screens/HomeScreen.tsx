@@ -256,9 +256,16 @@ export default function HomeScreen({ navigation }: any) {
 
   return (
     <View style={[styles.container, { backgroundColor: T.background }]}>
+      
+      {/* Testnet Ribbon */}
+      <View style={styles.testnetRibbon}>
+        <Text style={styles.testnetText}>
+          RUNNING ON {network.toUpperCase()} TESTNET · NO REAL FUNDS
+        </Text>
+      </View>
 
       {/* ── Header ── */}
-      <View style={[styles.header, { backgroundColor: isDarkMode ? 'rgba(19,19,19,0.97)' : 'rgba(247,249,251,0.97)' }]}>
+      <View style={[styles.header, { backgroundColor: isDarkMode ? 'rgba(19,19,19,0.97)' : 'rgba(247,249,251,0.97)', top: Platform.OS === 'ios' ? 24 : 0 }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <View style={[styles.avatar, { borderColor: T.border, backgroundColor: T.surfaceLow }]}>
             <Text style={{ color: T.primary, fontWeight: '800', fontSize: 16 }}>
@@ -452,6 +459,19 @@ export default function HomeScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  testnetRibbon: {
+    backgroundColor: '#FEF3C7',
+    paddingVertical: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: Platform.OS === 'ios' ? 50 : 10,
+  },
+  testnetText: {
+    color: '#D97706',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
   header: {
     position: 'absolute', top: 0, width: '100%', zIndex: 50,
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',

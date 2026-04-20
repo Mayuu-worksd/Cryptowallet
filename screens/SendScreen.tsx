@@ -89,6 +89,20 @@ export default function SendScreen({ navigation, route }: any) {
       Animated.spring(btnScale, { toValue: 1,    useNativeDriver: true, speed: 20, bounciness: 8 }),
     ]).start();
 
+    // Extra warning on mainnet — real funds at risk
+    if (network !== 'Sepolia') {
+      const { Alert } = require('react-native');
+      Alert.alert(
+        '⚠️ Real Funds Warning',
+        `You are on ${network} Mainnet. This transaction uses REAL ETH and cannot be reversed.\n\nAmount: ${parsedAmount.toFixed(6)} ETH ($${usdValue})`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'I Understand, Continue', style: 'destructive', onPress: () => setShowConfirm(true) },
+        ]
+      );
+      return;
+    }
+
     setShowConfirm(true);
   };
 

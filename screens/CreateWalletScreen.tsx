@@ -137,6 +137,7 @@ export default function CreateWalletScreen({ navigation }: any) {
   };
 
   const handleGoToWallet = async () => {
+    setStep('done');
     setLoading(true);
     setSavingDone(false);
     await new Promise(r => setTimeout(r, 100));
@@ -147,6 +148,7 @@ export default function CreateWalletScreen({ navigation }: any) {
     } catch (e) {
       setLoading(false);
       setSavingDone(false);
+      setStep('verify');
       showToast('Failed to save wallet.', 'error');
     }
   };
