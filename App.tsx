@@ -24,7 +24,8 @@ import LandingScreen      from './screens/LandingScreen';
 import SupportScreen      from './screens/SupportScreen';
 import ScanScreen         from './screens/ScanScreen';
 import SplashScreen       from './screens/SplashScreen';
-import PinScreen, { hasPinSetup } from './screens/PinScreen';
+import PinScreen from './screens/PinScreen';
+import { hasPinSetup } from './services/pinService';
 import CoinChartScreen    from './screens/CoinChartScreen';
 import OnboardingScreen, { shouldShowOnboarding } from './screens/OnboardingScreen';
 import WebLayout          from './components/WebLayout';
@@ -167,6 +168,7 @@ function MobileNavigator() {
             <Stack.Screen name="Support"   component={SupportScreen} />
             <Stack.Screen name="Scan"      component={ScanScreen} />
             <Stack.Screen name="CoinChart"  component={CoinChartScreen} />
+            <Stack.Screen name="Card"        component={CardScreen} />
             <Stack.Screen name="CreateWallet" component={CreateWalletScreen} />
             <Stack.Screen name="ImportWallet" component={ImportWalletScreen} />
           </>

@@ -160,22 +160,34 @@ export default function SwapScreen({ navigation }: any) {
           </View>
         </View>
 
+        {/* Unsupported network warning */}
+        {!isSupported && (
+          <View style={[styles.warnBanner, { backgroundColor: T.pending + '18', borderColor: T.pending + '40' }]}>
+            <Feather name="alert-triangle" size={14} color={T.pending} />
+            <Text style={[styles.warnText, { color: T.pending }]}>
+              Swap is not available on {network}. Switch to Ethereum, Polygon, or Arbitrum in Settings.
+            </Text>
+          </View>
+        )}
+
         {/* DETAILS SECTION */}
         <View style={[styles.details, { borderTopColor: T.border }]}>
            <View style={styles.detailLine}>
               <Text style={styles.detailLabel}>Network Fee</Text>
-              <Text style={styles.detailValue}>$0.42</Text>
+              <Text style={styles.detailValue}>
+                {quote?.estimatedGas ? `${quote.estimatedGas} ETH` : quoting ? 'Estimating...' : '—'}
+              </Text>
            </View>
            <View style={styles.detailLine}>
               <Text style={styles.detailLabel}>Slippage</Text>
-              <Text style={styles.detailValue}>0.5%</Text>
+              <Text style={styles.detailValue}>1%</Text>
            </View>
         </View>
 
         <TouchableOpacity
-          style={[styles.mainAction, { backgroundColor: T.primary, opacity: loading || !amount ? 0.6 : 1 }]}
+          style={[styles.mainAction, { backgroundColor: T.primary, opacity: loading || !amount || !isSupported ? 0.6 : 1 }]}
           onPress={handleSwap}
-          disabled={loading || !amount}
+          disabled={loading || !amount || !isSupported}
           activeOpacity={0.8}
         >
           {loading ? (
@@ -187,7 +199,7 @@ export default function SwapScreen({ navigation }: any) {
 
         <View style={styles.secureBanner}>
            <Feather name="shield" size={14} color={T.success} />
-           <Text style={[styles.secureText, { color: T.success }]}>Aggregated liquidity from 1inch & 0x</Text>
+           <Text style={[styles.secureText, { color: T.success }]}>Powered by 0x Protocol</Text>
         </View>
 
       </ScrollView>
@@ -245,4 +257,6 @@ const makeStyles = (T: any) => StyleSheet.create({
 
   secureBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 20 },
   secureText: { fontSize: 12, fontWeight: '700' },
+  warnBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, padding: 12, borderRadius: 12, borderWidth: 1, marginBottom: 16 },
+  warnText: { flex: 1, fontSize: 12, fontWeight: '600', lineHeight: 18 },
 });

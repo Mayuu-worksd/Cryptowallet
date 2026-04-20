@@ -257,12 +257,14 @@ export default function HomeScreen({ navigation }: any) {
   return (
     <View style={[styles.container, { backgroundColor: T.background }]}>
       
-      {/* Testnet Ribbon */}
-      <View style={styles.testnetRibbon}>
-        <Text style={styles.testnetText}>
-          RUNNING ON {network.toUpperCase()} TESTNET · NO REAL FUNDS
-        </Text>
-      </View>
+      {/* Testnet Ribbon — only show on testnet */}
+      {network === 'Sepolia' && (
+        <View style={styles.testnetRibbon}>
+          <Text style={styles.testnetText}>
+            RUNNING ON SEPOLIA TESTNET · NO REAL FUNDS
+          </Text>
+        </View>
+      )}
 
       {/* ── Header ── */}
       <View style={[styles.header, { backgroundColor: isDarkMode ? 'rgba(19,19,19,0.97)' : 'rgba(247,249,251,0.97)', top: Platform.OS === 'ios' ? 24 : 0 }]}>
@@ -297,7 +299,7 @@ export default function HomeScreen({ navigation }: any) {
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[styles.scroll, network !== 'Sepolia' && { paddingTop: 96 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={isLoadingBalance} onRefresh={onRefresh} tintColor={T.primary} />}
       >
