@@ -45,7 +45,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow ChainSplit to scan QR codes for sending crypto."
+          "cameraPermission": "Allow CryptoWallet to scan QR codes for sending crypto."
         }
       ]
     ],
