@@ -300,9 +300,33 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     await clearPin();
     setPinEnabled(false);
     setWalletAddress(data.address);
-    setWalletNameState('Main Wallet');
-    await storageService.saveWalletName('Main Wallet');
     setHasWallet(true);
+
+    // Restore saved wallet name — don't overwrite with hardcoded 'Main Wallet'
+    const savedName = await storageService.getWalletName();
+    if (savedName) {
+      setWalletNameState(savedName);
+    } else {
+      setWalletNameState('Main Wallet');
+      await storageService.saveWalletName('Main Wallet');
+    }
+
+    // Reload card data from storage so existing card is not lost after import
+    try {
+      const [savedCard, savedDetails, savedCardTxs, savedCreated, savedTxs] = await Promise.all([
+        AsyncStorage.getItem('cw_card_balance'),
+        AsyncStorage.getItem('cw_card_details'),
+        AsyncStorage.getItem('cw_card_transactions'),
+        AsyncStorage.getItem('cw_card_created'),
+        AsyncStorage.getItem('cw_transactions'),
+      ]);
+      if (savedCreated) setCardCreated(savedCreated === 'true');
+      if (savedDetails) setCardDetails(JSON.parse(savedDetails));
+      if (savedCard)    setCardBalance(parseFloat(savedCard));
+      if (savedCardTxs) setCardTransactions(JSON.parse(savedCardTxs));
+      if (savedTxs)     setTransactions(JSON.parse(savedTxs));
+    } catch {}
+
     fetchBalance(data.address, network);
   }, [network, fetchBalance]);
 
