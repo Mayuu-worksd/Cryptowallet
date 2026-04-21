@@ -51,8 +51,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "b642bc6a-f2df-412d-839c-7f43ed34fab7"
+        "projectId": "2b3d67fe-0ffc-4420-baa1-504e55424cc0"
       }
-    }
+    },
+    "owner": "mayu2323"
   }
 }
