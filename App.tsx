@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavigationContainer, useNavigation } from '@react-navigation/native';
+import { NavigationContainer, useNavigation, DefaultTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, Text, ActivityIndicator, Platform, useWindowDimensions, Animated, TouchableOpacity, StyleSheet } from 'react-native';
@@ -318,7 +318,7 @@ function MobileNavigator() {
         animationDuration: Platform.OS === 'android' ? 200 : 250,
         gestureEnabled: true,
         gestureDirection: 'horizontal',
-        contentStyle: { backgroundColor: 'transparent' },
+        contentStyle: { backgroundColor: '#101114' },
       }}>
         {!hasWallet ? (
           <>
@@ -329,9 +329,9 @@ function MobileNavigator() {
         ) : (
           <>
             <Stack.Screen name="Main"      component={Tabs} />
-            <Stack.Screen name="Send"      component={SendScreen}      options={{ contentStyle: { backgroundColor: '#101114' } }} />
+            <Stack.Screen name="Send"      component={SendScreen}      />
             <Stack.Screen name="Receive"   component={ReceiveScreen}   />
-            <Stack.Screen name="Swap"      component={SwapScreen}      options={{ contentStyle: { backgroundColor: '#101114' } }} />
+            <Stack.Screen name="Swap"      component={SwapScreen}      />
             <Stack.Screen name="History"   component={HistoryScreen}   />
             <Stack.Screen name="Portfolio" component={PortfolioScreen} />
             <Stack.Screen name="Settings"  component={SettingsScreen}  />
@@ -424,7 +424,7 @@ export default function App() {
   if (showOnboarding === null) {
     // Wait for onboarding check before rendering anything
     return (
-      <GestureHandlerRootView style={{ flex: 1 }}>
+      <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#101114' }}>
         <View style={{ flex: 1, backgroundColor: T.background }} />
       </GestureHandlerRootView>
     );
@@ -432,7 +432,7 @@ export default function App() {
 
   if (Platform.OS === 'web' && isDesktop) {
     return (
-      <GestureHandlerRootView style={{ flex: 1 }}>
+      <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#101114' }}>
         <WalletProvider><WebApp /></WalletProvider>
       </GestureHandlerRootView>
     );
@@ -440,7 +440,7 @@ export default function App() {
 
   if (showOnboarding) {
     return (
-      <GestureHandlerRootView style={{ flex: 1 }}>
+      <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#101114' }}>
         <WalletProvider>
           <OnboardingScreen onFinish={() => setShowOnboarding(false)} />
         </WalletProvider>
@@ -449,9 +449,9 @@ export default function App() {
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#101114' }}>
       <WalletProvider>
-        <NavigationContainer>
+        <NavigationContainer theme={{ ...DefaultTheme, dark: true, colors: { ...DefaultTheme.colors, primary: '#FF3B3B', background: '#101114', card: '#101114', text: '#FFFFFF', border: '#2E3036', notification: '#FF3B3B' } }}>
           <MobileNavigator />
         </NavigationContainer>
       </WalletProvider>

@@ -5,12 +5,12 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#101114"
     },
     "ios": {
       "supportsTablet": true,
@@ -26,7 +26,7 @@
       "package": "com.karthick.cryptowallet",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#101114"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -39,7 +39,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-system-ui",
+      ["expo-system-ui", { "backgroundColor": "#101114" }],
       "expo-secure-store",
       "expo-font",
       [
@@ -51,9 +51,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "2b3d67fe-0ffc-4420-baa1-504e55424cc0"
+        "projectId": "d0c86f41-30ec-490e-b66f-ba485383fcab"
       }
     },
-    "owner": "mayu2323"
+    "owner": "mayu4532"
   }
 }
