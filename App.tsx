@@ -2,10 +2,27 @@ import React from 'react';
 import { NavigationContainer, useNavigation, DefaultTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, Text, ActivityIndicator, Platform, useWindowDimensions, Animated, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, ActivityIndicator, Platform, useWindowDimensions, Animated, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Feather } from '@expo/vector-icons';
 const { useMemo, useCallback } = React;
+
+// ─── Error Boundary ───────────────────────────────────────────────────────────
+class ErrorBoundary extends React.Component<{children: React.ReactNode}, {error: string | null}> {
+  state = { error: null };
+  static getDerivedStateFromError(e: any) { return { error: e?.message ?? String(e) }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <View style={{ flex: 1, backgroundColor: '#101114', padding: 24, justifyContent: 'center' }}>
+          <Text style={{ color: '#FF3B3B', fontSize: 16, fontWeight: '800', marginBottom: 12 }}>App Crashed</Text>
+          <ScrollView><Text style={{ color: '#FFF', fontSize: 12, fontFamily: 'monospace' }}>{this.state.error}</Text></ScrollView>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 import { WalletProvider, useWallet } from './store/WalletContext';
 import { Theme } from './constants';
@@ -449,6 +466,7 @@ export default function App() {
   }
 
   return (
+    <ErrorBoundary>
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#101114' }}>
       <WalletProvider>
         <NavigationContainer theme={{ ...DefaultTheme, dark: true, colors: { ...DefaultTheme.colors, primary: '#FF3B3B', background: '#101114', card: '#101114', text: '#FFFFFF', border: '#2E3036', notification: '#FF3B3B' } }}>
@@ -457,5 +475,6 @@ export default function App() {
       </WalletProvider>
       {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
     </GestureHandlerRootView>
+    </ErrorBoundary>
   );
 }
