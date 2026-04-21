@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  Platform, Vibration, Animated,
+  Platform, Vibration, Animated, StatusBar,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
 import { Theme } from '../constants';
+import { parseQRPayload } from './ReceiveScreen';
+import { LinearGradient } from 'expo-linear-gradient';
 
-export default function ScanScreen({ navigation, route }: any) {
+export default function ScanScreen({ navigation }: any) {
   const { isDarkMode, network: appNetwork } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
 
@@ -19,36 +21,45 @@ export default function ScanScreen({ navigation, route }: any) {
   const [lastScan, setLastScan]         = useState('');
   const [scanInfo, setScanInfo]         = useState('');
 
-  // Corner bracket animation
+  // Corner bracket pulse animation
   const pulse = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 1.06, duration: 900, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 1,    duration: 900, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1.08, duration: 1000, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1,    duration: 1000, useNativeDriver: true }),
       ])
     ).start();
   }, []);
 
-  // Camera not supported on web — after hooks
+  // Scan line animation
+  const scanLinePos = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(scanLinePos, { toValue: WINDOW_SIZE - 4, duration: 2500, useNativeDriver: true }),
+        Animated.timing(scanLinePos, { toValue: 0, duration: 2500, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+
   if (Platform.OS === 'web') {
     return (
-      <View style={[styles.center, { backgroundColor: T.background }]}>
-        <View style={[styles.permBox, { backgroundColor: T.surface, borderColor: T.border }]}>
-          <View style={[styles.permIcon, { backgroundColor: T.primary + '20' }]}>
-            <Feather name="monitor" size={36} color={T.primary} />
+      <View style={[styles.center, { backgroundColor: '#0A0A0C' }]}>
+        <View style={styles.permBox}>
+          <View style={[styles.permIcon, { backgroundColor: 'rgba(236, 38, 41, 0.1)' }]}>
+            <Feather name="monitor" size={32} color={T.primary} />
           </View>
-          <Text style={[styles.permTitle, { color: T.text }]}>Not Available on Web</Text>
-          <Text style={[styles.permSub, { color: T.textMuted }]}>
-            QR scanning requires camera access. Please use the mobile app to scan QR codes.
+          <Text style={styles.permTitle}>Mobile Feature</Text>
+          <Text style={styles.permSub}>
+            Scanning QR codes with a camera is only available on native mobile devices.
           </Text>
           <TouchableOpacity
-            style={[styles.permBtn, { backgroundColor: T.primary }]}
+            style={styles.permBtnPrimary}
             onPress={() => navigation.goBack()}
-            activeOpacity={0.85}
+            activeOpacity={0.8}
           >
-            <Feather name="arrow-left" size={16} color="#FFF" />
-            <Text style={styles.permBtnText}>Go Back</Text>
+            <Text style={styles.permBtnText}>GO BACK</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -57,27 +68,39 @@ export default function ScanScreen({ navigation, route }: any) {
 
   const handleBarCodeScanned = ({ data }: { data: string }) => {
     if (scanned) return;
+    
+    // Support for simple addresses too
+    if (/^0x[0-9a-fA-F]{40}$/.test(data.trim())) {
+        processQRData(JSON.stringify({ address: data.trim(), network: 'Ethereum' }));
+        return;
+    }
+
     processQRData(data);
   };
 
   const processQRData = (data: string) => {
     try {
-      const { parseQRPayload } = require('./ReceiveScreen');
+      // This might throw if not JSON, handled by catch
       const result = parseQRPayload(data);
       if (!result) return;
+      
       setScanned(true);
       Vibration.vibrate(80);
       setLastScan(result.address);
+      
       if (result.network !== appNetwork) {
-        setScanInfo(`⚠️ QR is for ${result.network}, you are on ${appNetwork}`);
+        setScanInfo(`Network Mismatch: QR is for ${result.network}`);
       }
+      
       setTimeout(() => {
         navigation.navigate('Send', {
           scannedAddress: result.address,
           scannedNetwork: result.network,
         });
-      }, 800);
-    } catch {}
+      }, 1000);
+    } catch {
+       setScanInfo('Invalid QR Code format');
+    }
   };
 
   const handleGallery = async () => {
@@ -93,45 +116,40 @@ export default function ScanScreen({ navigation, route }: any) {
         quality: 1,
       });
       if (result.canceled) return;
-      // expo-image-picker doesn't decode QR natively
-      // Show a helpful message to user
-      setScanInfo('📌 Tip: Use camera to scan QR directly for best results');
+      setScanInfo('Please use the camera for instant scanning');
     } catch {
       setScanInfo('Could not open gallery');
     }
   };
 
-  // ── Permission not yet determined ──
   if (!permission) {
     return (
-      <View style={[styles.center, { backgroundColor: T.background }]}>
-        <Text style={{ color: T.textMuted, fontSize: 14 }}>Requesting camera permission...</Text>
+      <View style={[styles.center, { backgroundColor: '#0A0A0C' }]}>
+        <Text style={{ color: T.textMuted, fontSize: 14 }}>Initializing Camera...</Text>
       </View>
     );
   }
 
-  // ── Permission denied ──
   if (!permission.granted) {
     return (
-      <View style={[styles.center, { backgroundColor: T.background }]}>
-        <View style={[styles.permBox, { backgroundColor: T.surface, borderColor: T.border }]}>
-          <View style={[styles.permIcon, { backgroundColor: T.primary + '20' }]}>
-            <Feather name="camera-off" size={36} color={T.primary} />
+      <View style={[styles.center, { backgroundColor: '#0A0A0C' }]}>
+        <View style={styles.permBox}>
+          <View style={[styles.permIcon, { backgroundColor: 'rgba(236, 38, 41, 0.1)' }]}>
+            <Ionicons name="camera-outline" size={36} color={T.primary} />
           </View>
-          <Text style={[styles.permTitle, { color: T.text }]}>Camera Access Required</Text>
-          <Text style={[styles.permSub, { color: T.textMuted }]}>
-            Allow camera access to scan QR codes and autofill wallet addresses.
+          <Text style={styles.permTitle}>Camera Access</Text>
+          <Text style={styles.permSub}>
+            We need your permission to access the camera to scan wallet addresses via QR codes.
           </Text>
           <TouchableOpacity
-            style={[styles.permBtn, { backgroundColor: T.primary }]}
+            style={styles.permBtnPrimary}
             onPress={requestPermission}
-            activeOpacity={0.85}
+            activeOpacity={0.8}
           >
-            <Feather name="camera" size={16} color="#FFF" />
-            <Text style={styles.permBtnText}>Grant Camera Access</Text>
+            <Text style={styles.permBtnText}>GRANT ACCESS</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: 12 }}>
-            <Text style={{ color: T.textMuted, fontSize: 14, fontWeight: '600' }}>Go Back</Text>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: 20 }}>
+            <Text style={{ color: T.textMuted, fontSize: 14, fontWeight: '700' }}>Cancel</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -140,6 +158,7 @@ export default function ScanScreen({ navigation, route }: any) {
 
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
       <CameraView
         style={StyleSheet.absoluteFillObject}
         facing="back"
@@ -148,47 +167,55 @@ export default function ScanScreen({ navigation, route }: any) {
         onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
       />
 
-      {/* Dark overlay with cutout */}
+      {/* Modern Overlay */}
       <View style={styles.overlay}>
-        {/* Top dark area */}
         <View style={styles.overlayTop} />
-
-        {/* Middle row: dark | clear window | dark */}
         <View style={styles.overlayMiddle}>
           <View style={styles.overlaySide} />
-
-          {/* Scanner window */}
+          
           <Animated.View style={[styles.scanWindow, { transform: [{ scale: pulse }] }]}>
-            {/* Corner brackets */}
+            {/* Brackets */}
             {[
-              { top: 0,    left: 0,    borderTopWidth: 3,    borderLeftWidth: 3  },
-              { top: 0,    right: 0,   borderTopWidth: 3,    borderRightWidth: 3 },
-              { bottom: 0, left: 0,    borderBottomWidth: 3, borderLeftWidth: 3  },
-              { bottom: 0, right: 0,   borderBottomWidth: 3, borderRightWidth: 3 },
+              { top: 0,    left: 0,    borderTopWidth: 4,    borderLeftWidth: 4,  borderTopLeftRadius: 16 },
+              { top: 0,    right: 0,   borderTopWidth: 4,    borderRightWidth: 4, borderTopRightRadius: 16 },
+              { bottom: 0, left: 0,    borderBottomWidth: 4, borderLeftWidth: 4,  borderBottomLeftRadius: 16 },
+              { bottom: 0, right: 0,   borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: 16 },
             ].map((corner, i) => (
-              <View key={i} style={[styles.corner, corner, { borderColor: '#FF3B3B' }]} />
+              <View key={i} style={[styles.corner, corner, { borderColor: T.primary }]} />
             ))}
-            {/* Scan line */}
-            <View style={styles.scanLine} />
+            
+            {/* Animated Scan Line */}
+            <Animated.View style={[styles.scanLine, { transform: [{ translateY: scanLinePos }] }]}>
+               <LinearGradient
+                  colors={['transparent', T.primary, 'transparent']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={{ flex: 1, opacity: 0.8 }}
+                />
+            </Animated.View>
           </Animated.View>
 
           <View style={styles.overlaySide} />
         </View>
 
-        {/* Bottom area */}
         <View style={styles.overlayBottom}>
-          <Text style={styles.scanHint}>
-            {scanned ? '✓ QR Code detected!' : 'Point camera at a wallet QR code'}
-          </Text>
+          <View style={styles.hintContainer}>
+            <Text style={styles.scanHint}>
+              {scanned ? 'PAYMENT DETECTED' : 'ALIGN QR TO SCAN'}
+            </Text>
+          </View>
+
           {!!scanInfo && (
-            <View style={styles.scanInfoPill}>
-              <Text style={styles.scanInfoText}>{scanInfo}</Text>
+            <View style={styles.infoPill}>
+              <MaterialIcons name="info-outline" size={14} color="#FFF" />
+              <Text style={styles.infoPillText}>{scanInfo}</Text>
             </View>
           )}
+
           {scanned ? (
-            <>
-              <Text style={styles.scanResult} numberOfLines={1}>
-                {lastScan.length > 30 ? `${lastScan.slice(0, 16)}...${lastScan.slice(-8)}` : lastScan}
+            <View style={styles.scannedBox}>
+              <Text style={styles.scannedAddress} numberOfLines={1}>
+                {lastScan.slice(0, 12)}...{lastScan.slice(-8)}
               </Text>
               <TouchableOpacity
                 style={styles.rescanBtn}
@@ -196,88 +223,115 @@ export default function ScanScreen({ navigation, route }: any) {
                 activeOpacity={0.8}
               >
                 <Feather name="refresh-cw" size={14} color="#FFF" />
-                <Text style={styles.rescanText}>Scan Again</Text>
+                <Text style={styles.rescanText}>Retry</Text>
               </TouchableOpacity>
-            </>
+            </View>
           ) : (
-            <TouchableOpacity
-              style={styles.galleryBtn}
-              onPress={handleGallery}
-              activeOpacity={0.8}
-            >
-              <Feather name="image" size={18} color="#FFF" />
-              <Text style={styles.galleryText}>Choose from Gallery</Text>
+            <TouchableOpacity style={styles.galleryCard} onPress={handleGallery} activeOpacity={0.8}>
+               <Feather name="image" size={18} color="#FFF" />
+               <Text style={styles.galleryLabel}>Upload from gallery</Text>
             </TouchableOpacity>
           )}
         </View>
       </View>
 
-      {/* Header */}
+      {/* Premium Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.headerBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
-          <Feather name="x" size={22} color="#FFF" />
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
+          <Feather name="x" size={24} color="#FFF" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Scan QR Code</Text>
+        <Text style={styles.headerTitle}>SCAN QR</Text>
         <TouchableOpacity
-          style={[styles.headerBtn, torchOn && styles.headerBtnActive]}
+          style={[styles.torchBtn, torchOn && styles.torchBtnActive]}
           onPress={() => setTorchOn(p => !p)}
-          activeOpacity={0.8}
+          activeOpacity={0.7}
         >
-          <Feather name="zap" size={20} color={torchOn ? '#FF3B3B' : '#FFF'} />
+          <Ionicons name={torchOn ? "flash" : "flash-outline"} size={22} color={torchOn ? "#FFC107" : "#FFF"} />
         </TouchableOpacity>
       </View>
     </View>
   );
 }
 
-const WINDOW_SIZE = 260;
-const CORNER_SIZE = 28;
+const WINDOW_SIZE = 280;
+const CORNER_SIZE = 40;
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
 
-  // Permission screen
-  permBox: { width: '100%', maxWidth: 340, borderRadius: 24, padding: 28, borderWidth: 1, alignItems: 'center', gap: 12 },
-  permIcon: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
-  permTitle: { fontSize: 18, fontWeight: '800', textAlign: 'center' },
-  permSub: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
-  permBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 24, paddingVertical: 14, borderRadius: 16, marginTop: 8 },
-  permBtnText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
+  // Permissions
+  permBox: { width: '100%', borderRadius: 32, padding: 32, backgroundColor: '#1C1D21', alignItems: 'center' },
+  permIcon: { width: 80, height: 80, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
+  permTitle: { color: '#FFF', fontSize: 24, fontWeight: '800', marginBottom: 12 },
+  permSub: { color: '#A1A5AB', fontSize: 15, textAlign: 'center', lineHeight: 22 },
+  permBtnPrimary: { width: '100%', paddingVertical: 18, borderRadius: 100, backgroundColor: '#FF3B3B', alignItems: 'center', marginTop: 24 },
+  permBtnText: { color: '#FFF', fontSize: 14, fontWeight: '900', letterSpacing: 1.2 },
 
   // Overlay
-  overlay: { ...StyleSheet.absoluteFillObject, flexDirection: 'column' },
-  overlayTop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.62)' },
+  overlay: { ...StyleSheet.absoluteFillObject },
+  overlayTop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)' },
   overlayMiddle: { flexDirection: 'row', height: WINDOW_SIZE },
-  overlaySide: { flex: 1, backgroundColor: 'rgba(0,0,0,0.62)' },
-  overlayBottom: { flex: 1, backgroundColor: 'rgba(0,0,0,0.62)', alignItems: 'center', paddingTop: 28, gap: 10 },
+  overlaySide: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)' },
+  overlayBottom: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', paddingTop: 40 },
 
-  // Scanner window
-  scanWindow: { width: WINDOW_SIZE, height: WINDOW_SIZE, position: 'relative', overflow: 'hidden' },
+  // Scanner cutout
+  scanWindow: { width: WINDOW_SIZE, height: WINDOW_SIZE, position: 'relative' },
   corner: { position: 'absolute', width: CORNER_SIZE, height: CORNER_SIZE },
   scanLine: {
-    position: 'absolute', left: 12, right: 12, top: '50%',
-    height: 2, backgroundColor: '#FF3B3B', opacity: 0.85,
-    shadowColor: '#FF3B3B', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 1, shadowRadius: 6,
+    position: 'absolute', left: 0, right: 0, height: 3, 
   },
 
-  // Bottom hints
-  scanHint: { color: '#FFF', fontSize: 15, fontWeight: '600', textAlign: 'center', paddingHorizontal: 32 },
-  scanResult: { color: '#FF3B3B', fontSize: 13, fontWeight: '700', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
-  scanInfoPill: { backgroundColor: 'rgba(255,158,11,0.15)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: '#F59E0B', marginHorizontal: 20 },
-  scanInfoText: { color: '#F59E0B', fontSize: 12, fontWeight: '700', textAlign: 'center' },
-  rescanBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(255,59,59,0.25)', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: '#FF3B3B' },
-  rescanText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
-  galleryBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(255,255,255,0.12)', paddingHorizontal: 24, paddingVertical: 14, borderRadius: 28, borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)', marginTop: 8 },
-  galleryText: { color: '#FFF', fontWeight: '700', fontSize: 15 },
+  // UI elements
+  hintContainer: { 
+    backgroundColor: 'rgba(255,255,255,0.1)', 
+    paddingHorizontal: 20, 
+    paddingVertical: 10, 
+    borderRadius: 100, 
+    marginBottom: 20 
+  },
+  scanHint: { color: '#FFF', fontSize: 13, fontWeight: '900', letterSpacing: 1.5 },
+  
+  infoPill: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 8, 
+    backgroundColor: 'rgba(0,0,0,0.8)', 
+    borderWidth: 1, 
+    borderColor: 'rgba(255,255,255,0.1)', 
+    paddingHorizontal: 16, 
+    paddingVertical: 8, 
+    borderRadius: 20, 
+    marginBottom: 20 
+  },
+  infoPillText: { color: '#FFF', fontSize: 12, fontWeight: '600' },
+
+  scannedBox: { alignItems: 'center', gap: 16 },
+  scannedAddress: { color: '#FF3B3B', fontSize: 16, fontWeight: '800', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+  rescanBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 100 },
+  rescanText: { color: '#FFF', fontWeight: '700' },
+
+  galleryCard: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 24, 
+    paddingVertical: 16, 
+    borderRadius: 20, 
+    backgroundColor: 'rgba(255,255,255,0.08)', 
+    borderWidth: 1, 
+    borderColor: 'rgba(255,255,255,0.15)',
+    gap: 12
+  },
+  galleryLabel: { color: '#FFF', fontSize: 15, fontWeight: '600' },
 
   // Header
   header: {
     position: 'absolute', top: 0, left: 0, right: 0,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingTop: Platform.OS === 'web' ? 20 : 56, paddingBottom: 16,
+    paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 60 : 40, paddingBottom: 20,
   },
-  headerBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center' },
-  headerBtnActive: { backgroundColor: 'rgba(255,59,59,0.25)', borderWidth: 1, borderColor: '#FF3B3B' },
-  headerTitle: { color: '#FFF', fontSize: 17, fontWeight: '700' },
+  backBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' },
+  torchBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' },
+  torchBtnActive: { backgroundColor: 'rgba(255,193,7,0.2)', borderWidth: 1, borderColor: '#FFC107' },
+  headerTitle: { color: '#FFF', fontSize: 13, fontWeight: '800', letterSpacing: 2 },
 });

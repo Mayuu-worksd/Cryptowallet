@@ -1,29 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Platform, Dimensions, Share,
+  Platform, Dimensions, Share, Image, StatusBar, Modal,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import QRCode from 'react-native-qrcode-svg';
-import { Feather, MaterialIcons } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
 import { Theme } from '../constants';
 import Toast from '../components/Toast';
+import { LinearGradient } from 'expo-linear-gradient';
+
+const { width } = Dimensions.get('window');
 
 const NETWORKS = [
-  { id: 'Ethereum', label: 'Ethereum', symbol: 'ETH',   color: '#627EEA', chainId: 1       },
-  { id: 'Polygon',  label: 'Polygon',  symbol: 'MATIC', color: '#8247E5', chainId: 137     },
-  { id: 'Arbitrum', label: 'Arbitrum', symbol: 'ARB',   color: '#2D374B', chainId: 42161   },
-  { id: 'Sepolia',  label: 'Sepolia',  symbol: 'ETH',   color: '#F59E0B', chainId: 11155111},
+  { id: 'Ethereum', label: 'Ethereum', symbol: 'ETH',  color: '#627EEA', chainId: 1,        iconUrl: 'https://assets.coingecko.com/coins/images/279/large/ethereum.png' },
+  { id: 'Polygon',  label: 'Polygon',  symbol: 'MATIC',color: '#8247E5', chainId: 137,      iconUrl: 'https://assets.coingecko.com/coins/images/4713/large/matic-token-icon.png' },
+  { id: 'BNB Chain',label: 'BNB Chain',symbol: 'BNB',  color: '#F3BA2F', chainId: 56,       iconUrl: 'https://assets.coingecko.com/coins/images/825/large/bnb-icon2_2x.png' },
+  { id: 'Arbitrum', label: 'Arbitrum', symbol: 'ARB',  color: '#00A3FF', chainId: 42161,    iconUrl: 'https://assets.coingecko.com/coins/images/16547/large/photo_2023-03-29_21.47.00.jpeg' },
+  { id: 'Sepolia',  label: 'Sepolia',  symbol: 'ETH',  color: '#F59E0B', chainId: 11155111, iconUrl: 'https://assets.coingecko.com/coins/images/279/large/ethereum.png' },
 ];
 
-// QR payload structure — Paytm-style universal crypto QR
 export type QRPayload = {
   address: string;
   network: string;
   chainId: number;
   symbol:  string;
-  version: number;   // for future compatibility
+  version: number;
 };
 
 export function buildQRPayload(address: string, networkId: string): string {
@@ -38,24 +41,44 @@ export function buildQRPayload(address: string, networkId: string): string {
   return JSON.stringify(payload);
 }
 
-export function parseQRPayload(data: string): { address: string; network: string } | null {
-  // Try new JSON payload first
+export function parseQRPayload(data: string): QRPayload | null {
   try {
-    const parsed = JSON.parse(data) as QRPayload;
-    if (parsed.address && parsed.network && /^0x[0-9a-fA-F]{40}$/.test(parsed.address)) {
-      return { address: parsed.address, network: parsed.network };
-    }
-  } catch {}
+    const parsed = JSON.parse(data);
+    if (!parsed || typeof parsed.address !== 'string' || !parsed.address) return null;
+    return {
+      address: parsed.address,
+      network: parsed.network ?? 'Ethereum',
+      chainId: parsed.chainId ?? 1,
+      symbol:  parsed.symbol  ?? 'ETH',
+      version: parsed.version ?? 1,
+    };
+  } catch {
+    return null;
+  }
+}
 
-  // Fallback: plain ethereum: URI or raw address
-  let raw = data.trim();
-  if (raw.startsWith('ethereum:')) {
-    raw = raw.replace('ethereum:', '').split('?')[0].split('@')[0];
+function NetworkIcon({ net, size = 32 }: { net: typeof NETWORKS[number]; size?: number }) {
+  const [failed, setFailed] = React.useState(false);
+  if (!failed) {
+    return (
+      <Image
+        source={{ uri: net.iconUrl }}
+        style={{ width: size, height: size, borderRadius: size / 2 }}
+        onError={() => setFailed(true)}
+      />
+    );
   }
-  if (/^0x[0-9a-fA-F]{40}$/.test(raw)) {
-    return { address: raw, network: 'Ethereum' };
-  }
-  return null;
+  return (
+    <View style={{
+      width: size, height: size, borderRadius: size / 2,
+      backgroundColor: net.color + '25',
+      alignItems: 'center', justifyContent: 'center',
+    }}>
+      <Text style={{ color: net.color, fontSize: size * 0.36, fontWeight: '800' }}>
+        {net.symbol.slice(0, 2)}
+      </Text>
+    </View>
+  );
 }
 
 export default function ReceiveScreen({ navigation }: any) {
@@ -64,7 +87,13 @@ export default function ReceiveScreen({ navigation }: any) {
 
   const defaultNet = NETWORKS.find(n => n.id === globalNetwork) ?? NETWORKS[0];
   const [selectedNet, setSelectedNet] = useState(defaultNet);
+  const [netModalVisible, setNetModalVisible] = useState(false);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'success' as 'success' | 'error' | 'info' });
+
+  useEffect(() => {
+    const net = NETWORKS.find(n => n.id === globalNetwork) ?? NETWORKS[0];
+    setSelectedNet(net);
+  }, [globalNetwork]);
 
   const qrValue = walletAddress ? buildQRPayload(walletAddress, selectedNet.id) : '';
 
@@ -74,7 +103,7 @@ export default function ReceiveScreen({ navigation }: any) {
   const handleCopy = async () => {
     if (walletAddress) {
       await Clipboard.setStringAsync(walletAddress);
-      showToast('Address copied to clipboard!', 'success');
+      showToast('Address copied!', 'success');
     }
   };
 
@@ -82,16 +111,17 @@ export default function ReceiveScreen({ navigation }: any) {
     if (!walletAddress) return;
     try {
       await Share.share({
-        message: `My ${selectedNet.label} wallet address: ${walletAddress}`,
-        title: 'My Wallet Address',
+        message: `My ${selectedNet.label} address: ${walletAddress}`,
+        title: 'Wallet Address',
       });
     } catch {
-      showToast('Unable to share address', 'error');
+      showToast('Unable to share', 'error');
     }
   };
 
   return (
     <View style={[styles.container, { backgroundColor: T.background }]}>
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <Toast
         visible={toast.visible}
         message={toast.message}
@@ -99,145 +129,162 @@ export default function ReceiveScreen({ navigation }: any) {
         onHide={() => setToast(p => ({ ...p, visible: false }))}
       />
 
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: isDarkMode ? 'rgba(19,19,19,0.95)' : 'rgba(247,249,251,0.95)' }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
-            <MaterialIcons name="arrow-back" size={24} color={T.text} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: T.text }]}>Receive Crypto</Text>
+      {/* Network Selector Modal */}
+      <Modal visible={netModalVisible} transparent animationType="slide" statusBarTranslucent>
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={styles.modalDismissArea}
+            activeOpacity={1}
+            onPress={() => setNetModalVisible(false)}
+          />
+          <View style={[styles.modalSheet, { backgroundColor: T.surface }]}>
+            <View style={[styles.modalIndicator, { backgroundColor: T.border }]} />
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: T.text }]}>Choose Network</Text>
+              <TouchableOpacity onPress={() => setNetModalVisible(false)} style={[styles.modalCloseBtn, { backgroundColor: T.surfaceLow }]}>
+                <Feather name="x" size={20} color={T.textMuted} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
+              {NETWORKS.map(net => {
+                const isActive = selectedNet.id === net.id;
+                return (
+                  <TouchableOpacity
+                    key={net.id}
+                    style={[
+                      styles.modalNetRow,
+                      { backgroundColor: T.surfaceLow, borderColor: 'transparent' },
+                      isActive && { backgroundColor: isDarkMode ? '#25262B' : net.color + '12', borderColor: net.color, borderWidth: 1 },
+                    ]}
+                    onPress={() => { setSelectedNet(net); setNetModalVisible(false); }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.modalNetIconBox, { backgroundColor: net.color + '15' }]}>
+                      <NetworkIcon net={net} size={28} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.modalNetName, { color: T.text }, isActive && { color: net.color }]}>{net.label}</Text>
+                      <Text style={[styles.modalNetSub, { color: T.textMuted }]}>{net.symbol} · Chain ID: {net.chainId}</Text>
+                    </View>
+                    {isActive && (
+                      <View style={[styles.activeCheck, { backgroundColor: net.color }]}>
+                        <Feather name="check" size={12} color="#FFF" />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
         </View>
-        <View style={{ width: 40 }} />
+      </Modal>
+
+      {/* Header */}
+      <View style={[styles.header, { backgroundColor: T.background }]}>
+        <TouchableOpacity style={[styles.backBtn, { backgroundColor: T.surface }]} onPress={() => navigation.goBack()} activeOpacity={0.7}>
+          <Feather name="chevron-left" size={28} color={T.text} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: T.text }]}>RECEIVE</Text>
+        <TouchableOpacity style={[styles.backBtn, { backgroundColor: T.surface }]} onPress={() => navigation.navigate('Scan')} activeOpacity={0.7}>
+          <Ionicons name="qr-code-outline" size={20} color={T.primary} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
-        {/* Network Selector Pills */}
-        <View style={styles.sectionBlock}>
-          <Text style={[styles.sectionLabel, { color: T.textMuted }]}>Select Network</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.networkSelector}>
-            {NETWORKS.map((net) => {
-              const isActive = selectedNet.id === net.id;
-              return (
-                <TouchableOpacity
-                  key={net.id}
-                  style={[
-                    styles.netTab,
-                    { backgroundColor: T.surfaceLow, borderColor: isActive ? net.color : T.border },
-                    isActive && { backgroundColor: net.color + '15', borderWidth: 2 }
-                  ]}
-                  onPress={() => setSelectedNet(net)}
-                  activeOpacity={0.8}
-                >
-                  <View style={[styles.netDot, { backgroundColor: net.color }]} />
-                  <Text style={[styles.netTabText, { color: isActive ? T.text : T.textDim }]}>{net.label}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+        <View style={styles.heroSection}>
+          <Text style={[styles.heroTitle, { color: T.text }]}>Your QR Code</Text>
+          <Text style={[styles.heroSubTitle, { color: T.textMuted }]}>Choose a network below to update the address format and QR info.</Text>
         </View>
 
-        {/* Selected Network Info */}
-        <View style={styles.sectionBlock}>
-          <View style={[styles.networkBadge, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <View style={[styles.networkIcon, { backgroundColor: selectedNet.color + '20' }]}>
-                <MaterialIcons name="lan" size={16} color={selectedNet.color} />
-              </View>
-              <View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={[styles.networkName, { color: T.text }]}>{selectedNet.label} Network</Text>
-                  {selectedNet.id === globalNetwork && (
-                    <View style={styles.activeLabel}>
-                      <Text style={styles.activeLabelText}>CURRENT</Text>
-                    </View>
-                  )}
-                </View>
-                <Text style={[styles.networkArrival, { color: T.textMuted }]}>Chain ID: {selectedNet.chainId} • Symbol: {selectedNet.symbol}</Text>
-              </View>
+        {/* Network Selector */}
+        <View style={styles.selectorContainer}>
+          <Text style={[styles.selectorLabel, { color: T.textDim }]}>ACTIVE RECEIVING NETWORK</Text>
+          <TouchableOpacity
+            style={[styles.networkMainBtn, { backgroundColor: T.surface, borderColor: T.border }]}
+            onPress={() => setNetModalVisible(true)}
+            activeOpacity={0.8}
+          >
+            <NetworkIcon net={selectedNet} size={36} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.networkNameText, { color: T.text }]}>{selectedNet.label}</Text>
+              <Text style={[styles.networkStatusText, { color: T.textMuted }]}>Tap to change protocol</Text>
             </View>
-          </View>
+            <View style={[styles.chevronBox, { backgroundColor: T.surfaceLow }]}>
+              <Feather name="chevron-down" size={18} color={T.textMuted} />
+            </View>
+          </TouchableOpacity>
         </View>
 
-        {/* QR Code */}
-        <View style={styles.qrWrapper}>
-          <View style={[styles.qrBox, { backgroundColor: '#FFF', borderColor: T.surfaceLow }]}>
-            {walletAddress ? (
+        {/* QR Card */}
+        <View style={[styles.qrContainer, { borderColor: T.border }]}>
+          <LinearGradient
+            colors={isDarkMode ? ['#1C1D21', '#0A0A0C'] : ['#FFFFFF', '#F2F4F6']}
+            style={styles.qrCard}
+          >
+            <View style={[styles.qrWrapper, { shadowColor: isDarkMode ? '#000' : '#999' }]}>
               <QRCode
-                value={qrValue}
-                size={Dimensions.get('window').width * 0.55}
-                color="#101114"
+                value={qrValue || 'placeholder'}
+                size={width * 0.55}
+                color="#000"
                 backgroundColor="#FFF"
+                quietZone={12}
               />
-            ) : (
-              <View style={{ width: 220, height: 220, backgroundColor: T.surfaceLow, justifyContent: 'center', alignItems: 'center', borderRadius: 8 }}>
-                <Text style={{ color: '#888' }}>No Address</Text>
-              </View>
-            )}
-            <View style={styles.qrLogo}>
-              <View style={[styles.qrLogoInner, { backgroundColor: T.background }]}>
-                <Text style={[styles.qrLogoText, { color: T.primary }]}>CW</Text>
+            </View>
+
+            <View style={styles.qrFooter}>
+              <View style={[styles.networkBadge, { backgroundColor: selectedNet.color + '18', borderColor: selectedNet.color + '30' }]}>
+                <View style={[styles.miniDot, { backgroundColor: selectedNet.color }]} />
+                <Text style={[styles.networkBadgeText, { color: selectedNet.color }]}>{selectedNet.label} Network</Text>
               </View>
             </View>
-          </View>
+          </LinearGradient>
         </View>
 
-        {/* Address */}
-        <View style={styles.addressBlock}>
-          <Text style={[styles.addressTitle, { color: T.textMuted }]}>Your Wallet Address</Text>
-          <View style={[styles.addressBox, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
-            <Text style={[styles.addressText, { color: T.text }]} selectable>
-              {walletAddress || 'Waiting for address...'}
-            </Text>
-            <View style={[styles.addressActions, { borderTopColor: T.border }]}>
-              <TouchableOpacity
-                onPress={handleCopy}
-                style={[styles.actionBtn, { backgroundColor: T.surface }]}
-                activeOpacity={0.7}
-              >
-                <MaterialIcons name="content-copy" size={18} color={T.text} />
-                <Text style={[styles.actionBtnText, { color: T.text }]}>Copy</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleShare}
-                style={[styles.actionBtn, { backgroundColor: T.surface }]}
-                activeOpacity={0.7}
-              >
-                <MaterialIcons name="share" size={18} color={T.text} />
-                <Text style={[styles.actionBtnText, { color: T.text }]}>Share</Text>
-              </TouchableOpacity>
+        {/* Address Card */}
+        <View style={styles.addressContainer}>
+          <Text style={[styles.sectionLabel, { color: T.textDim }]}>WALLET ADDRESS</Text>
+          <TouchableOpacity style={[styles.addressBox, { backgroundColor: T.surface, borderColor: T.border }]} onPress={handleCopy} activeOpacity={0.9}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.addressValue, { color: T.text }]} numberOfLines={1}>
+                {walletAddress || '0x...'}
+              </Text>
+              <Text style={[styles.addressMeta, { color: T.textMuted }]}>Standard {selectedNet.symbol} Address</Text>
             </View>
-          </View>
+            <TouchableOpacity style={[styles.copyIconButton, { backgroundColor: T.surfaceLow }]} onPress={handleCopy}>
+              <Feather name="copy" size={18} color={T.primary} />
+            </TouchableOpacity>
+          </TouchableOpacity>
         </View>
 
-        {/* Instructions */}
-        <View style={styles.instructionsContainer}>
-          <View style={[styles.instructionCard, { backgroundColor: T.surfaceLow }]}>
-            <View style={[styles.instructionIconBox, { backgroundColor: T.error + '20' }]}>
-              <MaterialIcons name="security" size={20} color={T.error} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.instructionTitle, { color: T.text }]}>Send only compatible assets</Text>
-              <Text style={[styles.instructionBody, { color: T.textMuted }]}>
-                Sending unsupported tokens to this address may result in permanent loss.
-              </Text>
-            </View>
+        {/* Info Cards */}
+        <View style={styles.infoGrid}>
+          <View style={[styles.infoCard, { backgroundColor: T.surface, borderColor: T.border }]}>
+            <Feather name="shield" size={16} color={T.primary} />
+            <Text style={[styles.infoCardText, { color: T.text }]}>Secure Vault</Text>
           </View>
-
-          <View style={[styles.instructionCard, { backgroundColor: T.surfaceLow }]}>
-            <View style={[styles.instructionIconBox, { backgroundColor: T.primary + '20' }]}>
-              <MaterialIcons name="bolt" size={20} color={T.primary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.instructionTitle, { color: T.text }]}>Min. Deposit: 0.0001 ETH</Text>
-              <Text style={[styles.instructionBody, { color: T.textMuted }]}>
-                Amounts smaller than this will not be credited correctly to your account.
-              </Text>
-            </View>
+          <View style={[styles.infoCard, { backgroundColor: T.surface, borderColor: T.border }]}>
+            <Feather name="clock" size={16} color={T.success} />
+            <Text style={[styles.infoCardText, { color: T.text }]}>Instant Sync</Text>
           </View>
         </View>
 
       </ScrollView>
+
+      {/* Bottom Actions */}
+      <View style={[styles.footerContainer, { backgroundColor: isDarkMode ? 'rgba(10,10,12,0.95)' : 'rgba(247,249,251,0.97)', borderTopColor: T.border }]}>
+        <TouchableOpacity style={styles.primaryShareBtn} onPress={handleShare} activeOpacity={0.8}>
+          <LinearGradient
+            colors={[T.primary, '#D32F2F']}
+            style={styles.shareGradient}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+          >
+            <Feather name="share-2" size={18} color="#FFF" />
+            <Text style={styles.shareBtnText}>SHARE ASSET DETAILS</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
+
     </View>
   );
 }
@@ -245,46 +292,76 @@ export default function ReceiveScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
-    position: 'absolute', top: 0, width: '100%', zIndex: 50,
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 20, paddingTop: Platform.OS === 'web' ? 24 : 60, paddingBottom: 16,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 60 : 40, paddingBottom: 16,
   },
-  iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20 },
-  headerTitle: { fontSize: 18, fontWeight: '800' },
+  backBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 13, fontWeight: '900', letterSpacing: 2 },
 
-  scroll: { paddingTop: 100, paddingHorizontal: 24, paddingBottom: 60, alignItems: 'center' },
+  scroll: { paddingHorizontal: 24, paddingBottom: 150 },
 
-  sectionBlock: { width: '100%', marginBottom: 32 },
-  sectionLabel: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12, marginLeft: 4 },
-  networkBadge: { width: '100%', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderRadius: 16, borderWidth: 1 },
-  networkIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  networkName: { fontSize: 14, fontWeight: '600' },
-  networkArrival: { fontSize: 10, marginTop: 2 },
+  heroSection: { marginTop: 12, marginBottom: 24 },
+  heroTitle: { fontSize: 32, fontWeight: '800', letterSpacing: -1, marginBottom: 6 },
+  heroSubTitle: { fontSize: 14, lineHeight: 20, fontWeight: '500' },
 
-  networkSelector: { flexDirection: 'row', gap: 10, paddingRight: 20 },
-  netTab: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14, borderWidth: 1, minWidth: 110 },
-  netDot: { width: 8, height: 8, borderRadius: 4 },
-  netTabText: { fontSize: 13, fontWeight: '700' },
-  activeLabel: { backgroundColor: '#FF3B3B15', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  activeLabelText: { fontSize: 8, fontWeight: '900', color: '#FF3B3B' },
+  selectorContainer: { marginBottom: 32 },
+  selectorLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5, marginBottom: 10 },
+  networkMainBtn: {
+    flexDirection: 'row', alignItems: 'center',
+    borderRadius: 20, padding: 16, gap: 14, borderWidth: 1,
+  },
+  networkNameText: { fontSize: 16, fontWeight: '800', marginBottom: 2 },
+  networkStatusText: { fontSize: 12, fontWeight: '600' },
+  chevronBox: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
 
-  qrWrapper: { width: '100%', maxWidth: 320, aspectRatio: 1, marginBottom: 40 },
-  qrBox: { flex: 1, borderRadius: 40, padding: 32, alignItems: 'center', justifyContent: 'center', borderWidth: 12, shadowColor: '#FF544E', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.1, shadowRadius: 40 },
-  qrLogo: { position: 'absolute', top: '50%', left: '50%', transform: [{ translateX: -24 }, { translateY: -24 }], width: 48, height: 48, backgroundColor: '#FFF', borderRadius: 12, padding: 4 },
-  qrLogoInner: { flex: 1, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  qrLogoText: { fontSize: 10, fontWeight: '900', letterSpacing: -0.5 },
+  // Modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  modalDismissArea: { flex: 1 },
+  modalSheet: {
+    borderTopLeftRadius: 32, borderTopRightRadius: 32,
+    padding: 24, paddingBottom: Platform.OS === 'ios' ? 44 : 24, maxHeight: '80%',
+  },
+  modalIndicator: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 24 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalTitle: { fontSize: 20, fontWeight: '800' },
+  modalCloseBtn: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  modalNetRow: {
+    flexDirection: 'row', alignItems: 'center', padding: 18, borderRadius: 20,
+    marginBottom: 10, gap: 14, borderWidth: 1,
+  },
+  modalNetIconBox: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  modalNetName: { fontSize: 16, fontWeight: '700', marginBottom: 2 },
+  modalNetSub: { fontSize: 12, fontWeight: '600' },
+  activeCheck: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
 
-  addressBlock: { width: '100%', marginBottom: 32 },
-  addressTitle: { fontSize: 14, textAlign: 'center', marginBottom: 16 },
-  addressBox: { width: '100%', padding: 20, borderRadius: 24, borderWidth: 1 },
-  addressText: { fontSize: 14, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', textAlign: 'center', lineHeight: 22, marginBottom: 16 },
-  addressActions: { flexDirection: 'row', justifyContent: 'center', gap: 12, paddingTop: 16, borderTopWidth: 1 },
-  actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20 },
-  actionBtnText: { fontSize: 14, fontWeight: '600' },
+  // QR
+  qrContainer: { marginBottom: 32, borderRadius: 32, overflow: 'hidden', borderWidth: 1 },
+  qrCard: { padding: 32, alignItems: 'center' },
+  qrWrapper: {
+    backgroundColor: '#FFF', padding: 12, borderRadius: 24,
+    shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 12, elevation: 4,
+  },
+  qrFooter: { marginTop: 20 },
+  networkBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 100, gap: 8, borderWidth: 1 },
+  miniDot: { width: 6, height: 6, borderRadius: 3 },
+  networkBadgeText: { fontSize: 12, fontWeight: '700' },
 
-  instructionsContainer: { width: '100%', gap: 16 },
-  instructionCard: { flexDirection: 'row', padding: 20, borderRadius: 24, gap: 16, alignItems: 'flex-start' },
-  instructionIconBox: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  instructionTitle: { fontSize: 14, fontWeight: '700', marginBottom: 4 },
-  instructionBody: { fontSize: 12, lineHeight: 18 },
+  // Address
+  addressContainer: { marginBottom: 24 },
+  sectionLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5, marginBottom: 12 },
+  addressBox: { flexDirection: 'row', alignItems: 'center', borderRadius: 24, padding: 20, gap: 16, borderWidth: 1 },
+  addressValue: { fontSize: 15, fontWeight: '700', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', marginBottom: 4 },
+  addressMeta: { fontSize: 12, fontWeight: '600' },
+  copyIconButton: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+
+  // Info
+  infoGrid: { flexDirection: 'row', gap: 12 },
+  infoCard: { flex: 1, flexDirection: 'row', alignItems: 'center', borderRadius: 20, padding: 16, gap: 10, borderWidth: 1 },
+  infoCardText: { fontSize: 13, fontWeight: '700' },
+
+  // Footer
+  footerContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: Platform.OS === 'ios' ? 40 : 24, borderTopWidth: 1 },
+  primaryShareBtn: { height: 60, borderRadius: 30, overflow: 'hidden' },
+  shareGradient: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
+  shareBtnText: { color: '#FFF', fontSize: 14, fontWeight: '900', letterSpacing: 1 },
 });

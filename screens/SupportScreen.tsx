@@ -84,7 +84,7 @@ export default function SupportScreen({ navigation }: any) {
               <MaterialIcons name="email" size={22} color={T.primary} />
             </View>
             <Text style={[styles.contactCardTitle, { color: T.text }]}>Email Us</Text>
-            <Text style={[styles.contactCardSub, { color: T.textMuted }]}>support@crimson</Text>
+            <Text style={[styles.contactCardSub, { color: T.textMuted }]}>support@crimsoncapital.app</Text>
           </TouchableOpacity>
 
           <TouchableOpacity

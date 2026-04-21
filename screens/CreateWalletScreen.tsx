@@ -131,12 +131,12 @@ export default function CreateWalletScreen({ navigation }: any) {
   };
 
   const handleRemoveWord = (word: string, idx: number) => {
-    if (idx !== selectedWords.length - 1) return;
-    setSelected(prev => prev.slice(0, -1));
+    setSelected(prev => prev.filter((_, i) => i !== idx));
     setShuffled(prev => [...prev, word].sort(() => Math.random() - 0.5));
   };
 
   const handleGoToWallet = async () => {
+    if (loading) return; // prevent double-call
     setStep('done');
     setLoading(true);
     setSavingDone(false);
@@ -347,7 +347,7 @@ export default function CreateWalletScreen({ navigation }: any) {
         {step === 'verify' && (
           <TouchableOpacity
             style={[styles.primaryBtn, { backgroundColor: isVerificationCorrect ? T.primary : T.surfaceLow }]}
-            onPress={() => isVerificationCorrect && setStep('done')}
+            onPress={() => isVerificationCorrect && handleGoToWallet()}
             activeOpacity={0.8}
             disabled={!isVerificationCorrect}
           >
@@ -359,19 +359,9 @@ export default function CreateWalletScreen({ navigation }: any) {
         )}
 
         {step === 'done' && (
-          <TouchableOpacity
-            style={[styles.primaryBtn, { backgroundColor: T.primary, opacity: loading ? 0.7 : 1 }]}
-            onPress={handleGoToWallet}
-            activeOpacity={0.8}
-            disabled={loading}
-          >
-            {loading ? <ActivityIndicator color="#FFF" /> : (
-              <>
-                <Text style={styles.primaryBtnText}>Go to Wallet</Text>
-                <MaterialIcons name="chevron-right" size={24} color="#FFF" />
-              </>
-            )}
-          </TouchableOpacity>
+          <View style={[styles.primaryBtn, { backgroundColor: T.surfaceLow, opacity: 0.5 }]}>
+            <ActivityIndicator color="#FFF" />
+          </View>
         )}
       </View>
     </View>

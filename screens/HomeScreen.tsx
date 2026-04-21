@@ -1,12 +1,14 @@
 import React, { useCallback, useRef, memo, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Platform, Image, ActivityIndicator, Linking, RefreshControl, Animated,
+  Platform, Image, ActivityIndicator, Linking, RefreshControl, Animated, StatusBar, Dimensions,
 } from 'react-native';
 import { Feather, MaterialIcons } from '@expo/vector-icons';
-import { useWallet } from '../store/WalletContext';
+import { useWallet, useMarket } from '../store/WalletContext';
 import { Theme, COIN_META, COIN_COLORS } from '../constants';
 import { NewsItem } from '../services/marketService';
+
+const { width } = Dimensions.get('window');
 
 // ─── Skeleton pulse animation ─────────────────────────────────────────────────
 const SkeletonBox = memo(({ width, height, borderRadius = 8, style }: {
@@ -129,9 +131,7 @@ const NewsCard = memo(({ item, T }: { item: NewsItem; T: any }) => {
         if (!item.url) return;
         try {
           const u = new URL(item.url);
-          // Only allow safe protocols — block javascript:, data:, file:, etc.
           if (u.protocol !== 'https:' && u.protocol !== 'http:') return;
-          // Block private/local IP ranges to prevent SSRF-style abuse
           const host = u.hostname.toLowerCase();
           if (
             host === 'localhost' ||
@@ -161,95 +161,14 @@ const NewsCard = memo(({ item, T }: { item: NewsItem; T: any }) => {
   );
 });
 
-// ─── Web Dashboard ──────────────────────────────────────────────────────────
-const WebDashboard = ({ assetsList, totalUsd, T, walletName, transactions }: any) => {
-  return (
-    <View style={webStyles.container}>
-      <View style={webStyles.topRow}>
-        <View style={webStyles.heroColumn}>
-          <Text style={[webStyles.welcomeText, { color: T.textMuted }]}>Welcome back, {walletName}</Text>
-          <View style={[webStyles.portfolioCard, { backgroundColor: T.surface, borderColor: T.border }]}>
-            <Text style={[webStyles.portfolioLabel, { color: T.textMuted }]}>Total Portfolio Value</Text>
-            <Text style={[webStyles.portfolioValue, { color: T.text }]}>
-              ${totalUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </Text>
-            <View style={[webStyles.assetChartWrap, { borderTopColor: T.border }]}>
-              <Text style={[webStyles.chartTitle, { color: T.text }]}>Asset Allocation</Text>
-              <View style={webStyles.chartRow}>
-                {assetsList.filter((a: any) => a.usd > 0).slice(0, 4).map((a: any) => {
-                  const pct = totalUsd > 0 ? ((a.usd / totalUsd) * 100).toFixed(1) : '0.0';
-                  return (
-                    <View key={a.symbol} style={[webStyles.chartCol, { flex: parseFloat(pct) || 1 }]}>
-                      <View style={[webStyles.chartBar, { backgroundColor: COIN_COLORS[a.symbol] || T.primary }]} />
-                      <Text style={[webStyles.chartLabel, { color: T.text }]}>{a.symbol}</Text>
-                      <Text style={[webStyles.chartPercent, { color: T.textMuted }]}>{pct}%</Text>
-                    </View>
-                  );
-                })}
-              </View>
-            </View>
-          </View>
-
-          <View style={webStyles.activitySection}>
-            <View style={webStyles.sectionHead}>
-              <Text style={[webStyles.sectionTitle, { color: T.text }]}>Recent Activity</Text>
-            </View>
-            <View style={webStyles.activityList}>
-              {transactions.length === 0 ? (
-                <Text style={{ color: T.textMuted, fontSize: 14, paddingVertical: 20 }}>No transactions yet.</Text>
-              ) : transactions.slice(0, 5).map((tx: any, i: number) => {
-                const isDebit = tx.type === 'sent' || tx.type === 'card_spend';
-                return (
-                  <View key={tx.id} style={[webStyles.activityItem, { borderBottomColor: T.border }]}>
-                    <View style={webStyles.activityMeta}>
-                      <Text style={[webStyles.activityTitle, { color: T.text }]}>{tx.type.replace('_', ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}</Text>
-                      <Text style={[webStyles.activityDate, { color: T.textMuted }]}>{tx.date}</Text>
-                    </View>
-                    <Text style={[webStyles.activitySub, { color: T.textMuted }]} numberOfLines={1}>
-                      {tx.address.length > 20 ? `${tx.address.slice(0, 12)}...` : tx.address}
-                    </Text>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={[webStyles.activityAmount, { color: isDebit ? T.error : T.success }]}>
-                        {isDebit ? '-' : '+'}{tx.amount} {tx.coin}
-                      </Text>
-                      <Text style={[webStyles.activityStatus, { color: T.textMuted }]}>{tx.status}</Text>
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-        </View>
-
-        <View style={webStyles.sideColumn}>
-          <View style={[webStyles.marketPulseCard, { backgroundColor: T.surface, borderColor: T.border, borderWidth: 1 }]}>
-            <Text style={[webStyles.pulseLabel, { color: T.text }]}>Market Pulse</Text>
-            {assetsList.slice(0, 3).map((a: any) => {
-              const isUp = a.change24h >= 0;
-              return (
-                <View key={a.symbol} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: T.border }}>
-                  <Text style={{ color: T.text, fontWeight: '700', fontSize: 14 }}>{a.symbol}</Text>
-                  <Text style={{ color: isUp ? T.success : T.error, fontWeight: '700', fontSize: 14 }}>
-                    {isUp ? '+' : ''}{a.change24h.toFixed(2)}%
-                  </Text>
-                </View>
-              );
-            })}
-          </View>
-        </View>
-      </View>
-    </View>
-  );
-};
-
 // ─── Main screen ───────────────────────────────────────────────────────────────
 export default function HomeScreen({ navigation }: any) {
   const {
-    ethBalance, balances, isDarkMode, walletName,
-    prices, isPricesLoading, priceError, refreshPrices,
-    news, isNewsLoading, isLoadingBalance, refreshBalance,
-    balanceVisible, toggleBalanceVisible, network, refreshNews, transactions,
+    ethBalance, balances, isDarkMode, walletName, walletAddress,
+    isLoadingBalance, refreshBalance,
+    balanceVisible, toggleBalanceVisible, network, transactions,
   } = useWallet();
+  const { prices, isPricesLoading, priceError, refreshPrices, news, isNewsLoading, refreshNews } = useMarket();
 
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
 
@@ -265,6 +184,7 @@ export default function HomeScreen({ navigation }: any) {
         const change24h = prices[symbol]?.change24h ?? 0;
         return { symbol, amount: realBalances[symbol], usd: realBalances[symbol] * price, change24h };
       })
+      .filter(a => a.amount > 0)
       .sort((a, b) => b.usd - a.usd),
     [realBalances, prices]
   );
@@ -279,38 +199,26 @@ export default function HomeScreen({ navigation }: any) {
   const networkColor = network === 'Sepolia' ? '#F59E0B' : network === 'Polygon' ? '#8247E5' : '#627EEA';
   const isInitialLoad = isPricesLoading && totalUsd === 0;
 
-  if (Platform.OS === 'web') {
-    return <WebDashboard assetsList={assetsList} totalUsd={totalUsd} T={T} walletName={walletName} transactions={transactions} />;
-  }
-
   return (
     <View style={[styles.container, { backgroundColor: T.background }]}>
-      
-      {/* Testnet Ribbon — only show on testnet */}
-      {network === 'Sepolia' && (
-        <View style={styles.testnetRibbon}>
-          <Text style={styles.testnetText}>
-            RUNNING ON SEPOLIA TESTNET · NO REAL FUNDS
-          </Text>
-        </View>
-      )}
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
       {/* ── Header ── */}
-      <View style={[styles.header, { backgroundColor: isDarkMode ? 'rgba(19,19,19,0.97)' : 'rgba(247,249,251,0.97)', top: Platform.OS === 'ios' ? 24 : 0 }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+      <View style={[styles.header, { backgroundColor: isDarkMode ? 'rgba(19,19,19,0.92)' : 'rgba(247,249,251,0.95)', top: Platform.OS === 'ios' ? 24 : 0 }]}>
+        <View style={styles.headerLeft}>
           <View style={[styles.avatar, { borderColor: T.border, backgroundColor: T.surfaceLow }]}>
-            <Text style={{ color: T.primary, fontWeight: '800', fontSize: 16 }}>
+            <Text style={{ color: T.primary, fontWeight: '900', fontSize: 16 }}>
               {walletName.charAt(0).toUpperCase()}
             </Text>
           </View>
           <View>
-            <Text style={[styles.logoText, { color: T.primary }]}>CryptoWallet</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <View style={[styles.networkDot, { backgroundColor: networkColor }]} />
-              <Text style={{ fontSize: 11, color: T.textMuted, fontWeight: '600' }}>{network}</Text>
-            </View>
+            <Text style={[styles.walletLabel, { color: T.text }]}>{walletName}</Text>
+            <Text style={{ fontSize: 10, color: T.textMuted, fontWeight: '600', letterSpacing: 0.2 }}>
+              {walletAddress ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}` : ''}
+            </Text>
           </View>
         </View>
+
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           <TouchableOpacity style={styles.headerBtn} onPress={() => navigation.navigate('Receive')} activeOpacity={0.7}>
             <MaterialIcons name="qr-code" size={22} color={T.text} />
@@ -328,7 +236,7 @@ export default function HomeScreen({ navigation }: any) {
       </View>
 
       <ScrollView
-        contentContainerStyle={[styles.scroll, network !== 'Sepolia' && { paddingTop: 96 }]}
+        contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={isLoadingBalance} onRefresh={onRefresh} tintColor={T.primary} />}
       >
@@ -517,27 +425,14 @@ export default function HomeScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  testnetRibbon: {
-    backgroundColor: '#FEF3C7',
-    paddingVertical: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: Platform.OS === 'ios' ? 50 : 10,
-  },
-  testnetText: {
-    color: '#D97706',
-    fontSize: 10,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
   header: {
     position: 'absolute', top: 0, width: '100%', zIndex: 50,
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: 20, paddingTop: Platform.OS === 'web' ? 20 : 56, paddingBottom: 14,
   },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   avatar: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
-  logoText: { fontSize: 17, fontWeight: '800', letterSpacing: -0.5 },
-  networkDot: { width: 7, height: 7, borderRadius: 4 },
+  walletLabel: { fontSize: 16, fontWeight: '800', letterSpacing: -0.5 },
   headerBtn: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 19 },
 
   scroll: { paddingTop: 116, paddingHorizontal: 20, paddingBottom: 60 },
@@ -551,10 +446,8 @@ const styles = StyleSheet.create({
   balanceCurrency: { fontSize: 20, fontWeight: '700' },
   changePill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
 
-  // Actions row — clear bottom margin so Virtual Card has its own space
   actionsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 },
 
-  // Virtual Card Banner — proper spacing top and bottom
   cardBanner: {
     flexDirection: 'row', alignItems: 'center', gap: 14,
     padding: 18, borderRadius: 20, borderWidth: 1,
@@ -566,7 +459,6 @@ const styles = StyleSheet.create({
   openBtn: { paddingHorizontal: 18, paddingVertical: 9, borderRadius: 20 },
   openBtnText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
 
-  // My Assets — clear card with proper padding
   assetsContainer: { borderRadius: 22, padding: 18, borderWidth: 1 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   sectionTitle: { fontSize: 17, fontWeight: '800' },
@@ -593,77 +485,5 @@ const styles = StyleSheet.create({
   newsMeta: { fontSize: 11, fontWeight: '500' },
   newsPlaceholder: { padding: 40, borderRadius: 16, borderWidth: 1, alignItems: 'center', gap: 8 },
   retryBtn: { marginTop: 8, paddingHorizontal: 24, paddingVertical: 10, borderRadius: 20 },
+
 });
-
-const webStyles = StyleSheet.create({
-  container: { flex: 1 },
-  topRow: { flexDirection: 'row', gap: 48 },
-  heroColumn: { flex: 2.2 },
-  welcomeText: { fontSize: 18, fontWeight: '700', marginBottom: 24, letterSpacing: -0.4 },
-  portfolioCard: {
-    backgroundColor: '#1C1D21',
-    borderRadius: 32,
-    padding: 40,
-    marginBottom: 48,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.3,
-    shadowRadius: 40,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
-  },
-  portfolioLabel: { fontSize: 13, fontWeight: '800', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 12 },
-  portfolioValue: { fontSize: 56, fontWeight: '900', letterSpacing: -2, marginBottom: 40 },
-  assetChartWrap: { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)', paddingTop: 32 },
-  chartTitle: { fontSize: 15, fontWeight: '800', marginBottom: 24 },
-  chartRow: { flexDirection: 'row', gap: 12 },
-  chartCol: { gap: 8 },
-  chartBar: { width: '100%' },
-  chartLabel: { fontSize: 13, fontWeight: '800' },
-  chartPercent: { fontSize: 12, fontWeight: '600' },
-
-  activitySection: { flex: 1 },
-  sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 },
-  sectionTitle: { fontSize: 24, fontWeight: '800', letterSpacing: -0.6 },
-  activityList: { gap: 4 },
-  activityItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-    gap: 24,
-  },
-  activityMeta: { flex: 1.2 },
-  activityTitle: { fontSize: 16, fontWeight: '700', marginBottom: 4 },
-  activityDate: { fontSize: 12, fontWeight: '600' },
-  activitySub: { flex: 1, fontSize: 14, fontWeight: '600' },
-  activityAmount: { fontSize: 16, fontWeight: '800', marginBottom: 4 },
-  activityStatus: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
-
-  sideColumn: { flex: 1, gap: 32 },
-  eliteCard: {
-    borderRadius: 32,
-    padding: 32,
-    minHeight: 340,
-    justifyContent: 'space-between',
-    borderWidth: 1,
-  },
-  eliteHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  eliteDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#FF3B3B' },
-  eliteTitle: { color: '#FFF', fontSize: 15, fontWeight: '800', letterSpacing: 0.5 },
-  eliteDesc: { color: 'rgba(255,255,255,0.7)', fontSize: 18, fontWeight: '600', lineHeight: 28 },
-  eliteFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  eliteUser: { color: '#FFF', fontSize: 13, fontWeight: '800', letterSpacing: 1 },
-  eliteChip: { backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  eliteChipText: { color: '#FFF', fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
-
-  marketPulseCard: {
-    borderRadius: 32,
-    padding: 32,
-    gap: 12,
-  },
-  pulseLabel: { fontSize: 15, fontWeight: '800' },
-  pulseValue: { fontSize: 28, fontWeight: '900', letterSpacing: -0.5 },
-  pulseInfo: { fontSize: 14, fontWeight: '600', lineHeight: 22 },
-});
-

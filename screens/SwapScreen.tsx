@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   ScrollView, ActivityIndicator, Image, Platform, Modal,
 } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useWallet } from '../store/WalletContext';
+import { useWallet, useMarket } from '../store/WalletContext';
 import { Theme } from '../constants';
 import Toast from '../components/Toast';
 import { swapService, SwapQuote } from '../services/swapService';
@@ -40,10 +40,21 @@ function CoinIcon({ sym, size = 28 }: { sym: string; size?: number }) {
   );
 }
 
+// Defined outside component to avoid recreation on every render
+const TokenSelector = memo(({ sym, onPress, styles, T }: any) => (
+  <TouchableOpacity style={styles.tokenSelector} onPress={onPress} activeOpacity={0.7}>
+    <CoinIcon sym={sym} size={28} />
+    <Text style={[styles.selectorText, { color: T.text }]}>{sym}</Text>
+    <Feather name="chevron-down" size={16} color={T.textDim} />
+  </TouchableOpacity>
+));
+
 export default function SwapScreen({ navigation }: any) {
-  const { balances, ethBalance, prices, isDarkMode, network, refreshBalance, walletAddress } = useWallet();
+  const { balances, ethBalance, isDarkMode, network, refreshBalance, walletAddress } = useWallet();
+  const { prices } = useMarket();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
-  const styles = makeStyles(T);
+  // Memoize styles — only recompute when theme changes
+  const styles = useMemo(() => makeStyles(T), [T]);
 
   const [fromCoin, setFromCoin] = useState('ETH');
   const [toCoin, setToCoin]     = useState('USDT');
@@ -51,6 +62,7 @@ export default function SwapScreen({ navigation }: any) {
   const [loading, setLoading]   = useState(false);
   const [quoting, setQuoting]   = useState(false);
   const [quote, setQuote]       = useState<SwapQuote | null>(null);
+  const [isFallbackQuote, setIsFallbackQuote] = useState(false);
   const [toast, setToast]       = useState({ visible: false, message: '', type: 'success' as 'success' | 'error' | 'info' });
   const [selectorVisible, setSelectorVisible] = useState(false);
   const [selectorTarget, setSelectorTarget] = useState<'from' | 'to'>('from');
@@ -75,8 +87,9 @@ export default function SwapScreen({ navigation }: any) {
     const t = setTimeout(async () => {
       setQuoting(true);
       let q = await swapService.getQuote(fromCoin, toCoin, amount, network);
+      let fallback = false;
 
-      // Fallback: if 0x API fails, estimate from live prices
+      // Fallback: if 0x API fails, estimate from live prices (display only)
       if (!q) {
         const fromUsd = prices[fromCoin]?.usd ?? 0;
         const toUsd   = prices[toCoin]?.usd   ?? 1;
@@ -88,10 +101,12 @@ export default function SwapScreen({ navigation }: any) {
             estimatedGas: '0.002',
             rate:         (fromUsd / toUsd).toFixed(6),
           };
+          fallback = true;
         }
       }
 
       setQuote(q);
+      setIsFallbackQuote(fallback);
       setQuoting(false);
     }, 700);
     return () => clearTimeout(t);
@@ -102,18 +117,19 @@ export default function SwapScreen({ navigation }: any) {
     if (!amount || parsed <= 0)  { showToast('Enter a valid amount', 'error'); return; }
     if (parsed > fromBalance)    { showToast('Insufficient balance.', 'error'); return; }
     if (!isSupported)            { showToast('Switch to support network to swap.', 'error'); return; }
-    if (!quote)                  { showToast('Waiting for quote...', 'info'); return; }
+    if (!quote || isFallbackQuote) { showToast('Waiting for live quote from 0x...', 'info'); return; }
 
     setLoading(true);
     try {
       const privateKey = await (await import('../services/storageService')).storageService.getPrivateKey();
+      if (!privateKey) { showToast('Wallet not found. Please re-import.', 'error'); setLoading(false); return; }
       const { ethereumService } = await import('../services/ethereumService');
       const { ethers } = await import('ethers');
       const { RPC_URLS } = await import('../config');
       const provider = new ethers.providers.JsonRpcProvider(RPC_URLS[network]);
 
       const result = await swapService.executeSwap(
-        fromCoin, toCoin, amount, walletAddress, privateKey!, provider, network
+        fromCoin, toCoin, amount, walletAddress, privateKey, provider, network
       );
 
       if (result.success) {
@@ -149,13 +165,13 @@ export default function SwapScreen({ navigation }: any) {
     setQuote(null);
   };
 
-  const TokenSelector = ({ sym, onPress }: any) => (
-    <TouchableOpacity style={styles.tokenSelector} onPress={onPress} activeOpacity={0.7}>
-      <CoinIcon sym={sym} size={28} />
-      <Text style={[styles.selectorText, { color: T.text }]}>{sym}</Text>
-      <Feather name="chevron-down" size={16} color={T.textDim} />
-    </TouchableOpacity>
-  );
+  const TokenSelectorFrom = useCallback(() => (
+    <TokenSelector sym={fromCoin} onPress={() => openSelector('from')} styles={styles} T={T} />
+  ), [fromCoin, styles, T]);
+
+  const TokenSelectorTo = useCallback(() => (
+    <TokenSelector sym={toCoin} onPress={() => openSelector('to')} styles={styles} T={T} />
+  ), [toCoin, styles, T]);
 
   return (
     <View style={styles.container}>
@@ -195,7 +211,7 @@ export default function SwapScreen({ navigation }: any) {
               <Text style={[styles.balanceLabel, { color: T.textDim }]}>Balance: {fromBalance.toLocaleString(undefined, { maximumFractionDigits: 4 })} {fromCoin}</Text>
             </View>
             <View style={styles.cardContent}>
-              <TokenSelector sym={fromCoin} onPress={() => openSelector('from')} />
+              <TokenSelectorFrom />
               <View style={styles.amountContainer}>
                 <TextInput
                   style={[styles.amountInput, { color: T.text }]}
@@ -234,7 +250,7 @@ export default function SwapScreen({ navigation }: any) {
               <Text style={[styles.balanceLabel, { color: T.textDim }]}>Estimated</Text>
             </View>
             <View style={styles.cardContent}>
-              <TokenSelector sym={toCoin} onPress={() => openSelector('to')} />
+              <TokenSelectorTo />
               <View style={styles.amountContainer}>
                 {quoting ? (
                   <ActivityIndicator size="small" color={T.primary} style={{ alignSelf: 'flex-end', marginBottom: 10 }} />
@@ -248,6 +264,16 @@ export default function SwapScreen({ navigation }: any) {
             </View>
           </View>
         </View>
+
+        {/* Fallback quote warning */}
+        {isFallbackQuote && quote && (
+          <View style={[styles.warnBanner, { backgroundColor: T.pending + '18', borderColor: T.pending + '40', marginBottom: 16 }]}>
+            <Feather name="alert-triangle" size={14} color={T.pending} />
+            <Text style={[styles.warnText, { color: T.pending }]}>
+              Live quote unavailable. Shown amount is an estimate only. Confirm Swap is disabled until a real quote loads.
+            </Text>
+          </View>
+        )}
 
         {/* DETAILS */}
         <View style={[styles.detailsBox, { backgroundColor: T.surface, borderColor: T.border }]}>
@@ -279,9 +305,9 @@ export default function SwapScreen({ navigation }: any) {
 
         {/* SWAP BUTTON */}
         <TouchableOpacity
-          style={[styles.mainAction, { backgroundColor: T.primary, opacity: loading || !amount || !isSupported ? 0.6 : 1 }]}
+          style={[styles.mainAction, { backgroundColor: T.primary, opacity: loading || !amount || !isSupported || isFallbackQuote ? 0.6 : 1 }]}
           onPress={handleSwap}
-          disabled={loading || !amount || !isSupported}
+          disabled={loading || !amount || !isSupported || isFallbackQuote}
           activeOpacity={0.8}
         >
           {loading ? (

@@ -18,9 +18,15 @@ export default function LandingScreen({ navigation }: any) {
           <Text style={[styles.headerTitle, { color: T.primary, fontSize: 24 }]}>CryptoWallet</Text>
           <View style={{ flex: 1 }} />
           <View style={styles.webNavLinks}>
-            <Text style={[styles.webNavLink, { color: T.textMuted }]}>Wealth Management</Text>
-            <Text style={[styles.webNavLink, { color: T.textMuted }]}>Security Ledger</Text>
-            <Text style={[styles.webNavLink, { color: T.textMuted }]}>Governance</Text>
+            <TouchableOpacity onPress={() => {}} activeOpacity={0.7}>
+              <Text style={[styles.webNavLink, { color: T.textMuted }]}>Wealth Management</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => {}} activeOpacity={0.7}>
+              <Text style={[styles.webNavLink, { color: T.textMuted }]}>Security Ledger</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => {}} activeOpacity={0.7}>
+              <Text style={[styles.webNavLink, { color: T.textMuted }]}>Governance</Text>
+            </TouchableOpacity>
             <TouchableOpacity 
               style={[styles.webNavBtn, { backgroundColor: T.primary }]}
               onPress={() => navigation.navigate('CreateWallet')}
@@ -35,7 +41,7 @@ export default function LandingScreen({ navigation }: any) {
           <View style={styles.heroContent}>
             <View style={webLandingStyles.securityPill}>
                <Feather name="shield" size={14} color={T.primary} />
-               <Text style={[webLandingStyles.securityPillText, { color: T.primary }]}>SOC2 TYPE II COMPLIANT</Text>
+               <Text style={[webLandingStyles.securityPillText, { color: T.primary }]}>NON-CUSTODIAL · OPEN SOURCE</Text>
             </View>
             <Text style={[styles.heroTitle, { color: T.text, fontSize: 80, lineHeight: 88 }]}>
               The Future of{'\n'}
@@ -91,17 +97,17 @@ export default function LandingScreen({ navigation }: any) {
               <View style={webLandingStyles.securityText}>
                  <Text style={webLandingStyles.securityTitle}>Multi-Layer Global Security</Text>
                  <Text style={webLandingStyles.securityDesc}>
-                    Your assets are protected by a combination of physical hardware modules, multi-party computation, and institutional insurance coverage up to $500M USD.
+                    Your assets are protected by OS-level encryption and non-custodial key storage. Only you hold your private keys — no third party can access your funds.
                  </Text>
               </View>
               <View style={webLandingStyles.securityStats}>
                  <View style={webLandingStyles.statBox}>
                     <Text style={webLandingStyles.statVal}>100%</Text>
-                    <Text style={webLandingStyles.statLab}>Cold Storage</Text>
+                    <Text style={webLandingStyles.statLab}>Non-Custodial</Text>
                  </View>
                  <View style={webLandingStyles.statBox}>
-                    <Text style={webLandingStyles.statVal}>&lt; 2ms</Text>
-                    <Text style={webLandingStyles.statLab}>Execution Speed</Text>
+                    <Text style={webLandingStyles.statVal}>0</Text>
+                    <Text style={webLandingStyles.statLab}>Data Collected</Text>
                  </View>
               </View>
            </LinearGradient>
@@ -109,7 +115,7 @@ export default function LandingScreen({ navigation }: any) {
 
         {/* Footer */}
         <View style={[styles.webFooter, { borderTopColor: T.border + '20' }]}>
-          <Text style={[styles.webFooterText, { color: T.textMuted }]}>© 2026 CryptoWallet Professional. Registered Secure Crypto Services.</Text>
+          <Text style={[styles.webFooterText, { color: T.textMuted }]}>© 2025 CryptoWallet. Self-custody wallet. Not a financial service.</Text>
           <View style={styles.webFooterLinks}>
             <Text style={[styles.webFooterLink, { color: T.textMuted }]}>Institutions</Text>
             <Text style={[styles.webFooterLink, { color: T.textMuted }]}>Privacy</Text>

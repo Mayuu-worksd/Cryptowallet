@@ -4,7 +4,7 @@ import {
   ActivityIndicator, Image, Platform, Animated, Dimensions,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useWallet } from '../store/WalletContext';
+import { useWallet, useMarket } from '../store/WalletContext';
 import { Theme, COIN_META, COIN_COLORS } from '../constants';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -71,7 +71,8 @@ function Sparkline({ prices, color, width, height }: {
 
 export default function CoinChartScreen({ route, navigation }: any) {
   const { symbol } = route.params as { symbol: string };
-  const { isDarkMode, prices, balances, ethBalance } = useWallet();
+  const { isDarkMode, balances, ethBalance } = useWallet();
+  const { prices } = useMarket();
   const T     = isDarkMode ? Theme.colors : Theme.lightColors;
   const color = COIN_COLORS[symbol] ?? T.primary;
   const meta  = COIN_META[symbol];
@@ -135,6 +136,8 @@ export default function CoinChartScreen({ route, navigation }: any) {
 
   useEffect(() => { fetchChart(range); }, [range, symbol]);
 
+  const chartMin = chartData.length ? chartData.slice(-500).reduce((m, v) => v < m ? v : m, Infinity) : 0;
+  const chartMax = chartData.length ? chartData.slice(-500).reduce((m, v) => v > m ? v : m, -Infinity) : 0;
   const pctChange = chartData.length >= 2
     ? ((chartData[chartData.length - 1] - chartData[0]) / chartData[0]) * 100
     : change24h;
@@ -199,10 +202,10 @@ export default function CoinChartScreen({ route, navigation }: any) {
               {/* Min / Max labels */}
               <View style={styles.chartLabels}>
                 <Text style={[styles.chartLabel, { color: T.textMuted }]}>
-                  Low: ${Math.min(...chartData.slice(-Math.min(chartData.length, 500))).toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                  Low: ${chartMin.toLocaleString('en-US', { maximumFractionDigits: 2 })}
                 </Text>
                 <Text style={[styles.chartLabel, { color: T.textMuted }]}>
-                  High: ${Math.max(...chartData.slice(-Math.min(chartData.length, 500))).toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                  High: ${chartMax.toLocaleString('en-US', { maximumFractionDigits: 2 })}
                 </Text>
               </View>
             </Animated.View>
@@ -250,8 +253,8 @@ export default function CoinChartScreen({ route, navigation }: any) {
           {[
             { label: 'Current Price', value: formatPrice(priceNow) },
             { label: '24h Change',    value: `${isUp ? '+' : ''}${change24h.toFixed(2)}%`, color: isUp ? T.success : T.error },
-            { label: 'Range High', value: chartData.length ? `$${Math.max(...chartData.slice(-Math.min(chartData.length,500))).toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '—' },
-            { label: 'Range Low',  value: chartData.length ? `$${Math.min(...chartData.slice(-Math.min(chartData.length,500))).toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '—' },
+            { label: 'Range High', value: chartData.length ? `$${chartMax.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '—' },
+            { label: 'Range Low',  value: chartData.length ? `$${chartMin.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '—' },
           ].map((stat, i, arr) => (
             <View key={stat.label} style={[styles.statRow, i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: T.border }]}>
               <Text style={[styles.statLabel, { color: T.textMuted }]}>{stat.label}</Text>

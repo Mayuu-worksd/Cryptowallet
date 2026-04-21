@@ -1,8 +1,9 @@
 import React, { useEffect, useRef } from 'react';
 import {
-  View, Text, StyleSheet, Animated, StatusBar, Dimensions,
+  View, Text, StyleSheet, Animated, StatusBar, Dimensions, Image, ActivityIndicator,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { Theme } from '../constants';
 
 const { width, height } = Dimensions.get('window');
 
@@ -13,169 +14,231 @@ interface Props {
 export default function SplashScreen({ onFinish }: Props) {
   const logoScale      = useRef(new Animated.Value(0.3)).current;
   const logoOpacity    = useRef(new Animated.Value(0)).current;
-  const ringScale      = useRef(new Animated.Value(0.5)).current;
-  const ringOpacity    = useRef(new Animated.Value(0)).current;
-  const titleOpacity   = useRef(new Animated.Value(0)).current;
-  const titleY         = useRef(new Animated.Value(24)).current;
-  const taglineOpacity = useRef(new Animated.Value(0)).current;
+  const contentY       = useRef(new Animated.Value(30)).current;
+  const contentOpacity = useRef(new Animated.Value(0)).current;
+  const footerOpacity  = useRef(new Animated.Value(0)).current;
   const screenOpacity  = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    // rings fade in
-    Animated.timing(ringOpacity, { toValue: 0.18, duration: 600, useNativeDriver: true }).start();
-    Animated.spring(ringScale,   { toValue: 1, useNativeDriver: true, speed: 6, bounciness: 8 }).start();
+    // 1. Logo pop in
+    Animated.parallel([
+      Animated.spring(logoScale, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 40,
+        friction: 7,
+      }),
+      Animated.timing(logoOpacity, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+    ]).start();
 
-    // logo pops in
+    // 2. Text slide up
     Animated.sequence([
-      Animated.delay(250),
+      Animated.delay(400),
       Animated.parallel([
-        Animated.spring(logoScale,   { toValue: 1, useNativeDriver: true, speed: 10, bounciness: 14 }),
-        Animated.timing(logoOpacity, { toValue: 1, duration: 450, useNativeDriver: true }),
+        Animated.spring(contentY, {
+          toValue: 0,
+          useNativeDriver: true,
+          tension: 30,
+          friction: 8,
+        }),
+        Animated.timing(contentOpacity, {
+          toValue: 1,
+          duration: 600,
+          useNativeDriver: true,
+        }),
       ]),
     ]).start();
 
-    // title slides up
+    // 3. Footer fade in
     Animated.sequence([
-      Animated.delay(600),
-      Animated.parallel([
-        Animated.timing(titleOpacity,  { toValue: 1, duration: 400, useNativeDriver: true }),
-        Animated.spring(titleY, { toValue: 0, useNativeDriver: true, speed: 14, bounciness: 6 }),
-      ]),
+      Animated.delay(800),
+      Animated.timing(footerOpacity, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
     ]).start();
 
-    // tagline / badge
+    // 4. Finish sequence
     Animated.sequence([
-      Animated.delay(950),
-      Animated.timing(taglineOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
-    ]).start();
-
-    // fade out → trigger navigation
-    Animated.sequence([
-      Animated.delay(2500),
-      Animated.timing(screenOpacity, { toValue: 0, duration: 500, useNativeDriver: true }),
+      Animated.delay(3500),
+      Animated.timing(screenOpacity, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
     ]).start(() => onFinish());
   }, []);
 
   return (
     <Animated.View style={[styles.wrapper, { opacity: screenOpacity }]}>
-      <StatusBar barStyle="light-content" backgroundColor="#B00020" />
+      <StatusBar barStyle="light-content" backgroundColor={Theme.colors.primary} />
 
-      {/* Background */}
-      <View style={styles.bg} />
+      {/* Background with Depth */}
+      <View style={[styles.bg, { backgroundColor: Theme.colors.primary }]}>
+        <View style={styles.gradientOverlay} />
+      </View>
 
-      {/* Decorative rings */}
-      <Animated.View style={[styles.outerRing, { transform: [{ scale: ringScale }], opacity: ringOpacity }]} />
-      <Animated.View style={[styles.innerRing, { transform: [{ scale: ringScale }], opacity: ringOpacity }]} />
+      {/* Main Content Area */}
+      <View style={styles.content}>
+        <Animated.View style={[
+          styles.logoContainer,
+          { transform: [{ scale: logoScale }], opacity: logoOpacity }
+        ]}>
+          <View style={styles.logoShadow} />
+          <View style={styles.logoBox}>
+            <Image 
+              source={require('../assets/icon.png')} 
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+          </View>
+        </Animated.View>
 
-      {/* Logo */}
-      <Animated.View style={[styles.logoMark, { transform: [{ scale: logoScale }], opacity: logoOpacity }]}>
-        <View style={styles.logoCircle}>
-          <Feather name="shield" size={44} color="#FF3B3B" />
+        <Animated.View style={{ 
+          opacity: contentOpacity, 
+          transform: [{ translateY: contentY }],
+          alignItems: 'center'
+        }}>
+          <Text style={styles.appName}>CRYPTO WALLET</Text>
+          <Text style={styles.tagline}>SECURE ASSET MANAGEMENT</Text>
+          
+          <View style={styles.loaderContainer}>
+            <ActivityIndicator color="rgba(255,255,255,0.8)" size="small" />
+          </View>
+        </Animated.View>
+      </View>
+
+      {/* Footer Area */}
+      <Animated.View style={[styles.footer, { opacity: footerOpacity }]}>
+        <View style={styles.poweredBy}>
+          <Text style={styles.poweredText}>POWERED BY</Text>
+          <Text style={styles.brandText}>CHAINSPLIT</Text>
         </View>
-      </Animated.View>
 
-      {/* App name */}
-      <Animated.Text style={[styles.appName, { opacity: titleOpacity, transform: [{ translateY: titleY }] }]}>
-        CryptoWallet
-      </Animated.Text>
-
-      {/* Tagline */}
-      <Animated.Text style={[styles.tagline, { opacity: taglineOpacity }]}>
-        Your Digital Assets, Secured
-      </Animated.Text>
-
-      {/* Bottom badge */}
-      <Animated.View style={[styles.bottomBadge, { opacity: taglineOpacity }]}>
-        <View style={styles.dot} />
-        <Text style={styles.badgeText}>Powered by ChainSplit</Text>
-        <View style={styles.dot} />
+        <View style={styles.badge}>
+          <Feather name="shield" size={14} color="rgba(255,255,255,0.6)" />
+          <Text style={styles.badgeText}>END-TO-END ENCRYPTED</Text>
+        </View>
       </Animated.View>
     </Animated.View>
   );
 }
 
-const RING = width * 1.1;
-
 const styles = StyleSheet.create({
   wrapper: {
     ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 999,
+    zIndex: 9999,
   },
   bg: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#C00022',
+    overflow: 'hidden',
   },
-  outerRing: {
+  gradientOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+  },
+  content: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 40,
+  },
+  logoContainer: {
+    marginBottom: 40,
+    width: 100,
+    height: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoShadow: {
     position: 'absolute',
-    width: RING,
-    height: RING,
-    borderRadius: RING / 2,
-    borderWidth: 55,
-    borderColor: '#FFFFFF',
-    top:  height / 2 - RING / 2,
-    left: width  / 2 - RING / 2,
+    width: 80,
+    height: 80,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    transform: [{ translateY: 10 }],
+    filter: 'blur(15px)',
   },
-  innerRing: {
-    position: 'absolute',
-    width: RING * 0.55,
-    height: RING * 0.55,
-    borderRadius: (RING * 0.55) / 2,
-    borderWidth: 28,
-    borderColor: '#FFFFFF',
-    top:  height / 2 - (RING * 0.55) / 2,
-    left: width  / 2 - (RING * 0.55) / 2,
-  },
-  logoMark: {
-    marginBottom: 28,
-  },
-  logoCircle: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
+  logoBox: {
+    width: 90,
+    height: 90,
+    borderRadius: 22,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.28,
-    shadowRadius: 20,
-    elevation: 14,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  logoImage: {
+    width: '70%',
+    height: '70%',
   },
   appName: {
-    fontSize: 38,
+    fontSize: 34,
     fontWeight: '900',
     color: '#FFFFFF',
-    letterSpacing: -0.5,
-    textShadowColor: 'rgba(0,0,0,0.18)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 8,
+    letterSpacing: -1,
+    textAlign: 'center',
   },
   tagline: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.72)',
-    marginTop: 10,
-    letterSpacing: 0.4,
+    fontSize: 10,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.7)',
+    letterSpacing: 3,
+    marginTop: 8,
+    textAlign: 'center',
   },
-  bottomBadge: {
+  loaderContainer: {
+    marginTop: 64,
+  },
+  footer: {
     position: 'absolute',
     bottom: 54,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  poweredBy: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  poweredText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: 'rgba(255,255,255,0.4)',
+    letterSpacing: 4,
+  },
+  brandText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    marginTop: 2,
+    letterSpacing: 0.5,
+  },
+  badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-  },
-  dot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: 'rgba(0,0,0,0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 100,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    gap: 6,
   },
   badgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.45)',
-    letterSpacing: 0.6,
+    fontSize: 10,
+    fontWeight: '800',
+    color: 'rgba(255,255,255,0.6)',
+    letterSpacing: 1,
   },
 });

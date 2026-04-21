@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
+import React, { useState, useEffect, useCallback, useRef, memo, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ScrollView, TextInput, Platform, Linking, Modal,
@@ -6,17 +6,22 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { ethers } from 'ethers';
-import { useWallet, Transaction } from '../store/WalletContext';
+import { useWallet, useMarket, Transaction } from '../store/WalletContext';
 import { Theme } from '../constants';
 import { etherscanService, ChainTx } from '../services/etherscanService';
 
-const TYPE_CONFIG = (T: any): Record<string, { label: string; color: string; icon: string; bg: string }> => ({
-  sent:       { label: 'Sent',        color: T.error,   icon: 'arrow-up-right',  bg: T.error   + '18' },
-  received:   { label: 'Received',    color: T.success, icon: 'arrow-down-left', bg: T.success + '18' },
-  card_topup: { label: 'Card Top-up', color: '#2563EB', icon: 'credit-card',     bg: '#2563EB18' },
-  card_spend: { label: 'Card Spend',  color: '#7C3AED', icon: 'shopping-cart',   bg: '#7C3AED18' },
-  swap:       { label: 'Swap',        color: '#0891B2', icon: 'repeat',          bg: '#0891B218' },
-});
+const TYPE_CONFIG_DARK  = makeTypeConfig(Theme.colors);
+const TYPE_CONFIG_LIGHT = makeTypeConfig(Theme.lightColors);
+
+function makeTypeConfig(T: any): Record<string, { label: string; color: string; icon: string; bg: string }> {
+  return {
+    sent:       { label: 'Sent',        color: T.error,   icon: 'arrow-up-right',  bg: T.error   + '18' },
+    received:   { label: 'Received',    color: T.success, icon: 'arrow-down-left', bg: T.success + '18' },
+    card_topup: { label: 'Card Top-up', color: '#2563EB', icon: 'credit-card',     bg: '#2563EB18' },
+    card_spend: { label: 'Card Spend',  color: '#7C3AED', icon: 'shopping-cart',   bg: '#7C3AED18' },
+    swap:       { label: 'Swap',        color: '#0891B2', icon: 'repeat',          bg: '#0891B218' },
+  };
+}
 
 const FILTERS = ['All', 'Sent', 'Received', 'Card', 'Swap'];
 
@@ -28,7 +33,7 @@ const EXPLORER_URL: Record<string, string> = {
 };
 
 // ─── Skeleton row ──────────────────────────────────────────────────────────────
-const SkeletonRow = memo(() => {
+const SkeletonRow = memo(({ T }: { T: any }) => {
   const anim = useRef(new Animated.Value(0.4)).current;
   useEffect(() => {
     const loop = Animated.loop(
@@ -41,26 +46,27 @@ const SkeletonRow = memo(() => {
     return () => loop.stop();
   }, []);
   return (
-    <Animated.View style={[styles.skeletonRow, { opacity: anim }]}>
-      <View style={styles.skeletonIcon} />
+    <Animated.View style={[styles.skeletonRow, { opacity: anim, backgroundColor: T.surface }]}>
+      <View style={[styles.skeletonIcon, { backgroundColor: T.border }]} />
       <View style={{ flex: 1, gap: 6 }}>
-        <View style={[styles.skeletonLine, { width: '50%' }]} />
-        <View style={[styles.skeletonLine, { width: '70%', height: 10 }]} />
+        <View style={[styles.skeletonLine, { width: '50%', backgroundColor: T.border }]} />
+        <View style={[styles.skeletonLine, { width: '70%', height: 10, backgroundColor: T.border }]} />
       </View>
       <View style={{ alignItems: 'flex-end', gap: 6 }}>
-        <View style={[styles.skeletonLine, { width: 70 }]} />
-        <View style={[styles.skeletonLine, { width: 45, height: 10 }]} />
+        <View style={[styles.skeletonLine, { width: 70, backgroundColor: T.border }]} />
+        <View style={[styles.skeletonLine, { width: 45, height: 10, backgroundColor: T.border }]} />
       </View>
     </Animated.View>
   );
 });
 
 // ─── Tx Detail Modal ───────────────────────────────────────────────────────────
-const TxDetailModal = memo(({ tx, T, network, onClose }: {
-  tx: Transaction | null; T: any; network: string; onClose: () => void;
+const TxDetailModal = memo(({ tx, T, network, isDarkMode, onClose }: {
+  tx: Transaction | null; T: any; network: string; isDarkMode: boolean; onClose: () => void;
 }) => {
   if (!tx) return null;
-  const cfg      = TYPE_CONFIG(T)[tx.type] ?? { label: tx.type, color: T.primary, icon: 'activity', bg: T.primary + '18' };
+  const cfgMap   = isDarkMode ? TYPE_CONFIG_DARK : TYPE_CONFIG_LIGHT;
+  const cfg      = cfgMap[tx.type] ?? { label: tx.type, color: T.primary, icon: 'activity', bg: T.primary + '18' };
   const isDebit  = tx.type === 'sent' || tx.type === 'card_spend';
   const explorerBase = EXPLORER_URL[network] ?? EXPLORER_URL.Sepolia;
   return (
@@ -130,9 +136,10 @@ function chainTxToLocal(tx: ChainTx, walletAddress: string, ethPrice: number): T
 
 // ─── Main Screen ───────────────────────────────────────────────────────────────
 export default function HistoryScreen({ navigation }: any) {
-  const { transactions, isDarkMode, network, walletAddress, prices } = useWallet();
+  const { transactions, isDarkMode, network, walletAddress } = useWallet();
+  const { prices } = useMarket();
   const T      = isDarkMode ? Theme.colors : Theme.lightColors;
-  const cfgMap = TYPE_CONFIG(T);
+  const cfgMap = isDarkMode ? TYPE_CONFIG_DARK : TYPE_CONFIG_LIGHT;
 
   const [search, setSearch]             = useState('');
   const [activeFilter, setActiveFilter] = useState('All');
@@ -179,7 +186,7 @@ export default function HistoryScreen({ navigation }: any) {
       if (!seen.has(tx.id)) { seen.add(tx.id); merged.push(tx); }
     }
     // Sort by date descending
-    return merged.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return merged.sort((a, b) => (new Date(b.date).getTime() || 0) - (new Date(a.date).getTime() || 0));
   }, [transactions, chainTxs]);
 
   const filtered = allTxs.filter(tx => {
@@ -199,7 +206,7 @@ export default function HistoryScreen({ navigation }: any) {
 
   return (
     <View style={[styles.container, { backgroundColor: T.background }]}>
-      <TxDetailModal tx={selectedTx} T={T} network={network} onClose={() => setSelectedTx(null)} />
+      <TxDetailModal tx={selectedTx} T={T} network={network} isDarkMode={isDarkMode} onClose={() => setSelectedTx(null)} />
 
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: T.border }]}>
@@ -272,7 +279,7 @@ export default function HistoryScreen({ navigation }: any) {
 
         {/* Skeleton while loading */}
         {loadingChain && chainTxs.length === 0 ? (
-          [0,1,2,3,4].map(i => <SkeletonRow key={i} />)
+          [0,1,2,3,4].map(i => <SkeletonRow key={i} T={T} />)
         ) : filtered.length === 0 ? (
           <View style={styles.emptyBox}>
             <View style={[styles.emptyIcon, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
@@ -379,7 +386,7 @@ const styles = StyleSheet.create({
   statusText: { fontSize: 10, fontWeight: '700' },
 
   // Skeleton
-  skeletonRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, marginBottom: 8, backgroundColor: '#1C1D21' },
-  skeletonIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#2E3036' },
-  skeletonLine: { height: 13, borderRadius: 6, backgroundColor: '#2E3036' },
+  skeletonRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, marginBottom: 8 },
+  skeletonIcon: { width: 44, height: 44, borderRadius: 22 },
+  skeletonLine: { height: 13, borderRadius: 6 },
 });

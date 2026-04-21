@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useWallet } from '../store/WalletContext';
+import { useWallet, useMarket } from '../store/WalletContext';
 import { Theme, COIN_META, COIN_COLORS } from '../constants';
 
 const CoinIcon = memo(({ symbol, size = 44 }: { symbol: string; size?: number }) => {
@@ -29,10 +29,11 @@ const CoinIcon = memo(({ symbol, size = 44 }: { symbol: string; size?: number })
 });
 
 export default function PortfolioScreen({ navigation }: any) {
-  const { ethBalance, balances, prices, isDarkMode, walletName } = useWallet();
+  const { ethBalance, balances, isDarkMode, walletName } = useWallet();
+  const { prices } = useMarket();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
 
-  const realBalances = useMemo(
+  const realBalances: Record<string, number> = useMemo(
     () => ({ ...balances, ETH: parseFloat(ethBalance) || 0 }),
     [balances, ethBalance]
   );
@@ -120,6 +121,7 @@ export default function PortfolioScreen({ navigation }: any) {
                 key={a.symbol}
                 style={[styles.assetCard, { backgroundColor: T.surfaceLow }]}
                 activeOpacity={0.8}
+                onPress={() => navigation.navigate('CoinChart', { symbol: a.symbol })}
               >
                 <View style={styles.assetLeft}>
                   <View style={[styles.coinWrapper, { backgroundColor: T.surface, borderColor: T.border }]}>

@@ -166,7 +166,8 @@ export async function verifyPin(pin: string): Promise<VerifyResult> {
     return { success: true, lockout: { isLocked: false, remainingMs: 0, attemptsLeft: MAX_ATTEMPTS } };
   }
 
-  const salt   = await storage.getItem(PIN_SALT_KEY) ?? 'cw_salt_2024';
+  const salt = await storage.getItem(PIN_SALT_KEY);
+  if (!salt) return { success: false, lockout: { isLocked: false, remainingMs: 0, attemptsLeft: MAX_ATTEMPTS } };
   const hashed = await hashPin(pin, salt);
 
   if (hashed === stored) {

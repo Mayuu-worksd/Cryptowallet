@@ -5,6 +5,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, Text, ActivityIndicator, Platform, useWindowDimensions, Animated, TouchableOpacity, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Feather } from '@expo/vector-icons';
+const { useMemo, useCallback } = React;
 
 import { WalletProvider, useWallet } from './store/WalletContext';
 import { Theme } from './constants';
@@ -128,7 +129,7 @@ function CenterQRButton({ TC }: { TC: any }) {
           </View>
         </TouchableOpacity>
       </Animated.View>
-      <Text style={[tabStyles.centerLabel, { color: showMenu ? TC.primary : TC.textMuted }]}>Scan</Text>
+      <Text style={[tabStyles.centerLabel, { color: showMenu ? TC.primary : TC.textMuted }]}>Actions</Text>
     </View>
   );
 }
@@ -137,26 +138,29 @@ function Tabs() {
   const { isDarkMode } = useWallet();
   const TC = isDarkMode ? Theme.colors : Theme.lightColors;
 
+  const tabBarStyle = useMemo(() => ({
+    backgroundColor: TC.surface,
+    borderTopColor: TC.border,
+    borderTopWidth: 1,
+    height: 96,
+    paddingBottom: 20,
+    paddingTop: 10,
+  }), [TC.surface, TC.border]);
+
+  const screenOptions = useCallback(() => ({
+    headerShown: false,
+    tabBarStyle,
+    tabBarActiveTintColor: TC.primary,
+    tabBarInactiveTintColor: TC.textMuted,
+    tabBarLabelStyle: { fontSize: 11, fontWeight: '700' as const, marginTop: 4 },
+    tabBarBackground: () => (
+      <View style={{ flex: 1, backgroundColor: TC.surface, borderTopWidth: 1, borderTopColor: TC.border }} />
+    ),
+  }), [tabBarStyle, TC.primary, TC.textMuted, TC.surface, TC.border]);
+
   return (
     <Tab.Navigator
-      key={isDarkMode ? 'dark' : 'light'}
-      screenOptions={() => ({
-        headerShown: false,
-        tabBarStyle: {
-          backgroundColor: TC.surface,
-          borderTopColor: TC.border,
-          borderTopWidth: 1,
-          height: 96,
-          paddingBottom: 20,
-          paddingTop: 10,
-        },
-        tabBarActiveTintColor: TC.primary,
-        tabBarInactiveTintColor: TC.textMuted,
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '700', marginTop: 4 },
-        tabBarBackground: () => (
-          <View style={{ flex: 1, backgroundColor: TC.surface, borderTopWidth: 1, borderTopColor: TC.border }} />
-        ),
-      })}
+      screenOptions={screenOptions}
     >
       <Tab.Screen name="Home" component={HomeScreen} options={{
         tabBarLabel: 'Home',
@@ -308,7 +312,7 @@ function MobileNavigator() {
 
   return (
     <PinSetupContext.Provider value={triggerPinSetup}>
-      <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+      <Stack.Navigator screenOptions={{ headerShown: false, animation: 'ios_from_right', animationDuration: 250 }}>
         {!hasWallet ? (
           <>
             <Stack.Screen name="Landing"      component={LandingScreen} />
@@ -345,10 +349,6 @@ function WebApp() {
   React.useEffect(() => {
     if (!isLoadingWallet) setCurrentScreen(hasWallet ? 'Home' : 'Landing');
   }, [isLoadingWallet, hasWallet]);
-
-  React.useEffect(() => {
-    if (hasWallet) setCurrentScreen('Home');
-  }, [hasWallet]);
 
   const setScreen = React.useCallback((screen: string) => setCurrentScreen(screen), []);
   const nav = React.useMemo(() => ({

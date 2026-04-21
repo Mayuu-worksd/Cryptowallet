@@ -55,6 +55,13 @@ export const walletService = {
     return new ethers.Wallet(privateKey);
   },
 
+  // Derive a specific account index from a mnemonic
+  deriveAccount(mnemonic: string, index: number): { address: string; privateKey: string } {
+    const path = `m/44'/60'/0'/0/${index}`;
+    const wallet = ethers.Wallet.fromMnemonic(mnemonic, path);
+    return { address: wallet.address, privateKey: wallet.privateKey };
+  },
+
   // Validate an Ethereum address
   isValidAddress(address: string): boolean {
     return ethers.utils.isAddress(address);

@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Feather } from '@expo/vector-icons';
-import { useWallet } from '../store/WalletContext';
+import { useWallet, useMarket } from '../store/WalletContext';
 import { storageService } from '../services/storageService';
 import { Theme, COIN_META, COIN_COLORS } from '../constants';
 import Toast from '../components/Toast';
@@ -35,9 +35,10 @@ const CoinIcon = ({ symbol, size = 36 }: { symbol: string; size?: number }) => {
 export default function SettingsScreen({ navigation }: any) {
   const {
     network, switchNetwork, walletAddress, walletName, setWalletName,
-    deleteWallet, isDarkMode, toggleTheme, balances, ethBalance, prices,
+    deleteWallet, isDarkMode, toggleTheme, balances, ethBalance,
     pinEnabled, refreshPinEnabled,
   } = useWallet();
+  const { prices } = useMarket();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const triggerPinSetup = usePinSetup();
 

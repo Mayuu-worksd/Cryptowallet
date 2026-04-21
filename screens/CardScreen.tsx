@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
-import { useWallet } from '../store/WalletContext';
+import { useWallet, useMarket } from '../store/WalletContext';
 import { Theme } from '../constants';
 import Toast from '../components/Toast';
 import { CardDesignKey, CARD_DESIGNS } from '../components/card/CardDesigns';
@@ -48,9 +48,10 @@ export default function CardScreen({ navigation }: any) {
     cardBalance, cardFrozen, toggleFreezeCard,
     cardDetails, cardTransactions, cardCreated,
     balances, ethBalance, topupCard,
-    isDarkMode, prices, network,
+    isDarkMode, network,
     createCard, updateCardDetails,
   } = useWallet();
+  const { prices } = useMarket();
 
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
 
@@ -273,7 +274,9 @@ export default function CardScreen({ navigation }: any) {
               <View style={styles.coinRow}>
                 {COINS.map(c => {
                   const bal = c === 'ETH' ? parseFloat(ethBalance) : (balances[c] ?? 0);
-                  const unavailable = (c === 'BTC' || c === 'SOL') && bal === 0;
+                  // BTC and SOL are not on the ETH chain — always 0, hide them
+                  const isOffChain = (c === 'BTC' || c === 'SOL');
+                  if (isOffChain) return null;
                   return (
                     <TouchableOpacity
                       key={c}
@@ -281,19 +284,15 @@ export default function CardScreen({ navigation }: any) {
                         styles.coinTab,
                         { backgroundColor: T.surfaceLow },
                         topupCoin === c && styles.coinTabActive,
-                        unavailable && { opacity: 0.35 },
                       ]}
-                      onPress={() => { if (!unavailable) { setTopupCoin(c); setTopupAmount(''); } }}
-                      activeOpacity={unavailable ? 1 : 0.75}
+                      onPress={() => { setTopupCoin(c); setTopupAmount(''); }}
+                      activeOpacity={0.75}
                     >
                       <Text style={[
                         styles.coinTabText,
                         { color: T.textMuted },
                         topupCoin === c && styles.coinTabTextActive,
                       ]}>{c}</Text>
-                      {unavailable && (
-                        <Text style={{ fontSize: 8, color: T.textDim, marginTop: 2 }}>N/A</Text>
-                      )}
                     </TouchableOpacity>
                   );
                 })}

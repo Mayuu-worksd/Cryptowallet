@@ -36,7 +36,7 @@ export default function Toast({ visible, message, type = 'success', onHide, dura
       }, duration);
       return () => clearTimeout(timer);
     }
-  }, [visible]);
+  }, [visible, duration, onHide, opacity, translateY]);
 
   if (!visible) return null;
 
