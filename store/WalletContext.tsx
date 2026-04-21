@@ -147,7 +147,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     expiry: '\u2022\u2022/\u2022\u2022',
     cvv: '\u2022\u2022\u2022',
     brand: 'VISA' as const,
-    holderName: 'MAYUR K',
+    holderName: 'CARD HOLDER',
     design: 'dark',
   });
   const [network,         setNetworkState]  = useState(DEFAULT_NETWORK);

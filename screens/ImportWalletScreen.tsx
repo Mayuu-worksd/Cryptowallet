@@ -151,9 +151,9 @@ export default function ImportWalletScreen({ navigation }: any) {
     await new Promise(r => setTimeout(r, 100));
     try {
       await importWallet(trimmed);
-      // Trigger the success step in the overlay, then let hasWallet drive navigation
       setImportDone(true);
       await new Promise(r => setTimeout(r, 900));
+      setLoading(false);
     } catch (e: any) {
       setLoading(false);
       setImportDone(false);

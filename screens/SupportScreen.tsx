@@ -78,13 +78,13 @@ export default function SupportScreen({ navigation }: any) {
           <TouchableOpacity
             style={[styles.contactCard, { backgroundColor: T.surfaceLow, borderColor: T.border }]}
             activeOpacity={0.7}
-            onPress={() => Linking.openURL('mailto:support@crimsoncapital.app')}
+            onPress={() => Linking.openURL('mailto:support@cryptowallet.app')}
           >
             <View style={[styles.contactIconBox, { backgroundColor: T.primary + '20' }]}>
               <MaterialIcons name="email" size={22} color={T.primary} />
             </View>
             <Text style={[styles.contactCardTitle, { color: T.text }]}>Email Us</Text>
-            <Text style={[styles.contactCardSub, { color: T.textMuted }]}>support@crimsoncapital.app</Text>
+            <Text style={[styles.contactCardSub, { color: T.textMuted }]}>support@cryptowallet.app</Text>
           </TouchableOpacity>
 
           <TouchableOpacity

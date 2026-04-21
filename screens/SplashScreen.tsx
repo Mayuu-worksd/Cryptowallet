@@ -117,7 +117,7 @@ export default function SplashScreen({ onFinish }: Props) {
       <Animated.View style={[styles.footer, { opacity: footerOpacity }]}>
         <View style={styles.poweredBy}>
           <Text style={styles.poweredText}>POWERED BY</Text>
-          <Text style={styles.brandText}>CHAINSPLIT</Text>
+          <Text style={styles.brandText}>CRYPTOWALLET</Text>
         </View>
 
         <View style={styles.badge}>
