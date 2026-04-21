@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ScrollView, ActivityIndicator, Image, Platform,
+  ScrollView, ActivityIndicator, Image, Platform, Modal,
 } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
@@ -11,15 +11,34 @@ import { swapService, SwapQuote } from '../services/swapService';
 
 const COINS = ['ETH', 'USDT', 'USDC', 'WBTC', 'MATIC', 'LINK', 'UNI'];
 
-const SWAP_COIN_META: Record<string, { iconUrl: string; color: string }> = {
-  ETH:   { iconUrl: 'https://assets.coingecko.com/coins/images/279/large/ethereum.png',                        color: '#627EEA' },
-  USDT:  { iconUrl: 'https://assets.coingecko.com/coins/images/325/large/Tether.png',                         color: '#26A17B' },
-  USDC:  { iconUrl: 'https://assets.coingecko.com/coins/images/6319/large/USD_Coin_icon.png',                  color: '#2775CA' },
-  WBTC:  { iconUrl: 'https://assets.coingecko.com/coins/images/7598/large/wrapped_bitcoin_wbtc.png',           color: '#F7931A' },
-  MATIC: { iconUrl: 'https://assets.coingecko.com/coins/images/4713/large/matic-token-icon.png',              color: '#8247E5' },
-  LINK:  { iconUrl: 'https://assets.coingecko.com/coins/images/877/large/chainlink-new-logo.png',             color: '#2A5ADA' },
-  UNI:   { iconUrl: 'https://assets.coingecko.com/coins/images/12504/large/uniswap-uni.png',                  color: '#FF007A' },
+const SWAP_META: Record<string, { name: string; iconUrl: string; color: string }> = {
+  ETH:   { name: 'Ethereum',       iconUrl: 'https://assets.coingecko.com/coins/images/279/large/ethereum.png',                color: '#627EEA' },
+  USDT:  { name: 'Tether',         iconUrl: 'https://assets.coingecko.com/coins/images/325/large/Tether.png',                 color: '#26A17B' },
+  USDC:  { name: 'USD Coin',       iconUrl: 'https://assets.coingecko.com/coins/images/6319/large/USD_Coin_icon.png',          color: '#2775CA' },
+  WBTC:  { name: 'Wrapped Bitcoin',iconUrl: 'https://assets.coingecko.com/coins/images/7598/large/wrapped_bitcoin_wbtc.png',  color: '#F7931A' },
+  MATIC: { name: 'Polygon',        iconUrl: 'https://assets.coingecko.com/coins/images/4713/large/matic-token-icon.png',      color: '#8247E5' },
+  LINK:  { name: 'Chainlink',      iconUrl: 'https://assets.coingecko.com/coins/images/877/large/chainlink-new-logo.png',    color: '#2A5ADA' },
+  UNI:   { name: 'Uniswap',        iconUrl: 'https://assets.coingecko.com/coins/images/12504/large/uniswap-uni.png',          color: '#FF007A' },
 };
+
+function CoinIcon({ sym, size = 28 }: { sym: string; size?: number }) {
+  const meta = SWAP_META[sym];
+  const [failed, setFailed] = React.useState(false);
+  if (meta && !failed) {
+    return (
+      <Image
+        source={{ uri: meta.iconUrl }}
+        style={{ width: size, height: size, borderRadius: size / 2 }}
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return (
+    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: (meta?.color ?? '#888') + '30', alignItems: 'center', justifyContent: 'center' }}>
+      <Text style={{ fontSize: size * 0.35, fontWeight: '800', color: meta?.color ?? '#888' }}>{sym.slice(0, 2)}</Text>
+    </View>
+  );
+}
 
 export default function SwapScreen({ navigation }: any) {
   const { balances, ethBalance, prices, isDarkMode, network, refreshBalance, walletAddress } = useWallet();
@@ -33,6 +52,8 @@ export default function SwapScreen({ navigation }: any) {
   const [quoting, setQuoting]   = useState(false);
   const [quote, setQuote]       = useState<SwapQuote | null>(null);
   const [toast, setToast]       = useState({ visible: false, message: '', type: 'success' as 'success' | 'error' | 'info' });
+  const [selectorVisible, setSelectorVisible] = useState(false);
+  const [selectorTarget, setSelectorTarget] = useState<'from' | 'to'>('from');
   
   const isSupported = swapService.isNetworkSupported(network);
 
@@ -43,6 +64,7 @@ export default function SwapScreen({ navigation }: any) {
   const fromBalance = fromCoin === 'ETH' ? parseFloat(ethBalance) || 0 : (balances[fromCoin] ?? 0);
   const usdValue    = amount ? (parseFloat(amount) * fromPrice).toLocaleString('en-US', { minimumFractionDigits: 2 }) : '0.00';
   const toAmount    = quote?.toAmount ?? '';
+  const toUsdValue  = toAmount ? (parseFloat(toAmount) * (prices[toCoin]?.usd ?? 0)).toLocaleString('en-US', { minimumFractionDigits: 2 }) : '0.00';
   const rate        = quote?.rate ?? '—';
 
   useEffect(() => {
@@ -54,13 +76,10 @@ export default function SwapScreen({ navigation }: any) {
       setQuoting(true);
       let q = await swapService.getQuote(fromCoin, toCoin, amount, network);
 
-      // Fallback: if 0x API fails (no key / rate limit), estimate from live prices
+      // Fallback: if 0x API fails, estimate from live prices
       if (!q) {
-        const FALLBACK_USD: Record<string, number> = {
-          WBTC: 64000, MATIC: 0.85, LINK: 14, UNI: 7,
-        };
-        const fromUsd = prices[fromCoin]?.usd ?? FALLBACK_USD[fromCoin] ?? 0;
-        const toUsd   = prices[toCoin]?.usd   ?? FALLBACK_USD[toCoin]   ?? 1;
+        const fromUsd = prices[fromCoin]?.usd ?? 0;
+        const toUsd   = prices[toCoin]?.usd   ?? 1;
         if (fromUsd > 0 && toUsd > 0) {
           const parsed = parseFloat(amount);
           const toAmt  = (parsed * fromUsd) / toUsd;
@@ -82,21 +101,19 @@ export default function SwapScreen({ navigation }: any) {
     const parsed = parseFloat(amount);
     if (!amount || parsed <= 0)  { showToast('Enter a valid amount', 'error'); return; }
     if (parsed > fromBalance)    { showToast('Insufficient balance.', 'error'); return; }
-    if (!isSupported)            { showToast('Switch to Ethereum, Polygon or Arbitrum to swap.', 'error'); return; }
-    if (!quote)                  { showToast('Waiting for quote. Please try again.', 'info'); return; }
+    if (!isSupported)            { showToast('Switch to support network to swap.', 'error'); return; }
+    if (!quote)                  { showToast('Waiting for quote...', 'info'); return; }
 
     setLoading(true);
     try {
       const privateKey = await (await import('../services/storageService')).storageService.getPrivateKey();
-      if (!privateKey) { showToast('Wallet not found. Please re-import.', 'error'); setLoading(false); return; }
-
       const { ethereumService } = await import('../services/ethereumService');
       const { ethers } = await import('ethers');
       const { RPC_URLS } = await import('../config');
       const provider = new ethers.providers.JsonRpcProvider(RPC_URLS[network]);
 
       const result = await swapService.executeSwap(
-        fromCoin, toCoin, amount, walletAddress, privateKey, provider, network
+        fromCoin, toCoin, amount, walletAddress, privateKey!, provider, network
       );
 
       if (result.success) {
@@ -105,7 +122,7 @@ export default function SwapScreen({ navigation }: any) {
         setAmount('');
         setTimeout(() => navigation.goBack(), 1800);
       } else {
-        showToast(result.error ?? 'Swap failed. Please try again.', 'error');
+        showToast(result.error ?? 'Swap failed.', 'error');
       }
     } catch (e: any) {
       showToast(e?.message ?? 'Swap failed.', 'error');
@@ -114,30 +131,31 @@ export default function SwapScreen({ navigation }: any) {
     }
   };
 
-  const TokenBadge = ({ sym, current, onSelect }: any) => {
-    const meta = SWAP_COIN_META[sym];
-    const [imgFailed, setImgFailed] = React.useState(false);
-    return (
-      <TouchableOpacity
-        style={[styles.tokenBadge, current === sym && { borderColor: T.primary, backgroundColor: T.primary + '10' }]}
-        onPress={() => onSelect(sym)}
-        activeOpacity={0.8}
-      >
-        {meta && !imgFailed ? (
-          <Image
-            source={{ uri: meta.iconUrl }}
-            style={styles.badgeIcon}
-            onError={() => setImgFailed(true)}
-          />
-        ) : (
-          <View style={[styles.badgeIcon, { borderRadius: 11, backgroundColor: meta?.color + '30' ?? '#88888830', alignItems: 'center', justifyContent: 'center' }]}>
-            <Text style={{ fontSize: 9, fontWeight: '800', color: meta?.color ?? '#888' }}>{sym.slice(0,2)}</Text>
-          </View>
-        )}
-        <Text style={[styles.badgeText, current === sym && { color: T.primary }]}>{sym}</Text>
-      </TouchableOpacity>
-    );
+  const openSelector = (target: 'from' | 'to') => {
+    setSelectorTarget(target);
+    setSelectorVisible(true);
   };
+
+  const selectToken = (sym: string) => {
+    if (selectorTarget === 'from') {
+      if (sym === toCoin) setToCoin(fromCoin);
+      setFromCoin(sym);
+    } else {
+      if (sym === fromCoin) setFromCoin(toCoin);
+      setToCoin(sym);
+    }
+    setSelectorVisible(false);
+    setAmount('');
+    setQuote(null);
+  };
+
+  const TokenSelector = ({ sym, onPress }: any) => (
+    <TouchableOpacity style={styles.tokenSelector} onPress={onPress} activeOpacity={0.7}>
+      <CoinIcon sym={sym} size={28} />
+      <Text style={[styles.selectorText, { color: T.text }]}>{sym}</Text>
+      <Feather name="chevron-down" size={16} color={T.textDim} />
+    </TouchableOpacity>
+  );
 
   return (
     <View style={styles.container}>
@@ -148,80 +166,16 @@ export default function SwapScreen({ navigation }: any) {
         onHide={() => setToast(p => ({ ...p, visible: false }))}
       />
 
+      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+        <TouchableOpacity style={styles.headerIcon} onPress={() => navigation.goBack()}>
           <Feather name="arrow-left" size={24} color={T.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Swap Assets</Text>
+        <Text style={[styles.headerTitle, { color: T.text }]}>Swap Assets</Text>
         <View style={{ width: 40 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        
-        <View style={styles.swapContainer}>
-          {/* FROM CARD */}
-          <View style={[styles.inputCard, { backgroundColor: T.surface }]}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardLabel}>You Pay</Text>
-              <Text style={styles.balanceInfo}>Balance: {fromBalance.toFixed(4)}</Text>
-            </View>
-            <View style={styles.inputRow}>
-              <TextInput
-                style={styles.amountInput}
-                placeholder="0"
-                placeholderTextColor={T.textDim}
-                value={amount}
-                onChangeText={setAmount}
-                keyboardType="decimal-pad"
-                maxLength={12}
-              />
-            </View>
-            <View style={styles.cardFooter}>
-              <Text style={styles.usdSub}>≈ ${usdValue}</Text>
-              <TouchableOpacity onPress={() => setAmount(fromBalance.toString())}>
-                <Text style={styles.maxText}>USE MAX</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.selectorRow}>
-               {COINS.map(c => <TokenBadge key={c} sym={c} current={fromCoin} onSelect={setFromCoin} />)}
-            </View>
-          </View>
-
-          {/* SWAP ICON DIVIDER */}
-          <View style={styles.dividerArea}>
-            <TouchableOpacity 
-              style={[styles.swapCircle, { backgroundColor: T.surfaceHigh }]}
-              onPress={() => { setFromCoin(toCoin); setToCoin(fromCoin); setAmount(''); }}
-              activeOpacity={0.9}
-            >
-              <MaterialCommunityIcons name="swap-vertical" size={24} color={T.primary} />
-            </TouchableOpacity>
-          </View>
-
-          {/* TO CARD */}
-          <View style={[styles.inputCard, { backgroundColor: T.surface }]}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardLabel}>You Receive</Text>
-            </View>
-            <View style={styles.inputRow}>
-              <View style={{ flex: 1, height: 50, justifyContent: 'center' }}>
-                {quoting ? (
-                  <ActivityIndicator size="small" color={T.primary} style={{ alignSelf: 'flex-start' }} />
-                ) : (
-                  <Text style={[styles.amountInput, !toAmount && { color: T.textDim }]}>
-                    {toAmount || '0'}
-                  </Text>
-                )}
-              </View>
-            </View>
-            <View style={styles.cardFooter}>
-              <Text style={styles.usdSub}>Rate: 1 {fromCoin} = {rate} {toCoin}</Text>
-            </View>
-            <View style={styles.selectorRow}>
-               {COINS.map(c => <TokenBadge key={c} sym={c} current={toCoin} onSelect={setToCoin} />)}
-            </View>
-          </View>
-        </View>
 
         {/* Unsupported network warning */}
         {!isSupported && (
@@ -233,20 +187,97 @@ export default function SwapScreen({ navigation }: any) {
           </View>
         )}
 
-        {/* DETAILS SECTION */}
-        <View style={[styles.details, { borderTopColor: T.border }]}>
-           <View style={styles.detailLine}>
-              <Text style={styles.detailLabel}>Network Fee</Text>
-              <Text style={styles.detailValue}>
-                {quote?.estimatedGas ? `${quote.estimatedGas} ETH` : quoting ? 'Estimating...' : '—'}
-              </Text>
-           </View>
-           <View style={styles.detailLine}>
-              <Text style={styles.detailLabel}>Slippage</Text>
-              <Text style={styles.detailValue}>1%</Text>
-           </View>
+        <View style={styles.swapFrame}>
+          {/* FROM CARD */}
+          <View style={[styles.inputCard, { backgroundColor: T.surface }]}>
+            <View style={styles.cardTopRow}>
+              <Text style={[styles.cardLabel, { color: T.textMuted }]}>From</Text>
+              <Text style={[styles.balanceLabel, { color: T.textDim }]}>Balance: {fromBalance.toLocaleString(undefined, { maximumFractionDigits: 4 })} {fromCoin}</Text>
+            </View>
+            <View style={styles.cardContent}>
+              <TokenSelector sym={fromCoin} onPress={() => openSelector('from')} />
+              <View style={styles.amountContainer}>
+                <TextInput
+                  style={[styles.amountInput, { color: T.text }]}
+                  placeholder="0"
+                  placeholderTextColor={T.textDim}
+                  value={amount}
+                  onChangeText={setAmount}
+                  keyboardType="decimal-pad"
+                />
+                <Text style={[styles.usdValue, { color: T.textDim }]}>≈ ${usdValue}</Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={[styles.maxBtn, { backgroundColor: T.primary + '18' }]}
+              onPress={() => setAmount(fromBalance.toFixed(6))}
+            >
+              <Text style={[styles.maxBtnText, { color: T.primary }]}>MAX</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* SWAP BUTTON */}
+          <View style={styles.swapButtonContainer}>
+            <TouchableOpacity
+              style={[styles.floatingSwapBtn, { backgroundColor: T.primary, borderColor: T.background }]}
+              onPress={() => { setFromCoin(toCoin); setToCoin(fromCoin); setAmount(''); setQuote(null); }}
+              activeOpacity={0.9}
+            >
+              <MaterialCommunityIcons name="swap-vertical" size={22} color="#FFF" />
+            </TouchableOpacity>
+          </View>
+
+          {/* TO CARD */}
+          <View style={[styles.inputCard, { backgroundColor: T.surface, marginTop: -12 }]}>
+            <View style={styles.cardTopRow}>
+              <Text style={[styles.cardLabel, { color: T.textMuted }]}>To</Text>
+              <Text style={[styles.balanceLabel, { color: T.textDim }]}>Estimated</Text>
+            </View>
+            <View style={styles.cardContent}>
+              <TokenSelector sym={toCoin} onPress={() => openSelector('to')} />
+              <View style={styles.amountContainer}>
+                {quoting ? (
+                  <ActivityIndicator size="small" color={T.primary} style={{ alignSelf: 'flex-end', marginBottom: 10 }} />
+                ) : (
+                  <Text style={[styles.amountDisplay, { color: toAmount ? T.text : T.textDim }]}>
+                    {toAmount || '0'}
+                  </Text>
+                )}
+                <Text style={[styles.usdValue, { color: T.textDim }]}>≈ ${toUsdValue}</Text>
+              </View>
+            </View>
+          </View>
         </View>
 
+        {/* DETAILS */}
+        <View style={[styles.detailsBox, { backgroundColor: T.surface, borderColor: T.border }]}>
+          <View style={styles.detailRow}>
+            <Text style={[styles.detailLabel, { color: T.textMuted }]}>Rate</Text>
+            <Text style={[styles.detailValue, { color: T.text }]}>1 {fromCoin} = {rate} {toCoin}</Text>
+          </View>
+          <View style={[styles.detailDivider, { backgroundColor: T.border }]} />
+          <View style={styles.detailRow}>
+            <Text style={[styles.detailLabel, { color: T.textMuted }]}>Network Fee</Text>
+            <Text style={[styles.detailValue, { color: T.text }]}>
+              {quote?.estimatedGas ? `${quote.estimatedGas} ETH` : quoting ? 'Estimating...' : '—'}
+            </Text>
+          </View>
+          <View style={[styles.detailDivider, { backgroundColor: T.border }]} />
+          <View style={styles.detailRow}>
+            <Text style={[styles.detailLabel, { color: T.textMuted }]}>Slippage</Text>
+            <Text style={[styles.detailValue, { color: T.text }]}>1%</Text>
+          </View>
+          <View style={[styles.detailDivider, { backgroundColor: T.border }]} />
+          <View style={styles.detailRow}>
+            <Text style={[styles.detailLabel, { color: T.textMuted }]}>Protocol</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              <Feather name="shield" size={12} color={T.success} />
+              <Text style={[styles.detailValue, { color: T.success }]}>0x Protocol</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* SWAP BUTTON */}
         <TouchableOpacity
           style={[styles.mainAction, { backgroundColor: T.primary, opacity: loading || !amount || !isSupported ? 0.6 : 1 }]}
           onPress={handleSwap}
@@ -260,66 +291,104 @@ export default function SwapScreen({ navigation }: any) {
           )}
         </TouchableOpacity>
 
-        <View style={styles.secureBanner}>
-           <Feather name="shield" size={14} color={T.success} />
-           <Text style={[styles.secureText, { color: T.success }]}>Powered by 0x Protocol</Text>
-        </View>
-
       </ScrollView>
+
+      {/* TOKEN SELECTOR MODAL */}
+      <Modal visible={selectorVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: T.surface }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: T.text }]}>Select Token</Text>
+              <TouchableOpacity onPress={() => setSelectorVisible(false)}>
+                <Feather name="x" size={24} color={T.text} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {COINS.map(sym => {
+                const meta     = SWAP_META[sym];
+                const isActive = selectorTarget === 'from' ? fromCoin === sym : toCoin === sym;
+                return (
+                  <TouchableOpacity
+                    key={sym}
+                    style={[styles.tokenItem, { borderBottomColor: T.border },
+                      isActive && { backgroundColor: T.primary + '10' }]}
+                    onPress={() => selectToken(sym)}
+                    activeOpacity={0.7}
+                  >
+                    <CoinIcon sym={sym} size={44} />
+                    <View style={{ flex: 1, marginLeft: 14 }}>
+                      <Text style={[styles.tokenItemSym, { color: T.text }]}>{sym}</Text>
+                      <Text style={[styles.tokenItemName, { color: T.textMuted }]}>{meta?.name}</Text>
+                    </View>
+                    {isActive && <Feather name="check-circle" size={20} color={T.primary} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const makeStyles = (T: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: T.background },
-  header: { 
+  header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingTop: Platform.OS === 'web' ? 24 : 64, paddingBottom: 20 
+    paddingHorizontal: 20, paddingTop: Platform.OS === 'web' ? 24 : 64, paddingBottom: 20,
   },
-  headerTitle: { fontSize: 20, fontWeight: '800', color: T.text, letterSpacing: -0.6 },
-  backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  scroll: { paddingHorizontal: 20, paddingBottom: 100 },
+  headerTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.5 },
+  headerIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  scroll: { paddingHorizontal: 20, paddingBottom: 60 },
 
-  swapContainer: { gap: 6, marginBottom: 20 },
-  inputCard: { borderRadius: 28, padding: 20, borderWidth: 1, borderColor: T.border },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  cardLabel: { fontSize: 13, fontWeight: '800', color: T.textDim, textTransform: 'uppercase', letterSpacing: 0.5 },
-  balanceInfo: { fontSize: 12, fontWeight: '700', color: T.textDim },
-
-  inputRow: { flexDirection: 'row', alignItems: 'center', minHeight: 60 },
-  amountInput: { flex: 1, fontSize: 40, fontWeight: '800', color: T.text, padding: 0 },
-  
-  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  usdSub: { fontSize: 14, fontWeight: '600', color: T.textDim },
-  maxText: { fontSize: 12, fontWeight: '900', color: T.primary, letterSpacing: 0.5 },
-
-  selectorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  tokenBadge: { 
-    flexDirection: 'row', alignItems: 'center', gap: 6, 
-    backgroundColor: T.surfaceLow, paddingHorizontal: 12, paddingVertical: 8, 
-    borderRadius: 16, borderWidth: 1, borderColor: T.border 
-  },
-  badgeIcon: { width: 22, height: 22, borderRadius: 11 },
-  badgeText: { fontSize: 14, fontWeight: '800', color: T.text },
-
-  dividerArea: { height: 10, alignItems: 'center', justifyContent: 'center', zIndex: 10 },
-  swapCircle: { 
-    width: 48, height: 48, borderRadius: 24, 
-    alignItems: 'center', justifyContent: 'center', 
-    borderWidth: 4, borderColor: T.background,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 6
-  },
-
-  details: { marginTop: 12, borderTopWidth: 1, paddingTop: 20, gap: 10 },
-  detailLine: { flexDirection: 'row', justifyContent: 'space-between' },
-  detailLabel: { fontSize: 14, color: T.textMuted, fontWeight: '600' },
-  detailValue: { fontSize: 14, color: T.text, fontWeight: '700' },
-
-  mainAction: { height: 72, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginTop: 32 },
-  actionText: { color: '#FFF', fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
-
-  secureBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 20 },
-  secureText: { fontSize: 12, fontWeight: '700' },
   warnBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, padding: 12, borderRadius: 12, borderWidth: 1, marginBottom: 16 },
   warnText: { flex: 1, fontSize: 12, fontWeight: '600', lineHeight: 18 },
+
+  swapFrame: { marginBottom: 20 },
+  inputCard: { borderRadius: 24, padding: 20, marginBottom: 4 },
+  cardTopRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
+  cardLabel: { fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  balanceLabel: { fontSize: 12, fontWeight: '600' },
+  cardContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+
+  tokenSelector: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: T.surfaceHigh, paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: 16, gap: 8,
+  },
+  selectorText: { fontSize: 18, fontWeight: '800' },
+
+  amountContainer: { alignItems: 'flex-end', flex: 1 },
+  amountInput: { fontSize: 32, fontWeight: '800', textAlign: 'right', padding: 0, minWidth: 100 },
+  amountDisplay: { fontSize: 32, fontWeight: '800', textAlign: 'right' },
+  usdValue: { fontSize: 13, marginTop: 4 },
+
+  maxBtn: { alignSelf: 'flex-end', marginTop: 10, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10 },
+  maxBtnText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.5 },
+
+  swapButtonContainer: { height: 10, alignItems: 'center', justifyContent: 'center', zIndex: 10 },
+  floatingSwapBtn: {
+    width: 46, height: 46, borderRadius: 16,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 4,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 8,
+  },
+
+  detailsBox: { borderRadius: 20, borderWidth: 1, marginBottom: 24, overflow: 'hidden' },
+  detailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14 },
+  detailDivider: { height: 1 },
+  detailLabel: { fontSize: 13, fontWeight: '600' },
+  detailValue: { fontSize: 13, fontWeight: '700' },
+
+  mainAction: { height: 68, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  actionText: { color: '#FFF', fontSize: 17, fontWeight: '800', letterSpacing: 0.3 },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
+  modalContent: { borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, maxHeight: '80%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalTitle: { fontSize: 20, fontWeight: '800' },
+  tokenItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderRadius: 12, paddingHorizontal: 8 },
+  tokenItemSym: { fontSize: 16, fontWeight: '800', marginBottom: 2 },
+  tokenItemName: { fontSize: 13 },
 });
