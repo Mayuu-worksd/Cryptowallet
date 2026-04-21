@@ -312,7 +312,13 @@ function MobileNavigator() {
 
   return (
     <PinSetupContext.Provider value={triggerPinSetup}>
-      <Stack.Navigator screenOptions={{ headerShown: false, animation: 'ios_from_right', animationDuration: 250 }}>
+      <Stack.Navigator screenOptions={{
+        headerShown: false,
+        animation: Platform.OS === 'android' ? 'slide_from_right' : 'ios_from_right',
+        animationDuration: Platform.OS === 'android' ? 200 : 250,
+        gestureEnabled: true,
+        gestureDirection: 'horizontal',
+      }}>
         {!hasWallet ? (
           <>
             <Stack.Screen name="Landing"      component={LandingScreen} />
