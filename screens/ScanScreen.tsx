@@ -12,7 +12,23 @@ export default function ScanScreen({ navigation, route }: any) {
   const { isDarkMode } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
 
-  // Camera not supported on web
+  const [permission, requestPermission] = useCameraPermissions();
+  const [scanned, setScanned]           = useState(false);
+  const [torchOn, setTorchOn]           = useState(false);
+  const [lastScan, setLastScan]         = useState('');
+
+  // Corner bracket animation
+  const pulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1.06, duration: 900, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1,    duration: 900, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+
+  // Camera not supported on web — after hooks
   if (Platform.OS === 'web') {
     return (
       <View style={[styles.center, { backgroundColor: T.background }]}>
@@ -36,23 +52,6 @@ export default function ScanScreen({ navigation, route }: any) {
       </View>
     );
   }
-
-  const [permission, requestPermission] = useCameraPermissions();
-  const [scanned, setScanned]           = useState(false);
-  const [torchOn, setTorchOn]           = useState(false);
-  const [lastScan, setLastScan]         = useState('');
-
-  // Corner bracket animation
-  const pulse = useRef(new Animated.Value(1)).current;
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 1.06, duration: 900, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 1,    duration: 900, useNativeDriver: true }),
-      ])
-    ).start();
-  }, []);
-
   const handleBarCodeScanned = ({ data }: { data: string }) => {
     if (scanned) return;
 
@@ -72,7 +71,11 @@ export default function ScanScreen({ navigation, route }: any) {
     setScanned(true);
     Vibration.vibrate(80);
     setLastScan(raw);
-    navigation.replace('Send', { scannedAddress: raw });
+    try {
+      navigation.navigate('Send', { scannedAddress: raw });
+    } catch {
+      navigation.goBack();
+    }
   };
 
   // ── Permission not yet determined ──

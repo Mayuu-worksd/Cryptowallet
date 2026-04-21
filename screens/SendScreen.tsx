@@ -16,7 +16,6 @@ export default function SendScreen({ navigation, route }: any) {
 
   const [address, setAddress]           = useState(route?.params?.scannedAddress ?? '');
   const [amount, setAmount]             = useState('');
-  const [loading, setLoading]           = useState(false);
   const [estimating, setEstimating]     = useState(false);
   const [addressError, setAddressError] = useState('');
   const [amountError, setAmountError]   = useState('');
@@ -234,7 +233,15 @@ export default function SendScreen({ navigation, route }: any) {
             </View>
             <TouchableOpacity
               style={[styles.maxBtn, { backgroundColor: T.primary + '18' }]}
-              onPress={() => { setAmount(availBal.toFixed(6)); validateAmount(availBal.toFixed(6)); }}
+              onPress={() => {
+                // Subtract estimated gas so tx doesn't fail — fallback to 0.0005 ETH if not yet estimated
+                const gasBuf = gasEth ? parseFloat(gasEth) : 0.0005;
+                const maxAmt = Math.max(0, availBal - gasBuf);
+                if (maxAmt <= 0) return;
+                const maxStr = maxAmt.toFixed(6);
+                setAmount(maxStr);
+                validateAmount(maxStr);
+              }}
             >
               <Text style={[styles.maxBtnText, { color: T.primary }]}>MAX</Text>
             </TouchableOpacity>
