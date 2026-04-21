@@ -5,11 +5,21 @@ import {
 } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
-import { Theme, COIN_META } from '../constants';
+import { Theme } from '../constants';
 import Toast from '../components/Toast';
 import { swapService, SwapQuote } from '../services/swapService';
 
-const COINS = ['ETH', 'USDT', 'USDC'];
+const COINS = ['ETH', 'USDT', 'USDC', 'WBTC', 'MATIC', 'LINK', 'UNI'];
+
+const SWAP_COIN_META: Record<string, { iconUrl: string; color: string }> = {
+  ETH:   { iconUrl: 'https://assets.coingecko.com/coins/images/279/large/ethereum.png',                        color: '#627EEA' },
+  USDT:  { iconUrl: 'https://assets.coingecko.com/coins/images/325/large/Tether.png',                         color: '#26A17B' },
+  USDC:  { iconUrl: 'https://assets.coingecko.com/coins/images/6319/large/USD_Coin_icon.png',                  color: '#2775CA' },
+  WBTC:  { iconUrl: 'https://assets.coingecko.com/coins/images/7598/large/wrapped_bitcoin_wbtc.png',           color: '#F7931A' },
+  MATIC: { iconUrl: 'https://assets.coingecko.com/coins/images/4713/large/matic-token-icon.png',              color: '#8247E5' },
+  LINK:  { iconUrl: 'https://assets.coingecko.com/coins/images/877/large/chainlink-new-logo.png',             color: '#2A5ADA' },
+  UNI:   { iconUrl: 'https://assets.coingecko.com/coins/images/12504/large/uniswap-uni.png',                  color: '#FF007A' },
+};
 
 export default function SwapScreen({ navigation }: any) {
   const { balances, ethBalance, prices, isDarkMode, network, refreshBalance, walletAddress } = useWallet();
@@ -46,16 +56,18 @@ export default function SwapScreen({ navigation }: any) {
 
       // Fallback: if 0x API fails (no key / rate limit), estimate from live prices
       if (!q) {
-        const fromUsd = prices[fromCoin]?.usd ?? 0;
-        const toUsd   = prices[toCoin]?.usd ?? 1;
+        const FALLBACK_USD: Record<string, number> = {
+          WBTC: 64000, MATIC: 0.85, LINK: 14, UNI: 7,
+        };
+        const fromUsd = prices[fromCoin]?.usd ?? FALLBACK_USD[fromCoin] ?? 0;
+        const toUsd   = prices[toCoin]?.usd   ?? FALLBACK_USD[toCoin]   ?? 1;
         if (fromUsd > 0 && toUsd > 0) {
-          const parsed     = parseFloat(amount);
-          const toAmt      = (parsed * fromUsd) / toUsd;
-          const rate       = (fromUsd / toUsd).toFixed(6);
+          const parsed = parseFloat(amount);
+          const toAmt  = (parsed * fromUsd) / toUsd;
           q = {
             toAmount:     toAmt.toFixed(6),
             estimatedGas: '0.002',
-            rate,
+            rate:         (fromUsd / toUsd).toFixed(6),
           };
         }
       }
@@ -102,16 +114,30 @@ export default function SwapScreen({ navigation }: any) {
     }
   };
 
-  const TokenBadge = ({ sym, current, onSelect }: any) => (
-    <TouchableOpacity 
-      style={[styles.tokenBadge, current === sym && { borderColor: T.primary, backgroundColor: T.primary + '10' }]} 
-      onPress={() => onSelect(sym)} 
-      activeOpacity={0.8}
-    >
-      <Image source={{ uri: COIN_META[sym]?.iconUrl }} style={styles.badgeIcon} />
-      <Text style={[styles.badgeText, current === sym && { color: T.primary }]}>{sym}</Text>
-    </TouchableOpacity>
-  );
+  const TokenBadge = ({ sym, current, onSelect }: any) => {
+    const meta = SWAP_COIN_META[sym];
+    const [imgFailed, setImgFailed] = React.useState(false);
+    return (
+      <TouchableOpacity
+        style={[styles.tokenBadge, current === sym && { borderColor: T.primary, backgroundColor: T.primary + '10' }]}
+        onPress={() => onSelect(sym)}
+        activeOpacity={0.8}
+      >
+        {meta && !imgFailed ? (
+          <Image
+            source={{ uri: meta.iconUrl }}
+            style={styles.badgeIcon}
+            onError={() => setImgFailed(true)}
+          />
+        ) : (
+          <View style={[styles.badgeIcon, { borderRadius: 11, backgroundColor: meta?.color + '30' ?? '#88888830', alignItems: 'center', justifyContent: 'center' }]}>
+            <Text style={{ fontSize: 9, fontWeight: '800', color: meta?.color ?? '#888' }}>{sym.slice(0,2)}</Text>
+          </View>
+        )}
+        <Text style={[styles.badgeText, current === sym && { color: T.primary }]}>{sym}</Text>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={styles.container}>
