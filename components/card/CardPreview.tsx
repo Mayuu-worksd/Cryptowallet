@@ -36,8 +36,8 @@ export default function CardPreview({ cardNumber, holderName, expiry, designKey,
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={[styles.bankName, { color: design.accentColor }]}>CRIMSON</Text>
-            <Text style={[styles.cardType, { color: design.mutedColor }]}>ELITE RESERVE</Text>
+            <Text style={[styles.bankName, { color: design.accentColor }]}>CRYPTOWALLET</Text>
+            <Text style={[styles.cardType, { color: design.mutedColor }]}>VIRTUAL CARD</Text>
           </View>
           <View style={styles.mcWrap}>
             <View style={[styles.mcCircle, { backgroundColor: '#EB001B', opacity: 0.85 }]} />
