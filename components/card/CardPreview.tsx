@@ -64,7 +64,7 @@ export default function CardPreview({ cardNumber, holderName, expiry, designKey,
           </View>
           {!compact && (
             <TouchableOpacity onPress={() => setShowDetails(v => !v)} style={styles.eyeBtn}>
-              <Feather name={showDetails ? 'eye-off' : 'eye'} size={13} color={design.mutedColor} />
+              <Feather name={showDetails ? 'eye' : 'eye-off'} size={13} color={design.mutedColor} />
             </TouchableOpacity>
           )}
         </View>
