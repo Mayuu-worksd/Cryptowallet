@@ -318,8 +318,7 @@ function MobileNavigator() {
         animationDuration: Platform.OS === 'android' ? 200 : 250,
         gestureEnabled: true,
         gestureDirection: 'horizontal',
-        contentStyle: { backgroundColor: '#101114' },
-        cardStyle: { backgroundColor: '#101114' },
+        contentStyle: { backgroundColor: 'transparent' },
       }}>
         {!hasWallet ? (
           <>
@@ -330,15 +329,15 @@ function MobileNavigator() {
         ) : (
           <>
             <Stack.Screen name="Main"      component={Tabs} />
-            <Stack.Screen name="Send"      component={SendScreen} />
-            <Stack.Screen name="Receive"   component={ReceiveScreen} />
-            <Stack.Screen name="Swap"      component={SwapScreen} />
-            <Stack.Screen name="History"   component={HistoryScreen} />
+            <Stack.Screen name="Send"      component={SendScreen}      options={{ contentStyle: { backgroundColor: '#101114' } }} />
+            <Stack.Screen name="Receive"   component={ReceiveScreen}   />
+            <Stack.Screen name="Swap"      component={SwapScreen}      options={{ contentStyle: { backgroundColor: '#101114' } }} />
+            <Stack.Screen name="History"   component={HistoryScreen}   />
             <Stack.Screen name="Portfolio" component={PortfolioScreen} />
-            <Stack.Screen name="Settings"  component={SettingsScreen} />
-            <Stack.Screen name="Profile"   component={SettingsScreen} />
-            <Stack.Screen name="Support"   component={SupportScreen} />
-            <Stack.Screen name="Scan"      component={ScanScreen} />
+            <Stack.Screen name="Settings"  component={SettingsScreen}  />
+            <Stack.Screen name="Profile"   component={SettingsScreen}  />
+            <Stack.Screen name="Support"   component={SupportScreen}   />
+            <Stack.Screen name="Scan"      component={ScanScreen}      options={{ contentStyle: { backgroundColor: '#000' } }} />
             <Stack.Screen name="CoinChart"  component={CoinChartScreen} />
             <Stack.Screen name="Card"        component={CardScreen} />
             <Stack.Screen name="CreateWallet" component={CreateWalletScreen} />
