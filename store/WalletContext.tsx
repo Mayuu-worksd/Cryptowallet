@@ -142,10 +142,10 @@ export function formatPrice(usd: number): string {
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [isDarkMode, setIsDarkMode] = useState(true);
-  const toggleTheme = () => setIsDarkMode(p => !p);
+  const toggleTheme = useCallback(() => setIsDarkMode(p => !p), []);
 
   const [balanceVisible, setBalanceVisible] = useState(true);
-  const toggleBalanceVisible = () => setBalanceVisible(p => !p);
+  const toggleBalanceVisible = useCallback(() => setBalanceVisible(p => !p), []);
   const [pinEnabled, setPinEnabled] = useState(false);
 
   // Check PIN status on mount and expose a refresh function
@@ -312,7 +312,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(interval);
   }, [walletAddress, network]);
 
-  const fetchBalance = async (address: string, net: string) => {
+  const fetchBalance = useCallback(async (address: string, net: string) => {
     setIsLoadingBalance(true);
     try {
       const [ethBal, usdtBal] = await Promise.all([
@@ -327,24 +327,24 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoadingBalance(false);
     }
-  };
+  }, []);
 
-  const refreshBalance = async () => {
+  const refreshBalance = useCallback(async () => {
     if (walletAddress) await fetchBalance(walletAddress, network);
-  };
+  }, [walletAddress, network, fetchBalance]);
 
   const handleSetWalletName = useCallback(async (name: string) => {
     setWalletName(name);
     await storageService.saveWalletName(name);
   }, []);
 
-  const addTx = (tx: Omit<Transaction, 'id' | 'date'>) => {
+  const addTx = useCallback((tx: Omit<Transaction, 'id' | 'date'>) => {
     setTransactions(prev => [{
       ...tx,
       id:   Date.now().toString(),
       date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
     }, ...prev]);
-  };
+  }, []);
 
   // This only generates — doesn't set hasWallet until verified
   const createWallet = async (): Promise<{ mnemonic: string; address: string }> => {
