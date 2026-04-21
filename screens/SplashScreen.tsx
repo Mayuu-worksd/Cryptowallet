@@ -162,7 +162,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: 'rgba(0,0,0,0.2)',
     transform: [{ translateY: 10 }],
-    filter: 'blur(15px)',
   },
   logoBox: {
     width: 90,
