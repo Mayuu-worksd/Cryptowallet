@@ -204,7 +204,7 @@ export default function HomeScreen({ navigation }: any) {
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
       {/* ── Header ── */}
-      <View style={[styles.header, { backgroundColor: isDarkMode ? 'rgba(19,19,19,0.92)' : 'rgba(247,249,251,0.95)', top: Platform.OS === 'ios' ? 24 : 0 }]}>
+      <View style={[styles.header, { backgroundColor: isDarkMode ? 'rgba(19,19,19,0.92)' : 'rgba(247,249,251,0.95)', top: Platform.OS === 'ios' ? 44 : 0 }]}>
         <View style={styles.headerLeft}>
           <View style={[styles.avatar, { borderColor: T.border, backgroundColor: T.surfaceLow }]}>
             <Text style={{ color: T.primary, fontWeight: '900', fontSize: 16 }}>
@@ -435,7 +435,7 @@ const styles = StyleSheet.create({
   walletLabel: { fontSize: 16, fontWeight: '800', letterSpacing: -0.5 },
   headerBtn: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 19 },
 
-  scroll: { paddingTop: 116, paddingHorizontal: 20, paddingBottom: 60 },
+  scroll: { paddingTop: 130, paddingHorizontal: 20, paddingBottom: 60 },
 
   errorBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 12, borderWidth: 1, marginBottom: 14 },
   errorBannerText: { flex: 1, fontSize: 12, fontWeight: '600' },

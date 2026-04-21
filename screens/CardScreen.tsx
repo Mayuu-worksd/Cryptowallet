@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  TextInput, Platform, ActivityIndicator, StatusBar, Dimensions,
+  TextInput, Platform, ActivityIndicator, StatusBar, Dimensions, SafeAreaView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
@@ -17,7 +17,7 @@ import EditCardSheet from '../components/card/EditCardSheet';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH - 48;
 const CRIMSON = '#FF3B3B';
-const COINS = ['ETH', 'USDT', 'BTC', 'SOL'] as const;
+const COINS = ['ETH', 'USDT'] as const;
 
 // ── Extracted carousel item — hooks are safe here ─────────────────────────────
 function CarouselCard({
@@ -47,7 +47,7 @@ export default function CardScreen({ navigation }: any) {
   const {
     cardBalance, cardFrozen, toggleFreezeCard,
     cardDetails, cardTransactions, cardCreated,
-    balances, ethBalance, topupCard,
+    balances, ethBalance, topupCard, spendCard,
     isDarkMode, network,
     createCard, updateCardDetails,
   } = useWallet();
@@ -55,9 +55,14 @@ export default function CardScreen({ navigation }: any) {
 
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
 
-  const [showCreate, setShowCreate]   = useState(false);
+  const [
+    showCreate, setShowCreate,
+  ]   = useState(false);
   const [showEdit, setShowEdit]       = useState(false);
   const [showTopup, setShowTopup]     = useState(false);
+  const [showSpend, setShowSpend]     = useState(false);
+  const [spendAmount, setSpendAmount] = useState('');
+  const [spendLabel, setSpendLabel]   = useState('');
   const [topupCoin, setTopupCoin]     = useState<typeof COINS[number]>('ETH');
   const [topupAmount, setTopupAmount] = useState('');
   const [loading, setLoading]         = useState(false);
@@ -98,6 +103,20 @@ export default function CardScreen({ navigation }: any) {
     else showToast('Top-up failed. Try again.', 'error');
   };
 
+  const handleSpend = async () => {
+    const amt = parseFloat(spendAmount);
+    if (!amt || amt <= 0)    { showToast('Enter a valid amount', 'error'); return; }
+    if (cardFrozen)          { showToast('Card is frozen. Unfreeze to spend.', 'error'); return; }
+    if (amt > cardBalance)   { showToast('Insufficient card balance', 'error'); return; }
+    const label = spendLabel.trim() || 'Online Purchase';
+    setLoading(true);
+    await new Promise(r => setTimeout(r, 900));
+    const ok = spendCard(amt, label);
+    setLoading(false);
+    if (ok) { showToast(`Payment of $${amt.toFixed(2)} successful ✅`, 'success'); setSpendAmount(''); setSpendLabel(''); setShowSpend(false); }
+    else showToast('Payment failed. Try again.', 'error');
+  };
+
   // ── Full-screen create flow ────────────────────────────────────────────────
   if (showCreate) {
     return <CreateCardFlow onComplete={handleCardCreated} onCancel={() => setShowCreate(false)} />;
@@ -106,13 +125,12 @@ export default function CardScreen({ navigation }: any) {
   // ── No card state ──────────────────────────────────────────────────────────
   if (!cardCreated) {
     return (
-      <View style={[styles.root, { backgroundColor: T.background }]}>
+      <SafeAreaView style={[styles.root, { backgroundColor: T.background }]}>
         <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
         <Toast visible={toast.visible} message={toast.message} type={toast.type}
           onHide={() => setToast(p => ({ ...p, visible: false }))} />
-        <View style={styles.safeTop} />
         <NoCardState onCreatePress={() => setShowCreate(true)} isDarkMode={isDarkMode} />
-      </View>
+      </SafeAreaView>
     );
   }
 
@@ -122,7 +140,7 @@ export default function CardScreen({ navigation }: any) {
   const designChanged = carouselDesign !== currentDesignKey;
 
   return (
-    <View style={[styles.root, { backgroundColor: T.background }]}>
+    <SafeAreaView style={[styles.root, { backgroundColor: T.background }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <Toast visible={toast.visible} message={toast.message} type={toast.type}
         onHide={() => setToast(p => ({ ...p, visible: false }))} />
@@ -236,11 +254,20 @@ export default function CardScreen({ navigation }: any) {
           <View style={styles.actionRow}>
             <TouchableOpacity
               style={[styles.primaryAction, { backgroundColor: CRIMSON }]}
-              onPress={() => setShowTopup(v => !v)}
+              onPress={() => { setShowTopup(v => !v); setShowSpend(false); }}
               activeOpacity={0.85}
             >
               <Feather name="plus" size={18} color="#FFF" />
               <Text style={styles.primaryActionText}>Add Funds</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.primaryAction, { backgroundColor: '#2563EB' }]}
+              onPress={() => { setShowSpend(v => !v); setShowTopup(false); }}
+              activeOpacity={0.85}
+            >
+              <Feather name="shopping-cart" size={18} color="#FFF" />
+              <Text style={styles.primaryActionText}>Spend</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -343,6 +370,49 @@ export default function CardScreen({ navigation }: any) {
             </View>
           )}
 
+          {/* Spend panel */}
+          {showSpend && (
+            <View style={[styles.panel, { backgroundColor: T.surface }]}>
+              <View style={styles.panelHeader}>
+                <Text style={[styles.panelTitle, { color: T.text }]}>Simulate Payment</Text>
+                <TouchableOpacity onPress={() => { setShowSpend(false); setSpendAmount(''); setSpendLabel(''); }}>
+                  <Feather name="x" size={18} color={T.textMuted} />
+                </TouchableOpacity>
+              </View>
+              <Text style={[styles.panelSub, { color: T.textMuted }]}>
+                Card balance: ${cardBalance.toFixed(2)} USDT
+              </Text>
+              <View style={[styles.inputArea, { backgroundColor: T.surfaceLow }]}>
+                <TextInput
+                  style={[styles.amtInput, { color: T.text, marginBottom: 12 }]}
+                  placeholder="Amount (USD)"
+                  placeholderTextColor={T.textDim}
+                  keyboardType="decimal-pad"
+                  value={spendAmount}
+                  onChangeText={setSpendAmount}
+                />
+                <TextInput
+                  style={[styles.amtInput, { color: T.text, fontSize: 16 }]}
+                  placeholder="Merchant / Label (optional)"
+                  placeholderTextColor={T.textDim}
+                  value={spendLabel}
+                  onChangeText={setSpendLabel}
+                />
+              </View>
+              <TouchableOpacity
+                style={[styles.confirmBtn, { backgroundColor: '#2563EB' }, (!spendAmount || loading) && { opacity: 0.5 }]}
+                onPress={handleSpend}
+                disabled={!spendAmount || loading}
+                activeOpacity={0.85}
+              >
+                {loading
+                  ? <ActivityIndicator color="#FFF" />
+                  : <Text style={styles.confirmBtnText}>Confirm Payment</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          )}
+
           {/* Transactions */}
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: T.text }]}>Recent Activity</Text>
@@ -407,13 +477,12 @@ export default function CardScreen({ navigation }: any) {
 
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  safeTop: { height: Platform.OS === 'ios' ? 54 : (StatusBar.currentHeight ?? 24) + 8 },
 
   pageHeader: {
     flexDirection: 'row',
@@ -460,10 +529,10 @@ const styles = StyleSheet.create({
   networkDot: { width: 6, height: 6, borderRadius: 3, marginRight: 7 },
   networkText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.8 },
 
-  actionRow: { flexDirection: 'row', gap: 10, marginBottom: 24 },
+  actionRow: { flexDirection: 'row', gap: 8, marginBottom: 24 },
   primaryAction: {
     flex: 1, height: 54, borderRadius: 16,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
   },
   primaryActionText: { color: '#FFF', fontWeight: '800', fontSize: 15 },
   secondaryAction: {
