@@ -55,48 +55,80 @@ function TabIcon({ name, color, focused }: { name: any; color: string; focused: 
 function CenterQRButton({ TC }: { TC: any }) {
   const navigation = useNavigation<any>();
   const [showMenu, setShowMenu] = React.useState(false);
-  const scale = React.useRef(new Animated.Value(1)).current;
+  const scale      = React.useRef(new Animated.Value(1)).current;
+  const menuAnim   = React.useRef(new Animated.Value(0)).current;
+  const rotateAnim = React.useRef(new Animated.Value(0)).current;
 
-  const handlePress = () => {
-    Animated.sequence([
-      Animated.spring(scale, { toValue: 0.88, useNativeDriver: true, speed: 30, bounciness: 6 }),
-      Animated.spring(scale, { toValue: 1,    useNativeDriver: true, speed: 20, bounciness: 14 }),
-    ]).start();
-    setShowMenu(p => !p);
+  const openMenu = () => {
+    setShowMenu(true);
+    Animated.parallel([
+      Animated.spring(scale,      { toValue: 0.92, useNativeDriver: true, speed: 25, bounciness: 8 }),
+      Animated.spring(menuAnim,   { toValue: 1,    useNativeDriver: true, speed: 18, bounciness: 10 }),
+      Animated.spring(rotateAnim, { toValue: 1,    useNativeDriver: true, speed: 20, bounciness: 6 }),
+    ]).start(() =>
+      Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 12 }).start()
+    );
   };
+
+  const closeMenu = () => {
+    Animated.parallel([
+      Animated.spring(menuAnim,   { toValue: 0, useNativeDriver: true, speed: 25, bounciness: 4 }),
+      Animated.spring(rotateAnim, { toValue: 0, useNativeDriver: true, speed: 20, bounciness: 4 }),
+    ]).start(() => setShowMenu(false));
+  };
+
+  const handlePress = () => showMenu ? closeMenu() : openMenu();
+
+  const rotate = rotateAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '45deg'] });
 
   return (
     <View style={tabStyles.centerBtnWrap}>
+      {/* Mini menu */}
       {showMenu && (
-        <View style={tabStyles.miniMenu}>
+        <Animated.View style={[
+          tabStyles.miniMenu,
+          { opacity: menuAnim, transform: [{ translateY: menuAnim.interpolate({ inputRange: [0,1], outputRange: [20, 0] }) }] }
+        ]}>
           <TouchableOpacity
             style={[tabStyles.miniBtn, { backgroundColor: TC.surface, borderColor: TC.border }]}
-            onPress={() => { setShowMenu(false); navigation.navigate('Receive'); }}
-            activeOpacity={0.8}
+            onPress={() => { closeMenu(); setTimeout(() => navigation.navigate('Receive'), 200); }}
+            activeOpacity={0.75}
           >
-            <Feather name="download" size={16} color={TC.primary} />
+            <View style={[tabStyles.miniBtnIcon, { backgroundColor: TC.primary + '20' }]}>
+              <Feather name="download" size={18} color={TC.primary} />
+            </View>
             <Text style={[tabStyles.miniBtnText, { color: TC.text }]}>Receive</Text>
           </TouchableOpacity>
+
           <TouchableOpacity
             style={[tabStyles.miniBtn, { backgroundColor: TC.surface, borderColor: TC.border }]}
-            onPress={() => { setShowMenu(false); navigation.navigate('Scan'); }}
-            activeOpacity={0.8}
+            onPress={() => { closeMenu(); setTimeout(() => navigation.navigate('Scan'), 200); }}
+            activeOpacity={0.75}
           >
-            <Feather name="camera" size={16} color={TC.primary} />
-            <Text style={[tabStyles.miniBtnText, { color: TC.text }]}>Scan</Text>
+            <View style={[tabStyles.miniBtnIcon, { backgroundColor: TC.primary + '20' }]}>
+              <Feather name="camera" size={18} color={TC.primary} />
+            </View>
+            <Text style={[tabStyles.miniBtnText, { color: TC.text }]}>Scan QR</Text>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
       )}
+
+      {/* Main button */}
       <Animated.View style={{ transform: [{ scale }] }}>
         <TouchableOpacity
-          style={[tabStyles.centerBtn, { backgroundColor: TC.primary }]}
+          style={tabStyles.centerBtn}
           onPress={handlePress}
           activeOpacity={1}
         >
-          <Feather name={showMenu ? 'x' : 'grid'} size={26} color="#FFF" />
+          {/* Outer ring */}
+          <View style={tabStyles.centerBtnRing}>
+            <Animated.View style={[tabStyles.centerBtnInner, { backgroundColor: TC.primary, transform: [{ rotate }] }]}>
+              <Feather name="grid" size={28} color="#FFF" />
+            </Animated.View>
+          </View>
         </TouchableOpacity>
       </Animated.View>
-      <Text style={[tabStyles.centerLabel, { color: showMenu ? TC.primary : TC.textMuted }]}>QR</Text>
+      <Text style={[tabStyles.centerLabel, { color: showMenu ? TC.primary : TC.textMuted }]}>Scan</Text>
     </View>
   );
 }
@@ -114,8 +146,8 @@ function Tabs() {
           backgroundColor: TC.surface,
           borderTopColor: TC.border,
           borderTopWidth: 1,
-          height: 80,
-          paddingBottom: 24,
+          height: 96,
+          paddingBottom: 20,
           paddingTop: 10,
         },
         tabBarActiveTintColor: TC.primary,
@@ -157,54 +189,76 @@ function Tabs() {
 
 const tabStyles = StyleSheet.create({
   centerBtnWrap: {
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    paddingBottom: 10,
-    width: 70,
-    position: 'relative',
-  },
-  centerBtn: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 80,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 2,
+    marginTop: -36,
+  },
+  centerBtn: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  centerBtnRing: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    borderWidth: 4,
+    borderColor: '#FF3B3B50',
+    alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: '#FF3B3B',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.45,
-    shadowRadius: 12,
-    elevation: 10,
-    bottom: 16,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.65,
+    shadowRadius: 20,
+    elevation: 18,
+  },
+  centerBtnInner: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   centerLabel: {
     fontSize: 11,
     fontWeight: '700',
-    marginTop: 0,
-    bottom: 14,
+    marginTop: 6,
   },
   miniMenu: {
     position: 'absolute',
-    bottom: 72,
+    bottom: 92,
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     zIndex: 100,
+    width: 160,
   },
   miniBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 20,
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    borderRadius: 22,
     borderWidth: 1,
+    width: '100%',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 6,
   },
-  miniBtnText: { fontSize: 13, fontWeight: '700' },
+  miniBtnIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  miniBtnText: { fontSize: 14, fontWeight: '700' },
 });
 
 function MobileNavigator() {

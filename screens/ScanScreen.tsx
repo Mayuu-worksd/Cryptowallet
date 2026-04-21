@@ -4,6 +4,7 @@ import {
   Platform, Vibration, Animated,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import { Feather } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
 import { Theme } from '../constants';
@@ -56,29 +57,47 @@ export default function ScanScreen({ navigation, route }: any) {
 
   const handleBarCodeScanned = ({ data }: { data: string }) => {
     if (scanned) return;
+    processQRData(data);
+  };
 
+  const processQRData = (data: string) => {
     try {
       const { parseQRPayload } = require('./ReceiveScreen');
       const result = parseQRPayload(data);
-
-      if (!result) return; 
-
+      if (!result) return;
       setScanned(true);
       Vibration.vibrate(80);
       setLastScan(result.address);
-
       if (result.network !== appNetwork) {
-        setScanInfo(`⚠️ Note: QR is for ${result.network}, but you are on ${appNetwork}`);
+        setScanInfo(`⚠️ QR is for ${result.network}, you are on ${appNetwork}`);
       }
-
       setTimeout(() => {
-        navigation.navigate('Send', { 
-          scannedAddress: result.address, 
-          scannedNetwork: result.network 
+        navigation.navigate('Send', {
+          scannedAddress: result.address,
+          scannedNetwork: result.network,
         });
-      }, 1000);
-    } catch (e) {
-      // Fallback if requires fails or other errors
+      }, 800);
+    } catch {}
+  };
+
+  const handleGallery = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        setScanInfo('Gallery permission denied');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 1,
+      });
+      if (result.canceled) return;
+      // expo-image-picker doesn't decode QR natively
+      // Show a helpful message to user
+      setScanInfo('📌 Tip: Use camera to scan QR directly for best results');
+    } catch {
+      setScanInfo('Could not open gallery');
     }
   };
 
@@ -156,7 +175,7 @@ export default function ScanScreen({ navigation, route }: any) {
           <View style={styles.overlaySide} />
         </View>
 
-        {/* Bottom dark area */}
+        {/* Bottom area */}
         <View style={styles.overlayBottom}>
           <Text style={styles.scanHint}>
             {scanned ? '✓ QR Code detected!' : 'Point camera at a wallet QR code'}
@@ -166,19 +185,28 @@ export default function ScanScreen({ navigation, route }: any) {
               <Text style={styles.scanInfoText}>{scanInfo}</Text>
             </View>
           )}
-          {scanned && (
-            <Text style={styles.scanResult} numberOfLines={1}>
-              {lastScan.length > 30 ? `${lastScan.slice(0, 16)}...${lastScan.slice(-8)}` : lastScan}
-            </Text>
-          )}
-          {scanned && (
+          {scanned ? (
+            <>
+              <Text style={styles.scanResult} numberOfLines={1}>
+                {lastScan.length > 30 ? `${lastScan.slice(0, 16)}...${lastScan.slice(-8)}` : lastScan}
+              </Text>
+              <TouchableOpacity
+                style={styles.rescanBtn}
+                onPress={() => { setScanned(false); setLastScan(''); setScanInfo(''); }}
+                activeOpacity={0.8}
+              >
+                <Feather name="refresh-cw" size={14} color="#FFF" />
+                <Text style={styles.rescanText}>Scan Again</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
             <TouchableOpacity
-              style={styles.rescanBtn}
-              onPress={() => { setScanned(false); setLastScan(''); setScanInfo(''); }}
+              style={styles.galleryBtn}
+              onPress={handleGallery}
               activeOpacity={0.8}
             >
-              <Feather name="refresh-cw" size={14} color="#FFF" />
-              <Text style={styles.rescanText}>Scan Again</Text>
+              <Feather name="image" size={18} color="#FFF" />
+              <Text style={styles.galleryText}>Choose from Gallery</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -240,6 +268,8 @@ const styles = StyleSheet.create({
   scanInfoText: { color: '#F59E0B', fontSize: 12, fontWeight: '700', textAlign: 'center' },
   rescanBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(255,59,59,0.25)', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: '#FF3B3B' },
   rescanText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
+  galleryBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(255,255,255,0.12)', paddingHorizontal: 24, paddingVertical: 14, borderRadius: 28, borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)', marginTop: 8 },
+  galleryText: { color: '#FFF', fontWeight: '700', fontSize: 15 },
 
   // Header
   header: {
