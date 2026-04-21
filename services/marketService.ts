@@ -1,5 +1,5 @@
 const COINGECKO_URL =
-  'https://api.coingecko.com/api/v3/simple/price?ids=ethereum,bitcoin,tether,solana,matic-network&vs_currencies=usd&include_24hr_change=true';
+  'https://api.coingecko.com/api/v3/simple/price?ids=ethereum,bitcoin,tether,solana,matic-network,binancecoin&vs_currencies=usd&include_24hr_change=true';
 
 const COINGECKO_NEWS_URL =
   'https://api.coingecko.com/api/v3/news?per_page=10';
@@ -42,6 +42,7 @@ const ID_TO_SYMBOL: Record<string, string> = {
   tether:          'USDT',
   solana:          'SOL',
   'matic-network': 'MATIC',
+  binancecoin:     'BNB',
 };
 
 const STATIC_NEWS: NewsItem[] = [

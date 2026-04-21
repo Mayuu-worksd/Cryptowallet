@@ -115,7 +115,30 @@ const FALLBACK_PRICES: Record<string, CoinPrice> = {
   USDT:  { usd: 1,     change24h: 0 },
   SOL:   { usd: 180,   change24h: 0 },
   MATIC: { usd: 0.85,  change24h: 0 },
+  BNB:   { usd: 580,   change24h: 0 },
 };
+
+// ── Number formatting helpers ─────────────────────────────────────────────────
+export function formatUSD(value: number): string {
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
+  if (value >= 1_000)     return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (value >= 1)         return `$${value.toFixed(2)}`;
+  return `$${value.toFixed(4)}`;
+}
+
+export function formatCrypto(value: number, symbol: string): string {
+  if (value === 0) return `0 ${symbol}`;
+  if (value < 0.000001) return `<0.000001 ${symbol}`;
+  if (value < 0.01)     return `${value.toFixed(6)} ${symbol}`;
+  if (value < 1)        return `${value.toFixed(4)} ${symbol}`;
+  return `${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} ${symbol}`;
+}
+
+export function formatPrice(usd: number): string {
+  if (usd >= 1000) return `$${usd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (usd >= 1)    return `$${usd.toFixed(4)}`;
+  return `$${usd.toFixed(6)}`;
+}
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [isDarkMode, setIsDarkMode] = useState(true);
