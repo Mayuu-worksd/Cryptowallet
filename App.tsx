@@ -318,6 +318,8 @@ function MobileNavigator() {
         animationDuration: Platform.OS === 'android' ? 200 : 250,
         gestureEnabled: true,
         gestureDirection: 'horizontal',
+        contentStyle: { backgroundColor: '#101114' },
+        cardStyle: { backgroundColor: '#101114' },
       }}>
         {!hasWallet ? (
           <>
