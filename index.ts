@@ -1,3 +1,4 @@
+import 'react-native-worklets/src/index';
 import 'react-native-get-random-values';
 import '@ethersproject/shims';
 import { registerRootComponent } from 'expo';
