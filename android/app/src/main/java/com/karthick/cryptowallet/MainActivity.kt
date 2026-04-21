@@ -12,9 +12,6 @@ import expo.modules.ReactActivityDelegateWrapper
 
 class MainActivity : ReactActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
-    // SECURITY: Prevent screenshots and screen recording of sensitive wallet data
-    window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
-    
     // Set the theme to AppTheme BEFORE onCreate to support
     // coloring the background, status bar, and navigation bar.
     // This is required for expo-splash-screen.
