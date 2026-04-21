@@ -1,8 +1,8 @@
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, Text, ActivityIndicator, Platform, useWindowDimensions, Animated } from 'react-native';
+import { View, Text, ActivityIndicator, Platform, useWindowDimensions, Animated, TouchableOpacity, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Feather } from '@expo/vector-icons';
 
@@ -52,10 +52,59 @@ function TabIcon({ name, color, focused }: { name: any; color: string; focused: 
   );
 }
 
+function CenterQRButton({ TC }: { TC: any }) {
+  const navigation = useNavigation<any>();
+  const [showMenu, setShowMenu] = React.useState(false);
+  const scale = React.useRef(new Animated.Value(1)).current;
+
+  const handlePress = () => {
+    Animated.sequence([
+      Animated.spring(scale, { toValue: 0.88, useNativeDriver: true, speed: 30, bounciness: 6 }),
+      Animated.spring(scale, { toValue: 1,    useNativeDriver: true, speed: 20, bounciness: 14 }),
+    ]).start();
+    setShowMenu(p => !p);
+  };
+
+  return (
+    <View style={tabStyles.centerBtnWrap}>
+      {showMenu && (
+        <View style={tabStyles.miniMenu}>
+          <TouchableOpacity
+            style={[tabStyles.miniBtn, { backgroundColor: TC.surface, borderColor: TC.border }]}
+            onPress={() => { setShowMenu(false); navigation.navigate('Receive'); }}
+            activeOpacity={0.8}
+          >
+            <Feather name="download" size={16} color={TC.primary} />
+            <Text style={[tabStyles.miniBtnText, { color: TC.text }]}>Receive</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[tabStyles.miniBtn, { backgroundColor: TC.surface, borderColor: TC.border }]}
+            onPress={() => { setShowMenu(false); navigation.navigate('Scan'); }}
+            activeOpacity={0.8}
+          >
+            <Feather name="camera" size={16} color={TC.primary} />
+            <Text style={[tabStyles.miniBtnText, { color: TC.text }]}>Scan</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      <Animated.View style={{ transform: [{ scale }] }}>
+        <TouchableOpacity
+          style={[tabStyles.centerBtn, { backgroundColor: TC.primary }]}
+          onPress={handlePress}
+          activeOpacity={1}
+        >
+          <Feather name={showMenu ? 'x' : 'grid'} size={26} color="#FFF" />
+        </TouchableOpacity>
+      </Animated.View>
+      <Text style={[tabStyles.centerLabel, { color: showMenu ? TC.primary : TC.textMuted }]}>QR</Text>
+    </View>
+  );
+}
+
 function Tabs() {
   const { isDarkMode } = useWallet();
   const TC = isDarkMode ? Theme.colors : Theme.lightColors;
-  // key forces full remount on theme change so tab bar colours update instantly
+
   return (
     <Tab.Navigator
       key={isDarkMode ? 'dark' : 'light'}
@@ -85,10 +134,15 @@ function Tabs() {
         tabBarLabel: 'Card',
         tabBarIcon: ({ color, focused }) => <TabIcon name="credit-card" color={color} focused={focused} />,
       }} />
-      <Tab.Screen name="Send" component={SendScreen} options={{
-        tabBarLabel: 'Send',
-        tabBarIcon: ({ color, focused }) => <TabIcon name="send" color={color} focused={focused} />,
-      }} />
+      <Tab.Screen
+        name="QRCenter"
+        component={HomeScreen}
+        options={{
+          tabBarLabel: () => null,
+          tabBarIcon: () => null,
+          tabBarButton: () => <CenterQRButton TC={TC} />,
+        }}
+      />
       <Tab.Screen name="Assets" component={PortfolioScreen} options={{
         tabBarLabel: 'Assets',
         tabBarIcon: ({ color, focused }) => <TabIcon name="pie-chart" color={color} focused={focused} />,
@@ -100,6 +154,58 @@ function Tabs() {
     </Tab.Navigator>
   );
 }
+
+const tabStyles = StyleSheet.create({
+  centerBtnWrap: {
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingBottom: 10,
+    width: 70,
+    position: 'relative',
+  },
+  centerBtn: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
+    shadowColor: '#FF3B3B',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
+    elevation: 10,
+    bottom: 16,
+  },
+  centerLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 0,
+    bottom: 14,
+  },
+  miniMenu: {
+    position: 'absolute',
+    bottom: 72,
+    alignItems: 'center',
+    gap: 8,
+    zIndex: 100,
+  },
+  miniBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 20,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  miniBtnText: { fontSize: 13, fontWeight: '700' },
+});
 
 function MobileNavigator() {
   const { hasWallet, isLoadingWallet } = useWallet();

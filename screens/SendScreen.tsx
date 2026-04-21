@@ -14,7 +14,11 @@ export default function SendScreen({ navigation, route }: any) {
   const { ethBalance, sendETH, isDarkMode, prices, walletAddress, network } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
 
-  const [address, setAddress]           = useState(route?.params?.scannedAddress ?? '');
+  const scannedAddr = route?.params?.scannedAddress ?? '';
+  const scannedNet  = route?.params?.scannedNetwork ?? '';
+
+  const [address, setAddress]           = useState(scannedAddr);
+  const [scannedNetwork, setScannedNetwork] = useState(scannedNet);
   const [amount, setAmount]             = useState('');
   const [estimating, setEstimating]     = useState(false);
   const [addressError, setAddressError] = useState('');
@@ -28,7 +32,7 @@ export default function SendScreen({ navigation, route }: any) {
   const sendingRef = useRef(false); // double-tap guard
 
   useEffect(() => {
-    if (route?.params?.scannedAddress) validateAddress(route.params.scannedAddress);
+    if (scannedAddr) validateAddress(scannedAddr);
   }, []);
 
   const ethPrice     = prices.ETH?.usd ?? 3450;
@@ -182,6 +186,14 @@ export default function SendScreen({ navigation, route }: any) {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        
+        {/* Network Badge for Scanned Address */}
+        {!!scannedNetwork && (
+          <View style={[styles.scannedNetBadge, { backgroundColor: T.primary + '15' }]}>
+            <MaterialIcons name="lan" size={14} color={T.primary} />
+            <Text style={[styles.scannedNetText, { color: T.primary }]}>Network: {scannedNetwork}</Text>
+          </View>
+        )}
 
         {/* Balance pill */}
         <View style={[styles.balancePill, { backgroundColor: T.surface, borderColor: T.border }]}>
@@ -325,7 +337,9 @@ const makeStyles = (T: any) => StyleSheet.create({
   backBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
   headerTitle: { fontSize: 18, fontWeight: '700', color: T.text },
   scroll: { paddingHorizontal: 20, paddingBottom: 120 },
-  sectionLabel: { color: T.textMuted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', marginBottom: 8, marginTop: 20, letterSpacing: 0.6 },
+  scannedNetBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, alignSelf: 'flex-start', marginTop: 10, marginBottom: -10 },
+  scannedNetText: { fontSize: 13, fontWeight: '700' },
+  sectionLabel: { color: T.textMuted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', marginBottom: 8, marginTop: 24, letterSpacing: 0.6 },
 
   balancePill: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 12, borderWidth: 1, marginBottom: 4 },
   balancePillText: { fontSize: 13, fontWeight: '500' },

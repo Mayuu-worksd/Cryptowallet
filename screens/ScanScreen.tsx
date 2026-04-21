@@ -9,13 +9,14 @@ import { useWallet } from '../store/WalletContext';
 import { Theme } from '../constants';
 
 export default function ScanScreen({ navigation, route }: any) {
-  const { isDarkMode } = useWallet();
+  const { isDarkMode, network: appNetwork } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
 
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned]           = useState(false);
   const [torchOn, setTorchOn]           = useState(false);
   const [lastScan, setLastScan]         = useState('');
+  const [scanInfo, setScanInfo]         = useState('');
 
   // Corner bracket animation
   const pulse = useRef(new Animated.Value(1)).current;
@@ -52,29 +53,32 @@ export default function ScanScreen({ navigation, route }: any) {
       </View>
     );
   }
+
   const handleBarCodeScanned = ({ data }: { data: string }) => {
     if (scanned) return;
 
-    // Extract address from ethereum: URI scheme or plain address
-    let raw = data.trim();
-    if (raw.startsWith('ethereum:')) {
-      raw = raw.replace('ethereum:', '').split('?')[0].split('@')[0];
-    }
-
-    // Strictly validate: must be a checksummed or lowercase 0x Ethereum address
-    const ETH_ADDRESS_REGEX = /^0x[0-9a-fA-F]{40}$/;
-    if (!ETH_ADDRESS_REGEX.test(raw)) {
-      // Invalid QR — do not navigate, allow rescan
-      return;
-    }
-
-    setScanned(true);
-    Vibration.vibrate(80);
-    setLastScan(raw);
     try {
-      navigation.navigate('Send', { scannedAddress: raw });
-    } catch {
-      navigation.goBack();
+      const { parseQRPayload } = require('./ReceiveScreen');
+      const result = parseQRPayload(data);
+
+      if (!result) return; 
+
+      setScanned(true);
+      Vibration.vibrate(80);
+      setLastScan(result.address);
+
+      if (result.network !== appNetwork) {
+        setScanInfo(`⚠️ Note: QR is for ${result.network}, but you are on ${appNetwork}`);
+      }
+
+      setTimeout(() => {
+        navigation.navigate('Send', { 
+          scannedAddress: result.address, 
+          scannedNetwork: result.network 
+        });
+      }, 1000);
+    } catch (e) {
+      // Fallback if requires fails or other errors
     }
   };
 
@@ -157,6 +161,11 @@ export default function ScanScreen({ navigation, route }: any) {
           <Text style={styles.scanHint}>
             {scanned ? '✓ QR Code detected!' : 'Point camera at a wallet QR code'}
           </Text>
+          {!!scanInfo && (
+            <View style={styles.scanInfoPill}>
+              <Text style={styles.scanInfoText}>{scanInfo}</Text>
+            </View>
+          )}
           {scanned && (
             <Text style={styles.scanResult} numberOfLines={1}>
               {lastScan.length > 30 ? `${lastScan.slice(0, 16)}...${lastScan.slice(-8)}` : lastScan}
@@ -165,7 +174,7 @@ export default function ScanScreen({ navigation, route }: any) {
           {scanned && (
             <TouchableOpacity
               style={styles.rescanBtn}
-              onPress={() => { setScanned(false); setLastScan(''); }}
+              onPress={() => { setScanned(false); setLastScan(''); setScanInfo(''); }}
               activeOpacity={0.8}
             >
               <Feather name="refresh-cw" size={14} color="#FFF" />
@@ -227,6 +236,8 @@ const styles = StyleSheet.create({
   // Bottom hints
   scanHint: { color: '#FFF', fontSize: 15, fontWeight: '600', textAlign: 'center', paddingHorizontal: 32 },
   scanResult: { color: '#FF3B3B', fontSize: 13, fontWeight: '700', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+  scanInfoPill: { backgroundColor: 'rgba(255,158,11,0.15)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: '#F59E0B', marginHorizontal: 20 },
+  scanInfoText: { color: '#F59E0B', fontSize: 12, fontWeight: '700', textAlign: 'center' },
   rescanBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(255,59,59,0.25)', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: '#FF3B3B' },
   rescanText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
 
