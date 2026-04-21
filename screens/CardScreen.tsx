@@ -19,7 +19,7 @@ const CARD_WIDTH = SCREEN_WIDTH - 48;
 const CRIMSON = '#FF3B3B';
 const COINS = ['ETH', 'USDT'] as const;
 
-// ── Extracted carousel item — hooks are safe here ─────────────────────────────
+// ── Extracted carousel item ──────────────────────────────────────────────────
 function CarouselCard({
   designKey, cardNumber, holderName, expiry, frozen,
 }: {
@@ -55,12 +55,11 @@ export default function CardScreen({ navigation }: any) {
 
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
 
-  const [
-    showCreate, setShowCreate,
-  ]   = useState(false);
-  const [showEdit, setShowEdit]       = useState(false);
-  const [showTopup, setShowTopup]     = useState(false);
-  const [showSpend, setShowSpend]     = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [showEdit, setShowEdit]     = useState(false);
+  const [showTopup, setShowTopup]   = useState(false);
+  const [showSpend, setShowSpend]   = useState(false);
+  const [balanceHidden, setBalanceHidden] = useState(false);
   const [spendAmount, setSpendAmount] = useState('');
   const [spendLabel, setSpendLabel]   = useState('');
   const [topupCoin, setTopupCoin]     = useState<typeof COINS[number]>('ETH');
@@ -113,16 +112,19 @@ export default function CardScreen({ navigation }: any) {
     await new Promise(r => setTimeout(r, 900));
     const ok = spendCard(amt, label);
     setLoading(false);
-    if (ok) { showToast(`Payment of $${amt.toFixed(2)} successful ✅`, 'success'); setSpendAmount(''); setSpendLabel(''); setShowSpend(false); }
+    if (ok) { 
+      showToast(`Payment of $${amt.toFixed(2)} successful ✅`, 'success'); 
+      setSpendAmount(''); 
+      setSpendLabel(''); 
+      setShowSpend(false); 
+    }
     else showToast('Payment failed. Try again.', 'error');
   };
 
-  // ── Full-screen create flow ────────────────────────────────────────────────
   if (showCreate) {
     return <CreateCardFlow onComplete={handleCardCreated} onCancel={() => setShowCreate(false)} />;
   }
 
-  // ── No card state ──────────────────────────────────────────────────────────
   if (!cardCreated) {
     return (
       <SafeAreaView style={[styles.root, { backgroundColor: T.background }]}>
@@ -134,7 +136,6 @@ export default function CardScreen({ navigation }: any) {
     );
   }
 
-  // ── Card created — main view ───────────────────────────────────────────────
   const currentDesignKey = (cardDetails.design ?? 'dark') as CardDesignKey;
   const carouselDesign = CARD_DESIGNS[activeIndex]?.key ?? currentDesignKey;
   const designChanged = carouselDesign !== currentDesignKey;
@@ -157,20 +158,20 @@ export default function CardScreen({ navigation }: any) {
 
       {/* Header */}
       <View style={styles.pageHeader}>
-        <Text style={[styles.pageTitle, { color: T.text }]}>My Card</Text>
+        <Text style={[styles.pageTitle, { color: T.text }]}>Vault Card</Text>
         <TouchableOpacity
           style={[styles.editPill, { backgroundColor: T.surface }]}
           onPress={() => setShowEdit(true)}
           activeOpacity={0.75}
         >
-          <Feather name="edit-2" size={13} color={CRIMSON} />
-          <Text style={styles.editPillText}>Edit</Text>
+          <Feather name="settings" size={14} color={CRIMSON} />
+          <Text style={[styles.editPillText, { color: T.text }]}>Settings</Text>
         </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
-        {/* Card carousel — horizontal ScrollView avoids nested FlatList warning */}
+        {/* Card carousel */}
         <ScrollView
           horizontal
           pagingEnabled
@@ -209,7 +210,6 @@ export default function CardScreen({ navigation }: any) {
           ))}
         </View>
 
-        {/* Apply design button — only shows when carousel is on a different design */}
         {designChanged && (
           <TouchableOpacity
             style={[styles.applyBtn, { borderColor: CRIMSON }]}
@@ -220,251 +220,236 @@ export default function CardScreen({ navigation }: any) {
             activeOpacity={0.75}
           >
             <Feather name="check" size={14} color={CRIMSON} />
-            <Text style={[styles.applyBtnText, { color: CRIMSON }]}>Apply This Design</Text>
+            <Text style={[styles.applyBtnText, { color: CRIMSON }]}>Apply New Skin</Text>
           </TouchableOpacity>
         )}
 
         <View style={styles.body}>
 
-          {/* Balance */}
-          <View style={styles.balanceBlock}>
-            <Text style={[styles.balLabel, { color: T.textMuted }]}>CARD BALANCE</Text>
-            <View style={styles.balRow}>
-              <Text style={[styles.balSign, { color: T.text }]}>$</Text>
-              <Text style={[styles.balValue, { color: T.text }]}>
-                {cardBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </Text>
-              <Text style={[styles.balCurrency, { color: T.textMuted }]}>USDT</Text>
+          {/* New Balance Component */}
+          <LinearGradient
+            colors={[T.surfaceHigh, T.surface]}
+            style={styles.premiumBalanceCard}
+          >
+            <View style={styles.balCardHeader}>
+              <Text style={[styles.balCardLabel, { color: T.textDim }]}>AVAILABLE TO SPEND</Text>
+              <TouchableOpacity onPress={() => setBalanceHidden(v => !v)} activeOpacity={0.7}>
+                <Feather name={balanceHidden ? 'eye-off' : 'eye'} size={16} color={T.textDim} />
+              </TouchableOpacity>
             </View>
-          </View>
-
-          {/* Network badge */}
-          <View style={[styles.networkBadge, { backgroundColor: T.surface }]}>
-            <View style={[styles.networkDot, {
-              backgroundColor: network === 'Sepolia' ? '#F59E0B' : '#00C853',
-            }]} />
-            <Text style={[styles.networkText, { color: T.textMuted }]}>
-              {network.toUpperCase()} · {network === 'Sepolia' ? 'TESTNET' : 'MAINNET'}
-            </Text>
-          </View>
-
-          {/* Action buttons */}
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={[styles.primaryAction, { backgroundColor: CRIMSON }]}
-              onPress={() => { setShowTopup(v => !v); setShowSpend(false); }}
-              activeOpacity={0.85}
-            >
-              <Feather name="plus" size={18} color="#FFF" />
-              <Text style={styles.primaryActionText}>Add Funds</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.primaryAction, { backgroundColor: '#2563EB' }]}
-              onPress={() => { setShowSpend(v => !v); setShowTopup(false); }}
-              activeOpacity={0.85}
-            >
-              <Feather name="shopping-cart" size={18} color="#FFF" />
-              <Text style={styles.primaryActionText}>Spend</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.secondaryAction, { backgroundColor: T.surface }]}
-              onPress={toggleFreezeCard}
-              activeOpacity={0.75}
-            >
-              <Feather
-                name={cardFrozen ? 'unlock' : 'lock'}
-                size={18}
-                color={cardFrozen ? '#4ADE80' : CRIMSON}
-              />
-              <Text style={[styles.secondaryActionText, { color: T.text }]}>
-                {cardFrozen ? 'Unfreeze' : 'Freeze'}
+            <View style={styles.balCardMain}>
+              <Text style={[styles.currencySymbol, { color: T.text }]}>$</Text>
+              <Text style={[styles.mainBalText, { color: T.text }]}>
+                {balanceHidden ? '••••••' : cardBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </Text>
+              <Text style={[styles.usdtTag, { color: T.textMuted }]}>USDT</Text>
+            </View>
+            <View style={[styles.cardDivider, { backgroundColor: T.border }]} />
+            <View style={styles.networkInfoRow}>
+              <View style={[styles.statusIndicator, { backgroundColor: network === 'Sepolia' ? '#F59E0B' : '#00C853' }]} />
+              <Text style={[styles.networkLabelText, { color: T.textMuted }]}>
+                {network.toUpperCase()} · LIVE PROTECTION ACTIVE
+              </Text>
+            </View>
+          </LinearGradient>
+
+          {/* Action buttons - REDESIGNED */}
+          <View style={styles.mainActionsContainer}>
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: CRIMSON }]}
+              onPress={() => { setShowTopup(v => !v); setShowSpend(false); }}
+              activeOpacity={0.9}
+            >
+              <Feather name="plus-circle" size={20} color="#FFF" />
+              <Text style={styles.actionBtnText}>Add Cash</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: T.surfaceLow, borderWidth: 1, borderColor: T.border }]}
+              onPress={() => { setShowSpend(v => !v); setShowTopup(false); }}
+              activeOpacity={0.8}
+            >
+              <Feather name="shopping-bag" size={20} color={T.text} />
+              <Text style={[styles.actionBtnText, { color: T.text }]}>Pay Now</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.smallActionBtn, { backgroundColor: T.surfaceHigh }]}
+              onPress={toggleFreezeCard}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.freezeCircle, { backgroundColor: cardFrozen ? 'rgba(0,196,83,0.1)' : 'rgba(255,59,59,0.1)' }]}>
+                <Feather
+                  name={cardFrozen ? 'unlock' : 'lock'}
+                  size={16}
+                  color={cardFrozen ? '#00C853' : CRIMSON}
+                />
+              </View>
             </TouchableOpacity>
           </View>
 
-          {/* Top-up panel */}
+          {/* Panels */}
           {showTopup && (
-            <View style={[styles.panel, { backgroundColor: T.surface }]}>
+            <View style={[styles.panel, { backgroundColor: T.surface, borderColor: T.border, borderWidth: 1 }]}>
               <View style={styles.panelHeader}>
-                <Text style={[styles.panelTitle, { color: T.text }]}>Add Funds to Card</Text>
+                <Text style={[styles.panelTitle, { color: T.text }]}>Fund Your Card</Text>
                 <TouchableOpacity onPress={() => { setShowTopup(false); setTopupAmount(''); }}>
-                  <Feather name="x" size={18} color={T.textMuted} />
+                   <View style={[styles.closeIconBox, { backgroundColor: T.surfaceLow }]}>
+                    <Feather name="x" size={14} color={T.textMuted} />
+                   </View>
                 </TouchableOpacity>
               </View>
 
-              <Text style={[styles.panelSub, { color: T.textMuted }]}>Select asset to convert</Text>
-
-              <View style={styles.coinRow}>
+              <View style={styles.coinSelector}>
                 {COINS.map(c => {
-                  const bal = c === 'ETH' ? parseFloat(ethBalance) : (balances[c] ?? 0);
-                  // BTC and SOL are not on the ETH chain — always 0, hide them
-                  const isOffChain = (c === 'BTC' || c === 'SOL');
-                  if (isOffChain) return null;
+                  if (c === 'BTC' || c === 'SOL') return null;
                   return (
                     <TouchableOpacity
                       key={c}
                       style={[
-                        styles.coinTab,
+                        styles.coinPill,
                         { backgroundColor: T.surfaceLow },
-                        topupCoin === c && styles.coinTabActive,
+                        topupCoin === c && { backgroundColor: CRIMSON },
                       ]}
                       onPress={() => { setTopupCoin(c); setTopupAmount(''); }}
                       activeOpacity={0.75}
                     >
                       <Text style={[
-                        styles.coinTabText,
-                        { color: T.textMuted },
-                        topupCoin === c && styles.coinTabTextActive,
+                        styles.coinPillText,
+                        { color: T.textDim },
+                        topupCoin === c && { color: '#FFF' },
                       ]}>{c}</Text>
                     </TouchableOpacity>
                   );
                 })}
               </View>
 
-              <View style={[styles.inputArea, { backgroundColor: T.surfaceLow }]}>
-                <View style={styles.inputHeader}>
-                  <Text style={[styles.inputLabel, { color: T.textMuted }]}>
-                    Balance: {availableBalance.toFixed(4)} {topupCoin}
-                  </Text>
-                  <TouchableOpacity onPress={() => setTopupAmount(availableBalance.toString())}>
-                    <Text style={styles.maxText}>MAX</Text>
+              <View style={[styles.amountInputBox, { backgroundColor: T.surfaceLow }]}>
+                <View style={styles.inputTopRow}>
+                  <Text style={[styles.availLabel, { color: T.textDim }]}>Available: {parseFloat(ethBalance).toFixed(4)} {topupCoin}</Text>
+                  <TouchableOpacity onPress={() => setTopupAmount(ethBalance)}>
+                    <Text style={[styles.maxLabel, { color: CRIMSON }]}>MAX</Text>
                   </TouchableOpacity>
                 </View>
-                <View style={styles.inputRow}>
+                <View style={styles.inputMainRow}>
                   <TextInput
-                    style={[styles.amtInput, { color: T.text }]}
+                    style={[styles.hugeInput, { color: T.text }]}
                     placeholder="0.00"
                     placeholderTextColor={T.textDim}
                     keyboardType="decimal-pad"
                     value={topupAmount}
                     onChangeText={setTopupAmount}
                   />
-                  <Text style={[styles.coinLabel, { color: T.textMuted }]}>{topupCoin}</Text>
+                  <Text style={[styles.unitText, { color: T.textMuted }]}>{topupCoin}</Text>
                 </View>
-                <View style={[styles.divider, { borderTopColor: T.border }]} />
-                <View style={styles.convRow}>
-                  <Text style={[styles.convRate, { color: T.textMuted }]}>
-                    1 {topupCoin} ≈ ${conversionRate.toLocaleString()}
-                  </Text>
-                  <Text style={[styles.receiveText, { color: T.text }]}>
-                    → <Text style={{ color: '#4ADE80', fontWeight: '800' }}>${usdtValue} USDT</Text>
-                  </Text>
+                <View style={[styles.innerDivider, { backgroundColor: T.border }]} />
+                <View style={styles.summaryRow}>
+                   <Text style={[styles.convInfo, { color: T.textDim }]}>1 {topupCoin} = ${conversionRate.toLocaleString()}</Text>
+                   <Text style={[styles.receiveInfo, { color: T.text }]}>Get <Text style={{ color: '#00C853', fontWeight: '900' }}>${usdtValue}</Text></Text>
                 </View>
               </View>
 
               <TouchableOpacity
-                style={[styles.confirmBtn, (!topupAmount || loading) && { opacity: 0.5 }]}
+                style={[styles.panelConfirmBtn, (!topupAmount || loading) && { opacity: 0.6 }]}
                 onPress={handleTopup}
                 disabled={!topupAmount || loading}
-                activeOpacity={0.85}
+                activeOpacity={0.8}
               >
-                {loading
-                  ? <ActivityIndicator color="#FFF" />
-                  : <Text style={styles.confirmBtnText}>Confirm Transfer</Text>
-                }
+                {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.panelConfirmText}>Deposit Funds</Text>}
               </TouchableOpacity>
             </View>
           )}
 
-          {/* Spend panel */}
           {showSpend && (
-            <View style={[styles.panel, { backgroundColor: T.surface }]}>
+            <View style={[styles.panel, { backgroundColor: T.surface, borderColor: T.border, borderWidth: 1 }]}>
               <View style={styles.panelHeader}>
-                <Text style={[styles.panelTitle, { color: T.text }]}>Simulate Payment</Text>
+                <Text style={[styles.panelTitle, { color: T.text }]}>New Payment</Text>
                 <TouchableOpacity onPress={() => { setShowSpend(false); setSpendAmount(''); setSpendLabel(''); }}>
-                  <Feather name="x" size={18} color={T.textMuted} />
+                  <View style={[styles.closeIconBox, { backgroundColor: T.surfaceLow }]}>
+                    <Feather name="x" size={14} color={T.textMuted} />
+                   </View>
                 </TouchableOpacity>
               </View>
-              <Text style={[styles.panelSub, { color: T.textMuted }]}>
-                Card balance: ${cardBalance.toFixed(2)} USDT
-              </Text>
-              <View style={[styles.inputArea, { backgroundColor: T.surfaceLow }]}>
+              
+              <View style={[styles.amountInputBox, { backgroundColor: T.surfaceLow, marginBottom: 16 }]}>
+                <Text style={[styles.availLabel, { color: T.textDim, marginBottom: 8 }]}>LIMIT: ${cardBalance.toFixed(2)} USDT</Text>
                 <TextInput
-                  style={[styles.amtInput, { color: T.text, marginBottom: 12 }]}
-                  placeholder="Amount (USD)"
+                  style={[styles.hugeInput, { color: T.text }]}
+                  placeholder="$0.00"
                   placeholderTextColor={T.textDim}
                   keyboardType="decimal-pad"
                   value={spendAmount}
                   onChangeText={setSpendAmount}
                 />
-                <TextInput
-                  style={[styles.amtInput, { color: T.text, fontSize: 16 }]}
-                  placeholder="Merchant / Label (optional)"
+              </View>
+              
+              <View style={[styles.miniInputBox, { backgroundColor: T.surfaceLow }]}>
+                 <Feather name="tag" size={14} color={T.textDim} style={{marginRight: 10}} />
+                 <TextInput
+                  style={[styles.simpleInput, { color: T.text }]}
+                  placeholder="Merchant name (optional)"
                   placeholderTextColor={T.textDim}
                   value={spendLabel}
                   onChangeText={setSpendLabel}
                 />
               </View>
+
               <TouchableOpacity
-                style={[styles.confirmBtn, { backgroundColor: '#2563EB' }, (!spendAmount || loading) && { opacity: 0.5 }]}
+                style={[styles.panelConfirmBtn, { backgroundColor: T.text }, (!spendAmount || loading) && { opacity: 0.6 }]}
                 onPress={handleSpend}
                 disabled={!spendAmount || loading}
-                activeOpacity={0.85}
+                activeOpacity={0.8}
               >
-                {loading
-                  ? <ActivityIndicator color="#FFF" />
-                  : <Text style={styles.confirmBtnText}>Confirm Payment</Text>
+                {loading 
+                  ? <ActivityIndicator color={T.background} /> 
+                  : <Text style={[styles.panelConfirmText, { color: T.background }]}>Confirm Payment</Text>
                 }
               </TouchableOpacity>
             </View>
           )}
 
           {/* Transactions */}
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: T.text }]}>Recent Activity</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('History')} activeOpacity={0.7}>
-              <Text style={styles.seeAll}>See all</Text>
+          <View style={styles.transactionsHeader}>
+            <Text style={[styles.transactionsTitle, { color: T.text }]}>Transaction History</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('History')}>
+              <Text style={[styles.viewAllText, { color: CRIMSON }]}>View all</Text>
             </TouchableOpacity>
           </View>
 
-          <View style={[styles.txList, { backgroundColor: T.surface }]}>
+          <View style={[styles.transactionBox, { backgroundColor: T.surface }]}>
             {cardTransactions.length === 0 ? (
-              <View style={styles.emptyState}>
-                <View style={[styles.emptyIcon, { backgroundColor: T.surfaceLow }]}>
-                  <Feather name="activity" size={22} color={T.textDim} />
-                </View>
-                <Text style={[styles.emptyTitle, { color: T.text }]}>No transactions yet</Text>
-                <Text style={[styles.emptyText, { color: T.textMuted }]}>
-                  Add funds to start using your card
-                </Text>
+              <View style={styles.emptyActivity}>
+                <Feather name="inbox" size={32} color={T.textDim} />
+                <Text style={[styles.emptyTextTitle, { color: T.textDim }]}>No Activity Yet</Text>
               </View>
             ) : (
-              cardTransactions.slice(0, 10).map((tx, i) => (
+              cardTransactions.slice(0, 8).map((tx, i) => (
                 <View
                   key={tx.id}
                   style={[
-                    styles.txItem,
-                    i < Math.min(cardTransactions.length, 10) - 1 && {
+                    styles.txRow,
+                    i < Math.min(cardTransactions.length, 8) - 1 && {
                       borderBottomWidth: 1, borderBottomColor: T.border,
                     },
                   ]}
                 >
-                  <View style={[styles.txIcon, {
-                    backgroundColor: tx.type === 'topup'
-                      ? 'rgba(74,222,128,0.1)'
-                      : 'rgba(255,59,59,0.08)',
+                  <View style={[styles.typeIconBox, {
+                    backgroundColor: tx.type === 'topup' ? 'rgba(0,200,83,0.1)' : 'rgba(255,255,255,0.05)',
                   }]}>
                     <Feather
-                      name={tx.type === 'topup' ? 'arrow-down-left' : 'arrow-up-right'}
+                      name={tx.type === 'topup' ? 'download' : 'shopping-bag'}
                       size={16}
-                      color={tx.type === 'topup' ? '#4ADE80' : CRIMSON}
+                      color={tx.type === 'topup' ? '#00C853' : T.text}
                     />
                   </View>
-                  <View style={styles.txInfo}>
-                    <Text style={[styles.txTitle, { color: T.text }]} numberOfLines={1}>
-                      {tx.label}
-                    </Text>
-                    <Text style={[styles.txDate, { color: T.textMuted }]}>
-                      {new Date(tx.timestamp).toLocaleString([], {
-                        month: 'short', day: 'numeric',
-                        hour: '2-digit', minute: '2-digit',
-                      })}
+                  <View style={styles.txMainInfo}>
+                    <Text style={[styles.txLabel, { color: T.text }]} numberOfLines={1}>{tx.label}</Text>
+                    <Text style={[styles.txSubDate, { color: T.textDim }]}>
+                      {new Date(tx.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })} · {new Date(tx.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </Text>
                   </View>
-                  <Text style={[styles.txAmt, {
-                    color: tx.type === 'topup' ? '#4ADE80' : T.text,
+                  <Text style={[styles.txAmountText, {
+                    color: tx.type === 'topup' ? '#00C853' : T.text,
                   }]}>
                     {tx.type === 'topup' ? '+' : '−'}${tx.amount.toFixed(2)}
                   </Text>
@@ -481,114 +466,110 @@ export default function CardScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-
   pageHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) + 8 : 8,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) + 12 : 12,
     paddingBottom: 16,
   },
-  pageTitle: { fontSize: 28, fontWeight: '900', letterSpacing: -0.8 },
+  pageTitle: { fontSize: 32, fontWeight: '900', letterSpacing: -1 },
   editPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 24,
   },
-  editPillText: { color: CRIMSON, fontSize: 13, fontWeight: '700' },
+  editPillText: { fontSize: 13, fontWeight: '800' },
 
-  scroll: { paddingBottom: 110 },
-
-  carousel: { height: (CARD_WIDTH) / 1.586 + 48 },
+  scroll: { paddingBottom: 120 },
+  carousel: { height: (SCREEN_WIDTH - 48) / 1.586 + 48 },
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 12 },
   dot: { width: 6, height: 6, borderRadius: 3 },
-  dotActive: { width: 20, borderRadius: 3 },
+  dotActive: { width: 22, borderRadius: 3 },
 
   applyBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    alignSelf: 'center', borderWidth: 1,
-    paddingHorizontal: 18, paddingVertical: 8,
-    borderRadius: 20, marginBottom: 8,
+    alignSelf: 'center', borderWidth: 1.5,
+    paddingHorizontal: 20, paddingVertical: 9,
+    borderRadius: 22, marginBottom: 12,
   },
-  applyBtnText: { fontSize: 13, fontWeight: '800' },
+  applyBtnText: { fontSize: 13, fontWeight: '900', letterSpacing: 0.5 },
 
-  body: { paddingHorizontal: 20, marginTop: 16 },
+  body: { paddingHorizontal: 20 },
 
-  balanceBlock: { alignItems: 'center', marginBottom: 16 },
-  balLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 1.5, marginBottom: 8 },
-  balRow: { flexDirection: 'row', alignItems: 'baseline' },
-  balSign: { fontSize: 22, fontWeight: '700', marginRight: 2 },
-  balValue: { fontSize: 48, fontWeight: '900', letterSpacing: -1.5 },
-  balCurrency: { fontSize: 15, fontWeight: '700', marginLeft: 8 },
-
-  networkBadge: {
-    alignSelf: 'center', flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, marginBottom: 24,
+  premiumBalanceCard: {
+    borderRadius: 24,
+    padding: 24,
+    marginBottom: 20,
   },
-  networkDot: { width: 6, height: 6, borderRadius: 3, marginRight: 7 },
-  networkText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.8 },
+  balCardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+  balCardLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5 },
+  balCardMain: { flexDirection: 'row', alignItems: 'baseline', marginBottom: 16 },
+  currencySymbol: { fontSize: 24, fontWeight: '700', marginRight: 4, opacity: 0.6 },
+  mainBalText: { fontSize: 48, fontWeight: '900', letterSpacing: -2 },
+  usdtTag: { fontSize: 16, fontWeight: '800', marginLeft: 8 },
+  cardDivider: { height: 1, width: '100%', marginBottom: 16, opacity: 0.2 },
+  networkInfoRow: { flexDirection: 'row', alignItems: 'center' },
+  statusIndicator: { width: 6, height: 6, borderRadius: 3, marginRight: 8 },
+  networkLabelText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
 
-  actionRow: { flexDirection: 'row', gap: 8, marginBottom: 24 },
-  primaryAction: {
-    flex: 1, height: 54, borderRadius: 16,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+  mainActionsContainer: { flexDirection: 'row', gap: 12, marginBottom: 24 },
+  actionBtn: { 
+    flex: 2, height: 58, borderRadius: 18, 
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    overflow: 'hidden'
   },
-  primaryActionText: { color: '#FFF', fontWeight: '800', fontSize: 15 },
-  secondaryAction: {
-    flex: 1, height: 54, borderRadius: 16,
-    alignItems: 'center', justifyContent: 'center', gap: 5,
+  actionBtnText: { fontWeight: '900', fontSize: 16, color: '#FFF' },
+  smallActionBtn: {
+    width: 58, height: 58, borderRadius: 18,
+    alignItems: 'center', justifyContent: 'center',
   },
-  secondaryActionText: { fontSize: 11, fontWeight: '700' },
+  freezeCircle: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
 
-  panel: { borderRadius: 20, padding: 20, marginBottom: 24 },
-  panelHeader: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', marginBottom: 4,
-  },
-  panelTitle: { fontSize: 16, fontWeight: '800' },
-  panelSub: { fontSize: 13, marginBottom: 14 },
-  coinRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
-  coinTab: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
-  coinTabActive: { backgroundColor: CRIMSON },
-  coinTabText: { fontSize: 12, fontWeight: '800' },
-  coinTabTextActive: { color: '#FFF' },
-  inputArea: { borderRadius: 14, padding: 16, marginBottom: 14 },
-  inputHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  inputLabel: { fontSize: 12, fontWeight: '600' },
-  maxText: { fontSize: 12, fontWeight: '900', color: CRIMSON },
-  inputRow: { flexDirection: 'row', alignItems: 'center' },
-  amtInput: { flex: 1, fontSize: 26, fontWeight: '800', paddingVertical: 4 },
-  coinLabel: { fontSize: 14, fontWeight: '700', marginLeft: 8 },
-  divider: { borderTopWidth: 1, marginVertical: 12 },
-  convRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  convRate: { fontSize: 12, fontWeight: '500' },
-  receiveText: { fontSize: 13, fontWeight: '600' },
-  confirmBtn: {
-    backgroundColor: CRIMSON, height: 52,
-    borderRadius: 14, alignItems: 'center', justifyContent: 'center',
-  },
-  confirmBtnText: { color: '#FFF', fontWeight: '800', fontSize: 15 },
+  panel: { borderRadius: 26, padding: 20, marginBottom: 24 },
+  panelHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  panelTitle: { fontSize: 18, fontWeight: '900' },
+  closeIconBox: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 
-  sectionHeader: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', marginBottom: 12,
-  },
-  sectionTitle: { fontSize: 17, fontWeight: '800' },
-  seeAll: { color: CRIMSON, fontSize: 13, fontWeight: '700' },
+  coinSelector: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  coinPill: { flex: 1, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  coinPillText: { fontSize: 13, fontWeight: '800' },
 
-  txList: { borderRadius: 18, overflow: 'hidden', marginBottom: 24 },
-  txItem: { flexDirection: 'row', alignItems: 'center', padding: 16 },
-  txIcon: { width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  txInfo: { flex: 1, marginLeft: 14 },
-  txTitle: { fontSize: 14, fontWeight: '700' },
-  txDate: { fontSize: 11, marginTop: 2, fontWeight: '500' },
-  txAmt: { fontSize: 15, fontWeight: '800' },
+  amountInputBox: { borderRadius: 22, padding: 20 },
+  inputTopRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+  availLabel: { fontSize: 11, fontWeight: '700' },
+  maxLabel: { fontSize: 11, fontWeight: '900' },
+  inputMainRow: { flexDirection: 'row', alignItems: 'center' },
+  hugeInput: { flex: 1, fontSize: 32, fontWeight: '900', paddingVertical: 4 },
+  unitText: { fontSize: 16, fontWeight: '800', marginLeft: 10 },
+  innerDivider: { height: 1, marginVertical: 16 },
+  summaryRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  convInfo: { fontSize: 12, fontWeight: '600' },
+  receiveInfo: { fontSize: 13, fontWeight: '700' },
 
-  emptyState: { padding: 36, alignItems: 'center', gap: 10 },
-  emptyIcon: {
-    width: 52, height: 52, borderRadius: 16,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 4,
+  miniInputBox: { borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
+  simpleInput: { flex: 1, fontSize: 15, fontWeight: '700' },
+  
+  panelConfirmBtn: { 
+    backgroundColor: '#FF3B3B', height: 60, 
+    borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginTop: 12
   },
-  emptyTitle: { fontSize: 15, fontWeight: '700' },
-  emptyText: { fontSize: 13, fontWeight: '500' },
+  panelConfirmText: { color: '#FFF', fontWeight: '900', fontSize: 16 },
+
+  transactionsHeader: { 
+    flexDirection: 'row', justifyContent: 'space-between', 
+    alignItems: 'center', marginBottom: 16, marginTop: 12 
+  },
+  transactionsTitle: { fontSize: 18, fontWeight: '900' },
+  viewAllText: { fontSize: 13, fontWeight: '800' },
+
+  transactionBox: { borderRadius: 24, overflow: 'hidden', padding: 4 },
+  txRow: { flexDirection: 'row', alignItems: 'center', padding: 16, height: 72 },
+  typeIconBox: { width: 44, height: 44, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  txMainInfo: { flex: 1, marginLeft: 14 },
+  txLabel: { fontSize: 15, fontWeight: '800' },
+  txSubDate: { fontSize: 11, fontWeight: '600', marginTop: 3 },
+  txAmountText: { fontSize: 16, fontWeight: '900' },
+  emptyActivity: { padding: 48, alignItems: 'center', gap: 12 },
+  emptyTextTitle: { fontSize: 14, fontWeight: '700' },
 });
