@@ -39,7 +39,12 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      ["expo-system-ui", { "backgroundColor": "#101114" }],
+      [
+        "expo-system-ui",
+        {
+          "backgroundColor": "#101114"
+        }
+      ],
       "expo-secure-store",
       "expo-font",
       [
@@ -49,11 +54,11 @@
         }
       ]
     ],
+    "owner": "mayu0303",
     "extra": {
       "eas": {
-        "projectId": "d0c86f41-30ec-490e-b66f-ba485383fcab"
+        "projectId": "dba004dd-1121-41d4-823a-ee8ad9209efa"
       }
-    },
-    "owner": "mayu4532"
+    }
   }
 }

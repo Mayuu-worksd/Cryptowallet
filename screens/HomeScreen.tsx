@@ -117,125 +117,190 @@ const TokenRow = memo(({ symbol, amount, usd, change24h, T, hideBalance, onPress
 
 // ─── Market Ticker ────────────────────────────────────────────────────────────
 const TICKER_COINS = ['ETH', 'BTC', 'SOL', 'MATIC', 'USDT'] as const;
-const ITEM_WIDTH = 160;
+const TICKER_GAP = 16;
+const TICKER_ITEM_WIDTH = 180 + TICKER_GAP; // Explicit width including gap
 
 const MarketTicker = memo(({ prices, T, isPricesLoading, isInitialLoad, onCoinPress, onRefresh }: {
   prices: any; T: any; isPricesLoading: boolean; isInitialLoad: boolean;
   onCoinPress: (sym: string) => void; onRefresh: () => void;
 }) => {
   const translateX = useRef(new Animated.Value(0)).current;
-  const totalWidth = ITEM_WIDTH * TICKER_COINS.length;
-  const animRef    = useRef<Animated.CompositeAnimation | null>(null);
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const totalWidth = TICKER_ITEM_WIDTH * TICKER_COINS.length;
 
   useEffect(() => {
-    if (isInitialLoad) return;
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 0.3, duration: 1000, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, []);
+
+  useEffect(() => {
+    if (isInitialLoad || totalWidth === 0) return;
+    
     translateX.setValue(0);
-    animRef.current = Animated.loop(
+    const scroll = Animated.loop(
       Animated.timing(translateX, {
-        toValue:  -totalWidth,
-        duration: totalWidth * 38,   // ~6s for full scroll
+        toValue: -totalWidth,
+        duration: totalWidth * 40,
         useNativeDriver: true,
       })
     );
-    animRef.current.start();
-    return () => animRef.current?.stop();
+    scroll.start();
+    return () => scroll.stop();
   }, [isInitialLoad, totalWidth]);
 
-  // Duplicate coins so the loop looks seamless
-  const items = [...TICKER_COINS, ...TICKER_COINS];
+  const items = [...TICKER_COINS, ...TICKER_COINS, ...TICKER_COINS];
 
   return (
-    <View style={[tickerStyles.box, { backgroundColor: T.surface, borderColor: T.border }]}>
-      {/* Header */}
-      <View style={tickerStyles.header}>
-        <View style={tickerStyles.headerLeft}>
-          <View style={[tickerStyles.liveDot, { backgroundColor: '#00C853' }]} />
-          <Text style={[tickerStyles.headerTitle, { color: T.text }]}>Market</Text>
+    <View style={tickerStyles.container}>
+      <View style={[tickerStyles.badge, { borderColor: T.border }]}>
+        <View style={tickerStyles.badgeLeft}>
+          <Animated.View style={[tickerStyles.dot, { opacity: pulseAnim }]} />
+          <Text style={tickerStyles.badgeText}>MARKET LIVE</Text>
         </View>
-        {isPricesLoading && !isInitialLoad
-          ? <ActivityIndicator size="small" color={T.primary} />
-          : <TouchableOpacity onPress={onRefresh} activeOpacity={0.7}>
-              <Feather name="refresh-cw" size={14} color={T.textDim} />
-            </TouchableOpacity>
-        }
+        <View style={tickerStyles.badgeDivider} />
+        <TouchableOpacity 
+          onPress={onRefresh}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          activeOpacity={0.6}
+          style={tickerStyles.refreshBtnArea}
+        >
+          {isPricesLoading && !isInitialLoad 
+            ? <ActivityIndicator size="small" color="#FFF" style={{ transform: [{ scale: 0.5 }] }} />
+            : <Feather name="refresh-cw" size={12} color="#FFF" />
+          }
+        </TouchableOpacity>
       </View>
 
-      {/* Ticker strip */}
-      <View style={tickerStyles.strip}>
-        {isInitialLoad ? (
-          <View style={tickerStyles.skeletonRow}>
-            {[0,1,2].map(i => (
-              <View key={i} style={tickerStyles.skeletonItem}>
-                <SkeletonBox width={28} height={28} borderRadius={14} />
-                <View style={{ gap: 4 }}>
-                  <SkeletonBox width={36} height={11} />
-                  <SkeletonBox width={52} height={13} />
-                  <SkeletonBox width={40} height={10} />
-                </View>
-              </View>
-            ))}
-          </View>
-        ) : (
-          <Animated.View
-            style={[tickerStyles.track, { transform: [{ translateX }] }]}
-          >
-            {items.map((sym, idx) => {
-              const p    = prices[sym];
-              const isUp = (p?.change24h ?? 0) >= 0;
-              const price = p
-                ? p.usd >= 1000
-                  ? `$${(p.usd / 1000).toFixed(2)}k`
-                  : `$${p.usd.toFixed(2)}`
-                : '—';
-              return (
-                <TouchableOpacity
-                  key={`${sym}-${idx}`}
-                  style={[tickerStyles.item, { borderColor: T.border }]}
-                  onPress={() => onCoinPress(sym)}
-                  activeOpacity={0.75}
-                >
-                  <CoinIcon symbol={sym} size={28} />
-                  <Text style={[tickerStyles.sym, { color: T.textMuted }]}>{sym}</Text>
-                  <Text style={[tickerStyles.price, { color: T.text }]}>{price}</Text>
-                  <Text style={[tickerStyles.change, { color: isUp ? '#00C853' : '#FF3B3B' }]}>
-                    {isUp ? '▲' : '▼'} {Math.abs(p?.change24h ?? 0).toFixed(2)}%
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </Animated.View>
-        )}
+      <View style={[tickerStyles.surface, { backgroundColor: T.surface, borderColor: T.border }]}>
+        <View style={[tickerStyles.accentLine, { backgroundColor: T.primary }]} />
+        
+        <View style={tickerStyles.trackContainer}>
+          {isInitialLoad ? (
+             <View style={tickerStyles.skeletonRow}>
+               {[0,1,2].map(i => (
+                 <View key={i} style={tickerStyles.skeletonCard}>
+                   <SkeletonBox width={24} height={24} borderRadius={12} />
+                   <SkeletonBox width={100} height={14} borderRadius={4} />
+                 </View>
+               ))}
+             </View>
+          ) : (
+            <Animated.View style={[tickerStyles.track, { width: TICKER_ITEM_WIDTH * items.length, transform: [{ translateX }] }]}>
+              {items.map((sym, idx) => {
+                const p = prices[sym];
+                const isUp = (p?.change24h ?? 0) >= 0;
+                return (
+                  <TouchableOpacity
+                    key={`${sym}-${idx}`}
+                    style={[tickerStyles.item, { backgroundColor: T.surfaceLow + '80' }]}
+                    onPress={() => onCoinPress?.(sym)}
+                    activeOpacity={0.8}
+                  >
+                    <CoinIcon symbol={sym} size={24} />
+                    <View style={tickerStyles.itemInfo}>
+                      <View>
+                        <Text style={[tickerStyles.symbolText, { color: T.text }]}>{sym}</Text>
+                        <Text style={[tickerStyles.priceText, { color: T.textMuted }]}>
+                          ${p ? (p.usd >= 1 ? p.usd.toLocaleString() : p.usd.toFixed(4)) : '—'}
+                        </Text>
+                      </View>
+                      <View style={[tickerStyles.changeBadge, { backgroundColor: isUp ? T.success + '15' : T.error + '15' }]}>
+                        <Text style={[tickerStyles.changeText, { color: isUp ? T.success : T.error }]}>
+                          {isUp ? '+' : ''}{p?.change24h?.toFixed(2) ?? '0.00'}%
+                        </Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </Animated.View>
+          )}
+        </View>
       </View>
     </View>
   );
 });
 
 const tickerStyles = StyleSheet.create({
-  box: {
-    marginTop: 24, borderRadius: 22, borderWidth: 1, overflow: 'hidden',
+  container: { marginTop: 32, paddingVertical: 4 },
+  surface: {
+    height: 74,
+    borderRadius: 20,
+    borderWidth: 1,
+    overflow: 'hidden',
+    position: 'relative',
+    justifyContent: 'center',
   },
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 18, paddingTop: 16, paddingBottom: 12,
+  accentLine: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0,
+    height: 1,
+    opacity: 0.4,
   },
-  headerLeft:  { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  liveDot:     { width: 7, height: 7, borderRadius: 4 },
-  headerTitle: { fontSize: 17, fontWeight: '800' },
-  strip:       { height: 100, overflow: 'hidden' },
-  track:       { flexDirection: 'row', height: 100 },
-  item: {
-    width: ITEM_WIDTH,
+  badge: {
+    position: 'absolute',
+    top: -11,
+    left: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+    zIndex: 60,
+    paddingVertical: 2,
+    backgroundColor: '#FF3B3B',
+  },
+  badgeLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+  },
+  dot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#FFF' },
+  badgeText: { fontSize: 10, fontWeight: '900', letterSpacing: 1, color: '#FFF' },
+  badgeDivider: { width: 1, height: 20, backgroundColor: 'rgba(255,255,255,0.3)', marginHorizontal: 2 },
+  refreshBtnArea: {
+    paddingHorizontal: 10,
+    height: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    borderRightWidth: 1,
-    paddingVertical: 12,
   },
-  sym:    { fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
-  price:  { fontSize: 14, fontWeight: '800' },
-  change: { fontSize: 11, fontWeight: '700' },
-  skeletonRow:  { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, gap: 24, height: 100 },
-  skeletonItem: { alignItems: 'center', gap: 6 },
+  
+  trackContainer: { flex: 1, overflow: 'hidden' },
+  track: { flexDirection: 'row', alignItems: 'center', height: '100%', paddingHorizontal: TICKER_GAP / 2 },
+  
+  item: {
+    width: 180,
+    height: 54,
+    marginRight: TICKER_GAP,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    gap: 10,
+  },
+  itemInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  symbolText: { fontSize: 13, fontWeight: '800' },
+  priceText: { fontSize: 11, fontWeight: '600', marginTop: -2 },
+  changeBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  changeText: { fontSize: 10, fontWeight: '900' },
+  
+  skeletonRow: { flexDirection: 'row', alignItems: 'center', height: '100%', paddingHorizontal: 20 },
+  skeletonCard: { width: 140, height: 44, borderRadius: 12, marginRight: 16, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, gap: 10, backgroundColor: 'rgba(255,255,255,0.03)' },
 });
 
 
@@ -557,16 +622,16 @@ const styles = StyleSheet.create({
   openBtn: { paddingHorizontal: 18, paddingVertical: 9, borderRadius: 20 },
   openBtnText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
 
-  assetsContainer: { borderRadius: 22, padding: 18, borderWidth: 1 },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  sectionTitle: { fontSize: 17, fontWeight: '800' },
+  assetsContainer: { borderRadius: 20, padding: 14, borderWidth: 1 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  sectionTitle: { fontSize: 16, fontWeight: '900', letterSpacing: -0.2 },
 
-  tokenItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 11 },
+  tokenItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8 },
   tokenLeft: { flexDirection: 'row', alignItems: 'center' },
-  tokenName: { fontSize: 15, fontWeight: '700', marginBottom: 2 },
-  tokenSub: { fontSize: 12, fontWeight: '500' },
-  tokenUsd: { fontSize: 15, fontWeight: '700', marginBottom: 2 },
-  divider: { height: 1, width: '100%' },
+  tokenName: { fontSize: 15, fontWeight: '800', marginBottom: 1 },
+  tokenSub: { fontSize: 11, fontWeight: '600', letterSpacing: 0.2 },
+  tokenUsd: { fontSize: 15, fontWeight: '800', marginBottom: 1 },
+  divider: { height: 1, width: '100%', opacity: 0.5 },
 
   marketSection: { marginTop: 24, borderRadius: 22, padding: 18, borderWidth: 1 },
   marketRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 11 },
