@@ -26,7 +26,9 @@ const CoinIcon = memo(({ symbol, size = 44 }: { symbol: string; size?: number })
       <Text style={{ color, fontSize: size * 0.4, fontWeight: '800' }}>{symbol.charAt(0)}</Text>
     </View>
   );
-}); // memo CoinIcon({ navigation }: any) {
+});
+
+export default function PortfolioScreen({ navigation }: any) {
   const { ethBalance, balances, prices, isDarkMode, walletName } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
 
