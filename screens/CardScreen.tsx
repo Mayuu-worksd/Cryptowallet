@@ -155,8 +155,6 @@ export default function CardScreen({ navigation }: any) {
         onClose={() => setShowEdit(false)}
       />
 
-      <View style={styles.safeTop} />
-
       {/* Header */}
       <View style={styles.pageHeader}>
         <Text style={[styles.pageTitle, { color: T.text }]}>My Card</Text>
@@ -489,6 +487,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) + 8 : 8,
     paddingBottom: 16,
   },
   pageTitle: { fontSize: 28, fontWeight: '900', letterSpacing: -0.8 },
