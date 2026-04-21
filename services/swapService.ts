@@ -74,10 +74,10 @@ async function fetchWithTimeout(url: string, ms = 10000): Promise<Response> {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), ms);
   try {
-    return await fetch(url, {
-      signal: controller.signal,
-      headers: { 'Accept': 'application/json' },
-    });
+    const ZRX_API_KEY = process.env.EXPO_PUBLIC_ZRX_API_KEY ?? '';
+    const headers: Record<string, string> = { 'Accept': 'application/json' };
+    if (ZRX_API_KEY) headers['0x-api-key'] = ZRX_API_KEY;
+    return await fetch(url, { signal: controller.signal, headers });
   } finally {
     clearTimeout(id);
   }

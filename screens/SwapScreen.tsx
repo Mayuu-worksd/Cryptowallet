@@ -9,7 +9,7 @@ import { Theme, COIN_META } from '../constants';
 import Toast from '../components/Toast';
 import { swapService, SwapQuote } from '../services/swapService';
 
-const COINS = ['ETH', 'USDT', 'BTC', 'SOL'];
+const COINS = ['ETH', 'USDT', 'USDC'];
 
 export default function SwapScreen({ navigation }: any) {
   const { balances, ethBalance, prices, isDarkMode, network, refreshBalance, walletAddress } = useWallet();
@@ -42,12 +42,29 @@ export default function SwapScreen({ navigation }: any) {
     }
     const t = setTimeout(async () => {
       setQuoting(true);
-      const q = await swapService.getQuote(fromCoin, toCoin, amount, network);
+      let q = await swapService.getQuote(fromCoin, toCoin, amount, network);
+
+      // Fallback: if 0x API fails (no key / rate limit), estimate from live prices
+      if (!q) {
+        const fromUsd = prices[fromCoin]?.usd ?? 0;
+        const toUsd   = prices[toCoin]?.usd ?? 1;
+        if (fromUsd > 0 && toUsd > 0) {
+          const parsed     = parseFloat(amount);
+          const toAmt      = (parsed * fromUsd) / toUsd;
+          const rate       = (fromUsd / toUsd).toFixed(6);
+          q = {
+            toAmount:     toAmt.toFixed(6),
+            estimatedGas: '0.002',
+            rate,
+          };
+        }
+      }
+
       setQuote(q);
       setQuoting(false);
     }, 700);
     return () => clearTimeout(t);
-  }, [amount, fromCoin, toCoin, network, isSupported]);
+  }, [amount, fromCoin, toCoin, network, isSupported, prices]);
 
   const handleSwap = async () => {
     const parsed = parseFloat(amount);
