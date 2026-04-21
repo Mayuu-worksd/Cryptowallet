@@ -43,12 +43,14 @@ class MainApplication : Application(), ReactApplication {
     // behind a 6-digit PIN with SHA-256 hashing and escalating lockout tiers
     // before any wallet data or navigation is accessible.
     super.onCreate()
-    DefaultNewArchitectureEntryPoint.releaseLevel = try {
-      ReleaseLevel.valueOf(BuildConfig.REACT_NATIVE_RELEASE_LEVEL.uppercase())
-    } catch (e: IllegalArgumentException) {
-      ReleaseLevel.STABLE
+    if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
+      DefaultNewArchitectureEntryPoint.releaseLevel = try {
+        ReleaseLevel.valueOf(BuildConfig.REACT_NATIVE_RELEASE_LEVEL.uppercase())
+      } catch (e: IllegalArgumentException) {
+        ReleaseLevel.STABLE
+      }
+      DefaultNewArchitectureEntryPoint.load()
     }
-    DefaultNewArchitectureEntryPoint.load()
     ApplicationLifecycleDispatcher.onApplicationCreate(this)
   }
 
