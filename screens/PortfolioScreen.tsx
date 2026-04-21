@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, memo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Platform, Image,
@@ -8,7 +8,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useWallet } from '../store/WalletContext';
 import { Theme, COIN_META, COIN_COLORS } from '../constants';
 
-const CoinIcon = ({ symbol, size = 44 }: { symbol: string; size?: number }) => {
+const CoinIcon = memo(({ symbol, size = 44 }: { symbol: string; size?: number }) => {
   const meta  = COIN_META[symbol];
   const color = COIN_COLORS[symbol] || '#888';
   const [failed, setFailed] = useState(false);
@@ -26,23 +26,27 @@ const CoinIcon = ({ symbol, size = 44 }: { symbol: string; size?: number }) => {
       <Text style={{ color, fontSize: size * 0.4, fontWeight: '800' }}>{symbol.charAt(0)}</Text>
     </View>
   );
-};
-
-export default function PortfolioScreen({ navigation }: any) {
+}); // memo CoinIcon({ navigation }: any) {
   const { ethBalance, balances, prices, isDarkMode, walletName } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
 
-  const realBalances: Record<string, number> = { ...balances, ETH: parseFloat(ethBalance) || 0 };
+  const realBalances = useMemo(
+    () => ({ ...balances, ETH: parseFloat(ethBalance) || 0 }),
+    [balances, ethBalance]
+  );
 
-  const assetsList = Object.keys(realBalances)
-    .map(symbol => {
-      const price     = prices[symbol]?.usd ?? 0;
-      const change24h = prices[symbol]?.change24h ?? 0;
-      return { symbol, amount: realBalances[symbol], usd: realBalances[symbol] * price, change24h };
-    })
-    .sort((a, b) => b.usd - a.usd);
+  const assetsList = useMemo(() =>
+    Object.keys(realBalances)
+      .map(symbol => {
+        const price     = prices[symbol]?.usd ?? 0;
+        const change24h = prices[symbol]?.change24h ?? 0;
+        return { symbol, amount: realBalances[symbol], usd: realBalances[symbol] * price, change24h };
+      })
+      .sort((a, b) => b.usd - a.usd),
+    [realBalances, prices]
+  );
 
-  const totalUsd = assetsList.reduce((acc, a) => acc + a.usd, 0);
+  const totalUsd = useMemo(() => assetsList.reduce((acc, a) => acc + a.usd, 0), [assetsList]);
 
   return (
     <View style={[styles.container, { backgroundColor: T.background }]}>

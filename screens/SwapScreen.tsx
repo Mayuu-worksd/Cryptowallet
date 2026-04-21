@@ -12,7 +12,7 @@ import { swapService, SwapQuote } from '../services/swapService';
 const COINS = ['ETH', 'USDT', 'BTC', 'SOL'];
 
 export default function SwapScreen({ navigation }: any) {
-  const { balances, ethBalance, sendCrypto, prices, isDarkMode, network, refreshBalance } = useWallet();
+  const { balances, ethBalance, prices, isDarkMode, network, refreshBalance, walletAddress } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const styles = makeStyles(T);
 
@@ -52,17 +52,37 @@ export default function SwapScreen({ navigation }: any) {
   const handleSwap = async () => {
     const parsed = parseFloat(amount);
     if (!amount || parsed <= 0)  { showToast('Enter a valid amount', 'error'); return; }
-    if (parsed > fromBalance)    { showToast(`Insufficient balance.`, 'error'); return; }
+    if (parsed > fromBalance)    { showToast('Insufficient balance.', 'error'); return; }
+    if (!isSupported)            { showToast('Switch to Ethereum, Polygon or Arbitrum to swap.', 'error'); return; }
+    if (!quote)                  { showToast('Waiting for quote. Please try again.', 'info'); return; }
 
     setLoading(true);
-    await new Promise(r => setTimeout(r, 1500));
-    
-    // Simulated swap for the demo
-    sendCrypto(fromCoin, parsed, `Swap to ${toCoin}`);
-    showToast(`✓ Swapped ${amount} ${fromCoin} successfully`, 'success');
-    setAmount('');
-    setTimeout(() => navigation.goBack(), 1800);
-    setLoading(false);
+    try {
+      const privateKey = await (await import('../services/storageService')).storageService.getPrivateKey();
+      if (!privateKey) { showToast('Wallet not found. Please re-import.', 'error'); setLoading(false); return; }
+
+      const { ethereumService } = await import('../services/ethereumService');
+      const { ethers } = await import('ethers');
+      const { RPC_URLS } = await import('../config');
+      const provider = new ethers.providers.JsonRpcProvider(RPC_URLS[network]);
+
+      const result = await swapService.executeSwap(
+        fromCoin, toCoin, amount, walletAddress, privateKey, provider, network
+      );
+
+      if (result.success) {
+        showToast(`✓ Swapped ${amount} ${fromCoin} → ${toCoin}`, 'success');
+        refreshBalance();
+        setAmount('');
+        setTimeout(() => navigation.goBack(), 1800);
+      } else {
+        showToast(result.error ?? 'Swap failed. Please try again.', 'error');
+      }
+    } catch (e: any) {
+      showToast(e?.message ?? 'Swap failed.', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const TokenBadge = ({ sym, current, onSelect }: any) => (

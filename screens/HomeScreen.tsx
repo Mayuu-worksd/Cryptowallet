@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, memo } from 'react';
+import React, { useCallback, useRef, memo, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Platform, Image, ActivityIndicator, Linking, RefreshControl, Animated,
@@ -7,6 +7,28 @@ import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
 import { Theme, COIN_META, COIN_COLORS } from '../constants';
 import { NewsItem } from '../services/marketService';
+
+// ─── Skeleton pulse animation ─────────────────────────────────────────────────
+const SkeletonBox = memo(({ width, height, borderRadius = 8, style }: {
+  width: number | string; height: number; borderRadius?: number; style?: any;
+}) => {
+  const anim = useRef(new Animated.Value(0.4)).current;
+  React.useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(anim, { toValue: 1,   duration: 700, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 0.4, duration: 700, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, []);
+  return (
+    <Animated.View
+      style={[{ width, height, borderRadius, backgroundColor: '#2E3036', opacity: anim }, style]}
+    />
+  );
+});
 
 // ─── Coin icon with fallback ───────────────────────────────────────────────────
 const CoinIcon = memo(({ symbol, size = 44 }: { symbol: string; size?: number }) => {
@@ -231,17 +253,23 @@ export default function HomeScreen({ navigation }: any) {
 
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
 
-  const realBalances: Record<string, number> = { ...balances, ETH: parseFloat(ethBalance) || 0 };
+  const realBalances: Record<string, number> = useMemo(
+    () => ({ ...balances, ETH: parseFloat(ethBalance) || 0 }),
+    [balances, ethBalance]
+  );
 
-  const assetsList = Object.keys(realBalances)
-    .map(symbol => {
-      const price     = prices[symbol]?.usd ?? 0;
-      const change24h = prices[symbol]?.change24h ?? 0;
-      return { symbol, amount: realBalances[symbol], usd: realBalances[symbol] * price, change24h };
-    })
-    .sort((a, b) => b.usd - a.usd);
+  const assetsList = useMemo(() =>
+    Object.keys(realBalances)
+      .map(symbol => {
+        const price     = prices[symbol]?.usd ?? 0;
+        const change24h = prices[symbol]?.change24h ?? 0;
+        return { symbol, amount: realBalances[symbol], usd: realBalances[symbol] * price, change24h };
+      })
+      .sort((a, b) => b.usd - a.usd),
+    [realBalances, prices]
+  );
 
-  const totalUsd = assetsList.reduce((acc, a) => acc + a.usd, 0);
+  const totalUsd = useMemo(() => assetsList.reduce((acc, a) => acc + a.usd, 0), [assetsList]);
 
   const onRefresh = useCallback(() => {
     refreshBalance();
@@ -249,6 +277,7 @@ export default function HomeScreen({ navigation }: any) {
   }, [refreshBalance, refreshPrices]);
 
   const networkColor = network === 'Sepolia' ? '#F59E0B' : network === 'Polygon' ? '#8247E5' : '#627EEA';
+  const isInitialLoad = isPricesLoading && totalUsd === 0;
 
   if (Platform.OS === 'web') {
     return <WebDashboard assetsList={assetsList} totalUsd={totalUsd} T={T} walletName={walletName} transactions={transactions} />;
@@ -320,20 +349,24 @@ export default function HomeScreen({ navigation }: any) {
         <View style={styles.balanceSection}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 }}>
             <Text style={[styles.estText, { color: T.textMuted }]}>Total Portfolio Value</Text>
-            {isPricesLoading && <ActivityIndicator size="small" color={T.primary} />}
+            {isPricesLoading && !isInitialLoad && <ActivityIndicator size="small" color={T.primary} />}
             <TouchableOpacity onPress={toggleBalanceVisible} activeOpacity={0.7} style={{ marginLeft: 'auto' }}>
               <Feather name={balanceVisible ? 'eye' : 'eye-off'} size={18} color={T.textMuted} />
             </TouchableOpacity>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
-            <Text style={[styles.balanceValue, { color: T.text }]}>
-              {balanceVisible
-                ? `$${totalUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                : '$ ••••••'}
-            </Text>
-            <Text style={[styles.balanceCurrency, { color: T.textMuted }]}>USD</Text>
-          </View>
-          {balanceVisible && assetsList.length > 0 && (() => {
+          {isInitialLoad ? (
+            <SkeletonBox width={200} height={52} borderRadius={12} style={{ marginBottom: 8 }} />
+          ) : (
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
+              <Text style={[styles.balanceValue, { color: T.text }]}>
+                {balanceVisible
+                  ? `$${totalUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  : '$ ••••••'}
+              </Text>
+              <Text style={[styles.balanceCurrency, { color: T.textMuted }]}>USD</Text>
+            </View>
+          )}
+          {!isInitialLoad && balanceVisible && assetsList.length > 0 && (() => {
             const avgChange = assetsList.reduce((s, a) => s + a.change24h, 0) / assetsList.length;
             const isUp = avgChange >= 0;
             return (
@@ -383,7 +416,21 @@ export default function HomeScreen({ navigation }: any) {
               <Text style={{ color: T.primary, fontSize: 13, fontWeight: '700' }}>View All →</Text>
             </TouchableOpacity>
           </View>
-          {assetsList.slice(0, 4).map((a, idx) => (
+          {isInitialLoad ? (
+            [0,1,2].map(i => (
+              <View key={i} style={[styles.tokenItem, { gap: 12 }]}>
+                <SkeletonBox width={44} height={44} borderRadius={22} />
+                <View style={{ flex: 1, gap: 6 }}>
+                  <SkeletonBox width={100} height={14} />
+                  <SkeletonBox width={70} height={11} />
+                </View>
+                <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                  <SkeletonBox width={70} height={14} />
+                  <SkeletonBox width={45} height={11} />
+                </View>
+              </View>
+            ))
+          ) : assetsList.slice(0, 4).map((a, idx) => (
             <React.Fragment key={a.symbol}>
               <TokenRow
                 symbol={a.symbol} amount={a.amount} usd={a.usd}
@@ -401,10 +448,19 @@ export default function HomeScreen({ navigation }: any) {
         <View style={styles.marketSection}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: T.text }]}>Market</Text>
-            {isPricesLoading && <ActivityIndicator size="small" color={T.primary} />}
+            {isPricesLoading && !isInitialLoad && <ActivityIndicator size="small" color={T.primary} />}
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {(['ETH', 'BTC', 'SOL', 'MATIC', 'USDT'] as const).map(sym => {
+            {isInitialLoad ? (
+              [0,1,2,3,4].map(i => (
+                <View key={i} style={[styles.marketChip, { backgroundColor: T.surface, borderColor: T.border, gap: 6 }]}>
+                  <SkeletonBox width={28} height={28} borderRadius={14} />
+                  <SkeletonBox width={36} height={13} />
+                  <SkeletonBox width={48} height={14} />
+                  <SkeletonBox width={40} height={11} />
+                </View>
+              ))
+            ) : (['ETH', 'BTC', 'SOL', 'MATIC', 'USDT'] as const).map(sym => {
               const p    = prices[sym];
               const isUp = (p?.change24h ?? 0) >= 0;
               return (

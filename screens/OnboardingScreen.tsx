@@ -5,7 +5,6 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialIcons } from '@expo/vector-icons';
-import { Platform } from 'react-native';
 
 const AsyncStorage = Platform.OS === 'web'
   ? {
