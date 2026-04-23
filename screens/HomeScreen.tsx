@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, memo, useMemo, useEffect } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Platform, Image, ActivityIndicator, Linking, RefreshControl, Animated, StatusBar, Dimensions, Pressable,
@@ -324,6 +324,7 @@ const tickerStyles = StyleSheet.create({
 
 
 const NewsCard = memo(({ item, T }: { item: NewsItem; T: any }) => {
+  const navigation = useNavigation<any>();
   const timeAgo = (dateStr: string) => {
     const diff = Date.now() - new Date(dateStr).getTime();
     const h    = Math.floor(diff / 3_600_000);
@@ -336,20 +337,10 @@ const NewsCard = memo(({ item, T }: { item: NewsItem; T: any }) => {
       style={[styles.newsCard, { backgroundColor: T.surfaceLow, borderColor: T.border }]}
       onPress={() => {
         if (!item.url) return;
-        try {
-          const u = new URL(item.url);
-          if (u.protocol !== 'https:' && u.protocol !== 'http:') return;
-          const host = u.hostname.toLowerCase();
-          if (
-            host === 'localhost' ||
-            host.startsWith('127.') ||
-            host.startsWith('192.168.') ||
-            host.startsWith('10.') ||
-            host === '0.0.0.0' ||
-            host === '169.254.169.254'
-          ) return;
-          Linking.openURL(u.href);
-        } catch (_e) {}
+        navigation.navigate('Browser', { 
+          url: item.url,
+          title: item.title 
+        });
       }}
       activeOpacity={0.75}
     >

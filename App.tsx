@@ -55,9 +55,8 @@ import ScanScreen         from './screens/ScanScreen';
 import SplashScreen       from './screens/SplashScreen';
 import PinScreen from './screens/PinScreen';
 import { hasPinSetup } from './services/pinService';
-import CoinChartScreen    from './screens/CoinChartScreen';
-import OnboardingScreen, { shouldShowOnboarding } from './screens/OnboardingScreen';
 import WebLayout          from './components/WebLayout';
+import BrowserScreen     from './screens/BrowserScreen';
 
 const Tab   = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -210,6 +209,10 @@ function Tabs() {
       <Tab.Screen name="Assets" component={PortfolioScreen} options={{
         tabBarLabel: 'Assets',
         tabBarIcon: ({ color, focused }) => <TabIcon name="pie-chart" color={color} focused={focused} />,
+      }} />
+      <Tab.Screen name="Browser" component={BrowserScreen} options={{
+        tabBarLabel: 'Browser',
+        tabBarIcon: ({ color, focused }) => <TabIcon name="globe" color={color} focused={focused} />,
       }} />
       <Tab.Screen name="Profile" component={SettingsScreen} options={{
         tabBarLabel: 'Profile',
@@ -394,6 +397,7 @@ function MobileNavigator() {
             <Stack.Screen name="Scan"      component={ScanScreen}      options={{ contentStyle: { backgroundColor: '#000' } }} />
             <Stack.Screen name="CoinChart"  component={CoinChartScreen} />
             <Stack.Screen name="Card"        component={CardScreen} />
+            <Stack.Screen name="Browser"     component={BrowserScreen} />
           </>
         )}
       </Stack.Navigator>
