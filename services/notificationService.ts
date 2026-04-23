@@ -1,5 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -9,6 +10,8 @@ Notifications.setNotificationHandler({
   }),
 });
 
+const isExpoGo = Constants.appOwnership === 'expo';
+
 export const notificationService = {
   async requestPermissions(): Promise<boolean> {
     if (Platform.OS === 'web') return false;
@@ -17,6 +20,7 @@ export const notificationService = {
   },
 
   async notifyReceived(coin: string, amount: string, usdValue: string) {
+    if (isExpoGo) return;
     await Notifications.scheduleNotificationAsync({
       content: {
         title: `💰 ${coin} Received!`,
@@ -29,6 +33,7 @@ export const notificationService = {
   },
 
   async notifyNews(title: string, source: string) {
+    if (isExpoGo) return;
     await Notifications.scheduleNotificationAsync({
       content: {
         title: `📰 ${source}`,
@@ -41,6 +46,7 @@ export const notificationService = {
   },
 
   async notifySwapComplete(sellToken: string, buyToken: string, buyAmount: string) {
+    if (isExpoGo) return;
     await Notifications.scheduleNotificationAsync({
       content: {
         title: '✅ Swap Complete!',
@@ -53,6 +59,7 @@ export const notificationService = {
   },
 
   async notifySendComplete(coin: string, amount: string, toAddress: string) {
+    if (isExpoGo) return;
     await Notifications.scheduleNotificationAsync({
       content: {
         title: `📤 ${coin} Sent`,

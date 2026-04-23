@@ -319,92 +319,87 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [dataLoaded, fetchBalance]);
 
-  // ─── 4. Live Balance Healer: Watch history and heal balances/card reactively ───
+  // ─── 4. Live Balance Healer: Chronological History Replay Engine ───
   useEffect(() => {
     if (transactions.length > 0) {
-      console.log('[HEALER] Scanning', transactions.length, 'transactions for state recovery...');
-      const heals: Record<string, number> = {};
+      console.log('[HEALER] Replaying', transactions.length, 'transactions to reconstruct state...');
+      
+      const recoveredTokenBals: Record<string, number> = { 
+        USDC: 0, USDT: 0, DAI: 0, BTC: 0, SOL: 0, CUSTOM: 0 
+      };
       let recoveredCardBal = 0;
       let hasCardActivity = false;
 
-      transactions.forEach(t => {
+      // Sort transactions oldest to newest for accurate replay
+      const sortedTxs = [...transactions].sort((a, b) => 
+        new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
+
+      sortedTxs.forEach(t => {
         const isSuccess = t.status === 'success' || t.status === 'completed';
         if (!isSuccess) return;
 
         const txAny = t as any;
-        
+        const coin  = t.coin;
+        const amt   = parseFloat(t.amount);
+
         // 1. Recover Card State
         if (t.type === 'card_topup') {
           recoveredCardBal += parseFloat(t.usdValue || t.amount);
           hasCardActivity = true;
+          if (coin && coin !== 'ETH') {
+            recoveredTokenBals[coin] = (recoveredTokenBals[coin] || 0) - amt;
+          }
         } else if (t.type === 'card_spend') {
           recoveredCardBal -= parseFloat(t.usdValue || t.amount);
           hasCardActivity = true;
         }
 
-        // 2. Recover Token Balances
-        const isCustom = txAny.contractAddress?.toLowerCase() === '0x351028A22C876E0431b30921c0dD0a836a14899E'.toLowerCase() || t.coin === 'CUSTOM';
-        
-        if (isCustom) {
-          const amt = parseFloat(txAny.buyAmount || t.amount);
-          if (!isNaN(amt)) {
-            const isIncoming = t.type === 'received' || t.type === 'swap';
-            const change = isIncoming ? amt : -amt;
-            heals['CUSTOM'] = (heals['CUSTOM'] || 0) + change;
+        // 2. Recover Token Balances (Receives / Sends)
+        if (t.type === 'received' && coin !== 'ETH') {
+          recoveredTokenBals[coin] = (recoveredTokenBals[coin] || 0) + amt;
+        } else if (t.type === 'sent' && coin !== 'ETH') {
+          recoveredTokenBals[coin] = Math.max(0, (recoveredTokenBals[coin] || 0) - amt);
+        }
+
+        // 3. Recover Swaps
+        if (t.type === 'swap') {
+          const sellTok = coin;
+          const sellAmt = amt;
+          const buyTok  = txAny.buyToken || (sellTok === 'ETH' ? (t.address.split('→')[1]?.trim()) : 'ETH');
+          const buyAmt  = parseFloat(txAny.buyAmount || t.amount);
+
+          if (sellTok && sellTok !== 'ETH') {
+            recoveredTokenBals[sellTok] = Math.max(0, (recoveredTokenBals[sellTok] || 0) - sellAmt);
           }
-        } else if (t.type === 'swap') {
-          const buyTok = txAny.buyToken || (t.coin === 'ETH' ? (t.address.split('→')[1]?.trim()) : t.coin);
-          const buyAmt = parseFloat(txAny.buyAmount || t.amount);
-          if (!isNaN(buyAmt) && buyTok && buyTok !== 'ETH') {
-            heals[buyTok] = (heals[buyTok] || 0) + buyAmt;
+          if (buyTok && buyTok !== 'ETH') {
+            recoveredTokenBals[buyTok] = (recoveredTokenBals[buyTok] || 0) + buyAmt;
           }
         }
       });
 
-      // Apply Card Recovery
+      // Apply Recovered State
       if (hasCardActivity) {
-        setCardCreated(prev => {
-          if (!prev) {
-            console.log('[HEALER] Restoring Virtual Card from history');
-            AsyncStorage.setItem('cw_card_created', 'true');
-            // Also ensure deterministic details are set
-            const details = cardService.getFixedCardDetails('CARD HOLDER', 'dark', walletAddress);
-            setCardDetails(details);
-            AsyncStorage.setItem('cw_card_details', JSON.stringify(details));
-            return true;
-          }
-          return prev;
-        });
-        setCardBalance(prev => {
-          const finalBal = Math.max(0, recoveredCardBal);
-          if (Math.abs(prev - finalBal) > 0.01) {
-            console.log(`[HEALER] Restored Card Balance: $${finalBal}`);
-            AsyncStorage.setItem('cw_card_balance', String(finalBal)).catch(() => {});
-            return finalBal;
-          }
-          return prev;
-        });
+        setCardCreated(true);
+        setCardBalance(Math.max(0, recoveredCardBal));
       }
 
-      // Apply Token Recovery
-      if (Object.keys(heals).length > 0) {
-        setBalances(prev => {
-          let changed = false;
-          const next = { ...prev };
-          Object.entries(heals).forEach(([coin, val]) => {
-            if (next[coin] !== val) {
-              next[coin] = val;
-              changed = true;
-            }
-          });
-          if (changed) {
-            balancesRef.current = next;
-            AsyncStorage.setItem('cw_token_balances', JSON.stringify(next)).catch(() => {});
-            return next;
+      setBalances(prev => {
+        let changed = false;
+        const next = { ...prev };
+        Object.entries(recoveredTokenBals).forEach(([coin, val]) => {
+          if (Math.abs((next[coin] || 0) - val) > 0.0001) {
+            next[coin] = val;
+            changed = true;
           }
-          return prev;
         });
-      }
+        if (changed) {
+          balancesRef.current = next;
+          AsyncStorage.setItem('cw_token_balances', JSON.stringify(next)).catch(() => {});
+          return next;
+        }
+        return prev;
+      });
     }
   }, [transactions, walletAddress]);
 
