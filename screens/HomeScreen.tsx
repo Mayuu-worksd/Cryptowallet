@@ -201,8 +201,9 @@ const MarketTicker = memo(({ prices, T, isPricesLoading, isInitialLoad, onCoinPr
                     key={`${sym}-${idx}`}
                     style={[tickerStyles.item, { backgroundColor: T.surfaceLow + '80' }]}
                     onPress={() => onCoinPress?.(sym)}
-                    activeOpacity={0.6}
+                    activeOpacity={0.7}
                     delayPressIn={0}
+                    pressRetentionOffset={{ top: 10, left: 10, right: 10, bottom: 10 }}
                   >
                     <CoinIcon symbol={sym} size={24} />
                     <View style={tickerStyles.itemInfo}>
@@ -584,11 +585,7 @@ export default function HomeScreen({ navigation }: any) {
           T={T}
           isPricesLoading={isPricesLoading}
           isInitialLoad={isInitialLoad}
-          onCoinPress={(sym) => {
-            requestAnimationFrame(() => {
-              navigation.navigate('CoinChart', { symbol: sym });
-            });
-          }}
+          onCoinPress={(sym) => navigation.navigate('CoinChart', { symbol: sym })}
           onRefresh={refreshPrices}
         />
 
