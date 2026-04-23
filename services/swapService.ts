@@ -177,7 +177,7 @@ function buildSimulatedQuote(
 
 // ─── Layer 1: 0x API v2 (mainnet) ────────────────────────────────────────────
 async function try0xQuote(
-  from: string, to: string, amount: string, network: string
+  from: string, to: string, amount: string, network: string, walletAddress?: string
 ): Promise<SwapQuote | null> {
   const base   = ZRX_APIS[network];
   const tokens = MAINNET_TOKENS[network];
@@ -186,14 +186,16 @@ async function try0xQuote(
   try {
     const sellAmountWei = ethers.utils.parseUnits(amount, TOKEN_DECIMALS[from] ?? 18).toString();
     const chainId = network === 'Ethereum' ? '1' : network === 'Polygon' ? '137' : '42161';
-    const url = `${base}/swap/permit2/price?chainId=${chainId}&sellToken=${tokens[from]}&buyToken=${tokens[to]}&sellAmount=${sellAmountWei}`;
+    // Include taker address if available — required for accurate quotes on 0x v2
+    const takerParam = walletAddress ? `&taker=${walletAddress}` : '';
+    const url = `${base}/swap/permit2/price?chainId=${chainId}&sellToken=${tokens[from]}&buyToken=${tokens[to]}&sellAmount=${sellAmountWei}${takerParam}`;
     if (!isSafeUrl(url, ALLOWED_ZRX_HOSTS)) return null;
 
     const headers: Record<string, string> = { 'Accept': 'application/json', '0x-version': 'v2' };
     const apiKey = process.env.EXPO_PUBLIC_ZRX_API_KEY;
     if (apiKey) headers['0x-api-key'] = apiKey;
 
-    const res = await fetch(url, { headers, signal: AbortSignal.timeout(8000) });
+    const res = await fetch(url, { headers, signal: AbortSignal.timeout(10000) });
     if (!res.ok) return null;
     const data = await res.json();
     if (!data.buyAmount) return null;
@@ -309,7 +311,7 @@ export async function getSwapQuote(
 
   // Mainnet: try 0x first, fall back to simulated
   if (network !== 'Sepolia') {
-    const q = await try0xQuote(from, to, normalizedAmount, network);
+    const q = await try0xQuote(from, to, normalizedAmount, network, walletAddress);
     if (q) return q;
     const cg = await tryCoinGeckoQuote(from, to, normalizedAmount);
     if (cg) return cg;
