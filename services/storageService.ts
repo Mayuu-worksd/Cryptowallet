@@ -116,7 +116,24 @@ export const storageService = {
   },
 
   async clearKeysOnly(): Promise<void> {
-    console.log("[Storage] Clearing sensitive keys (Logout)...");
+    console.log("[Storage] Clearing sensitive keys + address (Logout)...");
+    if (Platform.OS === 'web') {
+      localStorage.removeItem(KEYS.PRIVATE_KEY);
+      localStorage.removeItem(KEYS.MNEMONIC);
+      localStorage.removeItem(KEYS.WALLET_ADDRESS);
+    } else {
+      await Promise.all([
+        SecureStore.deleteItemAsync(KEYS.PRIVATE_KEY),
+        SecureStore.deleteItemAsync(KEYS.MNEMONIC),
+        AsyncStorage.removeItem(KEYS.WALLET_ADDRESS),
+      ]);
+    }
+  },
+
+  async clearSecretsOnly(): Promise<void> {
+    // Removes ONLY private key + mnemonic — keeps wallet address.
+    // Used for "Delete Account" read-only mode so balance is still visible.
+    console.log("[Storage] Clearing secrets only (entering read-only mode)...");
     if (Platform.OS === 'web') {
       localStorage.removeItem(KEYS.PRIVATE_KEY);
       localStorage.removeItem(KEYS.MNEMONIC);

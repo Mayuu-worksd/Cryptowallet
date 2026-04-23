@@ -37,8 +37,8 @@ const CoinIcon = ({ symbol, size = 36 }: { symbol: string; size?: number }) => {
 export default function SettingsScreen({ navigation }: any) {
   const {
     network, switchNetwork, walletAddress, walletName, setWalletName,
-    deleteWallet, isDarkMode, toggleTheme, balances, ethBalance,
-    pinEnabled, refreshPinEnabled,
+    deleteWallet, enterReadOnlyMode, isDarkMode, toggleTheme, balances, ethBalance,
+    pinEnabled, refreshPinEnabled, isReadOnly,
   } = useWallet();
   const { prices } = useMarket();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
@@ -116,14 +116,30 @@ export default function SettingsScreen({ navigation }: any) {
     showToast('Seed phrase copied. Keep it safe!', 'info');
   };
 
-  const handleDelete = () => {
+  const handleLogout = () => {
     haptics.heavy();
     Alert.alert(
-      'Logout & Delete Wallet',
-      'This will remove your wallet from this device. Make sure your seed phrase is backed up first.',
+      'Logout',
+      'This will remove your wallet from this device. Your transaction history and balance data will be preserved — re-import your seed phrase anytime to restore full access.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: async () => { await deleteWallet(); } },
+        { text: 'Logout', style: 'destructive', onPress: async () => { await deleteWallet(); } },
+      ]
+    );
+  };
+
+  const handleDeleteAccount = () => {
+    haptics.heavy();
+    Alert.alert(
+      'Delete Account',
+      'This will permanently remove your private keys from this device. Your wallet address will remain visible in read-only mode — you can see your balance but cannot send, swap, or receive.\n\nTo restore full access, re-import your seed phrase.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Account',
+          style: 'destructive',
+          onPress: async () => { await enterReadOnlyMode(); },
+        },
       ]
     );
   };
@@ -481,14 +497,74 @@ export default function SettingsScreen({ navigation }: any) {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity
-          style={[styles.logoutBtn, { backgroundColor: T.surface, borderColor: T.error }]}
-          onPress={handleDelete}
-          activeOpacity={0.7}
-        >
-          <Feather name="log-out" size={18} color={T.error} />
-          <Text style={[styles.logoutBtnText, { color: T.error }]}>Logout & Delete Wallet</Text>
-        </TouchableOpacity>
+        {/* Read-Only Mode Banner */}
+        {isReadOnly && (
+          <View style={[styles.readOnlyBanner, { backgroundColor: '#F59E0B18', borderColor: '#F59E0B50' }]}>
+            <Feather name="eye" size={18} color="#F59E0B" />
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: '#F59E0B', fontSize: 14, fontWeight: '800', marginBottom: 2 }}>Read-Only Mode</Text>
+              <Text style={{ color: '#F59E0B99', fontSize: 12, lineHeight: 18 }}>
+                Your private keys have been removed. Balance is visible but you cannot transact. Import your seed phrase to restore full access.
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Action Buttons */}
+        {isReadOnly ? (
+          // In read-only mode: offer to re-import wallet
+          <TouchableOpacity
+            style={[styles.importRestoreBtn, { backgroundColor: T.primaryDark }]}
+            onPress={() => {
+              // Navigate back to Landing → ImportWallet
+              // Since hasWallet is still true we can't go to Landing stack.
+              // Instead show an info toast — user can factory reset from here.
+              haptics.selection();
+              Alert.alert(
+                'Restore Full Access',
+                'To restore your wallet, logout first and then re-import your seed phrase on the next screen.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Logout & Restore',
+                    onPress: async () => { await deleteWallet(); },
+                  },
+                ]
+              );
+            }}
+            activeOpacity={0.8}
+          >
+            <Feather name="download" size={18} color="#FFF" />
+            <Text style={[styles.logoutBtnText, { color: '#FFF' }]}>Import Wallet to Restore Access</Text>
+          </TouchableOpacity>
+        ) : (
+          // Normal mode: show Logout + Delete Account
+          <View style={{ gap: 12 }}>
+            <TouchableOpacity
+              style={[styles.logoutBtn, { backgroundColor: T.surface, borderColor: T.error }]}
+              onPress={handleLogout}
+              activeOpacity={0.7}
+            >
+              <Feather name="log-out" size={18} color={T.error} />
+              <Text style={[styles.logoutBtnText, { color: T.error }]}>Logout</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.deleteBtn, { backgroundColor: T.error + '15', borderColor: T.error + '60' }]}
+              onPress={handleDeleteAccount}
+              activeOpacity={0.7}
+            >
+              <Feather name="trash-2" size={18} color={T.error} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.logoutBtnText, { color: T.error, textAlign: 'left' }]}>Delete Account</Text>
+                <Text style={{ color: T.error + '99', fontSize: 11, fontWeight: '600', marginTop: 2 }}>
+                  Removes keys · Balance still visible
+                </Text>
+              </View>
+              <Feather name="chevron-right" size={16} color={T.error + '80'} />
+            </TouchableOpacity>
+          </View>
+        )}
 
       </ScrollView>
     </View>
@@ -538,6 +614,19 @@ const makeStyles = (T: any) => StyleSheet.create({
   comingSoonChip: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 16, borderWidth: 1 },
   logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 16, paddingVertical: 16, gap: 10, borderWidth: 1 },
   logoutBtnText: { fontSize: 16, fontWeight: '700' },
+  deleteBtn: {
+    flexDirection: 'row', alignItems: 'center',
+    borderRadius: 16, paddingVertical: 14, paddingHorizontal: 20,
+    gap: 14, borderWidth: 1,
+  },
+  importRestoreBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    borderRadius: 16, paddingVertical: 16, gap: 10,
+  },
+  readOnlyBanner: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 14,
+    padding: 16, borderRadius: 16, borderWidth: 1, marginBottom: 16,
+  },
 
   // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', padding: 24 },

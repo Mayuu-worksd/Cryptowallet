@@ -34,18 +34,13 @@ export const walletService = {
   // Import wallet from 12/24 word seed phrase
   async importFromMnemonic(mnemonic: string): Promise<WalletData> {
     const normalized = mnemonic.trim().toLowerCase().replace(/\s+/g, ' ');
-    
     try {
-      // Deconstruct derivation for better performance and thread yielding
-      const seed   = ethers.utils.mnemonicToSeed(normalized);
-      const hdNode = ethers.utils.HDNode.fromSeed(seed);
-      const child  = hdNode.derivePath("m/44'/60'/0'/0/0");
-      const wallet = new ethers.Wallet(child.privateKey);
-      
+      // ethers.Wallet.fromMnemonic uses the standard BIP-44 path (m/44'/60'/0'/0/0) by default
+      const wallet = ethers.Wallet.fromMnemonic(normalized);
       return {
-        address: wallet.address,
+        address:    wallet.address,
         privateKey: wallet.privateKey,
-        mnemonic: normalized,
+        mnemonic:   normalized,
       };
     } catch (e: any) {
       throw new Error('Invalid seed phrase. Please check your words and try again.');

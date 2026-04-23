@@ -9,103 +9,85 @@ import { Theme } from '../constants';
 import { useWallet } from '../store/WalletContext';
 import Toast from '../components/Toast';
 
+// Two-step overlay: loading → success
 const STEPS = [
-  { icon: 'search',        label: 'Scanning phrase...'     },
-  { icon: 'lock',          label: 'Deriving keys...'       },
-  { icon: 'shield',        label: 'Encrypting wallet...'   },
-  { icon: 'check-circle',  label: 'Wallet restored!'       },
+  { icon: 'lock',          label: 'Verifying phrase...'  },
+  { icon: 'check-circle',  label: 'Wallet restored!'      },
 ];
 
 function ImportingOverlay({ visible, isDarkMode, done }: { visible: boolean; isDarkMode: boolean; done: boolean }) {
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const [step, setStep] = useState(0);
   const fadeAnim  = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.85)).current;
+  const scaleAnim = useRef(new Animated.Value(0.88)).current;
   const spinAnim  = useRef(new Animated.Value(0)).current;
   const stepFade  = useRef(new Animated.Value(1)).current;
 
+  // Spin animation while loading
   useEffect(() => {
     if (!visible) return;
     const spin = Animated.loop(
-      Animated.timing(spinAnim, { toValue: 1, duration: 1200, useNativeDriver: true })
+      Animated.timing(spinAnim, { toValue: 1, duration: 900, useNativeDriver: true })
     );
     spin.start();
     return () => spin.stop();
   }, [visible]);
 
+  // Fade-in on mount, reset on hide
   useEffect(() => {
     if (visible) {
       setStep(0);
       Animated.parallel([
-        Animated.timing(fadeAnim,  { toValue: 1, duration: 250, useNativeDriver: true }),
-        Animated.spring(scaleAnim, { toValue: 1, speed: 14, bounciness: 8, useNativeDriver: true }),
+        Animated.timing(fadeAnim,  { toValue: 1, duration: 180, useNativeDriver: true }),
+        Animated.spring(scaleAnim, { toValue: 1, speed: 18, bounciness: 6, useNativeDriver: true }),
       ]).start();
     } else {
       fadeAnim.setValue(0);
-      scaleAnim.setValue(0.85);
+      scaleAnim.setValue(0.88);
     }
   }, [visible]);
 
-  // Steps 0-2 run on fixed timers; step 3 only fires when done=true
-  useEffect(() => {
-    if (!visible) return;
-    const timers = [
-      setTimeout(() => setStep(1), 600),
-      setTimeout(() => setStep(2), 1300),
-    ];
-    return () => timers.forEach(clearTimeout);
-  }, [visible]);
-
+  // Jump to success step when done
   useEffect(() => {
     if (done) {
       Animated.sequence([
-        Animated.timing(stepFade, { toValue: 0, duration: 150, useNativeDriver: true }),
-        Animated.timing(stepFade, { toValue: 1, duration: 200, useNativeDriver: true }),
+        Animated.timing(stepFade, { toValue: 0, duration: 100, useNativeDriver: true }),
+        Animated.timing(stepFade, { toValue: 1, duration: 150, useNativeDriver: true }),
       ]).start();
-      setStep(3);
+      setStep(1);
     }
   }, [done]);
 
-  const spin = spinAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
-  const currentStep = STEPS[step] ?? STEPS[0];
-  const isDone = step === STEPS.length - 1;
+  const spin    = spinAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const current = STEPS[step] ?? STEPS[0];
+  const isDone  = step === 1;
 
   return (
     <Modal visible={visible} transparent animationType="none" statusBarTranslucent>
       <Animated.View style={[styles.overlay, { opacity: fadeAnim, backgroundColor: isDarkMode ? 'rgba(10,10,10,0.96)' : 'rgba(240,242,245,0.97)' }]}>
         <Animated.View style={[styles.overlayCard, { backgroundColor: T.surface, borderColor: T.border, transform: [{ scale: scaleAnim }] }]}>
 
-          {/* Spinning ring + icon */}
+          {/* Icon with spinner ring */}
           <View style={styles.iconWrap}>
             {!isDone && (
               <Animated.View style={[styles.spinRing, { borderColor: T.primary, transform: [{ rotate: spin }] }]} />
             )}
-            <View style={[styles.iconCircle, { backgroundColor: isDone ? T.success + '20' : T.primary + '18' }]}>
-              <Feather
-                name={currentStep.icon as any}
-                size={32}
-                color={isDone ? T.success : T.primary}
-              />
+            <View style={[styles.iconCircle, { backgroundColor: isDone ? T.success + '22' : T.primary + '18' }]}>
+              <Feather name={current.icon as any} size={30} color={isDone ? T.success : T.primary} />
             </View>
           </View>
 
-          {/* Step label */}
+          {/* Label */}
           <Animated.Text style={[styles.overlayTitle, { color: T.text, opacity: stepFade }]}>
-            {currentStep.label}
+            {current.label}
           </Animated.Text>
 
-          {/* Step dots */}
+          {/* Two dots */}
           <View style={styles.dotsRow}>
             {STEPS.map((_, i) => (
               <View
                 key={i}
-                style={[
-                  styles.dot,
-                  {
-                    backgroundColor: i <= step ? T.primary : T.border,
-                    width: i === step ? 20 : 8,
-                  },
-                ]}
+                style={[styles.dot, { backgroundColor: i <= step ? T.primary : T.border, width: i === step ? 20 : 8 }]}
               />
             ))}
           </View>
@@ -124,9 +106,17 @@ export default function ImportWalletScreen({ navigation }: any) {
   const [loading, setLoading]   = useState(false);
   const [importDone, setImportDone] = useState(false);
   const [toast, setToast]       = useState({ visible: false, message: '', type: 'error' as 'success' | 'error' | 'info' });
-  const { importWallet, isDarkMode } = useWallet();
+  const { importWallet, isDarkMode, hasWallet } = useWallet();
 
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
+
+  // Once import succeeds + hasWallet is true, close overlay quickly and let App.tsx navigate
+  useEffect(() => {
+    if (hasWallet && importDone) {
+      const timer = setTimeout(() => setLoading(false), 400);
+      return () => clearTimeout(timer);
+    }
+  }, [hasWallet, importDone]);
 
   const wordCount = mnemonic.trim() ? mnemonic.trim().split(/\s+/).filter(Boolean).length : 0;
   const isValid   = wordCount === 12 || wordCount === 24;
@@ -148,31 +138,19 @@ export default function ImportWalletScreen({ navigation }: any) {
     }
     setLoading(true);
     setImportDone(false);
-    
-    // Step-by-step execution to keep UI responsive
+
+    // Small defer so the Modal mounts and animates before the JS thread gets busy
     setTimeout(async () => {
       try {
-        // Step 0: Scanning (already shown)
-        await new Promise(r => setTimeout(r, 400));
-        
-        // The heavy part: Deriving the wallet
-        // This will block the JS thread for a bit
         await importWallet(trimmed);
-        
-        // Show success state in the overlay
-        setImportDone(true);
-        
-        // Wait for the success animation to be visible to the user
-        // We do this BEFORE the screen unmounts
-        await new Promise(r => setTimeout(r, 1200));
-        
-        setLoading(false);
+        setImportDone(true); // triggers success step in overlay
+        // Navigation is handled automatically by App.tsx (hasWallet → Main stack)
       } catch (e: any) {
         setLoading(false);
         setImportDone(false);
         showToast(e?.message ?? 'Invalid seed phrase. Please check and try again.', 'error');
       }
-    }, 100);
+    }, 50);
   };
 
   return (
