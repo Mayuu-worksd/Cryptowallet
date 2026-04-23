@@ -2,7 +2,7 @@ import React, { useCallback, useRef, memo, useMemo, useEffect } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Platform, Image, ActivityIndicator, Linking, RefreshControl, Animated, StatusBar, Dimensions,
+  Platform, Image, ActivityIndicator, Linking, RefreshControl, Animated, StatusBar, Dimensions, Pressable,
 } from 'react-native';
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { useWallet, useMarket } from '../store/WalletContext';
@@ -215,13 +215,11 @@ const MarketTicker = memo(({ prices, T, isPricesLoading, isInitialLoad, onCoinPr
                 const p = prices[sym];
                 const isUp = (p?.change24h ?? 0) >= 0;
                 return (
-                  <TouchableOpacity
+                  <Pressable
                     key={`${sym}-${idx}`}
                     style={[tickerStyles.item, { backgroundColor: T.surfaceLow + '80' }]}
                     onPress={() => handleCoinPress(sym)}
-                    activeOpacity={0.7}
-                    delayPressIn={0}
-                    pressRetentionOffset={{ top: 10, left: 10, right: 10, bottom: 10 }}
+                    unstable_pressDelay={0}
                   >
                     <CoinIcon symbol={sym} size={24} />
                     <View style={tickerStyles.itemInfo}>
@@ -237,7 +235,7 @@ const MarketTicker = memo(({ prices, T, isPricesLoading, isInitialLoad, onCoinPr
                         </Text>
                       </View>
                     </View>
-                  </TouchableOpacity>
+                  </Pressable>
                 );
               })}
             </Animated.View>
