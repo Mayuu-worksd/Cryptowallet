@@ -127,6 +127,7 @@ const MarketTicker = memo(({ prices, T, isPricesLoading, isInitialLoad, onCoinPr
 }) => {
   const translateX = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const animRef = useRef<Animated.CompositeAnimation | null>(null);
   const totalWidth = TICKER_ITEM_WIDTH * TICKER_COINS.length;
 
   useEffect(() => {
@@ -142,18 +143,22 @@ const MarketTicker = memo(({ prices, T, isPricesLoading, isInitialLoad, onCoinPr
 
   useEffect(() => {
     if (isInitialLoad || totalWidth === 0) return;
-    
     translateX.setValue(0);
-    const scroll = Animated.loop(
+    animRef.current = Animated.loop(
       Animated.timing(translateX, {
         toValue: -totalWidth,
         duration: totalWidth * 40,
         useNativeDriver: true,
       })
     );
-    scroll.start();
-    return () => scroll.stop();
+    animRef.current.start();
+    return () => animRef.current?.stop();
   }, [isInitialLoad, totalWidth]);
+
+  const handleCoinPress = useCallback((sym: string) => {
+    animRef.current?.stop();
+    onCoinPress(sym);
+  }, [onCoinPress]);
 
   const items = [...TICKER_COINS, ...TICKER_COINS, ...TICKER_COINS];
 
@@ -200,7 +205,7 @@ const MarketTicker = memo(({ prices, T, isPricesLoading, isInitialLoad, onCoinPr
                   <TouchableOpacity
                     key={`${sym}-${idx}`}
                     style={[tickerStyles.item, { backgroundColor: T.surfaceLow + '80' }]}
-                    onPress={() => onCoinPress?.(sym)}
+                    onPress={() => handleCoinPress(sym)}
                     activeOpacity={0.7}
                     delayPressIn={0}
                     pressRetentionOffset={{ top: 10, left: 10, right: 10, bottom: 10 }}
