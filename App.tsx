@@ -38,6 +38,7 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {error:
 import { WalletProvider, useWallet } from './store/WalletContext';
 import { Theme } from './constants';
 import { PinSetupContext } from './store/PinSetupContext';
+import { notificationService } from './services/notificationService';
 
 import HomeScreen         from './screens/HomeScreen';
 import SendScreen         from './screens/SendScreen';
@@ -471,6 +472,7 @@ export default function App() {
 
   React.useEffect(() => {
     shouldShowOnboarding().then(show => setShowOnboarding(show));
+    notificationService.requestPermissions();
   }, []);
 
   if (showOnboarding === null) {

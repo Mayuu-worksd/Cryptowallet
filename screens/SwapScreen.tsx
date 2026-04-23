@@ -10,6 +10,7 @@ import { Theme } from '../constants';
 import Toast from '../components/Toast';
 import { swapService, SwapQuote, SUPPORTED_TOKENS, parseSwapError } from '../services/swapService';
 import { haptics } from '../utils/haptics';
+import { notificationService } from '../services/notificationService';
 
 const COIN_NOTES: Record<string, string> = {
   ETH:   'Ethereum — EVM native',
@@ -174,6 +175,7 @@ export default function SwapScreen({ navigation }: any) {
         setSwapResult({ sellAmt: capturedSell, sellTok: sellToken, buyAmt: capturedBuy, buyTok: buyToken });
         await applySwapBalances(sellToken, parseFloat(sellAmount), buyToken, parseFloat(quote.buyAmount));
         haptics.success();
+        notificationService.notifySwapComplete(sellToken, buyToken, parseFloat(quote.buyAmount).toFixed(4)).catch(() => {});
         setStep('success');
         setTimeout(() => refreshBalance(), 1000);
         setTimeout(() => refreshBalance(), 6000);

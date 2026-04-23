@@ -52,6 +52,14 @@
         {
           "cameraPermission": "Allow CryptoWallet to scan QR codes for sending crypto."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#FF3B3B",
+          "sounds": []
+        }
       ]
     ],
     "owner": "josh2345",

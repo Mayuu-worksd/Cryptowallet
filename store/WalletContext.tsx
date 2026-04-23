@@ -10,6 +10,7 @@ import { marketService, NewsItem } from '../services/marketService';
 import { hasPinSetup, clearPin } from '../services/pinService';
 import { transactionService } from '../services/transactionService';
 import { cardService } from '../services/cardService';
+import { notificationService } from '../services/notificationService';
 import { DEFAULT_NETWORK } from '../constants';
 
 export type Transaction = {
@@ -301,9 +302,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         .then(newTxs => {
           if (Array.isArray(newTxs) && newTxs.length > 0) {
             setTransactions(prev => {
-              // Merge and deduplicate
               const existingHashes = new Set(prev.map(t => t.txHash).filter(Boolean));
               const uniqueNew = newTxs.filter((t: any) => !t.txHash || !existingHashes.has(t.txHash));
+              // Fire notification for each new incoming tx
+              uniqueNew.forEach((t: any) => {
+                if (t.type === 'received') {
+                  const usd = (parseFloat(t.amount) * (prices.ETH?.usd ?? 3500)).toFixed(2);
+                  notificationService.notifyReceived(t.coin, t.amount, usd).catch(() => {});
+                }
+              });
               return [...uniqueNew, ...prev];
             });
           }
@@ -312,16 +319,30 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [dataLoaded, fetchBalance]);
 
-  // ─── 4. Live Balance Healer: Watch history and heal balances reactively ───
+  // ─── 4. Live Balance Healer: Watch history and heal balances/card reactively ───
   useEffect(() => {
     if (transactions.length > 0) {
-      console.log('[HEALER] Scanning', transactions.length, 'transactions for custom assets...');
+      console.log('[HEALER] Scanning', transactions.length, 'transactions for state recovery...');
       const heals: Record<string, number> = {};
+      let recoveredCardBal = 0;
+      let hasCardActivity = false;
+
       transactions.forEach(t => {
         const isSuccess = t.status === 'success' || t.status === 'completed';
         if (!isSuccess) return;
 
         const txAny = t as any;
+        
+        // 1. Recover Card State
+        if (t.type === 'card_topup') {
+          recoveredCardBal += parseFloat(t.usdValue || t.amount);
+          hasCardActivity = true;
+        } else if (t.type === 'card_spend') {
+          recoveredCardBal -= parseFloat(t.usdValue || t.amount);
+          hasCardActivity = true;
+        }
+
+        // 2. Recover Token Balances
         const isCustom = txAny.contractAddress?.toLowerCase() === '0x351028A22C876E0431b30921c0dD0a836a14899E'.toLowerCase() || t.coin === 'CUSTOM';
         
         if (isCustom) {
@@ -330,7 +351,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             const isIncoming = t.type === 'received' || t.type === 'swap';
             const change = isIncoming ? amt : -amt;
             heals['CUSTOM'] = (heals['CUSTOM'] || 0) + change;
-            console.log(`[HEALER] Found CUSTOM activity: ${t.type} ${amt} (Net: ${heals['CUSTOM']})`);
           }
         } else if (t.type === 'swap') {
           const buyTok = txAny.buyToken || (t.coin === 'ETH' ? (t.address.split('→')[1]?.trim()) : t.coin);
@@ -341,8 +361,33 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         }
       });
 
+      // Apply Card Recovery
+      if (hasCardActivity) {
+        setCardCreated(prev => {
+          if (!prev) {
+            console.log('[HEALER] Restoring Virtual Card from history');
+            AsyncStorage.setItem('cw_card_created', 'true');
+            // Also ensure deterministic details are set
+            const details = cardService.getFixedCardDetails('CARD HOLDER', 'dark', walletAddress);
+            setCardDetails(details);
+            AsyncStorage.setItem('cw_card_details', JSON.stringify(details));
+            return true;
+          }
+          return prev;
+        });
+        setCardBalance(prev => {
+          const finalBal = Math.max(0, recoveredCardBal);
+          if (Math.abs(prev - finalBal) > 0.01) {
+            console.log(`[HEALER] Restored Card Balance: $${finalBal}`);
+            AsyncStorage.setItem('cw_card_balance', String(finalBal)).catch(() => {});
+            return finalBal;
+          }
+          return prev;
+        });
+      }
+
+      // Apply Token Recovery
       if (Object.keys(heals).length > 0) {
-        console.log('[HEALER] Applying recovered balances:', heals);
         setBalances(prev => {
           let changed = false;
           const next = { ...prev };
@@ -361,7 +406,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         });
       }
     }
-  }, [transactions]);
+  }, [transactions, walletAddress]);
 
   useEffect(() => { 
     if (!dataLoaded || !hasWallet) return;
@@ -549,7 +594,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       tx.id === pendingId ? { ...tx, status: result.success ? 'success' : 'failed', txHash: result.hash } : tx
     ));
     
-    if (result.success) refreshBalance();
+    if (result.success) {
+      refreshBalance();
+      notificationService.notifySendComplete('ETH', amount, toAddress).catch(() => {});
+    }
     return result;
   }, [network, prices, addTx, refreshBalance]);
 
