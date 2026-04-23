@@ -8,6 +8,7 @@ import * as Clipboard from 'expo-clipboard';
 import { Theme } from '../constants';
 import { useWallet } from '../store/WalletContext';
 import Toast from '../components/Toast';
+import { walletService } from '../services/walletService';
 
 // Two-step overlay: loading → success
 const STEPS = [
@@ -82,12 +83,14 @@ function ImportingOverlay({ visible, isDarkMode, done }: { visible: boolean; isD
             {current.label}
           </Animated.Text>
 
-          {/* Two dots */}
           <View style={styles.dotsRow}>
             {STEPS.map((_, i) => (
               <View
                 key={i}
-                style={[styles.dot, { backgroundColor: i <= step ? T.primary : T.border, width: i === step ? 20 : 8 }]}
+                style={StyleSheet.flatten([
+                  styles.dot,
+                  { backgroundColor: i <= step ? T.primary : T.border, width: i === step ? 20 : 8 }
+                ])}
               />
             ))}
           </View>
@@ -105,10 +108,20 @@ export default function ImportWalletScreen({ navigation }: any) {
   const [mnemonic, setMnemonic] = useState('');
   const [loading, setLoading]   = useState(false);
   const [importDone, setImportDone] = useState(false);
-  const [toast, setToast]       = useState({ visible: false, message: '', type: 'error' as 'success' | 'error' | 'info' });
+  const [invalidWords, setInvalidWords] = useState<string[]>([]);
   const { importWallet, isDarkMode, hasWallet } = useWallet();
 
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
+
+  // Real-time validation
+  useEffect(() => {
+    if (!mnemonic) {
+      setInvalidWords([]);
+      return;
+    }
+    const invalid = walletService.getInvalidWords(mnemonic);
+    setInvalidWords(invalid);
+  }, [mnemonic]);
 
   // Once import succeeds + hasWallet is true, close overlay quickly and let App.tsx navigate
   useEffect(() => {
@@ -118,22 +131,38 @@ export default function ImportWalletScreen({ navigation }: any) {
     }
   }, [hasWallet, importDone]);
 
-  const wordCount = mnemonic.trim() ? mnemonic.trim().split(/\s+/).filter(Boolean).length : 0;
-  const isValid   = wordCount === 12 || wordCount === 24;
+  const VALID_COUNTS = [12, 15, 18, 21, 24];
+  const wordsArray  = mnemonic.trim() ? mnemonic.trim().split(/\s+/).filter(Boolean) : [];
+  const wordCount   = wordsArray.length;
+  const isValid     = VALID_COUNTS.includes(wordCount) && invalidWords.length === 0;
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'error') =>
     setToast({ visible: true, message, type });
 
   const handlePaste = async () => {
     const text = await Clipboard.getStringAsync();
-    if (text) setMnemonic(text.trim());
+    if (text) {
+      // Clean up pasted text: lowercase, remove numbers like "1. ", and collapse spaces
+      const clean = text.toLowerCase()
+        .replace(/\d+\./g, ' ') // remove "1. ", "2. "
+        .replace(/[^a-z\s]/g, ' ') // remove any non-alpha chars
+        .replace(/\s+/g, ' ') // collapse spaces
+        .trim();
+      setMnemonic(clean);
+    }
   };
 
   const handleImport = () => {
     const trimmed = mnemonic.trim().toLowerCase().replace(/\s+/g, ' ');
     const words   = trimmed.split(' ');
-    if (words.length !== 12 && words.length !== 24) {
-      showToast('Seed phrase must be exactly 12 or 24 words.', 'error');
+
+    if (invalidWords.length > 0) {
+      showToast(`Invalid words found: ${invalidWords.join(', ')}`, 'error');
+      return;
+    }
+
+    if (!VALID_COUNTS.includes(words.length)) {
+      showToast(`Seed phrase must be 12, 15, 18, 21, or 24 words. (You have ${words.length})`, 'error');
       return;
     }
     setLoading(true);
@@ -144,11 +173,11 @@ export default function ImportWalletScreen({ navigation }: any) {
       try {
         await importWallet(trimmed);
         setImportDone(true); // triggers success step in overlay
-        // Navigation is handled automatically by App.tsx (hasWallet → Main stack)
       } catch (e: any) {
         setLoading(false);
         setImportDone(false);
-        showToast(e?.message ?? 'Invalid seed phrase. Please check and try again.', 'error');
+        // If checksum fails but words are valid
+        showToast('Checksum failed. Ensure words are in the correct order.', 'error');
       }
     }, 50);
   };
@@ -200,7 +229,7 @@ export default function ImportWalletScreen({ navigation }: any) {
                 <Text style={[styles.wordCountText, {
                   color: isValid ? T.success : wordCount > 0 ? T.error : T.textMuted,
                 }]}>
-                  {wordCount} / {wordCount > 12 ? 24 : 12}
+                  {wordCount} Words
                 </Text>
               </View>
             </View>
@@ -219,6 +248,15 @@ export default function ImportWalletScreen({ navigation }: any) {
               keyboardType="visible-password"
               textContentType="none"
             />
+
+            {invalidWords.length > 0 && (
+              <View style={styles.invalidRow}>
+                <Feather name="alert-circle" size={14} color={T.error} />
+                <Text style={[styles.invalidText, { color: T.error }]}>
+                  Invalid words: {invalidWords.join(', ')}
+                </Text>
+              </View>
+            )}
 
             <View style={[styles.inputFooter, { borderTopColor: T.border }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -329,4 +367,6 @@ const styles = StyleSheet.create({
   dotsRow: { flexDirection: 'row', gap: 6, alignItems: 'center', marginBottom: 16 },
   dot: { height: 8, borderRadius: 4 },
   overlaySubtitle: { fontSize: 13, fontWeight: '500', textAlign: 'center' },
+  invalidRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, paddingHorizontal: 4 },
+  invalidText: { fontSize: 13, fontWeight: '700' },
 });

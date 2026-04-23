@@ -70,6 +70,24 @@ export const walletService = {
     return await storageService.hasWallet();
   },
 
+  /**
+   * Diagnostic tool: Checks which words in a phrase are not in the BIP-39 wordlist.
+   * Returns an array of invalid words.
+   */
+  getInvalidWords(mnemonic: string): string[] {
+    const words = mnemonic.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const wordlist = ethers.wordlists.en;
+    const invalid: string[] = [];
+    for (const w of words) {
+      try {
+        if (wordlist.getWordIndex(w) === -1) invalid.push(w);
+      } catch {
+        invalid.push(w);
+      }
+    }
+    return invalid;
+  },
+
   async deleteWallet(): Promise<void> {
     await storageService.clearWallet();
   },
