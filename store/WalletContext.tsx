@@ -23,6 +23,8 @@ export type Transaction = {
   status: 'success' | 'pending' | 'failed' | 'completed';
   date: string;
   txHash?: string;
+  contractAddress?: string;
+  isInternal?: boolean;
 };
 
 export type CardTransaction = {
@@ -143,12 +145,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [isNewsLoading,   setIsNewsLoading] = useState(true);
 
   const [dataLoaded,     setDataLoaded]     = useState(false);
+  const [isSyncing,      setIsSyncing]      = useState(false);
   const pendingAddressRef  = useRef<{ address: string; net: string } | null>(null);
   const ethBalanceRef      = useRef('0.0');
   const balancesRef        = useRef<Record<string, number>>({ ETH: 0, USDT: 0, USDC: 0, DAI: 0, BTC: 0, SOL: 0 });
   const priceIntervalRef   = useRef<ReturnType<typeof setInterval> | null>(null);
   const newsIntervalRef    = useRef<ReturnType<typeof setInterval> | null>(null);
   const balanceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const syncInProgressRef  = useRef(false);
 
   useEffect(() => { ethBalanceRef.current = ethBalance; }, [ethBalance]);
 
@@ -270,12 +274,28 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshBalance = useCallback(async () => {
-    if (walletAddress) {
-      await fetchBalance(walletAddress, network);
-      // Also trigger a history sync in the background
-      transactionService.syncIncoming(walletAddress, network, prices.ETH?.usd ?? 3500).catch(() => {});
+    if (walletAddress && !syncInProgressRef.current) {
+      setIsSyncing(true);
+      syncInProgressRef.current = true;
+      try {
+        await fetchBalance(walletAddress, network);
+        // Also trigger a history sync
+        const newTxs = await transactionService.syncIncoming(walletAddress, network, prices.ETH?.usd ?? 3500);
+        if (Array.isArray(newTxs) && newTxs.length > 0) {
+          setTransactions(prev => {
+            const existingHashes = new Set(prev.map(t => t.txHash).filter(Boolean));
+            const uniqueNew = newTxs.filter((t: any) => !t.txHash || !existingHashes.has(t.txHash));
+            return [...uniqueNew, ...prev];
+          });
+        }
+      } catch (e) {
+        console.warn('[refreshBalance] Error:', e);
+      } finally {
+        setIsSyncing(false);
+        syncInProgressRef.current = false;
+      }
     }
-  }, [walletAddress, network, fetchBalance]);
+  }, [walletAddress, network, prices, fetchBalance]);
 
   useEffect(() => {
     if (dataLoaded && pendingAddressRef.current) {
@@ -421,16 +441,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     fetchPrices();
     fetchNews();
-    priceIntervalRef.current = setInterval(fetchPrices, 30_000);
+    priceIntervalRef.current = setInterval(fetchPrices, 60_000);
     newsIntervalRef.current  = setInterval(fetchNews,   300_000);
     return () => {
       if (priceIntervalRef.current) clearInterval(priceIntervalRef.current);
       if (newsIntervalRef.current)  clearInterval(newsIntervalRef.current);
     };
   }, [fetchPrices, fetchNews]);
-
-  const [isSyncing, setIsSyncing] = useState(false);
-  const syncInProgressRef = useRef(false);
 
   // Background Sync Poller (Runs every 30s)
   useEffect(() => {
@@ -472,12 +489,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const importWallet = useCallback(async (mnemonic: string, isNew: boolean = false) => {
     try {
+      console.log('[WalletContext] importWallet START');
       setIsLoadingWallet(true);
+
+      console.log('[WalletContext] Step 1: Deriving wallet from mnemonic...');
       const data = await walletService.importFromMnemonic(mnemonic);
-      
+      console.log(`[WalletContext] Step 2: Wallet derived — ${data.address}`);
+
       const isSwitching = walletAddress && walletAddress.toLowerCase() !== data.address.toLowerCase();
-      
+
       if (isNew || isSwitching) {
+        console.log('[WalletContext] Step 3: Clearing old wallet data...');
         await storageService.clearWallet();
         await AsyncStorage.multiRemove([
           'cw_transactions', 'cw_card_balance', 'cw_card_details',
@@ -489,12 +511,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setCardTransactions([]);
         setBalances({ ETH: 0, USDT: 0, USDC: 0, DAI: 0, BTC: 0, SOL: 0 });
         setEthBalance('0.0');
+        console.log('[WalletContext] Step 3: Old data cleared');
       }
 
       const defaultName = `Wallet ${data.address.slice(-4).toUpperCase()}`;
+      console.log('[WalletContext] Step 4: Saving wallet to SecureStore...');
       await storageService.saveWallet(data.privateKey, data.mnemonic, data.address);
       await storageService.saveWalletName(defaultName);
+      console.log('[WalletContext] Step 4: Wallet saved to SecureStore');
 
+      console.log('[WalletContext] Step 5: Clearing PIN and read-only flag...');
       await clearPin();
       await AsyncStorage.removeItem('cw_read_only');
       setPinEnabled(false);
@@ -503,14 +529,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setWalletNameState(defaultName);
       setHasWallet(true);
       setIsLoadingWallet(false);
+      console.log('[WalletContext] Step 5: DONE — wallet import complete ✓');
 
       // Priority Sync after import (Background)
       transactionService.lastSyncTime = 0;
       transactionService.isLockedOut = false;
+      console.log('[WalletContext] Step 6: Starting background balance + tx sync...');
       (async () => {
         try {
           await fetchBalance(data.address, network);
+          console.log('[WalletContext] Step 6a: Balance fetched');
           const newTxs = await transactionService.syncIncoming(data.address, network, prices.ETH?.usd ?? 3500, true);
+          console.log(`[WalletContext] Step 6b: Tx sync done — ${Array.isArray(newTxs) ? newTxs.length : 0} new txs`);
           if (Array.isArray(newTxs) && newTxs.length > 0) {
             setTransactions(prev => {
               const existingHashes = new Set(prev.map(t => t.txHash).filter(Boolean));
@@ -519,9 +549,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             });
           }
         } catch (e) {
+          console.warn('[WalletContext] Background sync error:', e);
         }
       })();
     } catch (e: any) {
+      console.error('[WalletContext] importWallet FAILED:', e?.message);
       setIsLoadingWallet(false);
       throw new Error(e.message || 'Invalid seed phrase.');
     } finally {

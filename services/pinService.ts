@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import AsyncStorageNative from '@react-native-async-storage/async-storage';
 
 const PIN_KEY          = 'cw_pin_hash';
 const PIN_SALT_KEY     = 'cw_pin_salt';
@@ -15,24 +16,21 @@ const storage = {
     if (Platform.OS === 'web') {
       try { return localStorage.getItem(key); } catch { return null; }
     }
-    const AS = require('@react-native-async-storage/async-storage').default;
-    return AS.getItem(key);
+    return AsyncStorageNative.getItem(key);
   },
   async setItem(key: string, value: string): Promise<void> {
     if (Platform.OS === 'web') {
       try { localStorage.setItem(key, value); } catch (_e) {}
       return;
     }
-    const AS = require('@react-native-async-storage/async-storage').default;
-    return AS.setItem(key, value);
+    return AsyncStorageNative.setItem(key, value);
   },
   async removeItem(key: string): Promise<void> {
     if (Platform.OS === 'web') {
       try { localStorage.removeItem(key); } catch (_e) {}
       return;
     }
-    const AS = require('@react-native-async-storage/async-storage').default;
-    return AS.removeItem(key);
+    return AsyncStorageNative.removeItem(key);
   },
 };
 

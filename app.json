@@ -3,10 +3,10 @@
     "name": "CryptoWallet",
     "slug": "CryptoWallet",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -62,10 +62,10 @@
         }
       ]
     ],
-    "owner": "josh2345",
+    "owner": "kooo455",
     "extra": {
       "eas": {
-        "projectId": "53188b03-2882-4a95-949e-bd6e8547ce2b"
+        "projectId": "6995f7e5-466e-480a-848d-c546a7abef82"
       }
     }
   }

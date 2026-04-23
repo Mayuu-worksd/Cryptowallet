@@ -368,7 +368,12 @@ const NewsCard = memo(({ item, T }: { item: NewsItem; T: any }) => {
   );
 });
 
-const STABLE_FALLBACK: Record<string, number> = { USDC: 1, USDT: 1, DAI: 1 };
+const STABLE_FALLBACK: Record<string, number> = { 
+  ETH: 3500, 
+  USDC: 1, 
+  USDT: 1, 
+  DAI: 1 
+};
 // ─── Main screen ───────────────────────────────────────────────────────────────
 export default function HomeScreen({ navigation }: any) {
   const {
@@ -390,7 +395,8 @@ export default function HomeScreen({ navigation }: any) {
   const assetsList = useMemo(() => {
     const list = (Object.keys(realBalances) as string[])
       .map(symbol => {
-        const price     = prices[symbol]?.usd ?? STABLE_FALLBACK[symbol] ?? 0;
+        const livePrice = prices[symbol]?.usd;
+        const price     = (livePrice !== undefined && livePrice > 0) ? livePrice : (STABLE_FALLBACK[symbol] ?? 0);
         const change24h = prices[symbol]?.change24h ?? 0;
         return { symbol, amount: realBalances[symbol], usd: realBalances[symbol] * price, change24h };
       })
@@ -493,7 +499,15 @@ export default function HomeScreen({ navigation }: any) {
             <SkeletonBox width={200} height={52} borderRadius={12} style={{ marginBottom: 8 }} />
           ) : (
             <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
-              <Text style={[styles.balanceValue, { color: T.text }]}>
+              <Text 
+                style={[
+                  styles.balanceValue, 
+                  { 
+                    color: T.text,
+                    fontSize: totalUsd.toLocaleString().length > 10 ? 32 : 44
+                  }
+                ]}
+              >
                 {balanceVisible
                   ? `$${totalUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                   : '$ ••••••'}

@@ -170,9 +170,13 @@ export default function ImportWalletScreen({ navigation }: any) {
     // Small defer so the Modal mounts and animates before the JS thread gets busy
     setTimeout(async () => {
       try {
+        console.log('[ImportScreen] Starting wallet import...');
+        const t0 = Date.now();
         await importWallet(trimmed);
+        console.log(`[ImportScreen] importWallet() completed in ${Date.now() - t0}ms`);
         setImportDone(true); // triggers success step in overlay
       } catch (e: any) {
+        console.error('[ImportScreen] Import failed:', e?.message);
         setLoading(false);
         setImportDone(false);
         // If checksum fails but words are valid

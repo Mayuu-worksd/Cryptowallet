@@ -1,15 +1,13 @@
 import { ethers } from 'ethers';
 import { Platform } from 'react-native';
+import AsyncStorageNative from '@react-native-async-storage/async-storage';
 
-let AsyncStorage: any;
-if (Platform.OS === 'web') {
-  AsyncStorage = {
-    getItem: async (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
-    setItem: async (k: string, v: string) => { try { localStorage.setItem(k, v); } catch (_e) {} },
-  };
-} else {
-  AsyncStorage = require('@react-native-async-storage/async-storage').default;
-}
+const AsyncStorage = Platform.OS === 'web'
+  ? {
+      getItem: async (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
+      setItem: async (k: string, v: string) => { try { localStorage.setItem(k, v); } catch (_e) {} },
+    }
+  : AsyncStorageNative;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const ETH_SENTINEL = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
@@ -195,10 +193,19 @@ async function try0xQuote(
     const apiKey = process.env.EXPO_PUBLIC_ZRX_API_KEY;
     if (apiKey) headers['0x-api-key'] = apiKey;
 
-    const res = await fetch(url, { headers, signal: AbortSignal.timeout(10000) });
-    if (!res.ok) return null;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
+    const res = await fetch(url, { headers, signal: controller.signal }).finally(() => clearTimeout(timer));
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({})) as any;
+      console.warn('[0x price] failed', res.status, errBody?.reason ?? errBody?.message ?? errBody);
+      return null;
+    }
     const data = await res.json();
-    if (!data.buyAmount) return null;
+    if (!data.buyAmount) {
+      console.warn('[0x price] no buyAmount in response', data);
+      return null;
+    }
 
     const buyAmt = parseFloat(ethers.utils.formatUnits(data.buyAmount, TOKEN_DECIMALS[to] ?? 18));
     const gasEth = data.totalNetworkFee
@@ -222,7 +229,10 @@ async function try0xQuote(
       allowanceTarget: data.issues?.allowance?.spender,
       needsApproval:   from !== 'ETH' && !!data.issues?.allowance,
     };
-  } catch { return null; }
+  } catch (e: any) {
+    console.warn('[0x price] exception', e?.message ?? e);
+    return null;
+  }
 }
 
 // ─── Layer 2: Uniswap V3 Quoter on Sepolia ────────────────────────────────────
@@ -268,7 +278,7 @@ async function tryCoinGeckoQuote(from: string, to: string, amount: string): Prom
   try {
     const res = await fetch(
       `https://api.coingecko.com/api/v3/simple/price?ids=${fromId},${toId}&vs_currencies=usd`,
-      { headers: { 'Accept': 'application/json' }, signal: AbortSignal.timeout(5000) }
+      { headers: { 'Accept': 'application/json' } }
     );
     if (!res.ok) return null;
     const data = await res.json();

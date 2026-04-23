@@ -1,16 +1,14 @@
 import { ethers } from 'ethers';
 import { Platform } from 'react-native';
+import AsyncStorageNative from '@react-native-async-storage/async-storage';
 import { RPC_URLS } from '../config';
 
-let AsyncStorage: any;
-if (Platform.OS === 'web') {
-  AsyncStorage = {
-    getItem: async (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
-    setItem: async (k: string, v: string) => { try { localStorage.setItem(k, v); } catch (_e) {} },
-  };
-} else {
-  AsyncStorage = require('@react-native-async-storage/async-storage').default;
-}
+const AsyncStorage = Platform.OS === 'web'
+  ? {
+      getItem: async (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
+      setItem: async (k: string, v: string) => { try { localStorage.setItem(k, v); } catch (_e) {} },
+    }
+  : AsyncStorageNative;
 
 const ERC20_ABI = ['function balanceOf(address owner) view returns (uint256)'];
 

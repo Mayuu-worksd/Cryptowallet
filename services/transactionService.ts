@@ -6,18 +6,15 @@
 
 import { Platform } from 'react-native';
 import { ethers } from 'ethers';
+import AsyncStorageNative from '@react-native-async-storage/async-storage';
 import { etherscanService, ChainTx, TokenTx } from './etherscanService';
 
-// ─── AsyncStorage shim (matches WalletContext pattern) ────────────────────────
-let AsyncStorage: any;
-if (Platform.OS === 'web') {
-  AsyncStorage = {
-    getItem:  async (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
-    setItem:  async (k: string, v: string) => { try { localStorage.setItem(k, v); } catch (_e) {} },
-  };
-} else {
-  AsyncStorage = require('@react-native-async-storage/async-storage').default;
-}
+const AsyncStorage = Platform.OS === 'web'
+  ? {
+      getItem:  async (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
+      setItem:  async (k: string, v: string) => { try { localStorage.setItem(k, v); } catch (_e) {} },
+    }
+  : AsyncStorageNative;
 
 // ─── Cache key ────────────────────────────────────────────────────────────────
 const CACHE_KEY = 'tx_history_cache';
