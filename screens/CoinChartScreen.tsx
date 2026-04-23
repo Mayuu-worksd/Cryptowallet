@@ -66,7 +66,7 @@ const Sparkline = React.memo(({ prices, color, width, height }: {
       <Path d={pathD} stroke={color} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   );
-}
+});
 
 export default function CoinChartScreen({ route, navigation }: any) {
   const { symbol } = route.params as { symbol: string };
