@@ -89,10 +89,10 @@ export default function SwapScreen({ navigation }: any) {
   const buyUsdValue  = buyAmtNum > 0 ? (buyAmtNum * buyPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
   
   const isSimulated = quote?.isSimulated === true;
-  const isMainnet = network !== 'Sepolia';
+  const isMainnet = network === 'Ethereum' || network === 'Polygon' || network === 'Arbitrum';
   // On mainnet, block simulated quotes - real money on the line
   const isSimulatedOnMainnet = isSimulated && isMainnet;
-  const hasInsufficientBalance = network !== 'Sepolia' && sellAmtNum > sellBalance;
+  const hasInsufficientBalance = isMainnet && sellAmtNum > sellBalance;
   const canSwap =
     sellAmtNum > 0 &&
     !!quote &&

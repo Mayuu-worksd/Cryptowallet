@@ -474,8 +474,9 @@ export async function executeSwap(
   onStatus?: (msg: string) => void
 ): Promise<SwapResult> {
   try {
-    // MAINNET SAFETY: Block simulated swaps on mainnet — real money on the line
-    if (quote.isSimulated && network !== 'Sepolia') {
+    // MAINNET SAFETY: Block simulated swaps on real mainnet only
+    const isRealMainnet = network === 'Ethereum' || network === 'Polygon' || network === 'Arbitrum';
+    if (quote.isSimulated && isRealMainnet) {
       return { success: false, error: 'Live quote required for mainnet swaps. Please wait for a real quote or try again.' };
     }
 
