@@ -89,7 +89,9 @@ export default function SwapScreen({ navigation }: any) {
   const buyUsdValue  = buyAmtNum > 0 ? (buyAmtNum * buyPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
   
   const isSimulated = quote?.isSimulated === true;
-  // On testnet don't block on balance — it's fake money and balance may not reflect yet
+  const isMainnet = network !== 'Sepolia';
+  // On mainnet, block simulated quotes - real money on the line
+  const isSimulatedOnMainnet = isSimulated && isMainnet;
   const hasInsufficientBalance = network !== 'Sepolia' && sellAmtNum > sellBalance;
   const canSwap =
     sellAmtNum > 0 &&
@@ -97,7 +99,8 @@ export default function SwapScreen({ navigation }: any) {
     parseFloat(quote.buyAmount) > 0 &&
     !hasInsufficientBalance &&
     isSupported &&
-    !isLoadingQuote;
+    !isLoadingQuote &&
+    !isSimulatedOnMainnet;
 
   const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'success') =>
     setToast({ visible: true, message: msg, type });
@@ -401,7 +404,15 @@ export default function SwapScreen({ navigation }: any) {
           </View>
         </View>
 
-        {isSimulated && (
+        {isSimulatedOnMainnet && (
+          <View style={[styles.warnBanner, { backgroundColor: T.error + '18', borderColor: T.error + '40', marginBottom: 16 }]}>
+            <Feather name="alert-triangle" size={14} color={T.error} />
+            <Text style={[styles.warnText, { color: T.error }]}>
+              Live quote unavailable on mainnet. Waiting for a real price from 0x Protocol. Do not swap until a live quote loads.
+            </Text>
+          </View>
+        )}
+        {isSimulated && !isMainnet && (
           <View style={[styles.warnBanner, { backgroundColor: T.primary + '18', borderColor: T.primary + '40', marginBottom: 16 }]}>
             <Feather name="info" size={14} color={T.primary} />
             <Text style={[styles.warnText, { color: T.primary }]}>
@@ -460,6 +471,8 @@ export default function SwapScreen({ navigation }: any) {
                 ? 'Enter Amount'
                 : hasInsufficientBalance
                 ? 'Insufficient Balance'
+                : isSimulatedOnMainnet
+                ? 'Waiting for Live Quote...'
                 : canSwap
                 ? 'Confirm Swap'
                 : 'Enter Details'}

@@ -129,7 +129,6 @@ function isSafeUrl(url: string, allowed: string[]): boolean {
 }
 
 export function parseSwapError(e: any): string {
-  console.error('[swapService] Raw swap error:', e);
   const msg: string = e?.reason ?? e?.message ?? 'Unknown error';
   if (msg.includes('insufficient funds'))   return 'Insufficient ETH for gas fees';
   if (msg.includes('INSUFFICIENT_OUTPUT'))  return 'Price moved too much. Try increasing slippage.';
@@ -475,7 +474,12 @@ export async function executeSwap(
   onStatus?: (msg: string) => void
 ): Promise<SwapResult> {
   try {
-    // Simulated quote → simulated execution (works on ALL networks)
+    // MAINNET SAFETY: Block simulated swaps on mainnet — real money on the line
+    if (quote.isSimulated && network !== 'Sepolia') {
+      return { success: false, error: 'Live quote required for mainnet swaps. Please wait for a real quote or try again.' };
+    }
+
+    // Simulated quote → simulated execution (Sepolia only)
     if (quote.isSimulated) {
       const result = await _executeSimulated(quote, onStatus);
       if (result.success) await _saveSwapHistory({ ...quote, txHash: result.hash!, isSimulated: true });

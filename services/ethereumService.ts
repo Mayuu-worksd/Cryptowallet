@@ -73,8 +73,7 @@ export const ethereumService = {
         contract.decimals(),
       ]);
       return parseFloat(ethers.utils.formatUnits(raw, decimals));
-    } catch (e) {
-      console.error(`[ethereumService] Error fetching balance for ${tokenSymbol}:`, e);
+    } catch {
       return 0;
     }
   },
@@ -83,8 +82,7 @@ export const ethereumService = {
     try {
       const bal = await getProvider(network).getBalance(address);
       return ethers.utils.formatEther(bal);
-    } catch (e) {
-      console.error('Balance fetch error:', e);
+    } catch {
       return '0.0';
     }
   },
