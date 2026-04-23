@@ -139,26 +139,40 @@ export default function ImportWalletScreen({ navigation }: any) {
     if (text) setMnemonic(text.trim());
   };
 
-  const handleImport = async () => {
-    const trimmed = mnemonic.trim();
-    const words   = trimmed.split(/\s+/).filter(Boolean);
+  const handleImport = () => {
+    const trimmed = mnemonic.trim().toLowerCase().replace(/\s+/g, ' ');
+    const words   = trimmed.split(' ');
     if (words.length !== 12 && words.length !== 24) {
       showToast('Seed phrase must be exactly 12 or 24 words.', 'error');
       return;
     }
     setLoading(true);
     setImportDone(false);
-    await new Promise(r => setTimeout(r, 100));
-    try {
-      await importWallet(trimmed);
-      setImportDone(true);
-      await new Promise(r => setTimeout(r, 900));
-      setLoading(false);
-    } catch (e: any) {
-      setLoading(false);
-      setImportDone(false);
-      showToast(e?.message ?? 'Invalid seed phrase. Please check and try again.', 'error');
-    }
+    
+    // Step-by-step execution to keep UI responsive
+    setTimeout(async () => {
+      try {
+        // Step 0: Scanning (already shown)
+        await new Promise(r => setTimeout(r, 400));
+        
+        // The heavy part: Deriving the wallet
+        // This will block the JS thread for a bit
+        await importWallet(trimmed);
+        
+        // Show success state in the overlay
+        setImportDone(true);
+        
+        // Wait for the success animation to be visible to the user
+        // We do this BEFORE the screen unmounts
+        await new Promise(r => setTimeout(r, 1200));
+        
+        setLoading(false);
+      } catch (e: any) {
+        setLoading(false);
+        setImportDone(false);
+        showToast(e?.message ?? 'Invalid seed phrase. Please check and try again.', 'error');
+      }
+    }, 100);
   };
 
   return (

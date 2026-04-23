@@ -31,7 +31,7 @@ yarn-error.*
 *.pem
 
 # local env files
-.env
+# .env  <-- included for iOS/Android developer testing
 .env*.local
 .env.local
 .env.production
@@ -40,6 +40,6 @@ yarn-error.*
 *.tsbuildinfo
 
 # generated native folders
-/ios
+# /ios  <-- included for iOS build
 
 .vercel

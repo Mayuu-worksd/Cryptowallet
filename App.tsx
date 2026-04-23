@@ -2,7 +2,7 @@ import React from 'react';
 import { NavigationContainer, useNavigation, DefaultTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, Text, ActivityIndicator, Platform, useWindowDimensions, Animated, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, ActivityIndicator, Platform, useWindowDimensions, Animated, TouchableOpacity, StyleSheet, ScrollView, AppState } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Feather } from '@expo/vector-icons';
 const { useMemo, useCallback } = React;
@@ -14,9 +14,20 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {error:
   render() {
     if (this.state.error) {
       return (
-        <View style={{ flex: 1, backgroundColor: '#101114', padding: 24, justifyContent: 'center' }}>
-          <Text style={{ color: '#FF3B3B', fontSize: 16, fontWeight: '800', marginBottom: 12 }}>App Crashed</Text>
-          <ScrollView><Text style={{ color: '#FFF', fontSize: 12, fontFamily: 'monospace' }}>{this.state.error}</Text></ScrollView>
+        <View style={{ flex: 1, backgroundColor: '#101114', padding: 32, justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#FF3B3B20', alignItems: 'center', justifyContent: 'center', marginBottom: 24 }}>
+            <Text style={{ fontSize: 36 }}>⚠️</Text>
+          </View>
+          <Text style={{ color: '#FFF', fontSize: 20, fontWeight: '800', marginBottom: 12, textAlign: 'center' }}>Something went wrong</Text>
+          <Text style={{ color: '#A1A5AB', fontSize: 14, textAlign: 'center', lineHeight: 22, marginBottom: 32 }}>
+            The app ran into an unexpected problem. Please restart the app. If this keeps happening, contact support.
+          </Text>
+          <TouchableOpacity
+            style={{ backgroundColor: '#FF3B3B', paddingHorizontal: 32, paddingVertical: 14, borderRadius: 16 }}
+            onPress={() => this.setState({ error: null })}
+          >
+            <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 15 }}>Try Again</Text>
+          </TouchableOpacity>
         </View>
       );
     }
@@ -292,8 +303,17 @@ function MobileNavigator() {
   React.useEffect(() => {
     if (isLoadingWallet) return;
     if (!hasWallet) { setPinState('unlocked'); return; }
-    setPinState('checking');
-    hasPinSetup().then(has => setPinState(has ? 'verify' : 'unlocked'));
+    
+    // Safety timeout: if storage hangs, don't stay stuck on 'checking'
+    const timer = setTimeout(() => {
+      if (pinState === 'checking') setPinState('unlocked');
+    }, 2000);
+
+    hasPinSetup().then(has => {
+      clearTimeout(timer);
+      setPinState(has ? 'verify' : 'unlocked');
+    });
+    return () => clearTimeout(timer);
   }, [isLoadingWallet, hasWallet]);
 
   // After PIN setup completes, re-check so pinEnabled badge updates in Settings
@@ -304,6 +324,23 @@ function MobileNavigator() {
   const handlePinSetupCancel = React.useCallback(() => {
     setPinState('unlocked');
   }, []);
+
+  // Auto-lock after 5 minutes in background
+  const bgTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bgTimeRef  = React.useRef<number>(0);
+  React.useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'background' || state === 'inactive') {
+        bgTimeRef.current = Date.now();
+      } else if (state === 'active') {
+        const elapsed = Date.now() - bgTimeRef.current;
+        if (elapsed > 5 * 60 * 1000 && pinState === 'unlocked') {
+          hasPinSetup().then(has => { if (has) setPinState('verify'); });
+        }
+      }
+    });
+    return () => sub.remove();
+  }, [pinState]);
 
   if (isLoadingWallet || pinState === 'checking') {
     return (
@@ -357,8 +394,6 @@ function MobileNavigator() {
             <Stack.Screen name="Scan"      component={ScanScreen}      options={{ contentStyle: { backgroundColor: '#000' } }} />
             <Stack.Screen name="CoinChart"  component={CoinChartScreen} />
             <Stack.Screen name="Card"        component={CardScreen} />
-            <Stack.Screen name="CreateWallet" component={CreateWalletScreen} />
-            <Stack.Screen name="ImportWallet" component={ImportWalletScreen} />
           </>
         )}
       </Stack.Navigator>

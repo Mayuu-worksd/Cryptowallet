@@ -1,4 +1,5 @@
 import React, { useCallback, useRef, memo, useMemo, useEffect } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Platform, Image, ActivityIndicator, Linking, RefreshControl, Animated, StatusBar, Dimensions,
@@ -330,7 +331,7 @@ const NewsCard = memo(({ item, T }: { item: NewsItem; T: any }) => {
             host === '169.254.169.254'
           ) return;
           Linking.openURL(u.href);
-        } catch {}
+        } catch (_e) {}
       }}
       activeOpacity={0.75}
     >
@@ -349,6 +350,8 @@ const NewsCard = memo(({ item, T }: { item: NewsItem; T: any }) => {
   );
 });
 
+const STABLE_FALLBACK: Record<string, number> = { USDC: 1, USDT: 1, DAI: 1 };
+
 // ─── Main screen ───────────────────────────────────────────────────────────────
 export default function HomeScreen({ navigation }: any) {
   const {
@@ -360,32 +363,45 @@ export default function HomeScreen({ navigation }: any) {
 
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
 
-  const realBalances: Record<string, number> = useMemo(
-    () => ({ ...balances, ETH: parseFloat(ethBalance) || 0 }),
-    [balances, ethBalance]
-  );
+  const realBalances: Record<string, number> = useMemo(() => ({
+    ETH: parseFloat(ethBalance) || 0,
+    ...Object.fromEntries(
+      Object.entries(balances).filter(([k]) => k !== 'ETH').map(([k, v]) => [k, v ?? 0])
+    ),
+  }), [ethBalance, balances]);
 
-  const assetsList = useMemo(() =>
-    Object.keys(realBalances)
+  const assetsList = useMemo(() => {
+    const list = (Object.keys(realBalances) as string[])
       .map(symbol => {
-        const price     = prices[symbol]?.usd ?? 0;
+        const price     = prices[symbol]?.usd ?? STABLE_FALLBACK[symbol] ?? 0;
         const change24h = prices[symbol]?.change24h ?? 0;
         return { symbol, amount: realBalances[symbol], usd: realBalances[symbol] * price, change24h };
       })
       .filter(a => a.amount > 0)
-      .sort((a, b) => b.usd - a.usd),
-    [realBalances, prices]
-  );
+      .sort((a, b) => b.usd - a.usd);
+    if (list.length === 0 && network === 'Sepolia') {
+      return [{ symbol: 'ETH', amount: 0, usd: 0, change24h: prices['ETH']?.change24h ?? 0 }];
+    }
+    return list;
+  }, [realBalances, prices, network]);
 
   const totalUsd = useMemo(() => assetsList.reduce((acc, a) => acc + a.usd, 0), [assetsList]);
+
+  // Only show skeleton on very first load before we have ANY balance data
+  const isInitialLoad = isPricesLoading && parseFloat(ethBalance) === 0 && Object.values(balances).every(v => v === 0);
 
   const onRefresh = useCallback(() => {
     refreshBalance();
     refreshPrices();
   }, [refreshBalance, refreshPrices]);
 
+  useFocusEffect(
+    useCallback(() => {
+      if (walletAddress) refreshBalance();
+    }, [walletAddress, refreshBalance])
+  );
+
   const networkColor = network === 'Sepolia' ? '#F59E0B' : network === 'Polygon' ? '#8247E5' : '#627EEA';
-  const isInitialLoad = isPricesLoading && totalUsd === 0;
 
   return (
     <View style={[styles.container, { backgroundColor: T.background }]}>
@@ -394,10 +410,8 @@ export default function HomeScreen({ navigation }: any) {
       {/* ── Header ── */}
       <View style={[styles.header, { backgroundColor: isDarkMode ? 'rgba(19,19,19,0.92)' : 'rgba(247,249,251,0.95)', top: Platform.OS === 'ios' ? 44 : 0 }]}>
         <View style={styles.headerLeft}>
-          <View style={[styles.avatar, { borderColor: T.border, backgroundColor: T.surfaceLow }]}>
-            <Text style={{ color: T.primary, fontWeight: '900', fontSize: 16 }}>
-              {walletName.charAt(0).toUpperCase()}
-            </Text>
+          <View style={[styles.avatarWrap, { backgroundColor: T.primary + '18' }]}>
+            <MaterialIcons name="account-balance-wallet" size={20} color={T.primary} />
           </View>
           <View>
             <Text style={[styles.walletLabel, { color: T.text }]}>{walletName}</Text>
@@ -428,6 +442,25 @@ export default function HomeScreen({ navigation }: any) {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={isLoadingBalance} onRefresh={onRefresh} tintColor={T.primary} />}
       >
+        {/* ── Get Started banner for new users ── */}
+        {parseFloat(ethBalance) === 0 && Object.values(balances).every(v => v === 0) && !isLoadingBalance && (
+          <TouchableOpacity
+            style={[styles.getStartedBanner, { backgroundColor: T.primary + '15', borderColor: T.primary + '40' }]}
+            onPress={() => navigation.navigate('Receive')}
+            activeOpacity={0.85}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: T.primary, fontSize: 14, fontWeight: '800', marginBottom: 4 }}>
+                🚀 Your wallet is ready!
+              </Text>
+              <Text style={{ color: T.textMuted, fontSize: 12, fontWeight: '500', lineHeight: 18 }}>
+                To get started, receive ETH from a friend or buy crypto. Tap to get your address.
+              </Text>
+            </View>
+            <Feather name="arrow-right" size={18} color={T.primary} />
+          </TouchableOpacity>
+        )}
+
         {/* ── Price error banner ── */}
         {priceError && (
           <TouchableOpacity
@@ -526,14 +559,18 @@ export default function HomeScreen({ navigation }: any) {
                 </View>
               </View>
             ))
-          ) : assetsList.slice(0, 4).map((a, idx) => (
+          ) : assetsList.length === 0 ? (
+            <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+              <Text style={{ color: T.textMuted, fontSize: 14, fontWeight: '600' }}>No assets yet. Deposit or swap to get started.</Text>
+            </View>
+          ) : assetsList.map((a, idx) => (
             <React.Fragment key={a.symbol}>
               <TokenRow
                 symbol={a.symbol} amount={a.amount} usd={a.usd}
                 change24h={a.change24h} T={T} hideBalance={!balanceVisible}
                 onPress={() => navigation.navigate('CoinChart', { symbol: a.symbol })}
               />
-              {idx < Math.min(assetsList.length, 4) - 1 && (
+              {idx < assetsList.length - 1 && (
                 <View style={[styles.divider, { backgroundColor: T.border }]} />
               )}
             </React.Fragment>
@@ -594,12 +631,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20, paddingTop: Platform.OS === 'web' ? 20 : 56, paddingBottom: 14,
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  avatar: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  avatarWrap: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   walletLabel: { fontSize: 16, fontWeight: '800', letterSpacing: -0.5 },
   headerBtn: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 19 },
 
   scroll: { paddingTop: 130, paddingHorizontal: 20, paddingBottom: 60 },
 
+  getStartedBanner: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 16, borderWidth: 1, marginBottom: 14 },
   errorBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 12, borderWidth: 1, marginBottom: 14 },
   errorBannerText: { flex: 1, fontSize: 12, fontWeight: '600' },
 

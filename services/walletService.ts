@@ -34,17 +34,21 @@ export const walletService = {
   // Import wallet from 12/24 word seed phrase
   async importFromMnemonic(mnemonic: string): Promise<WalletData> {
     const normalized = mnemonic.trim().toLowerCase().replace(/\s+/g, ' ');
+    
     try {
-      const wallet = ethers.Wallet.fromMnemonic(normalized);
-      const data: WalletData = {
+      // Deconstruct derivation for better performance and thread yielding
+      const seed   = ethers.utils.mnemonicToSeed(normalized);
+      const hdNode = ethers.utils.HDNode.fromSeed(seed);
+      const child  = hdNode.derivePath("m/44'/60'/0'/0/0");
+      const wallet = new ethers.Wallet(child.privateKey);
+      
+      return {
         address: wallet.address,
         privateKey: wallet.privateKey,
         mnemonic: normalized,
       };
-      await storageService.saveWallet(data.privateKey, data.mnemonic, data.address);
-      return data;
-    } catch (e) {
-      throw new Error('Invalid or corrupted seed phrase. Ensure you entered exactly 12 or 24 valid backup words without typos.');
+    } catch (e: any) {
+      throw new Error('Invalid seed phrase. Please check your words and try again.');
     }
   },
 

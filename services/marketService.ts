@@ -1,5 +1,5 @@
 const COINGECKO_URL =
-  'https://api.coingecko.com/api/v3/simple/price?ids=ethereum,bitcoin,tether,solana,matic-network,binancecoin&vs_currencies=usd&include_24hr_change=true';
+  'https://api.coingecko.com/api/v3/simple/price?ids=ethereum,bitcoin,tether,usd-coin,dai,solana,matic-network,binancecoin&vs_currencies=usd&include_24hr_change=true';
 
 const COINGECKO_NEWS_URL =
   'https://api.coingecko.com/api/v3/news?per_page=10';
@@ -40,6 +40,8 @@ const ID_TO_SYMBOL: Record<string, string> = {
   ethereum:        'ETH',
   bitcoin:         'BTC',
   tether:          'USDT',
+  'usd-coin':      'USDC',
+  dai:             'DAI',
   solana:          'SOL',
   'matic-network': 'MATIC',
   binancecoin:     'BNB',

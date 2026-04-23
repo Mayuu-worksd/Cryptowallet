@@ -7,6 +7,10 @@ import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useWallet, useMarket } from '../store/WalletContext';
 import { Theme, COIN_META, COIN_COLORS } from '../constants';
+import Toast from '../components/Toast';
+import { haptics } from '../utils/haptics';
+
+const COMING_SOON = ['BTC', 'SOL'];
 
 const CoinIcon = memo(({ symbol, size = 44 }: { symbol: string; size?: number }) => {
   const meta  = COIN_META[symbol];
@@ -28,20 +32,30 @@ const CoinIcon = memo(({ symbol, size = 44 }: { symbol: string; size?: number })
   );
 });
 
+const STABLE_FALLBACK: Record<string, number> = { USDC: 1, USDT: 1, DAI: 1 };
+
 export default function PortfolioScreen({ navigation }: any) {
-  const { ethBalance, balances, isDarkMode, walletName } = useWallet();
+  const { ethBalance, balances, isDarkMode } = useWallet();
   const { prices } = useMarket();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
+  const [toast, setToast] = useState({ visible: false, message: '', type: 'info' as 'success' | 'error' | 'info' });
 
-  const realBalances: Record<string, number> = useMemo(
-    () => ({ ...balances, ETH: parseFloat(ethBalance) || 0 }),
-    [balances, ethBalance]
-  );
+  const showComingSoon = () => {
+    haptics.selection();
+    setToast({ visible: true, message: 'BTC & SOL support coming soon!', type: 'info' });
+  };
+
+  const realBalances: Record<string, number> = useMemo(() => ({
+    ETH:  parseFloat(ethBalance) || 0,
+    ...Object.fromEntries(
+      Object.entries(balances).filter(([k]) => k !== 'ETH').map(([k, v]) => [k, v ?? 0])
+    ),
+  }), [ethBalance, balances]);
 
   const assetsList = useMemo(() =>
-    Object.keys(realBalances)
+    (Object.keys(realBalances) as string[])
       .map(symbol => {
-        const price     = prices[symbol]?.usd ?? 0;
+        const price     = prices[symbol]?.usd ?? STABLE_FALLBACK[symbol] ?? 0;
         const change24h = prices[symbol]?.change24h ?? 0;
         return { symbol, amount: realBalances[symbol], usd: realBalances[symbol] * price, change24h };
       })
@@ -53,20 +67,20 @@ export default function PortfolioScreen({ navigation }: any) {
 
   return (
     <View style={[styles.container, { backgroundColor: T.background }]}>
+      <Toast
+        visible={toast.visible}
+        message={toast.message}
+        type={toast.type}
+        onHide={() => setToast(p => ({ ...p, visible: false }))}
+      />
 
       {/* Header */}
       <View style={[styles.header, { backgroundColor: isDarkMode ? 'rgba(19,19,19,0.95)' : 'rgba(247,249,251,0.95)' }]}>
-        <Text style={[styles.headerTitle, { color: T.text }]}>ASSETS</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-          <TouchableOpacity style={styles.iconBtn} activeOpacity={0.7}>
-            <Feather name="search" size={20} color={T.text} />
-          </TouchableOpacity>
-          <View style={[styles.avatar, { borderColor: T.border, backgroundColor: T.surfaceLow }]}>
-            <Text style={{ color: T.primary, fontWeight: '800', fontSize: 14 }}>
-              {walletName.charAt(0).toUpperCase()}
-            </Text>
-          </View>
-        </View>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.7}>
+          <Feather name="arrow-left" size={22} color={T.text} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: T.text }]}>My Assets</Text>
+        <View style={{ width: 38 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -101,17 +115,9 @@ export default function PortfolioScreen({ navigation }: any) {
           </LinearGradient>
         </View>
 
-        {/* Tabs */}
-        <View style={[styles.tabsContainer, { borderBottomColor: T.border }]}>
-          <TouchableOpacity style={[styles.activeTab, { borderBottomColor: T.primary }]} activeOpacity={0.9}>
-            <Text style={[styles.activeTabText, { color: T.text }]}>Crypto</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.inactiveTab} activeOpacity={0.7}>
-            <Text style={[styles.inactiveTabText, { color: T.textMuted }]}>Fiat</Text>
-          </TouchableOpacity>
-        </View>
 
-        {/* Assets list */}
+
+        {/* Assets list — live coins */}
         <View style={styles.assetList}>
           {assetsList.map(a => {
             if (a.amount <= 0) return null;
@@ -121,7 +127,7 @@ export default function PortfolioScreen({ navigation }: any) {
                 key={a.symbol}
                 style={[styles.assetCard, { backgroundColor: T.surfaceLow }]}
                 activeOpacity={0.8}
-                onPress={() => navigation.navigate('CoinChart', { symbol: a.symbol })}
+                onPress={() => { haptics.selection(); navigation.navigate('CoinChart', { symbol: a.symbol }); }}
               >
                 <View style={styles.assetLeft}>
                   <View style={[styles.coinWrapper, { backgroundColor: T.surface, borderColor: T.border }]}>
@@ -147,6 +153,29 @@ export default function PortfolioScreen({ navigation }: any) {
             );
           })}
 
+          {/* Coming Soon rows for BTC & SOL */}
+          {COMING_SOON.map(sym => (
+            <TouchableOpacity
+              key={sym}
+              style={[styles.assetCard, { backgroundColor: T.surfaceLow, opacity: 0.6 }]}
+              activeOpacity={0.8}
+              onPress={showComingSoon}
+            >
+              <View style={styles.assetLeft}>
+                <View style={[styles.coinWrapper, { backgroundColor: T.surface, borderColor: T.border }]}>
+                  <CoinIcon symbol={sym} size={40} />
+                </View>
+                <View style={styles.assetInfo}>
+                  <Text style={[styles.assetName, { color: T.text }]}>{COIN_META[sym]?.name ?? sym}</Text>
+                  <Text style={[styles.assetSymbol, { color: T.textMuted }]}>{sym}</Text>
+                </View>
+              </View>
+              <View style={[styles.comingSoonChip, { backgroundColor: T.primary + '20', borderColor: T.primary + '40' }]}>
+                <Text style={[styles.comingSoonText, { color: T.primary }]}>Coming Soon</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+
           {assetsList.every(a => a.amount <= 0) && (
             <View style={styles.emptyBox}>
               <Feather name="inbox" size={32} color={T.border} style={{ marginBottom: 16 }} />
@@ -168,11 +197,10 @@ const styles = StyleSheet.create({
   header: {
     position: 'absolute', top: 0, width: '100%', zIndex: 50,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 24, paddingTop: Platform.OS === 'web' ? 24 : 60, paddingBottom: 16,
+    paddingHorizontal: 20, paddingTop: Platform.OS === 'web' ? 24 : 60, paddingBottom: 16,
   },
-  headerTitle: { fontSize: 20, fontWeight: '900', letterSpacing: -0.5 },
-  iconBtn: { padding: 8, borderRadius: 20 },
-  avatar: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 20, fontWeight: '900', letterSpacing: -0.5, textAlign: 'center', flex: 1 },
+  backBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
 
   scroll: { paddingHorizontal: 24, paddingBottom: 100, paddingTop: 110 },
 
@@ -193,11 +221,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 80,
   },
 
-  tabsContainer: { flexDirection: 'row', gap: 32, marginBottom: 28, borderBottomWidth: 1 },
-  activeTab: { paddingBottom: 12, borderBottomWidth: 2 },
-  activeTabText: { fontSize: 14, fontWeight: '700' },
-  inactiveTab: { paddingBottom: 12 },
-  inactiveTabText: { fontSize: 14, fontWeight: '500' },
+
 
   assetList: { gap: 12 },
   assetCard: {
@@ -215,5 +239,7 @@ const styles = StyleSheet.create({
   assetUsd: { fontSize: 12, fontWeight: '500', marginBottom: 2 },
   assetChange: { fontSize: 11, fontWeight: '700' },
 
+  comingSoonChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1 },
+  comingSoonText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.3 },
   emptyBox: { padding: 40, alignItems: 'center' },
 });

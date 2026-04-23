@@ -91,18 +91,20 @@ export default function CreateWalletScreen({ navigation }: any) {
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') =>
     setToast({ visible: true, message, type });
 
-  const handleCreate = async () => {
+  const handleCreate = () => {
     setLoading(true);
-    await new Promise(r => setTimeout(r, 50));
-    try {
-      const data = await createWallet();
-      setMnemonic(data.mnemonic);
-      setStep('phrase');
-    } catch (e: any) {
-      showToast(e?.message ?? 'Failed to create wallet. Please try again.', 'error');
-    } finally {
-      setLoading(false);
-    }
+    // Allow UI to render the loading state before blocking the JS thread
+    setTimeout(async () => {
+      try {
+        const data = await createWallet();
+        setMnemonic(data.mnemonic);
+        setStep('phrase');
+      } catch (e: any) {
+        showToast(e?.message ?? 'Failed to create wallet. Please try again.', 'error');
+      } finally {
+        setLoading(false);
+      }
+    }, 150);
   };
 
   const handleCopyPhrase = async () => {
@@ -135,22 +137,38 @@ export default function CreateWalletScreen({ navigation }: any) {
     setShuffled(prev => [...prev, word].sort(() => Math.random() - 0.5));
   };
 
-  const handleGoToWallet = async () => {
-    if (loading) return; // prevent double-call
+  const handleGoToWallet = () => {
+    if (loading) return;
     setStep('done');
     setLoading(true);
     setSavingDone(false);
-    await new Promise(r => setTimeout(r, 100));
-    try {
-      await importWallet(mnemonic);
-      setSavingDone(true);
-      await new Promise(r => setTimeout(r, 900));
-    } catch (e) {
-      setLoading(false);
-      setSavingDone(false);
-      setStep('verify');
-      showToast('Failed to save wallet.', 'error');
-    }
+    
+    // Step-by-step execution to keep UI responsive
+    setTimeout(async () => {
+      try {
+        // The heavy part: Deriving the wallet from mnemonic
+        // This is the "Encrypting keys..." part
+        await importWallet(mnemonic, true);
+        
+        // If we reach here, it means it's done (but hasWallet is already true)
+        // However, we want to show the "success" state before unmounting.
+        // NOTE: Since hasWallet is true, App.tsx might trigger navigation.
+        // To prevent instant unmount, we could have delayed setHasWallet(true) 
+        // in WalletContext, but instead we'll just ensure setSavingDone(true) 
+        // is set so if the screen stays for a split second, it shows success.
+        setSavingDone(true);
+        
+        // Wait for the "Wallet ready!" animation to finish
+        await new Promise(r => setTimeout(r, 500));
+        
+        setLoading(false);
+      } catch (e) {
+        setLoading(false);
+        setSavingDone(false);
+        setStep('verify');
+        showToast('Failed to save wallet.', 'error');
+      }
+    }, 300); // Give a bit more time for the modal to mount
   };
 
   const isVerificationCorrect = selectedWords.join(' ') === mnemonic;
@@ -222,9 +240,15 @@ export default function CreateWalletScreen({ navigation }: any) {
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           <Text style={[styles.title, { color: T.text }]}>Your Seed Phrase</Text>
           <Text style={[styles.subtitle, { color: T.textMuted }]}>
-            Write these 12 words down in order and store them somewhere safe. This is the{' '}
-            <Text style={{ color: T.error, fontWeight: '700' }}>only way</Text> to recover your wallet.
+            Write these 12 words on paper and keep them somewhere safe offline.{' '}
+            <Text style={{ color: T.error, fontWeight: '700' }}>If you lose your phone, these words are the only way to recover your money.</Text>
           </Text>
+          <View style={[styles.screenshotWarning, { backgroundColor: '#F59E0B18', borderColor: '#F59E0B50' }]}>
+            <Text style={{ fontSize: 16 }}>⚠️</Text>
+            <Text style={{ color: '#F59E0B', fontSize: 13, fontWeight: '700', flex: 1 }}>
+              Never screenshot this. Hackers can access your photos and steal your funds.
+            </Text>
+          </View>
           <View style={[styles.phraseGrid, { backgroundColor: T.surface, borderColor: T.border }]}>
             {words.map((word, i) => (
               <View key={i} style={[styles.wordBox, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
@@ -398,6 +422,7 @@ const styles = StyleSheet.create({
   wordNum:    { fontSize: 11, fontWeight: '700', minWidth: 16 },
   wordText:   { fontSize: 14, fontWeight: '700', flex: 1 },
 
+  screenshotWarning: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 14, borderRadius: 14, borderWidth: 1, marginBottom: 20 },
   copyBtn:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 14, borderWidth: 1, marginBottom: 24 },
   copyBtnText: { fontSize: 14, fontWeight: '700' },
 

@@ -10,6 +10,7 @@ import { ethereumService } from '../services/ethereumService';
 import { Theme } from '../constants';
 import Toast from '../components/Toast';
 import { LinearGradient } from 'expo-linear-gradient';
+import { haptics } from '../utils/haptics';
 
 export default function SendScreen({ navigation, route }: any) {
   const { ethBalance, sendETH, isDarkMode, walletAddress, network } = useWallet();
@@ -27,6 +28,7 @@ export default function SendScreen({ navigation, route }: any) {
   const [gasEth, setGasEth]             = useState('');
   const [showConfirm, setShowConfirm]   = useState(false);
   const [sending, setSending]           = useState(false);
+  const [sendStatus, setSendStatus]     = useState('');
   const [toast, setToast]               = useState({ visible: false, message: '', type: 'success' as 'success' | 'error' | 'info' });
 
   const btnScale   = useRef(new Animated.Value(1)).current;
@@ -53,16 +55,18 @@ export default function SendScreen({ navigation, route }: any) {
     setAddressError(/^0x[0-9a-fA-F]{40}$/.test(val) ? '' : 'Invalid Ethereum address');
   }, []);
 
-  const validateAmount = useCallback((val: string) => {
+  const validateAmount = useCallback((val: string, currentGasEth?: string) => {
     if (!val) { setAmountError(''); return; }
     const p = parseFloat(val);
     if (isNaN(p) || p <= 0) { setAmountError('Enter a valid amount'); return; }
     if (p > availBal)        { setAmountError(`Exceeds balance (${availBal.toFixed(6)} ETH)`); return; }
+    const gas = parseFloat(currentGasEth ?? gasEth) || 0.0005;
+    if (p + gas > availBal)  { setAmountError(`Insufficient for gas. Max sendable: ${Math.max(0, availBal - gas).toFixed(6)} ETH`); return; }
     setAmountError('');
-  }, [availBal]);
+  }, [availBal, gasEth]);
 
   useEffect(() => {
-    if (!address || !amount || addressError || amountError || !parsedAmount) {
+    if (!address || !amount || addressError || !parsedAmount) {
       setGasEth('');
       return;
     }
@@ -71,21 +75,26 @@ export default function SendScreen({ navigation, route }: any) {
       try {
         const { gasCostEth } = await ethereumService.estimateGas(walletAddress, address, amount, network);
         setGasEth(gasCostEth);
-      } catch {
+        // Re-validate amount now that we have a real gas estimate
+        validateAmount(amount, gasCostEth);
+      } catch (_e) {
         setGasEth('0.000042');
+        validateAmount(amount, '0.000042');
       } finally {
         setEstimating(false);
       }
-    }, 600); // debounce
+    }, 600);
     return () => clearTimeout(t);
-  }, [address, amount, addressError, amountError, walletAddress, network]);
+  }, [address, amount, addressError, walletAddress, network]);
 
   const handleReview = () => {
     let err = false;
     if (!address || !/^0x[0-9a-fA-F]{40}$/.test(address)) { setAddressError('Valid Ethereum address required'); err = true; }
     if (!amount || parsedAmount <= 0)                       { setAmountError('Enter a valid amount'); err = true; }
     else if (parsedAmount > availBal)                       { setAmountError('Insufficient balance'); err = true; }
-    if (err) return;
+    else if (parsedAmount + (gasEthNum || 0.0005) > availBal) { setAmountError(`Insufficient for gas. Max sendable: ${Math.max(0, availBal - (gasEthNum || 0.0005)).toFixed(6)} ETH`); err = true; }
+    if (err) { haptics.error(); return; }
+    haptics.selection();
 
     Animated.sequence([
       Animated.spring(btnScale, { toValue: 0.95, useNativeDriver: true, speed: 30, bounciness: 4 }),
@@ -112,17 +121,30 @@ export default function SendScreen({ navigation, route }: any) {
     if (sendingRef.current) return;
     sendingRef.current = true;
     setSending(true);
+    setSendStatus('Signing transaction...');
     setShowConfirm(false);
+
+    setTimeout(() => setSendStatus('Broadcasting to network...'), 1500);
+    setTimeout(() => setSendStatus('Waiting for confirmation...'), 4000);
 
     const result = await sendETH(address, amount);
     setSending(false);
+    setSendStatus('');
     sendingRef.current = false;
 
     if (result.success) {
-      showToast(`✓ Sent! Tx: ${result.hash?.slice(0, 14)}...`, 'success');
+      haptics.success();
+      showToast(`ETH sent! Your transaction is on its way. ✓`, 'success');
       setTimeout(() => navigation.goBack(), 2200);
     } else {
-      showToast(result.error ?? 'Transfer failed. Please try again.', 'error');
+      haptics.error();
+      // Plain English error messages
+      let msg = result.error ?? 'Transfer failed. Please try again.';
+      if (msg.includes('insufficient funds')) msg = 'Not enough ETH to cover gas fees. Add more ETH to your wallet.';
+      else if (msg.includes('nonce')) msg = 'Transaction conflict. Please try again in a moment.';
+      else if (msg.includes('gas')) msg = 'Gas estimation failed. Network may be busy. Try again.';
+      else if (msg.includes('network') || msg.includes('timeout')) msg = 'No internet connection. Check your connection and try again.';
+      showToast(msg, 'error');
     }
   };
 
@@ -162,7 +184,7 @@ export default function SendScreen({ navigation, route }: any) {
               ))}
               <View style={styles.detailDivider} />
               <View style={styles.detailRow}>
-                <Text style={styles.totalLabel}>Total to pay</Text>
+                <Text style={styles.totalLabel}>Total Deducted from Wallet</Text>
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={styles.totalValue}>{totalETH} ETH</Text>
                   <Text style={styles.totalSub}>${totalUSD}</Text>
@@ -239,14 +261,14 @@ export default function SendScreen({ navigation, route }: any) {
         <View style={styles.section}>
           <View style={styles.labelRow}>
             <Text style={styles.sectionLabel}>AMOUNT TO SEND</Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => {
                 const gasBuf = gasEth ? parseFloat(gasEth) : 0.0005;
                 const maxAmt = Math.max(0, availBal - gasBuf);
                 if (maxAmt > 0) {
                   const s = maxAmt.toFixed(6);
                   setAmount(s);
-                  validateAmount(s);
+                  validateAmount(s, gasEth || '0.0005');
                 }
               }}
             >
@@ -261,7 +283,7 @@ export default function SendScreen({ navigation, route }: any) {
                 placeholder="0.00"
                 placeholderTextColor={T.textDim}
                 value={amount}
-                onChangeText={val => { setAmount(val); validateAmount(val); }}
+                onChangeText={val => { setAmount(val); validateAmount(val, gasEth); }}
                 keyboardType="decimal-pad"
               />
               <Text style={styles.ethBrand}>ETH</Text>
@@ -279,7 +301,12 @@ export default function SendScreen({ navigation, route }: any) {
               <View style={styles.gasIconBox}>
                  <MaterialIcons name="local-gas-station" size={16} color={T.primary} />
               </View>
-              <Text style={styles.gasTitle}>Network Estimation</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.gasTitle}>Network Fee</Text>
+                <Text style={{ color: T.textDim, fontSize: 11, fontWeight: '500', marginTop: 1 }}>
+                  A small fee paid to process your transaction on the blockchain
+                </Text>
+              </View>
            </View>
            
            <View style={styles.gasRow}>
@@ -310,7 +337,10 @@ export default function SendScreen({ navigation, route }: any) {
             activeOpacity={0.8}
           >
             {sending ? (
-               <ActivityIndicator color="#FFF" />
+               <View style={{ alignItems: 'center', gap: 6 }}>
+                 <ActivityIndicator color="#FFF" />
+                 {!!sendStatus && <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '600' }}>{sendStatus}</Text>}
+               </View>
             ) : (
               <LinearGradient
                 colors={canReview ? [T.primary, '#D32F2F'] : ['#2A2B31', '#2A2B31']}

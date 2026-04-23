@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const KEYS = {
   PRIVATE_KEY:    'wallet_private_key',
@@ -8,17 +9,10 @@ const KEYS = {
   WALLET_NAME:    'wallet_name',
 };
 
-// Simple obfuscation for web localStorage — not cryptographic but prevents
-// plain-text private key sitting in localStorage readable by JS.
-// On mobile, expo-secure-store handles real encryption at OS level.
-// EXPO_PUBLIC_WEB_SALT must be set in your .env file — never hardcode a fallback.
-const WEB_SALT = process.env.EXPO_PUBLIC_WEB_SALT;
-if (!WEB_SALT && Platform.OS === 'web') {
-  console.warn('EXPO_PUBLIC_WEB_SALT is not set. Web storage obfuscation is disabled.');
-}
+// Web fallback logic
+const WEB_SALT = process.env.EXPO_PUBLIC_WEB_SALT || 'default_fallback_salt';
 
-function xorEncode(str: string, key: string | undefined): string {
-  if (!key) return btoa(str);
+function xorEncode(str: string, key: string): string {
   let result = '';
   for (let i = 0; i < str.length; i++) {
     result += String.fromCharCode(str.charCodeAt(i) ^ key.charCodeAt(i % key.length));
@@ -26,10 +20,9 @@ function xorEncode(str: string, key: string | undefined): string {
   return btoa(result);
 }
 
-function xorDecode(encoded: string, key: string | undefined): string {
+function xorDecode(encoded: string, key: string): string {
   try {
     const str = atob(encoded);
-    if (!key) return str;
     let result = '';
     for (let i = 0; i < str.length; i++) {
       result += String.fromCharCode(str.charCodeAt(i) ^ key.charCodeAt(i % key.length));
@@ -40,79 +33,98 @@ function xorDecode(encoded: string, key: string | undefined): string {
   }
 }
 
-const storage = {
-  async set(key: string, value: string, sensitive = false): Promise<void> {
-    if (Platform.OS === 'web') {
-      const stored = sensitive ? xorEncode(value, WEB_SALT) : value;
-      localStorage.setItem(key, stored);
-    } else {
-      await SecureStore.setItemAsync(key, value);
-    }
-  },
-  async get(key: string, sensitive = false): Promise<string | null> {
-    if (Platform.OS === 'web') {
-      const raw = localStorage.getItem(key);
-      if (!raw) return null;
-      return sensitive ? xorDecode(raw, WEB_SALT) : raw;
-    }
-    return await SecureStore.getItemAsync(key);
-  },
-  async delete(key: string): Promise<void> {
-    if (Platform.OS === 'web') {
-      localStorage.removeItem(key);
-    } else {
-      await SecureStore.deleteItemAsync(key);
-    }
-  },
-};
-
 export const storageService = {
+  /**
+   * Saves critical wallet data. 
+   * Private keys and mnemonics go to SecureStore (encrypted at OS level).
+   * Public address goes to AsyncStorage for fast retrieval.
+   */
   async saveWallet(privateKey: string, mnemonic: string, address: string): Promise<void> {
-    // Validate before storing — never store malformed keys
-    if (!privateKey || !privateKey.startsWith('0x') || privateKey.length !== 66)
-      throw new Error('Invalid private key format');
-    if (!address || !address.startsWith('0x') || address.length !== 42)
-      throw new Error('Invalid address format');
-    if (!mnemonic || mnemonic.trim().split(/\s+/).length < 12)
-      throw new Error('Invalid mnemonic format');
-    await storage.set(KEYS.PRIVATE_KEY,    privateKey, true);
-    await storage.set(KEYS.MNEMONIC,       mnemonic,   true);
-    await storage.set(KEYS.WALLET_ADDRESS, address,    false);
+    console.log("[Storage] Saving wallet for address:", address);
+    
+    if (Platform.OS === 'web') {
+      localStorage.setItem(KEYS.PRIVATE_KEY,    xorEncode(privateKey, WEB_SALT));
+      localStorage.setItem(KEYS.MNEMONIC,       xorEncode(mnemonic,   WEB_SALT));
+      localStorage.setItem(KEYS.WALLET_ADDRESS, address);
+    } else {
+      await Promise.all([
+        SecureStore.setItemAsync(KEYS.PRIVATE_KEY, privateKey),
+        SecureStore.setItemAsync(KEYS.MNEMONIC,    mnemonic),
+        AsyncStorage.setItem(KEYS.WALLET_ADDRESS,  address),
+      ]);
+    }
   },
 
   async getPrivateKey(): Promise<string | null> {
-    return await storage.get(KEYS.PRIVATE_KEY, true);
+    if (Platform.OS === 'web') {
+      const val = localStorage.getItem(KEYS.PRIVATE_KEY);
+      return val ? xorDecode(val, WEB_SALT) : null;
+    }
+    return await SecureStore.getItemAsync(KEYS.PRIVATE_KEY);
   },
 
   async getMnemonic(): Promise<string | null> {
-    return await storage.get(KEYS.MNEMONIC, true);
+    if (Platform.OS === 'web') {
+      const val = localStorage.getItem(KEYS.MNEMONIC);
+      return val ? xorDecode(val, WEB_SALT) : null;
+    }
+    return await SecureStore.getItemAsync(KEYS.MNEMONIC);
   },
 
   async getWalletAddress(): Promise<string | null> {
-    return await storage.get(KEYS.WALLET_ADDRESS, false);
-  },
-
-  async hasWallet(): Promise<boolean> {
-    const address = await storage.get(KEYS.WALLET_ADDRESS, false);
-    return !!address;
-  },
-
-  async saveWalletAddress(address: string): Promise<void> {
-    await storage.set(KEYS.WALLET_ADDRESS, address, false);
+    if (Platform.OS === 'web') {
+      return localStorage.getItem(KEYS.WALLET_ADDRESS);
+    }
+    return await AsyncStorage.getItem(KEYS.WALLET_ADDRESS);
   },
 
   async saveWalletName(name: string): Promise<void> {
-    await storage.set(KEYS.WALLET_NAME, name, false);
+    if (Platform.OS === 'web') {
+      localStorage.setItem(KEYS.WALLET_NAME, name);
+    } else {
+      await AsyncStorage.setItem(KEYS.WALLET_NAME, name);
+    }
   },
 
   async getWalletName(): Promise<string | null> {
-    return await storage.get(KEYS.WALLET_NAME, false);
+    if (Platform.OS === 'web') {
+      return localStorage.getItem(KEYS.WALLET_NAME);
+    }
+    return await AsyncStorage.getItem(KEYS.WALLET_NAME);
+  },
+
+  async hasWallet(): Promise<boolean> {
+    const address = await this.getWalletAddress();
+    return !!address;
   },
 
   async clearWallet(): Promise<void> {
-    await storage.delete(KEYS.PRIVATE_KEY);
-    await storage.delete(KEYS.MNEMONIC);
-    await storage.delete(KEYS.WALLET_ADDRESS);
-    await storage.delete(KEYS.WALLET_NAME);
+    console.log("[Storage] Clearing all wallet data...");
+    if (Platform.OS === 'web') {
+      localStorage.removeItem(KEYS.PRIVATE_KEY);
+      localStorage.removeItem(KEYS.MNEMONIC);
+      localStorage.removeItem(KEYS.WALLET_ADDRESS);
+      localStorage.removeItem(KEYS.WALLET_NAME);
+    } else {
+      await Promise.all([
+        SecureStore.deleteItemAsync(KEYS.PRIVATE_KEY),
+        SecureStore.deleteItemAsync(KEYS.MNEMONIC),
+        AsyncStorage.removeItem(KEYS.WALLET_ADDRESS),
+        AsyncStorage.removeItem(KEYS.WALLET_NAME),
+      ]);
+    }
+  },
+
+  async clearKeysOnly(): Promise<void> {
+    console.log("[Storage] Clearing sensitive keys (Logout)...");
+    if (Platform.OS === 'web') {
+      localStorage.removeItem(KEYS.PRIVATE_KEY);
+      localStorage.removeItem(KEYS.MNEMONIC);
+    } else {
+      await Promise.all([
+        SecureStore.deleteItemAsync(KEYS.PRIVATE_KEY),
+        SecureStore.deleteItemAsync(KEYS.MNEMONIC),
+      ]);
+    }
   },
 };

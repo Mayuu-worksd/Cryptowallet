@@ -1,23 +1,15 @@
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode, useCallback, useMemo } from 'react';
-import { Platform } from 'react-native';
-
-let AsyncStorage: any;
-if (Platform.OS === 'web') {
-  AsyncStorage = {
-    getItem:     async (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
-    setItem:     async (k: string, v: string) => { try { localStorage.setItem(k, v); } catch {} },
-    removeItem:  async (k: string) => { try { localStorage.removeItem(k); } catch {} },
-    multiRemove: async (keys: string[]) => { try { keys.forEach(k => localStorage.removeItem(k)); } catch {} },
-  };
-} else {
-  AsyncStorage = require('@react-native-async-storage/async-storage').default;
-}
+import { Platform, AppState, AppStateStatus } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { walletService } from '../services/walletService';
 import { ethereumService } from '../services/ethereumService';
+import { getWalletBalances } from '../services/balanceService';
 import { storageService } from '../services/storageService';
 import { marketService, NewsItem } from '../services/marketService';
 import { hasPinSetup, clearPin } from '../services/pinService';
+import { transactionService } from '../services/transactionService';
+import { cardService } from '../services/cardService';
 import { DEFAULT_NETWORK } from '../constants';
 
 export type Transaction = {
@@ -27,7 +19,7 @@ export type Transaction = {
   amount: string;
   usdValue: string;
   address: string;
-  status: 'success' | 'pending' | 'failed';
+  status: 'success' | 'pending' | 'failed' | 'completed';
   date: string;
   txHash?: string;
 };
@@ -44,6 +36,19 @@ export type CardTransaction = {
 };
 
 export type CoinPrice = { usd: number; change24h: number };
+
+type MarketContextType = {
+  prices: Record<string, CoinPrice>;
+  isPricesLoading: boolean;
+  priceError: boolean;
+  news: NewsItem[];
+  isNewsLoading: boolean;
+  refreshPrices: () => Promise<void>;
+  refreshNews: () => Promise<void>;
+};
+
+const MarketContext = createContext<MarketContextType>({} as MarketContextType);
+export const useMarket = () => useContext(MarketContext);
 
 type WalletContextType = {
   isDarkMode: boolean;
@@ -66,13 +71,14 @@ type WalletContextType = {
   refreshPinEnabled: () => Promise<void>;
   generateMnemonic: () => string;
   createWallet: () => Promise<{ mnemonic: string; address: string }>;
-  importWallet: (mnemonic: string) => Promise<void>;
+  importWallet: (mnemonic: string, isNew?: boolean) => Promise<void>;
   deleteWallet: () => Promise<void>;
   refreshBalance: () => Promise<void>;
+  fetchBalance: (address: string, net: string) => Promise<void>;
   sendETH: (toAddress: string, amount: string) => Promise<{ success: boolean; error?: string; hash?: string }>;
   sendCrypto: (coin: string, amount: number, label: string) => void;
   topupCard: (coin: string, amount: number) => boolean;
-  spendCard: (amount: number, label: string) => boolean;
+  spendCard: (coin: string, amountUSD: number, label: string) => boolean;
   toggleFreezeCard: () => void;
   cardTransactions: CardTransaction[];
   cardDetails: { number: string; expiry: string; cvv: string; brand: 'VISA' | 'MASTERCARD'; holderName: string; design: string };
@@ -80,6 +86,7 @@ type WalletContextType = {
   createCard: (holderName: string, design: string) => void;
   updateCardDetails: (patch: { holderName?: string; design?: string }) => void;
   generateCardDetails: () => void;
+  applySwapBalances: (sellToken: string, sellAmt: number, buyToken: string, buyAmt: number) => Promise<void>;
   switchNetwork: (n: string) => void;
 };
 
@@ -89,44 +96,12 @@ const FALLBACK_PRICES: Record<string, CoinPrice> = {
   ETH:   { usd: 3450,  change24h: 0 },
   BTC:   { usd: 64000, change24h: 0 },
   USDT:  { usd: 1,     change24h: 0 },
+  USDC:  { usd: 1,     change24h: 0 },
+  DAI:   { usd: 1,     change24h: 0 },
   SOL:   { usd: 180,   change24h: 0 },
   MATIC: { usd: 0.85,  change24h: 0 },
   BNB:   { usd: 580,   change24h: 0 },
 };
-
-export function formatUSD(value: number): string {
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
-  if (value >= 1_000)     return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  if (value >= 1)         return `$${value.toFixed(2)}`;
-  return `$${value.toFixed(4)}`;
-}
-
-export function formatCrypto(value: number, symbol: string): string {
-  if (value === 0)       return `0 ${symbol}`;
-  if (value < 0.000001) return `<0.000001 ${symbol}`;
-  if (value < 0.01)     return `${value.toFixed(6)} ${symbol}`;
-  if (value < 1)        return `${value.toFixed(4)} ${symbol}`;
-  return `${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} ${symbol}`;
-}
-
-export function formatPrice(usd: number): string {
-  if (usd >= 1000) return `$${usd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  if (usd >= 1)    return `$${usd.toFixed(4)}`;
-  return `$${usd.toFixed(6)}`;
-}
-
-type MarketContextType = {
-  prices: Record<string, CoinPrice>;
-  isPricesLoading: boolean;
-  priceError: boolean;
-  news: NewsItem[];
-  isNewsLoading: boolean;
-  refreshPrices: () => Promise<void>;
-  refreshNews: () => Promise<void>;
-};
-
-const MarketContext = createContext<MarketContextType>({} as MarketContextType);
-export const useMarket = () => useContext(MarketContext);
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [isDarkMode,       setIsDarkMode]       = useState(true);
@@ -152,20 +127,34 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   });
   const [network,         setNetworkState]  = useState(DEFAULT_NETWORK);
   const [transactions,    setTransactions]  = useState<Transaction[]>([]);
-  const [balances,        setBalances]      = useState<Record<string, number>>({ ETH: 0, USDT: 0, BTC: 0, SOL: 0 });
+  const [balances, setBalances] = useState<Record<string, number>>({
+    ETH: 0, USDC: 0, USDT: 0, DAI: 0, BTC: 0, SOL: 0, CUSTOM: 0
+  });
   const [prices,          setPrices]        = useState<Record<string, CoinPrice>>(FALLBACK_PRICES);
   const [isPricesLoading, setIsPricesLoading] = useState(true);
   const [priceError,      setPriceError]    = useState(false);
   const [news,            setNews]          = useState<NewsItem[]>([]);
   const [isNewsLoading,   setIsNewsLoading] = useState(true);
 
-  const dataLoaded       = useRef(false);
-  const priceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const newsIntervalRef  = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [dataLoaded,     setDataLoaded]     = useState(false);
+  const pendingAddressRef  = useRef<{ address: string; net: string } | null>(null);
+  const ethBalanceRef      = useRef('0.0');
+  const balancesRef        = useRef<Record<string, number>>({ ETH: 0, USDT: 0, USDC: 0, DAI: 0, BTC: 0, SOL: 0 });
+  const priceIntervalRef   = useRef<ReturnType<typeof setInterval> | null>(null);
+  const newsIntervalRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  const balanceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => { ethBalanceRef.current = ethBalance; }, [ethBalance]);
 
   const toggleTheme          = useCallback(() => setIsDarkMode(p => !p), []);
   const toggleBalanceVisible = useCallback(() => setBalanceVisible(p => !p), []);
-  const toggleFreezeCard     = useCallback(() => setCardFrozen(p => !p), []);
+  const toggleFreezeCard     = useCallback(() => {
+    setCardFrozen(p => {
+      const newVal = !p;
+      cardService.setCardFrozen(newVal);
+      return newVal;
+    });
+  }, []);
 
   const refreshPinEnabled = useCallback(async () => {
     setPinEnabled(await hasPinSetup());
@@ -173,51 +162,228 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { refreshPinEnabled(); }, []);
 
-  // Persist on mount
-  useEffect(() => {
-    (async () => {
-      try {
-        const [savedTxs, savedCard, savedDetails, savedCardTxs, savedCreated] = await Promise.all([
-          AsyncStorage.getItem('cw_transactions'),
-          AsyncStorage.getItem('cw_card_balance'),
-          AsyncStorage.getItem('cw_card_details'),
-          AsyncStorage.getItem('cw_card_transactions'),
-          AsyncStorage.getItem('cw_card_created'),
-        ]);
-        if (savedTxs)     setTransactions(JSON.parse(savedTxs));
-        if (savedCard)    setCardBalance(parseFloat(savedCard));
-        if (savedCardTxs) setCardTransactions(JSON.parse(savedCardTxs));
-        if (savedCreated) setCardCreated(savedCreated === 'true');
-        if (savedDetails) setCardDetails(JSON.parse(savedDetails));
-      } catch {}
-      dataLoaded.current = true;
-    })();
+  const addTx = useCallback((tx: Omit<Transaction, 'id' | 'date'>) => {
+    setTransactions(prev => [{
+      ...tx,
+      id:   Date.now().toString(),
+      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    }, ...prev]);
   }, []);
 
-  useEffect(() => { if (!dataLoaded.current) return; AsyncStorage.setItem('cw_transactions', JSON.stringify(transactions)).catch(() => {}); }, [transactions]);
-  useEffect(() => { if (!dataLoaded.current) return; AsyncStorage.setItem('cw_card_balance', String(cardBalance)).catch(() => {}); }, [cardBalance]);
-  useEffect(() => { if (!dataLoaded.current) return; AsyncStorage.setItem('cw_card_transactions', JSON.stringify(cardTransactions)).catch(() => {}); }, [cardTransactions]);
+  const addCardTx = useCallback((tx: Omit<CardTransaction, 'id' | 'timestamp'>) => {
+    setCardTransactions(prev => [{ ...tx, id: Date.now().toString(), timestamp: new Date().toISOString() }, ...prev]);
+  }, []);
 
-  // Prices & news
+  useEffect(() => {
+    const startup = async () => {
+      console.log("[Startup] Checking for existing wallet...");
+      try {
+        const address = await storageService.getWalletAddress();
+        
+        if (address) {
+          console.log("Wallet Loaded:", address);
+          console.log("Stored Address:", address);
+          
+          setWalletAddress(address);
+          setHasWallet(true);
+          
+          const [savedName, savedTxs, savedCard, savedDetails, savedCardCreated, savedTokenBals, savedFrozen] = await Promise.all([
+            storageService.getWalletName(),
+            AsyncStorage.getItem('cw_transactions'),
+            AsyncStorage.getItem('cw_card_balance'),
+            AsyncStorage.getItem('cw_card_details'),
+            AsyncStorage.getItem('cw_card_created'),
+            AsyncStorage.getItem('cw_token_balances'),
+            cardService.getCardFrozen(),
+          ]);
+
+          if (savedName) setWalletNameState(savedName);
+          if (savedTxs)  setTransactions(JSON.parse(savedTxs));
+          if (savedCard) setCardBalance(parseFloat(savedCard));
+          if (savedDetails) setCardDetails(JSON.parse(savedDetails));
+          if (savedCardCreated) setCardCreated(savedCardCreated === 'true');
+          setCardFrozen(savedFrozen);
+          if (savedTokenBals) {
+            const parsed = JSON.parse(savedTokenBals);
+            setBalances(parsed);
+            balancesRef.current = parsed;
+          }
+
+          // 3. Auto-Healing: Restore balances from transaction history if missing
+          if (savedTxs) {
+            const txs: any[] = JSON.parse(savedTxs);
+            const heals: Record<string, number> = {};
+            txs.forEach(t => {
+              const isSuccess = t.status === 'success' || t.status === 'completed';
+              if (isSuccess && t.type === 'swap') {
+                // For a swap, we gain the 'buyToken' amount
+                const buyAmt = parseFloat(t.buyAmount);
+                const sellAmt = parseFloat(t.amount);
+                const buyTok = t.buyToken;
+                const sellTok = t.coin;
+                
+                if (!isNaN(buyAmt) && buyTok) {
+                  heals[buyTok] = (heals[buyTok] || 0) + buyAmt;
+                }
+                if (!isNaN(sellAmt) && sellTok) {
+                  heals[sellTok] = (heals[sellTok] || 0) - sellAmt;
+                }
+              }
+            });
+            
+            setBalances(prev => {
+              const next = { ...prev };
+              Object.entries(heals).forEach(([coin, val]) => {
+                // If current balance is 0 or missing, apply the healing from history
+                if (!next[coin] || next[coin] === 0) {
+                  // We use Math.max(0, ...) for the sell side to avoid negative balances
+                  next[coin] = Math.max(0, (next[coin] || 0) + val);
+                }
+              });
+              balancesRef.current = next;
+              return next;
+            });
+          }
+
+          pendingAddressRef.current = { address, net: network };
+        } else {
+          setHasWallet(false);
+        }
+      } catch (e) {
+        console.error("[Startup] Error loading wallet:", e);
+      } finally {
+        setIsLoadingWallet(false);
+        setDataLoaded(true);
+      }
+    };
+    startup();
+  }, []);
+
+  const fetchBalance = useCallback(async (address: string, net: string) => {
+    setIsLoadingBalance(true);
+    try {
+      const onChain = await getWalletBalances(address, net, balancesRef.current);
+      setEthBalance(onChain.ETH.toFixed(6));
+      ethBalanceRef.current = onChain.ETH.toFixed(6);
+      setBalances(onChain);
+      balancesRef.current = onChain;
+      await AsyncStorage.setItem('cw_token_balances', JSON.stringify(onChain));
+    } catch (e) {
+      console.error('[WalletContext] Balance fetch error:', e);
+    } finally {
+      setIsLoadingBalance(false);
+    }
+  }, []);
+
+  const refreshBalance = useCallback(async () => {
+    if (walletAddress) {
+      await fetchBalance(walletAddress, network);
+      // Also trigger a history sync in the background
+      transactionService.syncIncoming(walletAddress, network, prices.ETH?.usd ?? 3500).catch(() => {});
+    }
+  }, [walletAddress, network, fetchBalance]);
+
+  useEffect(() => {
+    if (dataLoaded && pendingAddressRef.current) {
+      const { address, net } = pendingAddressRef.current;
+      pendingAddressRef.current = null;
+      fetchBalance(address, net);
+      // FORCE A DEEP SCAN ON STARTUP AND UPDATE UI INSTANTLY
+      transactionService.syncIncoming(address, net, prices.ETH?.usd ?? 3500)
+        .then(newTxs => {
+          if (Array.isArray(newTxs) && newTxs.length > 0) {
+            setTransactions(prev => {
+              // Merge and deduplicate
+              const existingHashes = new Set(prev.map(t => t.txHash).filter(Boolean));
+              const uniqueNew = newTxs.filter((t: any) => !t.txHash || !existingHashes.has(t.txHash));
+              return [...uniqueNew, ...prev];
+            });
+          }
+        })
+        .catch(() => {});
+    }
+  }, [dataLoaded, fetchBalance]);
+
+  // ─── 4. Live Balance Healer: Watch history and heal balances reactively ───
+  useEffect(() => {
+    if (transactions.length > 0) {
+      console.log('[HEALER] Scanning', transactions.length, 'transactions for custom assets...');
+      const heals: Record<string, number> = {};
+      transactions.forEach(t => {
+        const isSuccess = t.status === 'success' || t.status === 'completed';
+        if (!isSuccess) return;
+
+        const txAny = t as any;
+        const isCustom = txAny.contractAddress?.toLowerCase() === '0x351028A22C876E0431b30921c0dD0a836a14899E'.toLowerCase() || t.coin === 'CUSTOM';
+        
+        if (isCustom) {
+          const amt = parseFloat(txAny.buyAmount || t.amount);
+          if (!isNaN(amt)) {
+            const isIncoming = t.type === 'received' || t.type === 'swap';
+            const change = isIncoming ? amt : -amt;
+            heals['CUSTOM'] = (heals['CUSTOM'] || 0) + change;
+            console.log(`[HEALER] Found CUSTOM activity: ${t.type} ${amt} (Net: ${heals['CUSTOM']})`);
+          }
+        } else if (t.type === 'swap') {
+          const buyTok = txAny.buyToken || (t.coin === 'ETH' ? (t.address.split('→')[1]?.trim()) : t.coin);
+          const buyAmt = parseFloat(txAny.buyAmount || t.amount);
+          if (!isNaN(buyAmt) && buyTok && buyTok !== 'ETH') {
+            heals[buyTok] = (heals[buyTok] || 0) + buyAmt;
+          }
+        }
+      });
+
+      if (Object.keys(heals).length > 0) {
+        console.log('[HEALER] Applying recovered balances:', heals);
+        setBalances(prev => {
+          let changed = false;
+          const next = { ...prev };
+          Object.entries(heals).forEach(([coin, val]) => {
+            if (next[coin] !== val) {
+              next[coin] = val;
+              changed = true;
+            }
+          });
+          if (changed) {
+            balancesRef.current = next;
+            AsyncStorage.setItem('cw_token_balances', JSON.stringify(next)).catch(() => {});
+            return next;
+          }
+          return prev;
+        });
+      }
+    }
+  }, [transactions]);
+
+  useEffect(() => { 
+    if (!dataLoaded || !hasWallet) return;
+    AsyncStorage.setItem('cw_transactions', JSON.stringify(transactions)).catch(() => {});
+  }, [transactions, dataLoaded, hasWallet]);
+
+  useEffect(() => {
+    if (!dataLoaded || !hasWallet) return;
+    AsyncStorage.setItem('cw_card_balance', String(cardBalance)).catch(() => {});
+  }, [cardBalance, dataLoaded, hasWallet]);
+
+  useEffect(() => {
+    if (!dataLoaded || !hasWallet) return;
+    AsyncStorage.setItem('cw_card_transactions', JSON.stringify(cardTransactions)).catch(() => {});
+  }, [cardTransactions, dataLoaded, hasWallet]);
+
   const fetchPrices = useCallback(async () => {
     try {
       setPriceError(false);
       const data = await marketService.fetchPrices();
       if (Object.keys(data).length > 0) setPrices(prev => ({ ...prev, ...data }));
-      else setPriceError(true);
-    } catch { setPriceError(true); }
+    } catch (_e) { setPriceError(true); }
     finally { setIsPricesLoading(false); }
   }, []);
 
-  const refreshPrices = useCallback(async () => { setIsPricesLoading(true); await fetchPrices(); }, [fetchPrices]);
-
   const fetchNews = useCallback(async () => {
     setIsNewsLoading(true);
-    try { setNews(await marketService.fetchNews()); } catch {}
+    try { setNews(await marketService.fetchNews()); } catch (_e) {}
     finally { setIsNewsLoading(false); }
   }, []);
-
-  const refreshNews = useCallback(async () => { await fetchNews(); }, [fetchNews]);
 
   useEffect(() => {
     fetchPrices();
@@ -230,231 +396,177 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     };
   }, [fetchPrices, fetchNews]);
 
-  // Balance
-  const fetchBalance = useCallback(async (address: string, net: string) => {
-    setIsLoadingBalance(true);
-    try {
-      const [ethBal, usdtBal] = await Promise.all([
-        ethereumService.getETHBalance(address, net),
-        ethereumService.getTokenBalance(address, 'USDT', net),
-      ]);
-      const parsed = parseFloat(ethBal);
-      setEthBalance(parsed.toFixed(6));
-      setBalances(prev => ({ ...prev, ETH: parsed, USDT: usdtBal }));
-    } catch (e) { console.error('Balance error:', e); }
-    finally { setIsLoadingBalance(false); }
-  }, []);
-
-  const refreshBalance = useCallback(async () => {
-    if (walletAddress) await fetchBalance(walletAddress, network);
-  }, [walletAddress, network, fetchBalance]);
-
-  // Wallet load
-  useEffect(() => {
-    (async () => {
-      try {
-        const exists = await walletService.walletExists();
-        if (exists) {
-          const address   = await storageService.getWalletAddress();
-          const savedName = await storageService.getWalletName();
-          if (address) {
-            setWalletAddress(address);
-            setHasWallet(true);
-            if (savedName) setWalletNameState(savedName);
-            fetchBalance(address, DEFAULT_NETWORK);
-          }
-        }
-      } catch (e) { console.error('Wallet load error:', e); }
-      finally { setIsLoadingWallet(false); }
-    })();
-  }, []);
-
-  useEffect(() => {
-    if (!walletAddress) return;
-    const interval = setInterval(() => fetchBalance(walletAddress, network), 30_000);
-    return () => clearInterval(interval);
-  }, [walletAddress, network, fetchBalance]);
-
-  // Wallet actions
   const handleSetWalletName = useCallback(async (name: string) => {
     setWalletNameState(name);
     await storageService.saveWalletName(name);
   }, []);
 
-  const addTx = useCallback((tx: Omit<Transaction, 'id' | 'date'>) => {
-    setTransactions(prev => [{
-      ...tx,
-      id:   Date.now().toString(),
-      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-    }, ...prev]);
-  }, []);
-
   const createWallet = useCallback(async (): Promise<{ mnemonic: string; address: string }> => {
-    // generateWalletPreview returns mnemonic+address for display only (no storage).
-    // Actual storage happens in importWallet() after the user verifies their phrase.
     return walletService.generateWalletPreview();
   }, []);
 
-  const importWallet = useCallback(async (mnemonic: string): Promise<void> => {
-    const data = await walletService.importFromMnemonic(mnemonic);
-    await clearPin();
-    setPinEnabled(false);
-    setWalletAddress(data.address);
-    setHasWallet(true);
-
-    // Restore saved wallet name — don't overwrite with hardcoded 'Main Wallet'
-    const savedName = await storageService.getWalletName();
-    if (savedName) {
-      setWalletNameState(savedName);
-    } else {
-      setWalletNameState('Main Wallet');
-      await storageService.saveWalletName('Main Wallet');
-    }
-
-    // Reload card data from storage so existing card is not lost after import
+  const importWallet = useCallback(async (mnemonic: string, isNew = false): Promise<void> => {
     try {
-      const [savedCard, savedDetails, savedCardTxs, savedCreated, savedTxs] = await Promise.all([
-        AsyncStorage.getItem('cw_card_balance'),
-        AsyncStorage.getItem('cw_card_details'),
-        AsyncStorage.getItem('cw_card_transactions'),
-        AsyncStorage.getItem('cw_card_created'),
-        AsyncStorage.getItem('cw_transactions'),
-      ]);
-      if (savedCreated) setCardCreated(savedCreated === 'true');
-      if (savedDetails) setCardDetails(JSON.parse(savedDetails));
-      if (savedCard)    setCardBalance(parseFloat(savedCard));
-      if (savedCardTxs) setCardTransactions(JSON.parse(savedCardTxs));
-      if (savedTxs)     setTransactions(JSON.parse(savedTxs));
-    } catch {}
+      const data = await walletService.importFromMnemonic(mnemonic);
+      const oldAddress = await storageService.getWalletAddress();
+      const isSwitching = oldAddress && oldAddress.toLowerCase() !== data.address.toLowerCase();
 
-    fetchBalance(data.address, network);
-  }, [network, fetchBalance]);
+      // Only wipe data if explicitly requested OR if switching to a totally different wallet
+      if (isNew || isSwitching) {
+        await storageService.clearWallet();
+        await AsyncStorage.multiRemove([
+          'cw_transactions', 'cw_card_balance', 'cw_card_details',
+          'cw_card_transactions', 'cw_card_created', 'cw_token_balances'
+        ]);
+        setTransactions([]);
+        setCardBalance(0);
+        setCardCreated(false);
+        setCardTransactions([]);
+        setBalances({ ETH: 0, USDT: 0, USDC: 0, DAI: 0, BTC: 0, SOL: 0 });
+        setEthBalance('0.0');
+      }
+
+      await storageService.saveWallet(data.privateKey, data.mnemonic, data.address);
+      const finalName = isNew ? 'Main Wallet' : (await storageService.getWalletName() || 'Main Wallet');
+      await storageService.saveWalletName(finalName);
+
+      await clearPin();
+      setPinEnabled(false);
+      setWalletAddress(data.address);
+      setWalletNameState(finalName);
+      setHasWallet(true);
+
+      (async () => {
+        try {
+          await fetchBalance(data.address, network);
+          await transactionService.syncIncoming(data.address, network, prices.ETH?.usd ?? 3500);
+        } catch (e) {}
+      })();
+    } catch (e: any) {
+      throw new Error(e.message || 'Invalid seed phrase. Please try again.');
+    }
+  }, [network, prices.ETH?.usd, fetchBalance]);
 
   const deleteWallet = useCallback(async (): Promise<void> => {
-    await walletService.deleteWallet();
+    // This is now a "Logout" - it preserves history but removes keys
+    await storageService.clearKeysOnly(); // Custom method to only wipe privateKey/mnemonic
+    setHasWallet(false);
+    setWalletAddress('');
+    setPinEnabled(false);
+  }, []);
+
+  const factoryReset = useCallback(async (): Promise<void> => {
+    // This is the "Nuclear" option
+    await storageService.clearWallet();
     await clearPin();
-    await AsyncStorage.multiRemove(['cw_transactions', 'cw_card_balance', 'cw_card_details', 'cw_card_transactions', 'cw_card_created']);
-    setCardTransactions([]);
-    setCardCreated(false);
+    await AsyncStorage.multiRemove([
+      'cw_transactions', 'cw_card_balance', 'cw_card_details',
+      'cw_card_transactions', 'cw_card_created', 'cw_token_balances'
+    ]);
+    setHasWallet(false);
     setWalletAddress('');
     setEthBalance('0.0');
-    setHasWallet(false);
     setTransactions([]);
     setCardBalance(0);
-    setWalletNameState('Account 1');
-    setBalances({ ETH: 0, USDT: 0, BTC: 0, SOL: 0 });
-    setCardDetails({
-      number: '\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022',
-      expiry: '\u2022\u2022/\u2022\u2022',
-      cvv: '\u2022\u2022\u2022',
-      brand: 'VISA',
-      holderName: 'CARD HOLDER',
-      design: 'dark',
-    });
+    setCardCreated(false);
+    setCardTransactions([]);
     setPinEnabled(false);
   }, []);
 
   const sendETH = useCallback(async (toAddress: string, amount: string): Promise<{ success: boolean; error?: string; hash?: string }> => {
-    if (!walletService.isValidAddress(toAddress))
-      return { success: false, error: 'Invalid Ethereum address. Please check and try again.' };
-    const parsedAmt = parseFloat(amount);
-    if (isNaN(parsedAmt) || parsedAmt <= 0)
-      return { success: false, error: 'Enter a valid amount greater than 0.' };
     const privateKey = await storageService.getPrivateKey();
-    if (!privateKey) return { success: false, error: 'Wallet not found. Please re-import.' };
+    if (!privateKey) return { success: false, error: 'Private key not found' };
+    
+    const parsedAmt = parseFloat(amount);
     const ethPrice = prices.ETH?.usd ?? 3450;
-    addTx({ type: 'sent', coin: 'ETH', amount, usdValue: (parsedAmt * ethPrice).toFixed(2), address: toAddress, status: 'pending' });
+    const pendingId = Date.now().toString();
+    
+    addTx({
+      type:     'sent',
+      coin:     'ETH',
+      amount,
+      usdValue: (parsedAmt * ethPrice).toFixed(2),
+      address:  toAddress,
+      status:   'pending',
+    });
+
     const result = await ethereumService.sendETH(privateKey, toAddress, amount, network);
-    setTransactions(prev => prev.map((tx, i) =>
-      i === 0 ? { ...tx, status: result.success ? 'success' : 'failed', txHash: result.hash } : tx
+    setTransactions(prev => prev.map(tx =>
+      tx.id === pendingId ? { ...tx, status: result.success ? 'success' : 'failed', txHash: result.hash } : tx
     ));
-    if (result.success) await refreshBalance();
+    
+    if (result.success) refreshBalance();
     return result;
-  }, [prices, network, addTx, refreshBalance]);
+  }, [network, prices, addTx, refreshBalance]);
 
   const sendCrypto = useCallback((coin: string, amount: number, label: string) => {
     const coinPrice = prices[coin]?.usd ?? 1;
-    setBalances(prev => ({ ...prev, [coin]: Math.max(0, +(prev[coin] - amount).toFixed(6)) }));
+    setBalances(prev => ({ ...prev, [coin]: Math.max(0, (prev[coin] || 0) - amount) }));
     addTx({ type: 'swap', coin, amount: amount.toString(), usdValue: (amount * coinPrice).toFixed(2), address: label, status: 'success' });
   }, [prices, addTx]);
 
-  const addCardTx = useCallback((tx: Omit<CardTransaction, 'id' | 'timestamp'>) => {
-    setCardTransactions(prev => [{ ...tx, id: Date.now().toString(), timestamp: new Date().toISOString() }, ...prev]);
-  }, []);
-
   const topupCard = useCallback((coin: string, amount: number): boolean => {
     const coinPrice  = prices[coin]?.usd ?? 1;
-    const currentBal = coin === 'ETH' ? parseFloat(ethBalance) : (balances[coin] ?? 0);
-    if (amount > currentBal) return false;
-    if (coin === 'ETH') {
-      const newBal = Math.max(0, parseFloat(ethBalance) - amount);
-      setEthBalance(newBal.toFixed(6));
-      setBalances(prev => ({ ...prev, ETH: newBal }));
-    } else {
-      setBalances(prev => ({ ...prev, [coin]: Math.max(0, +(prev[coin] - amount).toFixed(6)) }));
-    }
     const usd = +(amount * coinPrice).toFixed(2);
     setCardBalance(prev => +(prev + usd).toFixed(2));
     addTx({ type: 'card_topup', coin, amount: amount.toString(), usdValue: usd.toFixed(2), address: 'Virtual Card', status: 'success' });
     addCardTx({ type: 'topup', amount: usd, label: `Top-up via ${coin}`, coin, coinAmount: amount, status: 'success' });
-    // Re-sync with chain so the balance doesn't snap back on next poll
-    if (walletAddress) fetchBalance(walletAddress, network);
     return true;
-  }, [prices, ethBalance, balances, walletAddress, network, fetchBalance, addTx, addCardTx]);
+  }, [prices, addTx, addCardTx]);
 
-  const spendCard = useCallback((amount: number, label: string): boolean => {
-    if (cardFrozen || cardBalance < amount) return false;
-    setCardBalance(prev => +(prev - amount).toFixed(2));
-    addTx({ type: 'card_spend', coin: 'USD', amount: amount.toString(), usdValue: amount.toFixed(2), address: label, status: 'success' });
-    addCardTx({ type: 'spend', amount, label, status: 'success' });
+  const spendCard = useCallback((coin: string, amountUSD: number, label: string): boolean => {
+    if (cardFrozen) return false;
+    setCardBalance(prev => {
+      if (amountUSD > prev) return prev;
+      return +(prev - amountUSD).toFixed(2);
+    });
+    addTx({ type: 'card_spend', coin, amount: amountUSD.toFixed(2), usdValue: amountUSD.toFixed(2), address: label, status: 'success' });
+    addCardTx({ type: 'spend', amount: amountUSD, label, coin, status: 'success' });
     return true;
-  }, [cardFrozen, cardBalance, addTx, addCardTx]);
+  }, [cardFrozen, addTx, addCardTx]);
 
-  const generateCardDetails = useCallback((name?: string) => {
-    const rand = () => Math.floor(1000 + Math.random() * 9000);
-    const num  = `4532 ${rand()} ${rand()} ${rand()}`;
-    const cvv  = String(Math.floor(100 + Math.random() * 900));
-    const exp  = new Date(); exp.setFullYear(exp.getFullYear() + 4);
-    const expiry = `${String(exp.getMonth() + 1).padStart(2, '0')}/${String(exp.getFullYear()).slice(-2)}`;
-    const holderName = (name ?? walletName).toUpperCase().trim() || 'CARD HOLDER';
-    setCardDetails(prev => ({ ...prev, number: num, expiry, cvv, brand: 'VISA', holderName }));
-  }, [walletName]);
+  const generateCardDetails = useCallback(() => {
+    setCardDetails(prev => cardService.getFixedCardDetails(prev.holderName, prev.design, walletAddress));
+  }, [walletAddress]);
 
   const createCard = useCallback((holderName: string, design: string) => {
-    const rand = () => Math.floor(1000 + Math.random() * 9000);
-    const num  = `4532 ${rand()} ${rand()} ${rand()}`;
-    const cvv  = String(Math.floor(100 + Math.random() * 900));
-    const exp  = new Date(); exp.setFullYear(exp.getFullYear() + 4);
-    const expiry = `${String(exp.getMonth() + 1).padStart(2, '0')}/${String(exp.getFullYear()).slice(-2)}`;
-    const details = { number: num, expiry, cvv, brand: 'VISA' as const, holderName: holderName.toUpperCase().trim(), design };
+    const details = cardService.getFixedCardDetails(holderName, design, walletAddress);
     setCardDetails(details);
     setCardCreated(true);
-    AsyncStorage.setItem('cw_card_created', 'true').catch(() => {});
-    AsyncStorage.setItem('cw_card_details', JSON.stringify(details)).catch(() => {});
-  }, []);
+    AsyncStorage.setItem('cw_card_created', 'true');
+    AsyncStorage.setItem('cw_card_details', JSON.stringify(details));
+  }, [walletAddress]);
 
   const updateCardDetails = useCallback((patch: { holderName?: string; design?: string }) => {
     setCardDetails(prev => {
-      const updated = {
-        ...prev,
-        ...(patch.holderName ? { holderName: patch.holderName.toUpperCase().trim() } : {}),
-        ...(patch.design     ? { design: patch.design } : {}),
-      };
+      const updated = { ...prev, ...patch };
       AsyncStorage.setItem('cw_card_details', JSON.stringify(updated)).catch(() => {});
       return updated;
     });
   }, []);
 
+  const applySwapBalances = useCallback(async (sellTok: string, sellAmt: number, buyTok: string, buyAmt: number) => {
+    setBalances(prev => {
+      const updated = {
+        ...prev,
+        [sellTok]: Math.max(0, (prev[sellTok] || 0) - sellAmt),
+        [buyTok]: (prev[buyTok] || 0) + buyAmt
+      };
+      balancesRef.current = updated;
+      AsyncStorage.setItem('cw_token_balances', JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+  }, []);
+
   const switchNetwork = useCallback((n: string) => {
-    ethereumService.switchNetwork(n);
     setNetworkState(n);
     if (walletAddress) fetchBalance(walletAddress, n);
   }, [walletAddress, fetchBalance]);
 
   const marketValue = useMemo(() => ({
     prices, isPricesLoading, priceError, news, isNewsLoading,
-    refreshPrices, refreshNews,
-  }), [prices, isPricesLoading, priceError, news, isNewsLoading, refreshPrices, refreshNews]);
+    refreshPrices: fetchPrices, refreshNews: fetchNews,
+  }), [prices, isPricesLoading, priceError, news, isNewsLoading, fetchPrices, fetchNews]);
 
   const contextValue = useMemo(() => ({
     isDarkMode, toggleTheme,
@@ -465,16 +577,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     balances, cardBalance, cardFrozen, network, transactions,
     cardDetails, cardCreated, createCard, updateCardDetails, generateCardDetails, cardTransactions,
     generateMnemonic: () => walletService.generateMnemonic(),
-    createWallet, importWallet, deleteWallet, refreshBalance,
-    sendETH, sendCrypto, topupCard, spendCard, toggleFreezeCard, switchNetwork,
+    createWallet, importWallet, deleteWallet, refreshBalance, fetchBalance,
+    sendETH, sendCrypto, topupCard, spendCard, toggleFreezeCard, applySwapBalances, switchNetwork,
   }), [
     isDarkMode, toggleTheme, balanceVisible, toggleBalanceVisible,
     pinEnabled, refreshPinEnabled, walletAddress, walletName, handleSetWalletName,
     ethBalance, isLoadingBalance, hasWallet, isLoadingWallet,
     balances, cardBalance, cardFrozen, network, transactions,
     cardDetails, cardCreated, createCard, updateCardDetails, generateCardDetails, cardTransactions,
-    createWallet, importWallet, deleteWallet, refreshBalance,
-    sendETH, sendCrypto, topupCard, spendCard, toggleFreezeCard, switchNetwork,
+    createWallet, importWallet, deleteWallet, refreshBalance, fetchBalance,
+    sendETH, sendCrypto, topupCard, spendCard, toggleFreezeCard, applySwapBalances, switchNetwork,
   ]);
 
   return (

@@ -68,11 +68,35 @@ export default function ScanScreen({ navigation }: any) {
 
   const handleBarCodeScanned = ({ data }: { data: string }) => {
     if (scanned) return;
-    
-    // Support for simple addresses too
+
+    // ethereum: payment URI — route to Card pay form
+    if (data.startsWith('ethereum:')) {
+      setScanned(true);
+      Vibration.vibrate(80);
+      try {
+        const [addrPart, queryPart] = data.slice(9).split('?');
+        const address = addrPart.split('@')[0];
+        const params  = new URLSearchParams(queryPart ?? '');
+        const label   = params.get('label') ?? params.get('message') ?? '';
+        const valueWei = params.get('value');
+        const amountEth = valueWei ? (parseFloat(valueWei) / 1e18).toFixed(6) : '';
+        setLastScan(address);
+        setTimeout(() => {
+          navigation.navigate('Card', {
+            qrMerchant: { name: label || address.slice(0, 8) + '…', amount: amountEth, icon: '⚡' },
+          });
+        }, 800);
+      } catch {
+        setScanInfo('Invalid payment QR');
+        setScanned(false);
+      }
+      return;
+    }
+
+    // Plain address — go to Send
     if (/^0x[0-9a-fA-F]{40}$/.test(data.trim())) {
-        processQRData(JSON.stringify({ address: data.trim(), network: 'Ethereum' }));
-        return;
+      processQRData(JSON.stringify({ address: data.trim(), network: 'Ethereum' }));
+      return;
     }
 
     processQRData(data);
@@ -201,7 +225,7 @@ export default function ScanScreen({ navigation }: any) {
         <View style={styles.overlayBottom}>
           <View style={styles.hintContainer}>
             <Text style={styles.scanHint}>
-              {scanned ? 'PAYMENT DETECTED' : 'ALIGN QR TO SCAN'}
+              {scanned ? 'QR DETECTED' : 'SCAN WALLET OR PAYMENT QR'}
             </Text>
           </View>
 

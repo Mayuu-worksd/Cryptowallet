@@ -8,13 +8,15 @@ type Props = {
   cardNumber: string;
   holderName: string;
   expiry: string;
+  cvv?: string;
   designKey: string;
   frozen?: boolean;
   compact?: boolean;
 };
 
-export default function CardPreview({ cardNumber, holderName, expiry, designKey, frozen = false, compact = false }: Props) {
+export default function CardPreview({ cardNumber, holderName, expiry, cvv = '•••', designKey, frozen = false, compact = false }: Props) {
   const [showDetails, setShowDetails] = useState(false);
+  const [authenticating, setAuthenticating] = useState(false);
   const design = getDesign(designKey);
 
   const formattedNumber = useMemo(() => {
@@ -22,6 +24,18 @@ export default function CardPreview({ cardNumber, holderName, expiry, designKey,
     const last4 = cardNumber.replace(/\s/g, '').slice(-4);
     return `••••  ••••  ••••  ${last4}`;
   }, [cardNumber, showDetails]);
+
+  const handleToggleDetails = () => {
+    if (!showDetails) {
+      setAuthenticating(true);
+      setTimeout(() => {
+        setAuthenticating(false);
+        setShowDetails(true);
+      }, 800);
+    } else {
+      setShowDetails(false);
+    }
+  };
 
   return (
     <View style={[styles.shadow, compact && styles.shadowCompact]}>
@@ -62,9 +76,17 @@ export default function CardPreview({ cardNumber, holderName, expiry, designKey,
             <Text style={[styles.label, { color: design.mutedColor }]}>EXPIRES</Text>
             <Text style={[styles.value, { color: design.textColor }]}>{expiry}</Text>
           </View>
+          <View style={styles.footerItem}>
+            <Text style={[styles.label, { color: design.mutedColor }]}>CVV</Text>
+            <Text style={[styles.value, { color: design.textColor }]}>{showDetails ? cvv : '•••'}</Text>
+          </View>
           {!compact && (
-            <TouchableOpacity onPress={() => setShowDetails(v => !v)} style={styles.eyeBtn}>
-              <Feather name={showDetails ? 'eye' : 'eye-off'} size={13} color={design.mutedColor} />
+            <TouchableOpacity onPress={handleToggleDetails} style={styles.eyeBtn}>
+              {authenticating ? (
+                <View style={{ width: 13, height: 13, backgroundColor: design.mutedColor, borderRadius: 6.5, opacity: 0.5 }} />
+              ) : (
+                <Feather name={showDetails ? 'eye' : 'eye-off'} size={13} color={design.mutedColor} />
+              )}
             </TouchableOpacity>
           )}
         </View>

@@ -8,8 +8,8 @@ import { Feather, MaterialIcons } from '@expo/vector-icons';
 
 const AsyncStorage = Platform.OS === 'web'
   ? {
-      getItem: async (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
-      setItem: async (k: string, v: string) => { try { localStorage.setItem(k, v); } catch {} },
+      getItem: async (k: string) => { try { return localStorage.getItem(k); } catch (_e) { return null; } },
+      setItem: async (k: string, v: string) => { try { localStorage.setItem(k, v); } catch (_e) {} },
     }
   : require('@react-native-async-storage/async-storage').default;
 import { useWallet } from '../store/WalletContext';

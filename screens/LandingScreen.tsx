@@ -18,13 +18,13 @@ export default function LandingScreen({ navigation }: any) {
           <Text style={[styles.headerTitle, { color: T.primary, fontSize: 24 }]}>CryptoWallet</Text>
           <View style={{ flex: 1 }} />
           <View style={styles.webNavLinks}>
-            <TouchableOpacity onPress={() => {}} activeOpacity={0.7}>
+            <TouchableOpacity onPress={() => alert('Feature coming soon!')} activeOpacity={0.7}>
               <Text style={[styles.webNavLink, { color: T.textMuted }]}>Wealth Management</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => {}} activeOpacity={0.7}>
+            <TouchableOpacity onPress={() => alert('Feature coming soon!')} activeOpacity={0.7}>
               <Text style={[styles.webNavLink, { color: T.textMuted }]}>Security Ledger</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => {}} activeOpacity={0.7}>
+            <TouchableOpacity onPress={() => alert('Feature coming soon!')} activeOpacity={0.7}>
               <Text style={[styles.webNavLink, { color: T.textMuted }]}>Governance</Text>
             </TouchableOpacity>
             <TouchableOpacity 
@@ -174,12 +174,14 @@ export default function LandingScreen({ navigation }: any) {
             <Text style={styles.getStartedText}>Create Wallet</Text>
             <Feather name="arrow-right" size={18} color="#FFF" />
           </TouchableOpacity>
+          <Text style={[styles.btnHint, { color: T.textMuted }]}>New to crypto? Start here</Text>
           <TouchableOpacity
             style={[styles.restoreBtn, { backgroundColor: T.surface, borderColor: T.border }]}
             onPress={() => navigation.navigate('ImportWallet')}
           >
             <Text style={[styles.restoreText, { color: T.text }]}>Import Existing Wallet</Text>
           </TouchableOpacity>
+          <Text style={[styles.btnHint, { color: T.textMuted }]}>Already have a wallet? Restore it here</Text>
         </View>
       </View>
 
@@ -242,6 +244,7 @@ const styles = StyleSheet.create({
   pillText: { fontSize: 12, fontWeight: '800' },
 
   actions: { width: '100%', maxWidth: 340, gap: 16 },
+  btnHint: { fontSize: 12, fontWeight: '500', textAlign: 'center', marginTop: -8, marginBottom: 4 },
   getStartedBtn: { height: 64, borderRadius: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, shadowColor: '#FF3B3B', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.3, shadowRadius: 24, elevation: 8 },
   getStartedText: { color: '#FFF', fontSize: 17, fontWeight: '800' },
   restoreBtn: { height: 60, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },

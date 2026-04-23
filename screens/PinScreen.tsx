@@ -284,6 +284,29 @@ export default function PinScreen({ mode, onSuccess, onCancel }: Props) {
           </View>
         </View>
 
+        {/* Forgot PIN */}
+        {mode === 'verify' && !locked && (
+          <TouchableOpacity
+            style={{ marginTop: 16, paddingVertical: 8 }}
+            onPress={() => {
+              const { Alert } = require('react-native');
+              Alert.alert(
+                'Forgot PIN?',
+                'To reset your PIN, you need to delete and re-import your wallet using your 12-word seed phrase.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Go to Settings', onPress: () => onCancel?.() },
+                ]
+              );
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={{ color: T.textMuted, fontSize: 13, fontWeight: '600', textDecorationLine: 'underline' }}>
+              Forgot PIN?
+            </Text>
+          </TouchableOpacity>
+        )}
+
         {/* Step indicator for setup */}
         {mode === 'setup' && (
           <View style={styles.stepRow}>

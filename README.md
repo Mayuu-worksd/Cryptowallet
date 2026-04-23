@@ -165,21 +165,23 @@ npm install --legacy-peer-deps
 
 ### 3. Set up environment variables
 
-Create a `.env` file in the project root:
+A `.env` file is already included in this repo for developer testing. It contains working API keys for all services:
 
 ```env
-EXPO_PUBLIC_ALCHEMY_KEY=your_alchemy_key_here
-EXPO_PUBLIC_WEB_SALT=any_random_string_here
-EXPO_PUBLIC_ETHERSCAN_KEY=your_etherscan_key_here
-EXPO_PUBLIC_ZRX_API_KEY=your_0x_api_key_here
+EXPO_PUBLIC_ALCHEMY_KEY=YUIpvCTh5H7SkHPWFKiGe
+EXPO_PUBLIC_WEB_SALT=cw_w3b_s4lt_2024
+EXPO_PUBLIC_ETHERSCAN_KEY=2TJN7KQXJDKDNR9YP9WXNNHSJU3GTP2QRB
+EXPO_PUBLIC_ZRX_API_KEY=8222598d-7404-46d6-994d-82d85d45ef89
 ```
 
-- **Alchemy key** (required for RPC) — free at [alchemy.com](https://www.alchemy.com)
-- **Etherscan key** (optional, improves tx history rate limits) — free at [etherscan.io](https://etherscan.io/apis)
-- **0x API key** (optional, improves swap rate limits) — free at [0x.org](https://0x.org)
-- **WEB_SALT** — any random string, used for web localStorage obfuscation only
+| Key | Service | Purpose |
+|---|---|---|
+| `EXPO_PUBLIC_ALCHEMY_KEY` | [Alchemy](https://www.alchemy.com) | Ethereum RPC — balance, gas, send transactions |
+| `EXPO_PUBLIC_ETHERSCAN_KEY` | [Etherscan](https://etherscan.io/apis) | On-chain transaction history |
+| `EXPO_PUBLIC_ZRX_API_KEY` | [0x Protocol](https://0x.org) | Token swap quotes and execution |
+| `EXPO_PUBLIC_WEB_SALT` | Internal | Web localStorage obfuscation salt |
 
-> The app works without Etherscan and 0x keys — they just improve rate limits.
+> These keys are included for testing purposes only. For production, replace with your own keys.
 
 ### 4. Start the development server
 

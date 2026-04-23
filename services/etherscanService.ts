@@ -1,9 +1,11 @@
-// Etherscan-compatible APIs for each network — free, no key needed for basic use
-const EXPLORER_API: Record<string, string> = {
-  Ethereum: 'https://api.etherscan.io/api',
-  Sepolia:  'https://api-sepolia.etherscan.io/api',
-  Polygon:  'https://api.polygonscan.com/api',
-  Arbitrum: 'https://api.arbiscan.io/api',
+// Etherscan V2 — single endpoint, network selected via chainid
+const V2_BASE = 'https://api.etherscan.io/v2/api';
+
+const CHAIN_ID: Record<string, string> = {
+  Ethereum: '1',
+  Sepolia:  '11155111',
+  Polygon:  '137',
+  Arbitrum: '42161',
 };
 
 const EXPLORER_KEY = process.env.EXPO_PUBLIC_ETHERSCAN_KEY ?? '';
@@ -21,34 +23,65 @@ export type ChainTx = {
   blockNumber: string;
 };
 
+export type TokenTx = ChainTx & {
+  contractAddress: string;
+  tokenName:       string;
+  tokenSymbol:     string;
+  tokenDecimal:    string;
+  nonce:           string;
+};
+
 export const etherscanService = {
   async fetchTransactions(address: string, network: string): Promise<ChainTx[]> {
-    const base = EXPLORER_API[network];
-    if (!base || !address) return [];
+    const chainId = CHAIN_ID[network];
+    if (!chainId || !address) return [];
 
-    try {
-      const params = new URLSearchParams({
-        module:     'account',
-        action:     'txlist',
-        address,
-        startblock: '0',
-        endblock:   '99999999',
-        page:       '1',
-        offset:     '50',       // last 50 txns
-        sort:       'desc',
-        ...(EXPLORER_KEY ? { apikey: EXPLORER_KEY } : {}),
-      });
+    const params = new URLSearchParams({
+      chainid:    chainId,
+      module:     'account',
+      action:     'txlist',
+      address,
+      startblock: '0',
+      endblock:   '99999999',
+      page:       '1',
+      offset:     '50',
+      sort:       'desc',
+      ...(EXPLORER_KEY ? { apikey: EXPLORER_KEY } : {}),
+    });
 
-      const res = await fetch(`${base}?${params}`, {
-        headers: { 'Accept': 'application/json' },
-      });
+    const res = await fetch(`${V2_BASE}?${params}`, { headers: { 'Accept': 'application/json' } });
+    if (!res.ok) throw new Error('HTTP error');
 
-      if (!res.ok) return [];
-      const data = await res.json();
-      if (data.status !== '1' || !Array.isArray(data.result)) return [];
-      return data.result as ChainTx[];
-    } catch {
-      return [];
+    const data = await res.json();
+    if (data.status !== '1') {
+      if (data.message === 'No transactions found') return [];
+      throw new Error(data.result || data.message || 'Etherscan error');
     }
+    return (Array.isArray(data.result) ? data.result : []) as ChainTx[];
+  },
+
+  async fetchTokenTransactions(address: string, network: string): Promise<TokenTx[]> {
+    const chainId = CHAIN_ID[network];
+    if (!chainId || !address) return [];
+
+    const params = new URLSearchParams({
+      chainid:    chainId,
+      module:     'account',
+      action:     'tokentx',
+      address,
+      startblock: '0',
+      endblock:   '99999999',
+      page:       '1',
+      offset:     '50',
+      sort:       'desc',
+      ...(EXPLORER_KEY ? { apikey: EXPLORER_KEY } : {}),
+    });
+
+    const res = await fetch(`${V2_BASE}?${params}`, { headers: { 'Accept': 'application/json' } });
+    if (!res.ok) return [];
+
+    const data = await res.json();
+    if (data.status !== '1') return [];
+    return (Array.isArray(data.result) ? data.result : []) as TokenTx[];
   },
 };

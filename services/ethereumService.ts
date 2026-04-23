@@ -7,12 +7,26 @@ const ERC20_ABI = [
   'function decimals() view returns (uint8)',
 ];
 
-// USDT contract addresses per network
-const USDT_CONTRACTS: Record<string, string> = {
-  Ethereum: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
-  Polygon:  '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
-  Arbitrum: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
-  // Sepolia has no real USDT — returns 0, handled gracefully
+// Token contract addresses per network
+const TOKEN_CONTRACTS: Record<string, Record<string, string>> = {
+  USDT: {
+    Ethereum: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
+    Polygon:  '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
+    Arbitrum: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
+    Sepolia:  '0x7169D38820dfd117C3FA1f22a697dBA58d90BA06',
+  },
+  USDC: {
+    Ethereum: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+    Polygon:  '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174',
+    Arbitrum: '0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8',
+    Sepolia:  '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
+  },
+  DAI: {
+    Ethereum: '0x6B175474E89094C44Da98b954EedeAC495271d0F',
+    Polygon:  '0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063',
+    Arbitrum: '0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1',
+    Sepolia:  '0x3e622317f8C93f7328350cF0B56d9eD4C620C5d6',
+  },
 };
 
 const NETWORK_CONFIG: Record<string, { chainId: number; name: string }> = {
@@ -22,14 +36,14 @@ const NETWORK_CONFIG: Record<string, { chainId: number; name: string }> = {
   Arbitrum: { chainId: 42161,    name: 'arbitrum'  },
 };
 
-let provider: ethers.providers.JsonRpcProvider | null = null;
+let provider: ethers.providers.StaticJsonRpcProvider | null = null;
 let currentNetwork = 'Sepolia';
 
-function getProvider(network: string = currentNetwork): ethers.providers.JsonRpcProvider {
+export function getProvider(network: string = currentNetwork): ethers.providers.StaticJsonRpcProvider {
   if (!provider || network !== currentNetwork) {
     const rpcUrl    = NETWORKS[network]    ?? NETWORKS['Sepolia'];
     const netConfig = NETWORK_CONFIG[network] ?? NETWORK_CONFIG['Sepolia'];
-    provider = new ethers.providers.JsonRpcProvider(rpcUrl, {
+    provider = new ethers.providers.StaticJsonRpcProvider(rpcUrl, {
       chainId: netConfig.chainId,
       name:    netConfig.name,
     });
@@ -46,10 +60,10 @@ export const ethereumService = {
 
   async getTokenBalance(
     address: string,
-    tokenSymbol: 'USDT',
+    tokenSymbol: string,
     network: string = currentNetwork
   ): Promise<number> {
-    const contractAddress = USDT_CONTRACTS[network];
+    const contractAddress = TOKEN_CONTRACTS[tokenSymbol]?.[network];
     if (!contractAddress) return 0;
     try {
       const p        = getProvider(network);
@@ -59,7 +73,8 @@ export const ethereumService = {
         contract.decimals(),
       ]);
       return parseFloat(ethers.utils.formatUnits(raw, decimals));
-    } catch {
+    } catch (e) {
+      console.error(`[ethereumService] Error fetching balance for ${tokenSymbol}:`, e);
       return 0;
     }
   },
@@ -86,10 +101,9 @@ export const ethereumService = {
       gasPrice:   ethers.utils.parseUnits('20', 'gwei'),
       gasLimit:   ethers.BigNumber.from(21000),
     };
-    // Guard: don't call RPC with empty addresses
     if (!from || !to || !amount || parseFloat(amount) <= 0) return fallback;
     try {
-      const p          = getProvider(network);
+      const p = getProvider(network);
       const gasLimit   = await p.estimateGas({ from, to, value: ethers.utils.parseEther(amount) });
       const feeData    = await p.getFeeData();
       const gasPrice   = feeData.maxFeePerGas ?? feeData.gasPrice ?? ethers.utils.parseUnits('20', 'gwei');

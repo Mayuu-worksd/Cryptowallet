@@ -9,7 +9,9 @@ import { useWallet, useMarket } from '../store/WalletContext';
 import { storageService } from '../services/storageService';
 import { Theme, COIN_META, COIN_COLORS } from '../constants';
 import Toast from '../components/Toast';
-import { usePinSetup } from '../store/PinSetupContext';
+import { haptics } from '../utils/haptics';
+import PinScreen from './PinScreen';
+import { clearPin as removePin } from '../services/pinService';
 
 const NETWORKS = [
   { name: 'Sepolia',  type: 'Testnet', color: '#F59E0B', iconUrl: 'https://assets.coingecko.com/coins/images/279/large/ethereum.png' },
@@ -40,7 +42,6 @@ export default function SettingsScreen({ navigation }: any) {
   } = useWallet();
   const { prices } = useMarket();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
-  const triggerPinSetup = usePinSetup();
 
   // Refresh pin badge whenever screen comes into focus
   React.useEffect(() => {
@@ -53,6 +54,8 @@ export default function SettingsScreen({ navigation }: any) {
   const [phrase, setPhrase]             = useState('');
   const [phraseLoading, setPhraseLoading] = useState(false);
   const [toast, setToast]               = useState({ visible: false, message: '', type: 'success' as 'success' | 'error' | 'info' });
+  const [pinVerifyMode, setPinVerifyMode] = useState<'phrase' | 'toggle_off' | null>(null);
+  const [showPinSetup, setShowPinSetup]   = useState(false);
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') =>
     setToast({ visible: true, message, type });
@@ -60,6 +63,7 @@ export default function SettingsScreen({ navigation }: any) {
   const copyAddress = async () => {
     if (!walletAddress) return;
     await Clipboard.setStringAsync(walletAddress);
+    haptics.success();
     showToast('Wallet address copied!', 'success');
   };
 
@@ -71,30 +75,40 @@ export default function SettingsScreen({ navigation }: any) {
     showToast('Wallet renamed successfully', 'success');
   };
 
+  const executeViewPhrase = async () => {
+    setPhraseLoading(true);
+    setPhraseModal(true);
+    try {
+      const m = await storageService.getMnemonic();
+      setPhrase(m ?? 'Unable to retrieve seed phrase.');
+    } catch (_e) {
+      setPhrase('Unable to retrieve seed phrase.');
+    } finally {
+      setPhraseLoading(false);
+    }
+  };
+
   const handleViewPhrase = () => {
+    if (pinEnabled) {
+      setPinVerifyMode('phrase');
+      return;
+    }
     Alert.alert(
       'View Seed Phrase',
       'Your seed phrase gives full access to your wallet. Never share it with anyone.',
       [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Show Phrase',
-          style: 'destructive',
-          onPress: async () => {
-            setPhraseLoading(true);
-            setPhraseModal(true);
-            try {
-              const m = await storageService.getMnemonic();
-              setPhrase(m ?? 'Unable to retrieve seed phrase.');
-            } catch {
-              setPhrase('Unable to retrieve seed phrase.');
-            } finally {
-              setPhraseLoading(false);
-            }
-          },
-        },
+        { text: 'Show Phrase', style: 'destructive', onPress: executeViewPhrase },
       ]
     );
+  };
+
+  const handleTogglePin = async () => {
+    if (pinEnabled) {
+      setPinVerifyMode('toggle_off');
+    } else {
+      setShowPinSetup(true);
+    }
   };
 
   const handleCopyPhrase = async () => {
@@ -103,6 +117,7 @@ export default function SettingsScreen({ navigation }: any) {
   };
 
   const handleDelete = () => {
+    haptics.heavy();
     Alert.alert(
       'Logout & Delete Wallet',
       'This will remove your wallet from this device. Make sure your seed phrase is backed up first.',
@@ -123,6 +138,38 @@ export default function SettingsScreen({ navigation }: any) {
         type={toast.type}
         onHide={() => setToast(p => ({ ...p, visible: false }))}
       />
+
+      <Modal visible={pinVerifyMode !== null} animationType="slide">
+        {pinVerifyMode && (
+          <PinScreen 
+            mode="verify" 
+            onSuccess={async () => {
+              const mode = pinVerifyMode;
+              setPinVerifyMode(null);
+              if (mode === 'phrase') {
+                 setTimeout(() => executeViewPhrase(), 300);
+              } else if (mode === 'toggle_off') {
+                 await removePin();
+                 refreshPinEnabled();
+                 showToast('PIN removed successfully', 'success');
+              }
+            }} 
+            onCancel={() => setPinVerifyMode(null)} 
+          />
+        )}
+      </Modal>
+
+      <Modal visible={showPinSetup} animationType="slide">
+         <PinScreen
+            mode="setup"
+            onSuccess={() => {
+               setShowPinSetup(false);
+               refreshPinEnabled();
+               showToast('PIN enabled successfully!', 'success');
+            }}
+            onCancel={() => setShowPinSetup(false)}
+         />
+      </Modal>
 
       {/* Rename Modal */}
       <Modal visible={renameModal} transparent animationType="fade">
@@ -226,11 +273,16 @@ export default function SettingsScreen({ navigation }: any) {
         {/* Holdings with real coin logos */}
         <Text style={[styles.sectionTitle, { color: T.textMuted }]}>My Holdings</Text>
         <View style={[styles.cardBlock, { backgroundColor: T.surface }]}>
-          {(['ETH', 'BTC', 'USDT', 'SOL'] as const).map((sym, i, arr) => {
+          {(['ETH', 'USDC', 'USDT'] as const).map((sym, i, arr) => {
             const amt = sym === 'ETH' ? parseFloat(ethBalance) || 0 : (balances[sym] ?? 0);
             const usd = amt * (prices[sym]?.usd ?? 0);
             return (
-              <View key={sym} style={[styles.holdingRow, i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: T.border }]}>
+              <TouchableOpacity
+                key={sym}
+                onPress={() => { haptics.selection(); navigation.navigate('CoinChart', { symbol: sym }); }}
+                activeOpacity={0.7}
+                style={[styles.holdingRow, i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: T.border }]}
+              >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
                   <CoinIcon symbol={sym} size={40} />
                   <View>
@@ -239,9 +291,29 @@ export default function SettingsScreen({ navigation }: any) {
                   </View>
                 </View>
                 <Text style={[styles.menuLabel, { color: T.text }]}>${usd.toFixed(2)}</Text>
-              </View>
+              </TouchableOpacity>
             );
           })}
+          {/* Coming Soon rows */}
+          {(['BTC', 'SOL'] as const).map((sym, i) => (
+            <TouchableOpacity
+              key={sym}
+              onPress={() => { haptics.selection(); showToast('BTC & SOL support coming soon!', 'info'); }}
+              activeOpacity={0.7}
+              style={[styles.holdingRow, { borderTopWidth: i === 0 ? 1 : 0, borderTopColor: T.border }]}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                <CoinIcon symbol={sym} size={40} />
+                <View>
+                  <Text style={[styles.menuLabel, { color: T.text }]}>{COIN_META[sym]?.name ?? sym}</Text>
+                  <Text style={[styles.menuSub, { color: T.textMuted }]}>{sym}</Text>
+                </View>
+              </View>
+              <View style={[styles.comingSoonChip, { backgroundColor: T.primary + '20', borderColor: T.primary + '40' }]}>
+                <Text style={{ fontSize: 10, fontWeight: '800', color: T.primary }}>Soon</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
         </View>
 
         {/* Network Selection */}
@@ -261,11 +333,13 @@ export default function SettingsScreen({ navigation }: any) {
                       `You are switching to ${n.name} Mainnet. This uses real funds.`,
                       [
                         { text: 'Cancel', style: 'cancel' },
-                        { text: 'Switch', onPress: () => switchNetwork(n.name) },
+                        { text: 'Switch', onPress: () => { haptics.warning(); switchNetwork(n.name); showToast(`Switched to ${n.name}`, 'success'); } },
                       ]
                     );
                   } else {
+                    haptics.selection();
                     switchNetwork(n.name);
+                    showToast(`Switched to ${n.name}`, 'success');
                   }
                 }}
               >
@@ -313,7 +387,7 @@ export default function SettingsScreen({ navigation }: any) {
           <TouchableOpacity
             style={[styles.menuRow, { borderBottomWidth: 1, borderBottomColor: T.border }]}
             activeOpacity={0.7}
-            onPress={triggerPinSetup}
+            onPress={handleTogglePin}
           >
             <View style={styles.menuLeft}>
               <View style={[styles.menuIconBox, { backgroundColor: T.background }]}>
@@ -461,6 +535,7 @@ const makeStyles = (T: any) => StyleSheet.create({
   menuLabel: { fontSize: 16, fontWeight: '600', marginBottom: 2 },
   menuSub: { fontSize: 13 },
 
+  comingSoonChip: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 16, borderWidth: 1 },
   logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 16, paddingVertical: 16, gap: 10, borderWidth: 1 },
   logoutBtnText: { fontSize: 16, fontWeight: '700' },
 

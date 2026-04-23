@@ -1,0 +1,1 @@
+{"name":"INPUT_INVALID","message":"The input is invalid","data":{"zid":"0xd77075b31794b5d3a8efce8d","details":[{"field":"taker","reason":"Invalid ethereum address"}]}}

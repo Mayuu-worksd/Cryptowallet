@@ -20,7 +20,7 @@ const storage = {
   },
   async setItem(key: string, value: string): Promise<void> {
     if (Platform.OS === 'web') {
-      try { localStorage.setItem(key, value); } catch {}
+      try { localStorage.setItem(key, value); } catch (_e) {}
       return;
     }
     const AS = require('@react-native-async-storage/async-storage').default;
@@ -28,7 +28,7 @@ const storage = {
   },
   async removeItem(key: string): Promise<void> {
     if (Platform.OS === 'web') {
-      try { localStorage.removeItem(key); } catch {}
+      try { localStorage.removeItem(key); } catch (_e) {}
       return;
     }
     const AS = require('@react-native-async-storage/async-storage').default;

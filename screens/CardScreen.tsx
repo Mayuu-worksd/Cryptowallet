@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   TextInput, Platform, ActivityIndicator, StatusBar, Dimensions, SafeAreaView,
@@ -13,20 +13,25 @@ import CardPreview from '../components/card/CardPreview';
 import NoCardState from '../components/card/NoCardState';
 import CreateCardFlow from '../components/card/CreateCardFlow';
 import EditCardSheet from '../components/card/EditCardSheet';
+import { cardService } from '../services/cardService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH - 48;
 const CRIMSON = '#FF3B3B';
 const COINS = ['ETH', 'USDT'] as const;
+const ICONS = ['🛍️','🍔','☕','🎬','✈️','🏥','🎮','🏠','⚡','💊','📦','🎵'];
+
+type CustomMerchant = { name: string; amount: string; icon: string };
 
 // ── Extracted carousel item ──────────────────────────────────────────────────
 function CarouselCard({
-  designKey, cardNumber, holderName, expiry, frozen,
+  designKey, cardNumber, holderName, expiry, cvv, frozen,
 }: {
   designKey: CardDesignKey;
   cardNumber: string;
   holderName: string;
   expiry: string;
+  cvv: string;
   frozen: boolean;
 }) {
   return (
@@ -35,6 +40,7 @@ function CarouselCard({
         cardNumber={cardNumber}
         holderName={holderName}
         expiry={expiry}
+        cvv={cvv}
         designKey={designKey}
         frozen={frozen}
       />
@@ -42,12 +48,14 @@ function CarouselCard({
   );
 }
 
+
+
 // ─────────────────────────────────────────────────────────────────────────────
-export default function CardScreen({ navigation }: any) {
+export default function CardScreen({ navigation, route }: any) {
   const {
-    cardBalance, cardFrozen, toggleFreezeCard,
+    cardFrozen, toggleFreezeCard,
     cardDetails, cardTransactions, cardCreated,
-    balances, ethBalance, topupCard, spendCard,
+    balances, ethBalance, spendCard, topupCard, cardBalance,
     isDarkMode, network,
     createCard, updateCardDetails,
   } = useWallet();
@@ -55,16 +63,16 @@ export default function CardScreen({ navigation }: any) {
 
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
 
-  const [showCreate, setShowCreate] = useState(false);
-  const [showEdit, setShowEdit]     = useState(false);
-  const [showTopup, setShowTopup]   = useState(false);
-  const [showSpend, setShowSpend]   = useState(false);
+  const [showCreate, setShowCreate]   = useState(false);
+  const [showEdit, setShowEdit]       = useState(false);
+  const [showSpend, setShowSpend]     = useState(false);
+  const [showTopup, setShowTopup]     = useState(false);
   const [balanceHidden, setBalanceHidden] = useState(false);
-  const [spendAmount, setSpendAmount] = useState('');
-  const [spendLabel, setSpendLabel]   = useState('');
-  const [topupCoin, setTopupCoin]     = useState<typeof COINS[number]>('ETH');
+  const [merchant, setMerchant]       = useState<CustomMerchant>({ name: '', amount: '', icon: '🛍️' });
+  const [topupToken, setTopupToken]   = useState<typeof COINS[number]>('ETH');
   const [topupAmount, setTopupAmount] = useState('');
   const [loading, setLoading]         = useState(false);
+  const [topupLoading, setTopupLoading] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [toast, setToast]             = useState({
     visible: false, message: '', type: 'success' as 'success' | 'error' | 'info',
@@ -73,16 +81,27 @@ export default function CardScreen({ navigation }: any) {
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') =>
     setToast({ visible: true, message, type });
 
-  const availableBalance = useMemo(() =>
-    topupCoin === 'ETH' ? parseFloat(ethBalance) : (balances[topupCoin] ?? 0),
-    [topupCoin, ethBalance, balances]);
+  // Pre-fill form when returning from QR scan
+  useEffect(() => {
+    if (!route?.params?.qrMerchant) return;
+    setMerchant(route.params.qrMerchant);
+    setShowSpend(true);
+    navigation.setParams({ qrMerchant: undefined });
+  }, [route?.params?.qrMerchant]);
 
-  const conversionRate = useMemo(() => prices[topupCoin]?.usd ?? 1, [topupCoin, prices]);
+  const topupTokenBalance = useMemo(() =>
+    topupToken === 'ETH' ? parseFloat(ethBalance) : (balances[topupToken] ?? 0),
+    [topupToken, ethBalance, balances]);
 
-  const usdtValue = useMemo(() => {
-    const amt = parseFloat(topupAmount) || 0;
-    return (amt * conversionRate).toFixed(2);
-  }, [topupAmount, conversionRate]);
+  const topupRate = useMemo(() => prices[topupToken]?.usd ?? 1, [topupToken, prices]);
+
+  const topupUSD = useMemo(() => {
+    const amt = parseFloat(topupAmount);
+    return isNaN(amt) ? 0 : +(amt * topupRate).toFixed(2);
+  }, [topupAmount, topupRate]);
+
+  // conversionRate used for pay panel crypto equivalent preview (uses topupToken)
+  const conversionRate = useMemo(() => prices[topupToken]?.usd ?? 1, [topupToken, prices]);
 
   const handleCardCreated = (holderName: string, design: CardDesignKey) => {
     createCard(holderName, design);
@@ -92,33 +111,37 @@ export default function CardScreen({ navigation }: any) {
 
   const handleTopup = async () => {
     const amt = parseFloat(topupAmount);
-    if (!amt || amt <= 0)       { showToast('Enter a valid amount', 'error'); return; }
-    if (amt > availableBalance) { showToast('Insufficient balance', 'error'); return; }
-    setLoading(true);
-    await new Promise(r => setTimeout(r, 1200));
-    const ok = topupCard(topupCoin, amt);
-    setLoading(false);
-    if (ok) { showToast('Funds added successfully', 'success'); setTopupAmount(''); setShowTopup(false); }
-    else showToast('Top-up failed. Try again.', 'error');
+    if (isNaN(amt) || amt <= 0) { showToast('Enter a valid amount', 'error'); return; }
+    // Allow tiny epsilon for floating point rounding differences when hitting MAX
+    if (amt > topupTokenBalance + 0.000001) { showToast(`Insufficient ${topupToken} balance`, 'error'); return; }
+    setTopupLoading(true);
+    await new Promise(r => setTimeout(r, 800));
+    const ok = topupCard(topupToken, amt);
+    setTopupLoading(false);
+    if (ok) {
+      showToast(`+$${topupUSD.toFixed(2)} added to card ✅`, 'success');
+      setTopupAmount('');
+      setShowTopup(false);
+    } else showToast('Top-up failed. Check balance.', 'error');
   };
 
   const handleSpend = async () => {
-    const amt = parseFloat(spendAmount);
-    if (!amt || amt <= 0)    { showToast('Enter a valid amount', 'error'); return; }
-    if (cardFrozen)          { showToast('Card is frozen. Unfreeze to spend.', 'error'); return; }
-    if (amt > cardBalance)   { showToast('Insufficient card balance', 'error'); return; }
-    const label = spendLabel.trim() || 'Online Purchase';
+    const amtUSD = parseFloat(merchant.amount);
+    if (!merchant.name.trim()) { showToast('Enter a merchant name', 'error'); return; }
+    if (isNaN(amtUSD) || amtUSD <= 0) { showToast('Enter a valid amount', 'error'); return; }
+    if (amtUSD > 1000) { showToast('Exceeds per-payment limit ($1000)', 'error'); return; }
+    if (cardFrozen) { showToast('Card is frozen. Unfreeze to spend.', 'error'); return; }
+    if (amtUSD > cardBalance) { showToast('Insufficient card balance. Top up first.', 'error'); return; }
+
     setLoading(true);
     await new Promise(r => setTimeout(r, 900));
-    const ok = spendCard(amt, label);
+    const ok = spendCard(topupToken, amtUSD, `${merchant.icon} ${merchant.name.trim()}`);
     setLoading(false);
-    if (ok) { 
-      showToast(`Payment of $${amt.toFixed(2)} successful ✅`, 'success'); 
-      setSpendAmount(''); 
-      setSpendLabel(''); 
-      setShowSpend(false); 
-    }
-    else showToast('Payment failed. Try again.', 'error');
+    if (ok) {
+      showToast(`Paid $${amtUSD.toFixed(2)} to ${merchant.name.trim()} ✅`, 'success');
+      setMerchant({ name: '', amount: '', icon: '🛍️' });
+      setShowSpend(false);
+    } else showToast('Payment failed. Try again.', 'error');
   };
 
   if (showCreate) {
@@ -191,6 +214,7 @@ export default function CardScreen({ navigation }: any) {
               cardNumber={cardDetails.number}
               holderName={cardDetails.holderName}
               expiry={cardDetails.expiry}
+              cvv={cardDetails.cvv}
               frozen={cardFrozen}
             />
           ))}
@@ -226,51 +250,56 @@ export default function CardScreen({ navigation }: any) {
 
         <View style={styles.body}>
 
-          {/* New Balance Component */}
+          {/* Balance Card */}
           <LinearGradient
             colors={[T.surfaceHigh, T.surface]}
             style={styles.premiumBalanceCard}
           >
             <View style={styles.balCardHeader}>
-              <Text style={[styles.balCardLabel, { color: T.textDim }]}>AVAILABLE TO SPEND</Text>
+              <Text style={[styles.balCardLabel, { color: T.textDim }]}>CARD BALANCE</Text>
               <TouchableOpacity onPress={() => setBalanceHidden(v => !v)} activeOpacity={0.7}>
                 <Feather name={balanceHidden ? 'eye-off' : 'eye'} size={16} color={T.textDim} />
               </TouchableOpacity>
             </View>
             <View style={styles.balCardMain}>
-              <Text style={[styles.currencySymbol, { color: T.text }]}>$</Text>
+              {!balanceHidden && <Text style={[styles.currencySymbol, { color: T.text }]}>$</Text>}
               <Text style={[styles.mainBalText, { color: T.text }]}>
-                {balanceHidden ? '••••••' : cardBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {balanceHidden ? '••••••' : cardBalance.toFixed(2)}
               </Text>
-              <Text style={[styles.usdtTag, { color: T.textMuted }]}>USDT</Text>
+              {!balanceHidden && <Text style={[styles.usdtTag, { color: T.textMuted }]}>USD</Text>}
             </View>
             <View style={[styles.cardDivider, { backgroundColor: T.border }]} />
-            <View style={styles.networkInfoRow}>
-              <View style={[styles.statusIndicator, { backgroundColor: network === 'Sepolia' ? '#F59E0B' : '#00C853' }]} />
-              <Text style={[styles.networkLabelText, { color: T.textMuted }]}>
-                {network.toUpperCase()} · LIVE PROTECTION ACTIVE
-              </Text>
+            <View style={[styles.networkInfoRow, { justifyContent: 'space-between' }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={[styles.statusIndicator, { backgroundColor: network === 'Sepolia' ? '#F59E0B' : '#00C853' }]} />
+                <Text style={[styles.networkLabelText, { color: T.textMuted }]}>
+                  {network.toUpperCase()} · LIVE PROTECTION ACTIVE
+                </Text>
+              </View>
+              {cardBalance === 0 && (
+                <Text style={{ color: CRIMSON, fontSize: 10, fontWeight: '800' }}>TOP UP TO SPEND</Text>
+              )}
             </View>
           </LinearGradient>
 
-          {/* Action buttons - REDESIGNED */}
+          {/* Action buttons */}
           <View style={styles.mainActionsContainer}>
             <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: CRIMSON }]}
-              onPress={() => { setShowTopup(v => !v); setShowSpend(false); }}
+              style={[styles.actionBtn, { backgroundColor: CRIMSON, flex: 1 }]}
+              onPress={() => { setShowSpend(v => !v); setShowTopup(false); }}
               activeOpacity={0.9}
             >
-              <Feather name="plus-circle" size={20} color="#FFF" />
-              <Text style={styles.actionBtnText}>Add Cash</Text>
+              <Feather name="shopping-bag" size={20} color="#FFF" />
+              <Text style={styles.actionBtnText}>Pay Now</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: T.surfaceLow, borderWidth: 1, borderColor: T.border }]}
-              onPress={() => { setShowSpend(v => !v); setShowTopup(false); }}
-              activeOpacity={0.8}
+              style={[styles.actionBtn, { backgroundColor: T.surfaceHigh, flex: 1 }]}
+              onPress={() => { setShowTopup(v => !v); setShowSpend(false); }}
+              activeOpacity={0.9}
             >
-              <Feather name="shopping-bag" size={20} color={T.text} />
-              <Text style={[styles.actionBtnText, { color: T.text }]}>Pay Now</Text>
+              <Feather name="plus-circle" size={20} color={T.text} />
+              <Text style={[styles.actionBtnText, { color: T.text }]}>Top Up</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -288,121 +317,172 @@ export default function CardScreen({ navigation }: any) {
             </TouchableOpacity>
           </View>
 
-          {/* Panels */}
+          {/* Top Up Panel */}
           {showTopup && (
             <View style={[styles.panel, { backgroundColor: T.surface, borderColor: T.border, borderWidth: 1 }]}>
               <View style={styles.panelHeader}>
-                <Text style={[styles.panelTitle, { color: T.text }]}>Fund Your Card</Text>
+                <Text style={[styles.panelTitle, { color: T.text }]}>Top Up Card</Text>
                 <TouchableOpacity onPress={() => { setShowTopup(false); setTopupAmount(''); }}>
-                   <View style={[styles.closeIconBox, { backgroundColor: T.surfaceLow }]}>
+                  <View style={[styles.closeIconBox, { backgroundColor: T.surfaceLow }]}>
                     <Feather name="x" size={14} color={T.textMuted} />
-                   </View>
+                  </View>
                 </TouchableOpacity>
               </View>
 
-              <View style={styles.coinSelector}>
-                {COINS.map(c => {
-                  if (c === 'BTC' || c === 'SOL') return null;
-                  return (
-                    <TouchableOpacity
-                      key={c}
-                      style={[
-                        styles.coinPill,
-                        { backgroundColor: T.surfaceLow },
-                        topupCoin === c && { backgroundColor: CRIMSON },
-                      ]}
-                      onPress={() => { setTopupCoin(c); setTopupAmount(''); }}
-                      activeOpacity={0.75}
-                    >
-                      <Text style={[
-                        styles.coinPillText,
-                        { color: T.textDim },
-                        topupCoin === c && { color: '#FFF' },
-                      ]}>{c}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
+              {/* Token selector */}
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+                {COINS.map(c => (
+                  <TouchableOpacity
+                    key={c}
+                    onPress={() => { setTopupToken(c); setTopupAmount(''); }}
+                    style={[
+                      { flex: 1, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
+                        backgroundColor: topupToken === c ? CRIMSON + '20' : T.surfaceLow,
+                        borderWidth: 1, borderColor: topupToken === c ? CRIMSON : T.border },
+                    ]}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: topupToken === c ? CRIMSON : T.textDim }}>{c}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
 
-              <View style={[styles.amountInputBox, { backgroundColor: T.surfaceLow }]}>
-                <View style={styles.inputTopRow}>
-                  <Text style={[styles.availLabel, { color: T.textDim }]}>Available: {parseFloat(ethBalance).toFixed(4)} {topupCoin}</Text>
-                  <TouchableOpacity onPress={() => setTopupAmount(ethBalance)}>
-                    <Text style={[styles.maxLabel, { color: CRIMSON }]}>MAX</Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={styles.inputMainRow}>
-                  <TextInput
-                    style={[styles.hugeInput, { color: T.text }]}
-                    placeholder="0.00"
-                    placeholderTextColor={T.textDim}
-                    keyboardType="decimal-pad"
-                    value={topupAmount}
-                    onChangeText={setTopupAmount}
-                  />
-                  <Text style={[styles.unitText, { color: T.textMuted }]}>{topupCoin}</Text>
-                </View>
-                <View style={[styles.innerDivider, { backgroundColor: T.border }]} />
-                <View style={styles.summaryRow}>
-                   <Text style={[styles.convInfo, { color: T.textDim }]}>1 {topupCoin} = ${conversionRate.toLocaleString()}</Text>
-                   <Text style={[styles.receiveInfo, { color: T.text }]}>Get <Text style={{ color: '#00C853', fontWeight: '900' }}>${usdtValue}</Text></Text>
-                </View>
+              {/* Amount input */}
+              <Text style={[styles.availLabel, { color: T.textDim, marginBottom: 8 }]}>AMOUNT ({topupToken})</Text>
+              <View style={[styles.miniInputBox, { backgroundColor: T.surfaceLow, marginBottom: 8 }]}>
+                <TextInput
+                  style={[styles.simpleInput, { color: T.text }]}
+                  placeholder="0.00"
+                  placeholderTextColor={T.textMuted}
+                  keyboardType="decimal-pad"
+                  value={topupAmount}
+                  onChangeText={v => setTopupAmount(v.replace(/[^0-9.]/g, ''))}
+                />
+                <TouchableOpacity onPress={() => setTopupAmount((Math.floor(topupTokenBalance * 100000) / 100000).toString())}>
+                  <Text style={{ color: CRIMSON, fontSize: 11, fontWeight: '900' }}>MAX</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 }}>
+                <Text style={[styles.availLabel, { color: T.textDim }]}>
+                  Available: {topupTokenBalance.toFixed(4)} {topupToken}
+                </Text>
+                {topupUSD > 0 && (
+                  <Text style={[styles.availLabel, { color: '#00C853' }]}>+${topupUSD.toFixed(2)} USD</Text>
+                )}
               </View>
 
               <TouchableOpacity
-                style={[styles.panelConfirmBtn, (!topupAmount || loading) && { opacity: 0.6 }]}
+                style={[styles.panelConfirmBtn, { backgroundColor: '#00C853' },
+                  (!topupAmount || topupLoading) && { opacity: 0.5 }]}
                 onPress={handleTopup}
-                disabled={!topupAmount || loading}
+                disabled={!topupAmount || topupLoading}
                 activeOpacity={0.8}
               >
-                {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.panelConfirmText}>Deposit Funds</Text>}
+                {topupLoading
+                  ? <ActivityIndicator color="#FFF" />
+                  : <Text style={[styles.panelConfirmText, { color: '#FFF' }]}>
+                      {topupUSD > 0 ? `Add $${topupUSD.toFixed(2)} to Card` : 'Enter Amount'}
+                    </Text>
+                }
               </TouchableOpacity>
             </View>
           )}
 
+          {/* Pay Panel */}
           {showSpend && (
             <View style={[styles.panel, { backgroundColor: T.surface, borderColor: T.border, borderWidth: 1 }]}>
               <View style={styles.panelHeader}>
                 <Text style={[styles.panelTitle, { color: T.text }]}>New Payment</Text>
-                <TouchableOpacity onPress={() => { setShowSpend(false); setSpendAmount(''); setSpendLabel(''); }}>
-                  <View style={[styles.closeIconBox, { backgroundColor: T.surfaceLow }]}>
-                    <Feather name="x" size={14} color={T.textMuted} />
-                   </View>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                  <TouchableOpacity
+                    style={[styles.closeIconBox, { backgroundColor: CRIMSON + '20', borderWidth: 1, borderColor: CRIMSON + '40' }]}
+                    onPress={() => navigation.navigate('Scan', { returnTo: 'Card' })}
+                    activeOpacity={0.75}
+                  >
+                    <Feather name="camera" size={14} color={CRIMSON} />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => { setShowSpend(false); setMerchant({ name: '', amount: '', icon: '🛍️' }); }}>
+                    <View style={[styles.closeIconBox, { backgroundColor: T.surfaceLow }]}>
+                      <Feather name="x" size={14} color={T.textMuted} />
+                    </View>
+                  </TouchableOpacity>
+                </View>
               </View>
-              
-              <View style={[styles.amountInputBox, { backgroundColor: T.surfaceLow, marginBottom: 16 }]}>
-                <Text style={[styles.availLabel, { color: T.textDim, marginBottom: 8 }]}>LIMIT: ${cardBalance.toFixed(2)} USDT</Text>
+
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
+                <Text style={[styles.availLabel, { color: T.textDim }]}>CARD BALANCE: ${cardBalance.toFixed(2)}</Text>
+                {cardBalance === 0 && (
+                  <TouchableOpacity onPress={() => { setShowSpend(false); setShowTopup(true); }}>
+                    <Text style={[styles.availLabel, { color: CRIMSON }]}>TOP UP FIRST →</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Icon picker */}
+              <Text style={[styles.availLabel, { color: T.textDim, marginBottom: 8 }]}>ICON</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {ICONS.map(ic => (
+                    <TouchableOpacity
+                      key={ic}
+                      onPress={() => setMerchant(p => ({ ...p, icon: ic }))}
+                      style={[
+                        { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: T.surfaceLow },
+                        merchant.icon === ic && { backgroundColor: CRIMSON + '25', borderWidth: 1.5, borderColor: CRIMSON },
+                      ]}
+                    >
+                      <Text style={{ fontSize: 22 }}>{ic}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+
+              {/* Merchant name */}
+              <Text style={[styles.availLabel, { color: T.textDim, marginBottom: 8 }]}>MERCHANT NAME</Text>
+              <View style={[styles.miniInputBox, { backgroundColor: T.surfaceLow, marginBottom: 14 }]}>
+                <Text style={{ fontSize: 20, marginRight: 10 }}>{merchant.icon}</Text>
                 <TextInput
-                  style={[styles.hugeInput, { color: T.text }]}
-                  placeholder="$0.00"
-                  placeholderTextColor={T.textDim}
-                  keyboardType="decimal-pad"
-                  value={spendAmount}
-                  onChangeText={setSpendAmount}
-                />
-              </View>
-              
-              <View style={[styles.miniInputBox, { backgroundColor: T.surfaceLow }]}>
-                 <Feather name="tag" size={14} color={T.textDim} style={{marginRight: 10}} />
-                 <TextInput
                   style={[styles.simpleInput, { color: T.text }]}
-                  placeholder="Merchant name (optional)"
-                  placeholderTextColor={T.textDim}
-                  value={spendLabel}
-                  onChangeText={setSpendLabel}
+                  placeholder="e.g. Netflix, Coffee Shop…"
+                  placeholderTextColor={T.textMuted}
+                  value={merchant.name}
+                  onChangeText={v => setMerchant(p => ({ ...p, name: v }))}
+                  maxLength={40}
                 />
               </View>
 
+              {/* Amount */}
+              <Text style={[styles.availLabel, { color: T.textDim, marginBottom: 8 }]}>AMOUNT (USD)</Text>
+              <View style={[styles.miniInputBox, { backgroundColor: T.surfaceLow, marginBottom: 20 }]}>
+                <Text style={[styles.simpleInput, { color: T.textMuted, width: 18 }]}>$</Text>
+                <TextInput
+                  style={[styles.simpleInput, { color: T.text }]}
+                  placeholder="0.00"
+                  placeholderTextColor={T.textMuted}
+                  keyboardType="decimal-pad"
+                  value={merchant.amount}
+                  onChangeText={v => setMerchant(p => ({ ...p, amount: v.replace(/[^0-9.]/g, '') }))}
+                />
+                <Text style={[styles.availLabel, { color: T.textDim }]}>
+                  ≈ {merchant.amount && !isNaN(parseFloat(merchant.amount))
+                    ? (parseFloat(merchant.amount) / conversionRate).toFixed(6)
+                    : '0'} {topupToken}
+                </Text>
+              </View>
+
               <TouchableOpacity
-                style={[styles.panelConfirmBtn, { backgroundColor: T.text }, (!spendAmount || loading) && { opacity: 0.6 }]}
+                style={[styles.panelConfirmBtn, { backgroundColor: T.text },
+                  (!merchant.name.trim() || !merchant.amount || loading) && { opacity: 0.5 }]}
                 onPress={handleSpend}
-                disabled={!spendAmount || loading}
+                disabled={!merchant.name.trim() || !merchant.amount || loading}
                 activeOpacity={0.8}
               >
-                {loading 
-                  ? <ActivityIndicator color={T.background} /> 
-                  : <Text style={[styles.panelConfirmText, { color: T.background }]}>Confirm Payment</Text>
+                {loading
+                  ? <ActivityIndicator color={T.background} />
+                  : <Text style={[styles.panelConfirmText, { color: T.background }]}>
+                      {merchant.name.trim() && merchant.amount
+                        ? `Pay $${parseFloat(merchant.amount || '0').toFixed(2)} to ${merchant.name.trim()}`
+                        : 'Fill in details to pay'}
+                    </Text>
                 }
               </TouchableOpacity>
             </View>
@@ -445,7 +525,7 @@ export default function CardScreen({ navigation }: any) {
                   <View style={styles.txMainInfo}>
                     <Text style={[styles.txLabel, { color: T.text }]} numberOfLines={1}>{tx.label}</Text>
                     <Text style={[styles.txSubDate, { color: T.textDim }]}>
-                      {new Date(tx.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })} · {new Date(tx.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {new Date(tx.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
                     </Text>
                   </View>
                   <Text style={[styles.txAmountText, {
