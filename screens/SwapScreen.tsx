@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, memo } from 'react';
+import React, { useState, useEffect, useRef, memo } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   ScrollView, ActivityIndicator, Image, Platform, Modal,
@@ -56,7 +56,7 @@ export default function SwapScreen({ navigation }: any) {
   const { balances, ethBalance, isDarkMode, network, refreshBalance, walletAddress, applySwapBalances } = useWallet();
   const { prices } = useMarket();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
-  const styles = useMemo(() => makeStyles(T), [T]);
+  const styles = React.useMemo(() => makeStyles(T), [T]);
 
   const [sellToken, setSellToken] = useState('ETH');
   const [buyToken, setBuyToken]   = useState('USDC');

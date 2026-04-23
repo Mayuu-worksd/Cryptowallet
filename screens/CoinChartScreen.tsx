@@ -149,18 +149,26 @@ export default function CoinChartScreen({ route, navigation }: any) {
     fetchChart(range);
   }, [range, symbol]);
 
-  const chartMin = chartData.length ? chartData.slice(-500).reduce((m, v) => v < m ? v : m, Infinity) : 0;
-  const chartMax = chartData.length ? chartData.slice(-500).reduce((m, v) => v > m ? v : m, -Infinity) : 0;
-  const pctChange = chartData.length >= 2
-    ? ((chartData[chartData.length - 1] - chartData[0]) / chartData[0]) * 100
-    : change24h;
+  const chartMin = useMemo(() => chartData.length ? chartData.reduce((m, v) => v < m ? v : m, Infinity) : 0, [chartData]);
+  const chartMax = useMemo(() => chartData.length ? chartData.reduce((m, v) => v > m ? v : m, -Infinity) : 0, [chartData]);
+  const pctChange = useMemo(() => {
+    if (chartData.length >= 2) return ((chartData[chartData.length - 1] - chartData[0]) / chartData[0]) * 100;
+    return change24h;
+  }, [chartData, change24h]);
   const chartUp = pctChange >= 0;
 
-  const formatPrice = (p: number) => {
+  const formatPrice = useCallback((p: number) => {
     if (p >= 1000) return `$${p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     if (p >= 1)    return `$${p.toFixed(4)}`;
     return `$${p.toFixed(6)}`;
-  };
+  }, []);
+
+  const stats = useMemo(() => [
+    { label: 'Current Price', value: formatPrice(priceNow) },
+    { label: '24h Change',    value: `${isUp ? '+' : ''}${change24h.toFixed(2)}%`, color: isUp ? T.success : T.error },
+    { label: 'Range High',    value: chartData.length ? `$${chartMax.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '—' },
+    { label: 'Range Low',     value: chartData.length ? `$${chartMin.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '—' },
+  ], [priceNow, isUp, change24h, chartData, chartMax, chartMin, formatPrice, T]);
 
   return (
     <View style={[styles.container, { backgroundColor: T.background }]}>
@@ -263,12 +271,7 @@ export default function CoinChartScreen({ route, navigation }: any) {
         {/* Stats */}
         <View style={[styles.statsCard, { backgroundColor: T.surface, borderColor: T.border }]}>
           <Text style={[styles.holdingsTitle, { color: T.textMuted }]}>MARKET STATS</Text>
-          {[
-            { label: 'Current Price', value: formatPrice(priceNow) },
-            { label: '24h Change',    value: `${isUp ? '+' : ''}${change24h.toFixed(2)}%`, color: isUp ? T.success : T.error },
-            { label: 'Range High', value: chartData.length ? `$${chartMax.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '—' },
-            { label: 'Range Low',  value: chartData.length ? `$${chartMin.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '—' },
-          ].map((stat, i, arr) => (
+          {stats.map((stat, i, arr) => (
             <View key={stat.label} style={[styles.statRow, i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: T.border }]}>
               <Text style={[styles.statLabel, { color: T.textMuted }]}>{stat.label}</Text>
               <Text style={[styles.statValue, { color: stat.color ?? T.text }]}>{stat.value}</Text>
