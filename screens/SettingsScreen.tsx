@@ -252,7 +252,7 @@ export default function SettingsScreen({ navigation }: any) {
       </Modal>
 
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Main')} activeOpacity={0.7}>
           <Feather name="arrow-left" size={24} color={T.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Profile & Settings</Text>

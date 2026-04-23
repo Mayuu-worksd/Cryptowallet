@@ -4,6 +4,7 @@ import {
   ActivityIndicator, Image, Platform, Animated, Dimensions,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { Svg, Path, Defs, LinearGradient, Stop, Polygon } from 'react-native-svg';
 import { useWallet, useMarket } from '../store/WalletContext';
 import { Theme, COIN_META, COIN_COLORS } from '../constants';
 
@@ -30,9 +31,9 @@ const RANGES = [
   { label: '1Y', days: 365 },
 ];
 
-function Sparkline({ prices, color, width, height }: {
+const Sparkline = React.memo(({ prices, color, width, height }: {
   prices: number[]; color: string; width: number; height: number;
-}) {
+}) => {
   if (prices.length < 2) return null;
 
   // Sample down to max 120 points for performance
@@ -53,23 +54,18 @@ function Sparkline({ prices, color, width, height }: {
   const pathD   = `M ${pts.join(' L ')}`;
   const fillPts = [`0,${height}`, ...pts, `${width},${height}`].join(' ');
 
-  try {
-    const { Svg, Path, Defs, LinearGradient: SvgGrad, Stop, Polygon } = require('react-native-svg');
-    return (
-      <Svg width={width} height={height}>
-        <Defs>
-          <SvgGrad id="grad" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={color} stopOpacity="0.25" />
-            <Stop offset="1" stopColor={color} stopOpacity="0" />
-          </SvgGrad>
-        </Defs>
-        <Polygon points={fillPts} fill="url(#grad)" />
-        <Path d={pathD} stroke={color} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-      </Svg>
-    );
-  } catch {
-    return null;
-  }
+  return (
+    <Svg width={width} height={height}>
+      <Defs>
+        <LinearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0" stopColor={color} stopOpacity="0.25" />
+          <Stop offset="1" stopColor={color} stopOpacity="0" />
+        </LinearGradient>
+      </Defs>
+      <Polygon points={fillPts} fill="url(#grad)" />
+      <Path d={pathD} stroke={color} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
 }
 
 export default function CoinChartScreen({ route, navigation }: any) {
@@ -83,6 +79,7 @@ export default function CoinChartScreen({ route, navigation }: any) {
   const [chartData, setChartData]   = useState<number[]>([]);
   const [loading, setLoading]       = useState(true);
   const [range, setRange]           = useState(7);
+  // Initialise price from already-cached context data so the screen renders instantly
   const [priceNow, setPriceNow]     = useState(prices[symbol]?.usd ?? 0);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -146,14 +143,10 @@ export default function CoinChartScreen({ route, navigation }: any) {
     Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
   };
 
+  // Fetch immediately on mount — don't wait for InteractionManager
+  // The price/stats already show from cached data, only the chart spinner is visible
   useEffect(() => {
-    if (Platform.OS === 'web') {
-      fetchChart(range);
-      return;
-    }
-    const { InteractionManager } = require('react-native');
-    const task = InteractionManager.runAfterInteractions(() => fetchChart(range));
-    return () => task.cancel();
+    fetchChart(range);
   }, [range, symbol]);
 
   const chartMin = chartData.length ? chartData.slice(-500).reduce((m, v) => v < m ? v : m, Infinity) : 0;

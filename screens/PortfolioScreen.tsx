@@ -76,7 +76,7 @@ export default function PortfolioScreen({ navigation }: any) {
 
       {/* Header */}
       <View style={[styles.header, { backgroundColor: isDarkMode ? 'rgba(19,19,19,0.95)' : 'rgba(247,249,251,0.95)' }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.7}>
+        <TouchableOpacity onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Main')} style={styles.backBtn} activeOpacity={0.7}>
           <Feather name="arrow-left" size={22} color={T.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: T.text }]}>My Assets</Text>
