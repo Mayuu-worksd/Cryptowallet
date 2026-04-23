@@ -49,6 +49,8 @@ type LocalTx = {
   date:            string;
   txHash?:         string;
   contractAddress?: string;
+  rawDate?:        number;
+  isInternal?:     boolean;
 };
 
 type CardTx = {
