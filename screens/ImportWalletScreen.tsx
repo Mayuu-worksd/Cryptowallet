@@ -210,11 +210,14 @@ export default function ImportWalletScreen({ navigation }: any) {
               placeholder="word1 word2 word3 ..."
               placeholderTextColor={T.textDim}
               value={mnemonic}
-              onChangeText={setMnemonic}
+              onChangeText={(text) => setMnemonic(text.toLowerCase().replace(/[^a-z\s]/g, ''))}
               multiline
               autoCapitalize="none"
               autoCorrect={false}
               spellCheck={false}
+              autoComplete="off"
+              keyboardType="visible-password"
+              textContentType="none"
             />
 
             <View style={[styles.inputFooter, { borderTopColor: T.border }]}>
