@@ -158,7 +158,20 @@ const MarketTicker = memo(({ prices, T, isPricesLoading, isInitialLoad, onCoinPr
   const handleCoinPress = useCallback((sym: string) => {
     animRef.current?.stop();
     onCoinPress(sym);
-  }, [onCoinPress]);
+    // Restart animation after navigation
+    setTimeout(() => {
+      if (totalWidth === 0) return;
+      translateX.setValue(0);
+      animRef.current = Animated.loop(
+        Animated.timing(translateX, {
+          toValue: -totalWidth,
+          duration: totalWidth * 40,
+          useNativeDriver: true,
+        })
+      );
+      animRef.current.start();
+    }, 500);
+  }, [onCoinPress, totalWidth, translateX]);
 
   const items = [...TICKER_COINS, ...TICKER_COINS, ...TICKER_COINS];
 
