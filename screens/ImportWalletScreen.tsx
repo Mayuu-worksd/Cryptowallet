@@ -8,7 +8,6 @@ import * as Clipboard from 'expo-clipboard';
 import { Theme } from '../constants';
 import { useWallet } from '../store/WalletContext';
 import Toast from '../components/Toast';
-import { walletService } from '../services/walletService';
 
 // Two-step overlay: loading → success
 const STEPS = [
@@ -109,17 +108,17 @@ export default function ImportWalletScreen({ navigation }: any) {
   const [loading, setLoading]   = useState(false);
   const [importDone, setImportDone] = useState(false);
   const [invalidWords, setInvalidWords] = useState<string[]>([]);
+  const [toast, setToast] = useState({ visible: false, message: '', type: 'error' as 'success' | 'error' | 'info' });
   const { importWallet, isDarkMode, hasWallet } = useWallet();
 
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
 
   // Real-time validation
   useEffect(() => {
-    if (!mnemonic) {
-      setInvalidWords([]);
-      return;
-    }
-    const invalid = walletService.getInvalidWords(mnemonic);
+    if (!mnemonic.trim()) { setInvalidWords([]); return; }
+    const words = mnemonic.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    // Basic check: BIP39 words are 3-8 chars, letters only
+    const invalid = words.filter(w => !/^[a-z]{3,8}$/.test(w));
     setInvalidWords(invalid);
   }, [mnemonic]);
 
