@@ -84,4 +84,29 @@ export const etherscanService = {
     if (data.status !== '1') return [];
     return (Array.isArray(data.result) ? data.result : []) as TokenTx[];
   },
+  
+  async fetchInternalTransactions(address: string, network: string): Promise<ChainTx[]> {
+    const chainId = CHAIN_ID[network];
+    if (!chainId || !address) return [];
+
+    const params = new URLSearchParams({
+      chainid:    chainId,
+      module:     'account',
+      action:     'txlistinternal',
+      address,
+      startblock: '0',
+      endblock:   '99999999',
+      page:       '1',
+      offset:     '50',
+      sort:       'desc',
+      ...(EXPLORER_KEY ? { apikey: EXPLORER_KEY } : {}),
+    });
+
+    const res = await fetch(`${V2_BASE}?${params}`, { headers: { 'Accept': 'application/json' } });
+    if (!res.ok) return [];
+
+    const data = await res.json();
+    if (data.status !== '1') return [];
+    return (Array.isArray(data.result) ? data.result : []) as ChainTx[];
+  },
 };

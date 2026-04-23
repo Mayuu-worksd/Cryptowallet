@@ -282,26 +282,23 @@ export const transactionService = {
     
     // 1. Check for active lockout
     if (this.isLockedOut && now < this.lockoutExpiry) {
-      console.log(`[transactionService] Sync is in backoff mode. Resuming in ${Math.ceil((this.lockoutExpiry - now) / 1000)}s`);
       return [];
     }
 
-    // 2. Standard Cooldown (120s) — Bypass if force is true
-    if (!force && (now - this.lastSyncTime < 120000)) {
+    // 2. Standard Cooldown (15s) — Bypass if force is true
+    if (!force && (now - this.lastSyncTime < 15000)) {
       return [];
     }
     this.lastSyncTime = now;
 
     try {
-      console.log('[transactionService] Triggering fresh sync...');
-      // 1. Fetch ETH Txs first
-      const chainTxs = await etherscanService.fetchTransactions(walletAddress, network);
-      
-      // 2. SAFETY DELAY: Wait 3 seconds
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      // 3. Fetch Token Txs second
-      const tokenTxs = await etherscanService.fetchTokenTransactions(walletAddress, network);
+
+      // 1. Fetch Txs in parallel
+      const [chainTxs, tokenTxs, internalTxs] = await Promise.all([
+        etherscanService.fetchTransactions(walletAddress, network),
+        etherscanService.fetchTokenTransactions(walletAddress, network),
+        etherscanService.fetchInternalTransactions(walletAddress, network),
+      ]);
       
       // Success! Clear lockout
       this.isLockedOut = false;
@@ -339,6 +336,29 @@ export const transactionService = {
         knownHashes.add(tx.hash);
       }
 
+      // 1.5 Process Internal ETH Txs (Swaps/Contract Income)
+      for (const tx of internalTxs) {
+        if (tx.isError !== '0' || knownHashes.has(tx.hash)) continue;
+        const isOut  = tx.from.toLowerCase() === walletAddress.toLowerCase();
+        const ethAmt = parseFloat(ethers.utils.formatEther(tx.value || '0'));
+        if (ethAmt <= 0) continue;
+
+        newTxs.push({
+          id:      tx.hash + '_int',
+          type:    isOut ? 'sent' : 'received',
+          coin:    'ETH',
+          amount:  ethAmt.toFixed(6),
+          usdValue: (ethAmt * ethPriceUsd).toFixed(2),
+          address: isOut ? tx.to : tx.from,
+          status:  'success',
+          date:    new Date(parseInt(tx.timeStamp, 10) * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          rawDate: parseInt(tx.timeStamp, 10) * 1000,
+          txHash:  tx.hash,
+          isInternal: true,
+        });
+        knownHashes.add(tx.hash);
+      }
+
       // 2. Process Token Txs (Check for CUSTOM swap)
       for (const tx of tokenTxs) {
         if (knownHashes.has(tx.hash)) continue;
@@ -366,7 +386,7 @@ export const transactionService = {
       if (newTxs.length > 0) {
         const updated = [...newTxs, ...localTxs];
         await AsyncStorage.setItem('cw_transactions', JSON.stringify(updated));
-        return newTxs; // Return the new transactions for UI update
+        return newTxs;
       }
       return [];
     } catch (e: any) {

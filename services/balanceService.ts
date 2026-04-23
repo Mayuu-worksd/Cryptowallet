@@ -89,8 +89,6 @@ export async function getWalletBalances(
   const isTestnet = network === 'Sepolia';
   const local     = localBalances ?? {};
 
-  console.log('[balanceService] Fetching for', walletAddress.slice(0, 10), 'on', network);
-
   const [ethRaw, usdcRaw, usdtRaw, daiRaw, customRaw] = await Promise.allSettled([
     provider.getBalance(walletAddress),
     fetchERC20(provider, walletAddress, TOKEN_CONTRACTS.USDC[network], TOKEN_DECIMALS.USDC, 'USDC'),
@@ -104,9 +102,6 @@ export async function getWalletBalances(
   const chainUSDT   = usdtRaw.status   === 'fulfilled' ? usdtRaw.value : null;
   const chainDAI    = daiRaw.status    === 'fulfilled' ? daiRaw.value  : null;
   const chainCUSTOM = customRaw.status === 'fulfilled' ? customRaw.value : null;
-
-  console.log('[balanceService] Chain — ETH:', chainETH, 'USDC:', chainUSDC, 'USDT:', chainUSDT, 'DAI:', chainDAI, 'CUSTOM:', chainCUSTOM);
-  console.log('[balanceService] Local —', local);
 
   // ─── AUTO-HEAL: Calculate CUSTOM balance from history ─────────────────────
   let historyCUSTOM = 0;
@@ -152,9 +147,6 @@ export async function getWalletBalances(
       : (chainCUSTOM !== null ? chainCUSTOM : (local.CUSTOM ?? 0)),
   };
 
-  console.log('[balanceService] Final balances:', balances);
-
-  // Only persist if we actually have meaningful data to avoid wiping local swap values
   const hasAnyBalance = balances.ETH > 0 || balances.USDC > 0 || balances.USDT > 0 || balances.DAI > 0 || balances.CUSTOM > 0;
   if (hasAnyBalance || !isTestnet) {
     await AsyncStorage.setItem('cw_token_balances', JSON.stringify(balances)).catch(() => {});

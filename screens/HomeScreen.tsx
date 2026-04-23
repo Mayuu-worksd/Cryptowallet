@@ -369,12 +369,11 @@ const NewsCard = memo(({ item, T }: { item: NewsItem; T: any }) => {
 });
 
 const STABLE_FALLBACK: Record<string, number> = { USDC: 1, USDT: 1, DAI: 1 };
-
 // ─── Main screen ───────────────────────────────────────────────────────────────
 export default function HomeScreen({ navigation }: any) {
   const {
     ethBalance, balances, isDarkMode, walletName, walletAddress,
-    isLoadingBalance, refreshBalance,
+    isLoadingBalance, refreshBalance, isSyncing,
     balanceVisible, toggleBalanceVisible, network, transactions,
   } = useWallet();
   const { prices, isPricesLoading, priceError, refreshPrices, news, isNewsLoading, refreshNews } = useMarket();
@@ -434,8 +433,11 @@ export default function HomeScreen({ navigation }: any) {
           <View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Text style={[styles.walletLabel, { color: T.text }]}>{walletName}</Text>
-              <View style={{ backgroundColor: networkColor + '20', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6, borderWidth: 1, borderColor: networkColor + '40' }}>
-                <Text style={{ color: networkColor, fontSize: 8, fontWeight: '800', textTransform: 'uppercase' }}>{network}</Text>
+              <View style={{ backgroundColor: networkColor + '20', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6, borderWidth: 1, borderColor: networkColor + '40', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                {isSyncing && <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: networkColor }} />}
+                <Text style={{ color: networkColor, fontSize: 8, fontWeight: '800', textTransform: 'uppercase' }}>
+                  {isSyncing ? 'Syncing...' : network}
+                </Text>
               </View>
             </View>
             <Text style={{ fontSize: 10, color: T.textMuted, fontWeight: '600', letterSpacing: 0.2 }}>

@@ -165,13 +165,13 @@ npm install --legacy-peer-deps
 
 ### 3. Set up environment variables
 
-A `.env` file is already included in this repo for developer testing. It contains working API keys for all services:
+A `.env` file is included in this repo for developer testing:
 
 ```env
-EXPO_PUBLIC_ALCHEMY_KEY=YUIpvCTh5H7SkHPWFKiGe
-EXPO_PUBLIC_WEB_SALT=cw_w3b_s4lt_2024
-EXPO_PUBLIC_ETHERSCAN_KEY=2TJN7KQXJDKDNR9YP9WXNNHSJU3GTP2QRB
-EXPO_PUBLIC_ZRX_API_KEY=8222598d-7404-46d6-994d-82d85d45ef89
+EXPO_PUBLIC_ALCHEMY_KEY=your_alchemy_key
+EXPO_PUBLIC_WEB_SALT=your_web_salt
+EXPO_PUBLIC_ETHERSCAN_KEY=your_etherscan_key
+EXPO_PUBLIC_ZRX_API_KEY=your_zrx_api_key
 ```
 
 | Key | Service | Purpose |
@@ -181,7 +181,7 @@ EXPO_PUBLIC_ZRX_API_KEY=8222598d-7404-46d6-994d-82d85d45ef89
 | `EXPO_PUBLIC_ZRX_API_KEY` | [0x Protocol](https://0x.org) | Token swap quotes and execution |
 | `EXPO_PUBLIC_WEB_SALT` | Internal | Web localStorage obfuscation salt |
 
-> These keys are included for testing purposes only. For production, replace with your own keys.
+> Contact the project maintainer for API keys.
 
 ### 4. Start the development server
 

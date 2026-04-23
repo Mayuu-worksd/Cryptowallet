@@ -40,7 +40,6 @@ export const storageService = {
    * Public address goes to AsyncStorage for fast retrieval.
    */
   async saveWallet(privateKey: string, mnemonic: string, address: string): Promise<void> {
-    console.log("[Storage] Saving wallet for address:", address);
     
     if (Platform.OS === 'web') {
       localStorage.setItem(KEYS.PRIVATE_KEY,    xorEncode(privateKey, WEB_SALT));
@@ -99,7 +98,6 @@ export const storageService = {
   },
 
   async clearWallet(): Promise<void> {
-    console.log("[Storage] Clearing all wallet data...");
     if (Platform.OS === 'web') {
       localStorage.removeItem(KEYS.PRIVATE_KEY);
       localStorage.removeItem(KEYS.MNEMONIC);
@@ -116,7 +114,6 @@ export const storageService = {
   },
 
   async clearKeysOnly(): Promise<void> {
-    console.log("[Storage] Clearing sensitive keys + address (Logout)...");
     if (Platform.OS === 'web') {
       localStorage.removeItem(KEYS.PRIVATE_KEY);
       localStorage.removeItem(KEYS.MNEMONIC);
@@ -133,7 +130,6 @@ export const storageService = {
   async clearSecretsOnly(): Promise<void> {
     // Removes ONLY private key + mnemonic — keeps wallet address.
     // Used for "Delete Account" read-only mode so balance is still visible.
-    console.log("[Storage] Clearing secrets only (entering read-only mode)...");
     if (Platform.OS === 'web') {
       localStorage.removeItem(KEYS.PRIVATE_KEY);
       localStorage.removeItem(KEYS.MNEMONIC);

@@ -68,6 +68,7 @@ type WalletContextType = {
   network: string;
   transactions: Transaction[];
   balanceVisible: boolean;
+  isSyncing: boolean;
   toggleBalanceVisible: () => void;
   pinEnabled: boolean;
   addTx: (tx: Omit<Transaction, 'id' | 'date'>) => void;
@@ -182,13 +183,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const startup = async () => {
-      console.log("[Startup] Checking for existing wallet...");
       try {
         const address = await storageService.getWalletAddress();
         
         if (address) {
-          console.log("Wallet Loaded:", address);
-          console.log("Stored Address:", address);
           
           setWalletAddress(address);
           setHasWallet(true);
@@ -220,7 +218,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
               if (raw) {
                 const registry = JSON.parse(raw);
                 if (registry[address.toLowerCase()]) {
-                  console.log("[Startup] Restoring Card from Global Registry");
                   setCardCreated(true);
                   const details = cardService.getFixedCardDetails('CARD HOLDER', 'dark', address);
                   setCardDetails(details);
@@ -249,7 +246,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           setHasWallet(false);
         }
       } catch (e) {
-        console.error("[Startup] Error loading wallet:", e);
       } finally {
         setIsLoadingWallet(false);
         setDataLoaded(true);
@@ -268,7 +264,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       balancesRef.current = onChain;
       await AsyncStorage.setItem('cw_token_balances', JSON.stringify(onChain));
     } catch (e) {
-      console.error('[WalletContext] Balance fetch error:', e);
     } finally {
       setIsLoadingBalance(false);
     }
@@ -312,7 +307,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   // ─── 4. Live Balance Healer: Chronological History Replay Engine ───
   useEffect(() => {
     if (transactions.length > 0) {
-      console.log('[HEALER] Replaying', transactions.length, 'transactions to reconstruct state...');
       
       const recoveredTokenBals: Record<string, number> = { 
         USDC: 0, USDT: 0, DAI: 0, BTC: 0, SOL: 0, CUSTOM: 0 
@@ -372,7 +366,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       if (hasCardActivity) {
         setCardCreated(true);
         const finalBal = Math.max(0, recoveredCardBal);
-        console.log(`[HEALER] Card State Restored. Balance: $${finalBal.toFixed(2)}`);
         setCardBalance(finalBal);
       }
 
@@ -381,7 +374,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         const next = { ...prev };
         Object.entries(recoveredTokenBals).forEach(([coin, val]) => {
           if (Math.abs((next[coin] || 0) - val) > 0.0001) {
-            console.log(`[HEALER] Recovered ${coin} Balance: ${val.toFixed(4)}`);
             next[coin] = val;
             changed = true;
           }
@@ -437,6 +429,38 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     };
   }, [fetchPrices, fetchNews]);
 
+  const [isSyncing, setIsSyncing] = useState(false);
+  const syncInProgressRef = useRef(false);
+
+  // Background Sync Poller (Runs every 30s)
+  useEffect(() => {
+    if (!hasWallet || !walletAddress) return;
+
+    const interval = setInterval(async () => {
+      if (syncInProgressRef.current) return;
+      syncInProgressRef.current = true;
+      setIsSyncing(true);
+      try {
+        await fetchBalance(walletAddress, network);
+        const newTxs = await transactionService.syncIncoming(walletAddress, network, prices.ETH?.usd ?? 3500);
+        if (Array.isArray(newTxs) && newTxs.length > 0) {
+          setTransactions(prev => {
+            const existingHashes = new Set(prev.map(t => t.txHash).filter(Boolean));
+            const uniqueNew = newTxs.filter((t: any) => !t.txHash || !existingHashes.has(t.txHash));
+            if (uniqueNew.length === 0) return prev;
+            return [...uniqueNew, ...prev];
+          });
+        }
+      } catch (e) {
+      } finally {
+        setIsSyncing(false);
+        syncInProgressRef.current = false;
+      }
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [hasWallet, walletAddress, network, prices, fetchBalance]);
+
   const handleSetWalletName = useCallback(async (name: string) => {
     setWalletNameState(name);
     await storageService.saveWalletName(name);
@@ -446,15 +470,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return walletService.generateWalletPreview();
   }, []);
 
-  const importWallet = useCallback(async (mnemonic: string, isNew = false): Promise<void> => {
+  const importWallet = useCallback(async (mnemonic: string, isNew: boolean = false) => {
     try {
+      setIsLoadingWallet(true);
       const data = await walletService.importFromMnemonic(mnemonic);
-      const oldAddress = await storageService.getWalletAddress();
-      const isSwitching = oldAddress && oldAddress.toLowerCase() !== data.address.toLowerCase();
-
-      // ONLY wipe local data if this is a brand-new wallet OR switching to a different address.
-      // If restoring the SAME wallet (same address, e.g. from another device), preserve nothing
-      // locally — on-chain sync will repopulate everything.
+      
+      const isSwitching = walletAddress && walletAddress.toLowerCase() !== data.address.toLowerCase();
+      
       if (isNew || isSwitching) {
         await storageService.clearWallet();
         await AsyncStorage.multiRemove([
@@ -469,20 +491,20 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setEthBalance('0.0');
       }
 
+      const defaultName = `Wallet ${data.address.slice(-4).toUpperCase()}`;
       await storageService.saveWallet(data.privateKey, data.mnemonic, data.address);
-      const finalName = isNew ? 'Main Wallet' : (await storageService.getWalletName() || 'Main Wallet');
-      await storageService.saveWalletName(finalName);
+      await storageService.saveWalletName(defaultName);
 
       await clearPin();
-      await AsyncStorage.removeItem('cw_read_only'); // Clear read-only flag on re-import
+      await AsyncStorage.removeItem('cw_read_only');
       setPinEnabled(false);
       setIsReadOnly(false);
       setWalletAddress(data.address);
-      setWalletNameState(finalName);
+      setWalletNameState(defaultName);
       setHasWallet(true);
+      setIsLoadingWallet(false);
 
-      // Always fetch fresh on-chain data after import/restore.
-      // Reset the cooldown so the 120s gate doesn't block a newly imported wallet.
+      // Priority Sync after import (Background)
       transactionService.lastSyncTime = 0;
       transactionService.isLockedOut = false;
       (async () => {
@@ -497,13 +519,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             });
           }
         } catch (e) {
-          console.error('[importWallet] Background sync error:', e);
         }
       })();
     } catch (e: any) {
-      throw new Error(e.message || 'Invalid seed phrase. Please try again.');
+      setIsLoadingWallet(false);
+      throw new Error(e.message || 'Invalid seed phrase.');
+    } finally {
+      setIsLoadingWallet(false);
     }
-  }, [network, prices.ETH?.usd, fetchBalance]);
+  }, [walletAddress, network, prices, fetchBalance]);
 
   const deleteWallet = useCallback(async (): Promise<void> => {
     // LOGOUT — clears keys + address + read-only flag.
@@ -670,7 +694,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     balanceVisible, toggleBalanceVisible,
     pinEnabled, refreshPinEnabled,
     walletAddress, walletName, setWalletName: handleSetWalletName,
-    ethBalance, isLoadingBalance, hasWallet, isLoadingWallet, isReadOnly,
+    ethBalance, isLoadingBalance, hasWallet, isLoadingWallet, isReadOnly, isSyncing,
     balances, cardBalance, cardFrozen, network, transactions,
     cardDetails, cardCreated, createCard, updateCardDetails, generateCardDetails, cardTransactions,
     addTx,
@@ -680,7 +704,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }), [
     isDarkMode, toggleTheme, balanceVisible, toggleBalanceVisible,
     pinEnabled, refreshPinEnabled, addTx, walletAddress, walletName, handleSetWalletName,
-    ethBalance, isLoadingBalance, hasWallet, isLoadingWallet, isReadOnly,
+    ethBalance, isLoadingBalance, hasWallet, isLoadingWallet, isReadOnly, isSyncing,
     balances, cardBalance, cardFrozen, network, transactions,
     cardDetails, cardCreated, createCard, updateCardDetails, generateCardDetails, cardTransactions,
     createWallet, importWallet, deleteWallet, enterReadOnlyMode, refreshBalance, fetchBalance,
