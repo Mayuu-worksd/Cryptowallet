@@ -54,7 +54,7 @@ const TokenSelector = memo(({ sym, onPress, styles, T }: any) => (
 ));
 
 export default function SwapScreen({ navigation }: any) {
-  const { balances, ethBalance, isDarkMode, network, refreshBalance, walletAddress, applySwapBalances } = useWallet();
+  const { balances, ethBalance, isDarkMode, network, refreshBalance, walletAddress, applySwapBalances, addTx } = useWallet();
   const { prices } = useMarket();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const styles = React.useMemo(() => makeStyles(T), [T]);
@@ -173,35 +173,28 @@ export default function SwapScreen({ navigation }: any) {
         const capturedSell = sellAmount;
         const capturedBuy  = quote.buyAmount;
         setSwapResult({ sellAmt: capturedSell, sellTok: sellToken, buyAmt: capturedBuy, buyTok: buyToken });
+        
+        // 1. Update balances immediately
         await applySwapBalances(sellToken, parseFloat(sellAmount), buyToken, parseFloat(quote.buyAmount));
+        
+        // 2. Add to transaction history state (propagates to all screens instantly)
+        addTx({
+          type:      'swap',
+          coin:      sellToken,
+          amount:    sellAmount,
+          buyToken:  buyToken,
+          buyAmount: quote.buyAmount,
+          usdValue:  (parseFloat(sellAmount) * sellPrice).toFixed(2),
+          address:   `${sellToken} → ${buyToken}`,
+          status:    'success',
+          txHash:    result.hash ?? undefined,
+        } as any);
+
         haptics.success();
         notificationService.notifySwapComplete(sellToken, buyToken, parseFloat(quote.buyAmount).toFixed(4)).catch(() => {});
         setStep('success');
         setTimeout(() => refreshBalance(), 1000);
         setTimeout(() => refreshBalance(), 6000);
-        
-        // Also save to cw_transactions so HistoryScreen picks it up immediately
-        try {
-          const { default: AS } = Platform.OS === 'web'
-            ? { default: { getItem: (k: string) => localStorage.getItem(k), setItem: (k: string, v: string) => localStorage.setItem(k, v) } }
-            : await import('@react-native-async-storage/async-storage');
-          const raw = await AS.getItem('cw_transactions');
-          const existing = raw ? JSON.parse(raw) : [];
-          const newTx = {
-            id:        Date.now().toString(),
-            type:      'swap',
-            coin:      sellToken,
-            amount:    sellAmount,
-            buyToken:  buyToken,
-            buyAmount: quote.buyAmount,
-            usdValue:  (parseFloat(sellAmount) * sellPrice).toFixed(2),
-            address:   `${sellToken} → ${buyToken}`,
-            status:    'success',
-            date:      new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-            txHash:    result.hash ?? undefined,
-          };
-          await AS.setItem('cw_transactions', JSON.stringify([newTx, ...existing]));
-        } catch (_e) {}
       } else {
         throw new Error(result.error || 'Swap failed');
       }

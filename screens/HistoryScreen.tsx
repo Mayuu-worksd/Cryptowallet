@@ -443,9 +443,9 @@ export default function HistoryScreen({ navigation }: any) {
         ) : filtered.length === 0 ? (
           <EmptyState filter={activeFilter} T={T} />
         ) : (
-          filtered.map(tx => (
+          filtered.map((tx, index) => (
             <TxRow
-              key={tx.id}
+              key={tx.id ? `${tx.id}-${index}` : `tx-${index}`}
               tx={tx}
               T={T}
               cfg={cfgMap[tx.type]}

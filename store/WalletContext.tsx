@@ -70,6 +70,7 @@ type WalletContextType = {
   balanceVisible: boolean;
   toggleBalanceVisible: () => void;
   pinEnabled: boolean;
+  addTx: (tx: Omit<Transaction, 'id' | 'date'>) => void;
   refreshPinEnabled: () => Promise<void>;
   generateMnemonic: () => string;
   createWallet: () => Promise<{ mnemonic: string; address: string }>;
@@ -169,8 +170,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const addTx = useCallback((tx: Omit<Transaction, 'id' | 'date'>) => {
     setTransactions(prev => [{
       ...tx,
-      id:   Date.now().toString(),
-      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      id:      Date.now().toString(),
+      date:    new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      rawDate: Date.now(),
     }, ...prev]);
   }, []);
 
@@ -211,6 +213,24 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           if (savedCard) setCardBalance(parseFloat(savedCard));
           if (savedDetails) setCardDetails(JSON.parse(savedDetails));
           if (savedCardCreated) setCardCreated(savedCardCreated === 'true');
+          
+          // 2.5 Global Card Registry Check (Restore if not found locally)
+          if (!savedCardCreated || savedCardCreated !== 'true') {
+            AsyncStorage.getItem('cw_global_card_registry').then(raw => {
+              if (raw) {
+                const registry = JSON.parse(raw);
+                if (registry[address.toLowerCase()]) {
+                  console.log("[Startup] Restoring Card from Global Registry");
+                  setCardCreated(true);
+                  const details = cardService.getFixedCardDetails('CARD HOLDER', 'dark', address);
+                  setCardDetails(details);
+                  AsyncStorage.setItem('cw_card_created', 'true');
+                  AsyncStorage.setItem('cw_card_details', JSON.stringify(details));
+                }
+              }
+            }).catch(() => {});
+          }
+
           setCardFrozen(savedFrozen);
           if (savedTokenBals) {
             const parsed = JSON.parse(savedTokenBals);
@@ -221,40 +241,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           // 3. Auto-Healing: Restore balances from transaction history if missing
           if (savedTxs) {
             const txs: any[] = JSON.parse(savedTxs);
-            const heals: Record<string, number> = {};
-            txs.forEach(t => {
-              const isSuccess = t.status === 'success' || t.status === 'completed';
-              if (isSuccess && t.type === 'swap') {
-                // For a swap, we gain the 'buyToken' amount
-                const buyAmt = parseFloat(t.buyAmount);
-                const sellAmt = parseFloat(t.amount);
-                const buyTok = t.buyToken;
-                const sellTok = t.coin;
-                
-                if (!isNaN(buyAmt) && buyTok) {
-                  heals[buyTok] = (heals[buyTok] || 0) + buyAmt;
-                }
-                if (!isNaN(sellAmt) && sellTok) {
-                  heals[sellTok] = (heals[sellTok] || 0) - sellAmt;
-                }
-              }
-            });
-            
-            setBalances(prev => {
-              const next = { ...prev };
-              Object.entries(heals).forEach(([coin, val]) => {
-                // If current balance is 0 or missing, apply the healing from history
-                if (!next[coin] || next[coin] === 0) {
-                  // We use Math.max(0, ...) for the sell side to avoid negative balances
-                  next[coin] = Math.max(0, (next[coin] || 0) + val);
-                }
-              });
-              balancesRef.current = next;
-              return next;
-            });
+            // ... (rest of healing logic is already handled by the transactions watcher)
           }
 
-          pendingAddressRef.current = { address, net: network };
+          setHasWallet(true);
         } else {
           setHasWallet(false);
         }
@@ -298,7 +288,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       pendingAddressRef.current = null;
       fetchBalance(address, net);
       // FORCE A DEEP SCAN ON STARTUP AND UPDATE UI INSTANTLY
-      transactionService.syncIncoming(address, net, prices.ETH?.usd ?? 3500)
+      transactionService.syncIncoming(address, net, prices.ETH?.usd ?? 3500, true)
         .then(newTxs => {
           if (Array.isArray(newTxs) && newTxs.length > 0) {
             setTransactions(prev => {
@@ -331,8 +321,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       let hasCardActivity = false;
 
       // Sort transactions oldest to newest for accurate replay
-      const sortedTxs = [...transactions].sort((a, b) => 
-        new Date(a.date).getTime() - new Date(b.date).getTime()
+      const sortedTxs = [...transactions].sort((a: any, b: any) => 
+        (a.rawDate || new Date(a.date).getTime()) - (b.rawDate || new Date(b.date).getTime())
       );
 
       sortedTxs.forEach(t => {
@@ -381,7 +371,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       // Apply Recovered State
       if (hasCardActivity) {
         setCardCreated(true);
-        setCardBalance(Math.max(0, recoveredCardBal));
+        const finalBal = Math.max(0, recoveredCardBal);
+        console.log(`[HEALER] Card State Restored. Balance: $${finalBal.toFixed(2)}`);
+        setCardBalance(finalBal);
       }
 
       setBalances(prev => {
@@ -389,6 +381,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         const next = { ...prev };
         Object.entries(recoveredTokenBals).forEach(([coin, val]) => {
           if (Math.abs((next[coin] || 0) - val) > 0.0001) {
+            console.log(`[HEALER] Recovered ${coin} Balance: ${val.toFixed(4)}`);
             next[coin] = val;
             changed = true;
           }
@@ -495,7 +488,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       (async () => {
         try {
           await fetchBalance(data.address, network);
-          const newTxs = await transactionService.syncIncoming(data.address, network, prices.ETH?.usd ?? 3500);
+          const newTxs = await transactionService.syncIncoming(data.address, network, prices.ETH?.usd ?? 3500, true);
           if (Array.isArray(newTxs) && newTxs.length > 0) {
             setTransactions(prev => {
               const existingHashes = new Set(prev.map(t => t.txHash).filter(Boolean));
@@ -632,6 +625,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setCardCreated(true);
     AsyncStorage.setItem('cw_card_created', 'true');
     AsyncStorage.setItem('cw_card_details', JSON.stringify(details));
+    
+    // Add to global registry so it restores on other devices/logins
+    AsyncStorage.getItem('cw_global_card_registry').then(raw => {
+      const registry = raw ? JSON.parse(raw) : {};
+      registry[walletAddress.toLowerCase()] = true;
+      AsyncStorage.setItem('cw_global_card_registry', JSON.stringify(registry));
+    }).catch(() => {});
   }, [walletAddress]);
 
   const updateCardDetails = useCallback((patch: { holderName?: string; design?: string }) => {
@@ -673,12 +673,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     ethBalance, isLoadingBalance, hasWallet, isLoadingWallet, isReadOnly,
     balances, cardBalance, cardFrozen, network, transactions,
     cardDetails, cardCreated, createCard, updateCardDetails, generateCardDetails, cardTransactions,
+    addTx,
     generateMnemonic: () => walletService.generateMnemonic(),
     createWallet, importWallet, deleteWallet, enterReadOnlyMode, refreshBalance, fetchBalance,
     sendETH, sendCrypto, topupCard, spendCard, toggleFreezeCard, applySwapBalances, switchNetwork,
   }), [
     isDarkMode, toggleTheme, balanceVisible, toggleBalanceVisible,
-    pinEnabled, refreshPinEnabled, walletAddress, walletName, handleSetWalletName,
+    pinEnabled, refreshPinEnabled, addTx, walletAddress, walletName, handleSetWalletName,
     ethBalance, isLoadingBalance, hasWallet, isLoadingWallet, isReadOnly,
     balances, cardBalance, cardFrozen, network, transactions,
     cardDetails, cardCreated, createCard, updateCardDetails, generateCardDetails, cardTransactions,

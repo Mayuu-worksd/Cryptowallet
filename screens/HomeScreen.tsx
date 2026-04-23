@@ -432,7 +432,12 @@ export default function HomeScreen({ navigation }: any) {
             <MaterialIcons name="account-balance-wallet" size={20} color={T.primary} />
           </View>
           <View>
-            <Text style={[styles.walletLabel, { color: T.text }]}>{walletName}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={[styles.walletLabel, { color: T.text }]}>{walletName}</Text>
+              <View style={{ backgroundColor: networkColor + '20', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6, borderWidth: 1, borderColor: networkColor + '40' }}>
+                <Text style={{ color: networkColor, fontSize: 8, fontWeight: '800', textTransform: 'uppercase' }}>{network}</Text>
+              </View>
+            </View>
             <Text style={{ fontSize: 10, color: T.textMuted, fontWeight: '600', letterSpacing: 0.2 }}>
               {walletAddress ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}` : ''}
             </Text>
@@ -460,25 +465,6 @@ export default function HomeScreen({ navigation }: any) {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={isLoadingBalance} onRefresh={onRefresh} tintColor={T.primary} />}
       >
-        {/* ── Get Started banner for new users ── */}
-        {parseFloat(ethBalance) === 0 && Object.values(balances).every(v => v === 0) && !isLoadingBalance && (
-          <TouchableOpacity
-            style={[styles.getStartedBanner, { backgroundColor: T.primary + '15', borderColor: T.primary + '40' }]}
-            onPress={() => navigation.navigate('Receive')}
-            activeOpacity={0.85}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: T.primary, fontSize: 14, fontWeight: '800', marginBottom: 4 }}>
-                🚀 Your wallet is ready!
-              </Text>
-              <Text style={{ color: T.textMuted, fontSize: 12, fontWeight: '500', lineHeight: 18 }}>
-                To get started, receive ETH from a friend or buy crypto. Tap to get your address.
-              </Text>
-            </View>
-            <Feather name="arrow-right" size={18} color={T.primary} />
-          </TouchableOpacity>
-        )}
-
         {/* ── Price error banner ── */}
         {priceError && (
           <TouchableOpacity

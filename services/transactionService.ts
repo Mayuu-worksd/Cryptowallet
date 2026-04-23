@@ -274,6 +274,7 @@ export const transactionService = {
     walletAddress: string,
     network: string,
     ethPriceUsd: number,
+    force: boolean = false,
   ): Promise<any[]> {
     if (!walletAddress) return [];
     
@@ -285,8 +286,8 @@ export const transactionService = {
       return [];
     }
 
-    // 2. Standard Cooldown (120s)
-    if (now - this.lastSyncTime < 120000) {
+    // 2. Standard Cooldown (120s) — Bypass if force is true
+    if (!force && (now - this.lastSyncTime < 120000)) {
       return [];
     }
     this.lastSyncTime = now;
@@ -315,22 +316,24 @@ export const transactionService = {
       const knownHashes = new Set(localTxs.map(t => t.txHash).filter(Boolean));
       const newTxs: LocalTx[] = [];
 
-      // 1. Process ETH Txs
+      // 1. Process ETH Txs (Incoming & Outgoing)
       for (const tx of chainTxs) {
-        if (tx.from.toLowerCase() === walletAddress.toLowerCase()) continue;
         if (tx.isError !== '0' || knownHashes.has(tx.hash)) continue;
+        
+        const isOut  = tx.from.toLowerCase() === walletAddress.toLowerCase();
         const ethAmt = parseFloat(ethers.utils.formatEther(tx.value || '0'));
         if (ethAmt <= 0) continue;
 
         newTxs.push({
           id:      tx.hash,
-          type:    'received',
+          type:    isOut ? 'sent' : 'received',
           coin:    'ETH',
           amount:  ethAmt.toFixed(6),
           usdValue: (ethAmt * ethPriceUsd).toFixed(2),
-          address: tx.from,
+          address: isOut ? tx.to : tx.from,
           status:  'success',
           date:    new Date(parseInt(tx.timeStamp, 10) * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          rawDate: parseInt(tx.timeStamp, 10) * 1000,
           txHash:  tx.hash,
         });
         knownHashes.add(tx.hash);
@@ -354,8 +357,9 @@ export const transactionService = {
           address: isOut ? tx.to : tx.from,
           status:  'success',
           date:    new Date(parseInt(tx.timeStamp, 10) * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          rawDate: parseInt(tx.timeStamp, 10) * 1000,
           txHash:  tx.hash,
-          contractAddress: tx.contractAddress, // Added this crucial link!
+          contractAddress: tx.contractAddress,
         });
       }
 
