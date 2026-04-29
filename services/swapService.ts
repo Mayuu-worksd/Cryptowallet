@@ -182,7 +182,7 @@ async function try0xQuote(
   if (!base || !tokens?.[from] || !tokens?.[to]) return null;
 
   try {
-    const sellAmountWei = ethers.utils.parseUnits(amount, TOKEN_DECIMALS[from] ?? 18).toString();
+    const sellAmountWei = ethers.parseUnits(amount, TOKEN_DECIMALS[from] ?? 18).toString();
     const chainId = network === 'Ethereum' ? '1' : network === 'Polygon' ? '137' : '42161';
     // Include taker address if available — required for accurate quotes on 0x v2
     const takerParam = walletAddress ? `&taker=${walletAddress}` : '';
@@ -207,9 +207,9 @@ async function try0xQuote(
       return null;
     }
 
-    const buyAmt = parseFloat(ethers.utils.formatUnits(data.buyAmount, TOKEN_DECIMALS[to] ?? 18));
+    const buyAmt = parseFloat(ethers.formatUnits(data.buyAmount, TOKEN_DECIMALS[to] ?? 18));
     const gasEth = data.totalNetworkFee
-      ? parseFloat(ethers.utils.formatEther(data.totalNetworkFee)).toFixed(6)
+      ? parseFloat(ethers.formatEther(data.totalNetworkFee)).toFixed(6)
       : '0.003';
     const rate = buyAmt / parseFloat(amount);
 
@@ -241,15 +241,15 @@ async function tryUniswapSepoliaQuote(
 ): Promise<SwapQuote | null> {
   if (!SEPOLIA_TOKENS[from] || !SEPOLIA_TOKENS[to]) return null;
   try {
-    const provider  = new ethers.providers.JsonRpcProvider(rpcUrl);
+    const provider  = new ethers.JsonRpcProvider(rpcUrl);
     const quoter    = new ethers.Contract(UNISWAP_QUOTER_SEPOLIA, QUOTER_ABI, provider);
     const tokenIn   = from === 'ETH' ? SEPOLIA_TOKENS.WETH : SEPOLIA_TOKENS[from];
     const tokenOut  = to   === 'ETH' ? SEPOLIA_TOKENS.WETH : SEPOLIA_TOKENS[to];
-    const amtIn     = ethers.utils.parseUnits(amount, TOKEN_DECIMALS[from] ?? 18);
-    const amtOut: ethers.BigNumber = await quoter.callStatic.quoteExactInputSingle(
+    const amtIn     = ethers.parseUnits(amount, TOKEN_DECIMALS[from] ?? 18);
+    const amtOut: bigint = await quoter.quoteExactInputSingle.staticCall(
       tokenIn, tokenOut, POOL_FEE, amtIn, 0
     );
-    const buyAmt = parseFloat(ethers.utils.formatUnits(amtOut, TOKEN_DECIMALS[to] ?? 18));
+    const buyAmt = parseFloat(ethers.formatUnits(amtOut, TOKEN_DECIMALS[to] ?? 18));
     const rate   = buyAmt / parseFloat(amount);
     return {
       buyAmount:       buyAmt.toFixed(6),
@@ -348,7 +348,7 @@ async function _execute0x(
   if (!base || !tokens) return { success: false, error: `0x not supported on ${network}` };
 
   onStatus?.('Fetching executable quote...');
-  const sellAmt = ethers.utils.parseUnits(quote.sellAmount, TOKEN_DECIMALS[quote.fromToken] ?? 18).toString();
+  const sellAmt = ethers.parseUnits(quote.sellAmount, TOKEN_DECIMALS[quote.fromToken] ?? 18).toString();
   const chainId = network === 'Ethereum' ? '1' : network === 'Polygon' ? '137' : '42161';
   const url = `${base}/swap/permit2/quote?chainId=${chainId}&sellToken=${tokens[quote.fromToken]}&buyToken=${tokens[quote.toToken]}&sellAmount=${sellAmt}&taker=${wallet.address}&slippageBps=100`;
   if (!isSafeUrl(url, ALLOWED_ZRX_HOSTS)) return { success: false, error: 'Blocked unsafe URL' };
@@ -365,16 +365,16 @@ async function _execute0x(
   const data = await res.json();
 
   if (data.issues?.balance) {
-    const needed = ethers.utils.formatUnits(data.issues.balance.expected, TOKEN_DECIMALS[quote.fromToken] ?? 18);
+    const needed = ethers.formatUnits(data.issues.balance.expected, TOKEN_DECIMALS[quote.fromToken] ?? 18);
     return { success: false, error: `Insufficient balance. Need ${parseFloat(needed).toFixed(6)} ${quote.fromToken}.` };
   }
 
   if (quote.fromToken !== 'ETH' && data.issues?.allowance?.spender) {
     onStatus?.(`Approving ${quote.fromToken}...`);
     const token = new ethers.Contract(tokens[quote.fromToken], ERC20_ABI, wallet);
-    const allowance: ethers.BigNumber = await token.allowance(wallet.address, data.issues.allowance.spender);
-    if (allowance.lt(sellAmt)) {
-      const approveTx = await token.approve(data.issues.allowance.spender, ethers.constants.MaxUint256);
+    const allowance: bigint = await token.allowance(wallet.address, data.issues.allowance.spender);
+    if (allowance < BigInt(sellAmt)) {
+      const approveTx = await token.approve(data.issues.allowance.spender, ethers.MaxUint256);
       onStatus?.('Waiting for approval...');
       await approveTx.wait();
     }
@@ -384,16 +384,16 @@ async function _execute0x(
   const txReq: any = {
     to:       data.transaction.to,
     data:     data.transaction.data,
-    value:    ethers.BigNumber.from(data.transaction.value ?? '0'),
-    gasLimit: ethers.BigNumber.from(data.transaction.gas ?? '400000'),
+    value:    BigInt(data.transaction.value ?? '0'),
+    gasLimit: BigInt(data.transaction.gas ?? '400000'),
   };
-  if (data.transaction.gasPrice) txReq.gasPrice = ethers.BigNumber.from(data.transaction.gasPrice);
+  if (data.transaction.gasPrice) txReq.gasPrice = BigInt(data.transaction.gasPrice);
 
   const tx      = await wallet.sendTransaction(txReq);
   onStatus?.(`Submitted! ${tx.hash.slice(0, 12)}...`);
   const receipt = await tx.wait();
   onStatus?.('Swap complete!');
-  return { success: true, hash: receipt.transactionHash, explorerUrl: `https://etherscan.io/tx/${receipt.transactionHash}` };
+  return { success: true, hash: receipt!.hash, explorerUrl: `https://etherscan.io/tx/${receipt!.hash}` };
 }
 
 // ─── Execute Uniswap V3 swap (Sepolia) ───────────────────────────────────────
@@ -407,8 +407,8 @@ async function _executeUniswapSepolia(
   const tokenOut  = isToETH   ? SEPOLIA_TOKENS.WETH : SEPOLIA_TOKENS[quote.toToken];
   if (!tokenIn || !tokenOut) return { success: false, error: `Token not supported on Sepolia` };
 
-  const amtIn  = ethers.utils.parseUnits(quote.sellAmount, TOKEN_DECIMALS[quote.fromToken] ?? 18);
-  const minOut = ethers.utils.parseUnits(quote.minimumReceived, TOKEN_DECIMALS[quote.toToken] ?? 18);
+  const amtIn  = ethers.parseUnits(quote.sellAmount, TOKEN_DECIMALS[quote.fromToken] ?? 18);
+  const minOut = ethers.parseUnits(quote.minimumReceived, TOKEN_DECIMALS[quote.toToken] ?? 18);
 
   if (isFromETH) {
     onStatus?.('Wrapping ETH → WETH...');
@@ -418,9 +418,9 @@ async function _executeUniswapSepolia(
 
   onStatus?.('Approving Uniswap router...');
   const tokenContract = new ethers.Contract(tokenIn, ERC20_ABI, wallet);
-  const allowance: ethers.BigNumber = await tokenContract.allowance(wallet.address, UNISWAP_ROUTER_SEPOLIA);
-  if (allowance.lt(amtIn)) {
-    await (await tokenContract.approve(UNISWAP_ROUTER_SEPOLIA, ethers.constants.MaxUint256)).wait();
+  const allowance: bigint = await tokenContract.allowance(wallet.address, UNISWAP_ROUTER_SEPOLIA);
+  if (allowance < amtIn) {
+    await (await tokenContract.approve(UNISWAP_ROUTER_SEPOLIA, ethers.MaxUint256)).wait();
   }
 
   onStatus?.('Executing Uniswap V3 swap...');
@@ -435,12 +435,12 @@ async function _executeUniswapSepolia(
   if (isToETH) {
     onStatus?.('Unwrapping WETH → ETH...');
     const weth = new ethers.Contract(SEPOLIA_TOKENS.WETH, WETH_ABI, wallet);
-    const bal: ethers.BigNumber = await weth.balanceOf(wallet.address);
-    if (bal.gt(0)) await (await weth.withdraw(bal)).wait();
+    const bal: bigint = await weth.balanceOf(wallet.address);
+    if (bal > 0n) await (await weth.withdraw(bal)).wait();
   }
 
   onStatus?.('Swap complete!');
-  return { success: true, hash: receipt.transactionHash, explorerUrl: `https://sepolia.etherscan.io/tx/${receipt.transactionHash}` };
+  return { success: true, hash: receipt!.hash, explorerUrl: `https://sepolia.etherscan.io/tx/${receipt!.hash}` };
 }
 
 // ─── Execute simulated swap ───────────────────────────────────────────────────
@@ -499,7 +499,7 @@ export async function executeSwap(
       return result;
     }
 
-    const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+    const provider = new ethers.JsonRpcProvider(rpcUrl);
     const wallet   = new ethers.Wallet(privateKey, provider);
 
     let result: SwapResult;

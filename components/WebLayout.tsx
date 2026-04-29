@@ -28,6 +28,7 @@ const NAV_ITEMS = [
   { name: 'Assets',  screen: 'Assets'      },
   { name: 'History', screen: 'History'     },
   { name: 'Profile', screen: 'Profile'     },
+  { name: 'Admin',   screen: 'Admin'       },
 ];
 
 function NavItem({ item, isActive, onPress }: { item: typeof NAV_ITEMS[0]; isActive: boolean; onPress: () => void }) {

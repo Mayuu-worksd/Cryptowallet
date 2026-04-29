@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Crimson Capital P2P Marketplace</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "outline": "#ae8883",
+                        "on-primary-fixed": "#410002",
+                        "on-tertiary-fixed": "#410004",
+                        "outline-variant": "#5d3f3c",
+                        "surface": "#131313",
+                        "error": "#ffb4ab",
+                        "tertiary": "#ffb3ae",
+                        "tertiary-fixed": "#ffdad7",
+                        "on-surface": "#e5e2e1",
+                        "tertiary-fixed-dim": "#ffb3ae",
+                        "tertiary-container": "#ff5353",
+                        "surface-container-lowest": "#0e0e0e",
+                        "on-tertiary-fixed-variant": "#930015",
+                        "surface-dim": "#131313",
+                        "primary-fixed-dim": "#ffb4ab",
+                        "primary-fixed": "#ffdad6",
+                        "on-background": "#e5e2e1",
+                        "primary-container": "#ff544b",
+                        "inverse-surface": "#e5e2e1",
+                        "on-secondary-fixed": "#1b1b1d",
+                        "secondary-container": "#474649",
+                        "surface-variant": "#353534",
+                        "surface-container": "#201f1f",
+                        "surface-tint": "#ffb4ab",
+                        "on-secondary-fixed-variant": "#474649",
+                        "inverse-primary": "#c00014",
+                        "primary": "#ffb4ab",
+                        "on-secondary": "#303032",
+                        "on-primary-fixed-variant": "#93000d",
+                        "surface-bright": "#393939",
+                        "on-primary": "#690006",
+                        "on-surface-variant": "#e7bdb8",
+                        "on-error": "#690005",
+                        "on-primary-container": "#5c0005",
+                        "secondary-fixed": "#e4e2e4",
+                        "secondary": "#c8c6c8",
+                        "inverse-on-surface": "#313030",
+                        "secondary-fixed-dim": "#c8c6c8",
+                        "on-tertiary": "#68000c",
+                        "on-error-container": "#ffdad6",
+                        "surface-container-low": "#1c1b1b",
+                        "error-container": "#93000a",
+                        "surface-container-highest": "#353534",
+                        "on-tertiary-container": "#5c0009",
+                        "background": "#131313",
+                        "on-secondary-container": "#b6b4b7",
+                        "surface-container-high": "#2a2a2a"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Inter"],
+                        "display": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: #131313; color: #e5e2e1; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .glass-panel { background: rgba(32, 31, 31, 0.7); backdrop-filter: blur(20px); }
+        .crimson-glow { box-shadow: 0 0 20px rgba(236, 38, 41, 0.2); }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="antialiased min-h-screen pb-32">
+<!-- Top Navigation Bar -->
+<header class="sticky top-0 z-50 bg-neutral-950/80 backdrop-blur-xl border-b border-neutral-900 shadow-2xl flex justify-between items-center w-full px-6 py-4">
+<div class="flex items-center gap-4">
+<button class="hover:bg-neutral-900 transition-colors p-2 rounded-full active:scale-95 duration-200">
+<span class="material-symbols-outlined text-on-surface">arrow_back</span>
+</button>
+<h1 class="text-xl font-black text-red-600 font-bold tracking-tight Inter">P2P Marketplace</h1>
+</div>
+<div class="flex items-center gap-2">
+<button class="hover:bg-neutral-900 transition-colors p-2 rounded-full active:scale-95 duration-200">
+<span class="material-symbols-outlined text-neutral-400">settings</span>
+</button>
+</div>
+</header>
+<main class="max-w-4xl mx-auto px-4 pt-6 space-y-6">
+<!-- Marketplace Tabs -->
+<div class="flex items-center gap-8 border-b border-neutral-800 px-2">
+<button class="pb-3 text-red-500 font-bold border-b-2 border-red-500 transition-all">Buy</button>
+<button class="pb-3 text-neutral-500 font-medium hover:text-neutral-300 transition-all">Sell / My Orders</button>
+</div>
+<!-- Fiat Chips Horizontal Scroll -->
+<div class="flex overflow-x-auto gap-3 no-scrollbar pb-2">
+<button class="flex-none px-6 py-2.5 bg-red-600 text-white font-bold rounded-full crimson-glow active:scale-95 transition-transform">USD</button>
+<button class="flex-none px-6 py-2.5 bg-surface-container-high text-neutral-400 font-semibold rounded-full hover:bg-neutral-800 transition-colors">EUR</button>
+<button class="flex-none px-6 py-2.5 bg-surface-container-high text-neutral-400 font-semibold rounded-full hover:bg-neutral-800 transition-colors">GBP</button>
+<button class="flex-none px-6 py-2.5 bg-surface-container-high text-neutral-400 font-semibold rounded-full hover:bg-neutral-800 transition-colors">JPY</button>
+<button class="flex-none px-6 py-2.5 bg-surface-container-high text-neutral-400 font-semibold rounded-full hover:bg-neutral-800 transition-colors">CAD</button>
+<button class="flex-none px-6 py-2.5 bg-surface-container-high text-neutral-400 font-semibold rounded-full hover:bg-neutral-800 transition-colors">AUD</button>
+</div>
+<!-- Orders Grid/List -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<!-- Order Card 1 -->
+<div class="bg-surface-container rounded-lg p-5 border border-transparent hover:border-red-600/30 transition-all duration-300 group shadow-lg">
+<div class="flex justify-between items-start mb-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-neutral-800 flex items-center justify-center border border-neutral-700">
+<span class="material-symbols-outlined text-yellow-500" data-weight="fill">currency_bitcoin</span>
+</div>
+<div>
+<h3 class="font-bold text-on-surface">BTC Trade</h3>
+<p class="text-xs text-neutral-500 font-medium">Merchant: CryptoElite_99</p>
+</div>
+</div>
+<span class="px-3 py-1 bg-green-500/10 text-green-500 text-[10px] font-black rounded-full tracking-wider">OPEN</span>
+</div>
+<div class="space-y-3 mb-5">
+<div class="flex justify-between text-sm">
+<span class="text-neutral-500">Amount</span>
+<span class="text-on-surface font-bold">0.045 BTC</span>
+</div>
+<div class="flex justify-between text-sm">
+<span class="text-neutral-500">Total Price</span>
+<span class="text-red-500 font-black text-lg">2,840.00 USD</span>
+</div>
+<div class="pt-3 border-t border-neutral-800 flex items-center gap-2">
+<span class="material-symbols-outlined text-neutral-400 text-sm">payments</span>
+<span class="text-xs text-neutral-400 font-medium">Bank Transfer, Zelle</span>
+</div>
+</div>
+<button class="w-full py-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 active:scale-[0.98] transition-all crimson-glow">Buy BTC</button>
+</div>
+<!-- Order Card 2 -->
+<div class="bg-surface-container rounded-lg p-5 border border-transparent hover:border-red-600/30 transition-all duration-300 group shadow-lg">
+<div class="flex justify-between items-start mb-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-neutral-800 flex items-center justify-center border border-neutral-700">
+<span class="material-symbols-outlined text-blue-400" data-weight="fill">monetization_on</span>
+</div>
+<div>
+<h3 class="font-bold text-on-surface">USDT Stable</h3>
+<p class="text-xs text-neutral-500 font-medium">Merchant: SecureVault_P2P</p>
+</div>
+</div>
+<span class="px-3 py-1 bg-green-500/10 text-green-500 text-[10px] font-black rounded-full tracking-wider">OPEN</span>
+</div>
+<div class="space-y-3 mb-5">
+<div class="flex justify-between text-sm">
+<span class="text-neutral-500">Amount</span>
+<span class="text-on-surface font-bold">5,000.00 USDT</span>
+</div>
+<div class="flex justify-between text-sm">
+<span class="text-neutral-500">Total Price</span>
+<span class="text-red-500 font-black text-lg">5,050.00 USD</span>
+</div>
+<div class="pt-3 border-t border-neutral-800 flex items-center gap-2">
+<span class="material-symbols-outlined text-neutral-400 text-sm">credit_card</span>
+<span class="text-xs text-neutral-400 font-medium">Revolut, Wise</span>
+</div>
+</div>
+<button class="w-full py-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 active:scale-[0.98] transition-all crimson-glow">Buy USDT</button>
+</div>
+<!-- Order Card 3 (Completed Example) -->
+<div class="bg-surface-container/50 rounded-lg p-5 border border-neutral-800/50 opacity-80 group shadow-lg">
+<div class="flex justify-between items-start mb-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-neutral-900/50 flex items-center justify-center border border-neutral-800">
+<span class="material-symbols-outlined text-gray-500" data-weight="fill">token</span>
+</div>
+<div>
+<h3 class="font-bold text-neutral-400">ETH Trade</h3>
+<p class="text-xs text-neutral-600 font-medium">Merchant: Alpha_Trader</p>
+</div>
+</div>
+<span class="px-3 py-1 bg-neutral-800 text-neutral-500 text-[10px] font-black rounded-full tracking-wider uppercase">COMPLETED</span>
+</div>
+<div class="space-y-3 mb-5">
+<div class="flex justify-between text-sm">
+<span class="text-neutral-600">Amount</span>
+<span class="text-neutral-500 font-bold">1.2 ETH</span>
+</div>
+<div class="flex justify-between text-sm">
+<span class="text-neutral-600">Total Price</span>
+<span class="text-neutral-500 font-black text-lg">2,910.00 USD</span>
+</div>
+</div>
+<button class="w-full py-3 bg-neutral-800 text-neutral-500 font-bold rounded-lg cursor-not-allowed">Order Closed</button>
+</div>
+</div>
+</main>
+<!-- Floating Action Button -->
+<button class="fixed bottom-24 right-6 w-14 h-14 bg-red-600 rounded-full shadow-[0_8px_30px_rgb(236,38,41,0.4)] flex items-center justify-center active:scale-90 transition-transform z-50">
+<span class="material-symbols-outlined text-white text-3xl">add</span>
+</button>
+<!-- Bottom Navigation Bar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-3 pb-6 bg-neutral-950/80 backdrop-blur-xl border-t border-neutral-800 shadow-[0_-10px_20px_rgba(0,0,0,0.5)] rounded-t-[24px]">
+<div class="flex flex-col items-center justify-center text-neutral-500 hover:text-red-400 active:scale-90 transition-transform">
+<span class="material-symbols-outlined" data-icon="account_balance_wallet">account_balance_wallet</span>
+<span class="text-xs font-medium Inter">Wallet</span>
+</div>
+<div class="flex flex-col items-center justify-center text-red-500 bg-red-500/10 rounded-2xl px-4 py-1 active:scale-90 transition-transform">
+<span class="material-symbols-outlined" data-icon="swap_horizontal_circle">swap_horizontal_circle</span>
+<span class="text-xs font-medium Inter">P2P</span>
+</div>
+<div class="flex flex-col items-center justify-center text-neutral-500 hover:text-red-400 active:scale-90 transition-transform">
+<span class="material-symbols-outlined" data-icon="receipt_long">receipt_long</span>
+<span class="text-xs font-medium Inter">Orders</span>
+</div>
+<div class="flex flex-col items-center justify-center text-neutral-500 hover:text-red-400 active:scale-90 transition-transform">
+<span class="material-symbols-outlined" data-icon="person_2">person_2</span>
+<span class="text-xs font-medium Inter">Profile</span>
+</div>
+</nav>
+</body></html>

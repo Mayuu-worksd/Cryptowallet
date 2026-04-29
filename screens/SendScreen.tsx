@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { Theme } from '../constants';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   ScrollView, ActivityIndicator, Platform, KeyboardAvoidingView,
@@ -7,7 +8,6 @@ import {
 import { Feather, MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useWallet, useMarket } from '../store/WalletContext';
 import { ethereumService } from '../services/ethereumService';
-import { Theme } from '../constants';
 import Toast from '../components/Toast';
 import { LinearGradient } from 'expo-linear-gradient';
 import { haptics } from '../utils/haptics';
@@ -364,19 +364,20 @@ const makeStyles = (T: any) => StyleSheet.create({
   
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 60 : 40, paddingBottom: 20,
+    paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 60 : 48, paddingBottom: 20,
+    backgroundColor: T.background,
   },
-  backBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: T.surface, alignItems: 'center', justifyContent: 'center' },
+  backBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: T.surfaceLow, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { color: T.text, fontSize: 13, fontWeight: '800', letterSpacing: 2 },
-  qrBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: T.surface, alignItems: 'center', justifyContent: 'center' },
+  qrBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: T.surfaceLow, alignItems: 'center', justifyContent: 'center' },
 
-  scroll: { paddingHorizontal: 24, paddingBottom: 140 },
+  scroll: { paddingHorizontal: 24, paddingBottom: 160 },
 
   balanceContainer: { marginTop: 24, marginBottom: 32 },
   balanceBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   balanceDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Theme.colors.success },
   balanceTitle: { color: T.textMuted, fontSize: 13, fontWeight: '700', letterSpacing: 0.5 },
-  balanceAmount: { color: T.text, fontSize: 40, fontWeight: '800', letterSpacing: -1 },
+  balanceAmount: { color: T.text, fontSize: 34, fontWeight: '800', letterSpacing: -1 },
   balanceUsd: { color: T.textDim, fontSize: 14, fontWeight: '600', marginTop: 4 },
 
   section: { marginBottom: 28 },
@@ -451,3 +452,4 @@ const makeStyles = (T: any) => StyleSheet.create({
   confirmGradient: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   modalConfirmText: { color: '#FFF', fontSize: 14, fontWeight: '900', letterSpacing: 1 },
 });
+

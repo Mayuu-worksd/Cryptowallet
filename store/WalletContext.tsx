@@ -8,6 +8,7 @@ import { getWalletBalances } from '../services/balanceService';
 import { storageService } from '../services/storageService';
 import { marketService, NewsItem } from '../services/marketService';
 import { hasPinSetup, clearPin } from '../services/pinService';
+import { kycService, KYCStatus, txService, dbCardService, vccService, cardVariantService, VCCCard } from '../services/supabaseService';
 import { transactionService } from '../services/transactionService';
 import { cardService } from '../services/cardService';
 import { notificationService } from '../services/notificationService';
@@ -56,6 +57,17 @@ export const useMarket = () => useContext(MarketContext);
 type WalletContextType = {
   isDarkMode: boolean;
   toggleTheme: () => void;
+  accountType: 'personal' | 'business';
+  accountTypeSet: boolean;
+  setAccountType: (type: 'personal' | 'business') => Promise<void>;
+  p2pCountry: string;
+  p2pCurrency: string;
+  setP2PPreferences: (country: string, currency: string) => Promise<void>;
+  lockedBalance: Record<string, number>;
+  lockBalance: (token: string, amount: number) => void;
+  unlockBalance: (token: string, amount: number) => void;
+  kycStatus: KYCStatus;
+  refreshKYCStatus: () => Promise<void>;
   walletAddress: string;
   walletName: string;
   setWalletName: (name: string) => void;
@@ -112,6 +124,12 @@ const FALLBACK_PRICES: Record<string, CoinPrice> = {
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [isDarkMode,       setIsDarkMode]       = useState(true);
+  const [accountType,      setAccountTypeState] = useState<'personal' | 'business'>('personal');
+  const [accountTypeSet,   setAccountTypeSet]   = useState(false);
+  const [p2pCountry,       setP2PCountryState]  = useState('United States');
+  const [p2pCurrency,      setP2PCurrencyState] = useState('USD');
+  const [lockedBalance,    setLockedBalance]    = useState<Record<string, number>>({});
+  const [kycStatus,        setKycStatus]        = useState<KYCStatus>(null);
   const [balanceVisible,   setBalanceVisible]   = useState(true);
   const [pinEnabled,       setPinEnabled]       = useState(false);
   const [walletAddress,    setWalletAddress]    = useState('');
@@ -156,19 +174,65 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { ethBalanceRef.current = ethBalance; }, [ethBalance]);
 
-  const toggleTheme          = useCallback(() => setIsDarkMode(p => !p), []);
-  const toggleBalanceVisible = useCallback(() => setBalanceVisible(p => !p), []);
-  const toggleFreezeCard     = useCallback(() => {
-    setCardFrozen(p => {
-      const newVal = !p;
-      cardService.setCardFrozen(newVal);
+  const toggleTheme = useCallback(async () => {
+    setIsDarkMode(prev => {
+      const newVal = !prev;
+      AsyncStorage.setItem('cw_is_dark_mode', String(newVal)).catch(() => {});
       return newVal;
     });
   }, []);
 
+  const setAccountType = useCallback(async (type: 'personal' | 'business') => {
+    setAccountTypeState(type);
+    setAccountTypeSet(true);
+    await AsyncStorage.setItem('cw_account_type', type);
+  }, []);
+
+  const setP2PPreferences = useCallback(async (country: string, currency: string) => {
+    setP2PCountryState(country);
+    setP2PCurrencyState(currency);
+    await AsyncStorage.setItem('cw_p2p_country', country);
+    await AsyncStorage.setItem('cw_p2p_currency', currency);
+  }, []);
+
+  const lockBalance = useCallback((token: string, amount: number) => {
+    setLockedBalance(prev => {
+      const updated = { ...prev, [token]: (prev[token] || 0) + amount };
+      AsyncStorage.setItem('cw_locked_balance', JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+  }, []);
+
+  const unlockBalance = useCallback((token: string, amount: number) => {
+    setLockedBalance(prev => {
+      const updated = { ...prev, [token]: Math.max(0, (prev[token] || 0) - amount) };
+      AsyncStorage.setItem('cw_locked_balance', JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+  }, []);
+  const toggleBalanceVisible = useCallback(() => setBalanceVisible(p => !p), []);
+  const toggleFreezeCard = useCallback(() => {
+    setCardFrozen(p => {
+      const newVal = !p;
+      cardService.setCardFrozen(newVal);
+      // Persist freeze state to Supabase (check both tables for safety during migration)
+      dbCardService.updateStatus(walletAddress, newVal ? 'frozen' : 'active').catch(() => {});
+      vccService.updateStatus(walletAddress, newVal ? 'frozen' : 'active').catch(() => {});
+      return newVal;
+    });
+  }, [walletAddress]);
+
   const refreshPinEnabled = useCallback(async () => {
     setPinEnabled(await hasPinSetup());
   }, []);
+
+  const refreshKYCStatus = useCallback(async () => {
+    if (!walletAddress) return;
+    try {
+      const record = await kycService.getStatus(walletAddress);
+      setKycStatus(record?.status ?? null);
+    } catch (_e) {}
+  }, [walletAddress]);
 
   useEffect(() => { refreshPinEnabled(); }, []);
 
@@ -188,12 +252,57 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const startup = async () => {
       try {
+        // Load UI preferences first (fastest)
+        const [savedDarkMode, savedAccountType, savedP2PCountry, savedP2PCurrency, savedLockedBal] = await Promise.all([
+          AsyncStorage.getItem('cw_is_dark_mode'),
+          AsyncStorage.getItem('cw_account_type'),
+          AsyncStorage.getItem('cw_p2p_country'),
+          AsyncStorage.getItem('cw_p2p_currency'),
+          AsyncStorage.getItem('cw_locked_balance'),
+        ]);
+
+        if (savedDarkMode !== null) setIsDarkMode(savedDarkMode === 'true');
+        if (savedAccountType === 'business') setAccountTypeState('business');
+        if (savedP2PCountry)  setP2PCountryState(savedP2PCountry);
+        if (savedP2PCurrency) setP2PCurrencyState(savedP2PCurrency);
+        if (savedLockedBal)   setLockedBalance(JSON.parse(savedLockedBal));
+
+        // Mark onboarding complete if critical prefs exist
+        if (savedAccountType && savedP2PCountry && savedP2PCurrency) {
+          setAccountTypeSet(true);
+        }
+
+        // Load wallet data
         const address = await storageService.getWalletAddress();
-        
         if (address) {
-          
           setWalletAddress(address);
           setHasWallet(true);
+          // Load KYC status
+          kycService.getStatus(address).then(r => setKycStatus(r?.status ?? null)).catch(() => {});
+          // Load card from Supabase
+          vccService.getCard(address).then(async vcc => {
+            if (vcc) {
+              setCardCreated(true);
+              setCardBalance(vcc.balance);
+              setCardFrozen(vcc.card_status === 'frozen');
+              const variants = await cardVariantService.getVariants();
+              const variant  = variants.find(v => v.id === vcc.card_variant);
+              const details = cardService.getFixedCardDetails(vcc.card_holder_name, variant?.color_hex || 'dark', address);
+              setCardDetails(details);
+              AsyncStorage.setItem('cw_card_created', 'true').catch(() => {});
+              AsyncStorage.setItem('cw_card_details', JSON.stringify(details)).catch(() => {});
+            } else {
+              dbCardService.getCard(address).then(dbCard => {
+                if (dbCard) {
+                  setCardCreated(true);
+                  setCardBalance(dbCard.balance);
+                  setCardFrozen(dbCard.status === 'frozen');
+                  const details = cardService.getFixedCardDetails(dbCard.holder_name, dbCard.design, address);
+                  setCardDetails(details);
+                }
+              }).catch(() => {});
+            }
+          }).catch(() => {});
           
           const [savedName, savedTxs, savedCard, savedDetails, savedCardCreated, savedTokenBals, savedFrozen, savedReadOnly] = await Promise.all([
             storageService.getWalletName(),
@@ -279,7 +388,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       syncInProgressRef.current = true;
       try {
         await fetchBalance(walletAddress, network);
-        // Also trigger a history sync
         const newTxs = await transactionService.syncIncoming(walletAddress, network, prices.ETH?.usd ?? 3500);
         if (Array.isArray(newTxs) && newTxs.length > 0) {
           setTransactions(prev => {
@@ -288,9 +396,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             return [...uniqueNew, ...prev];
           });
         }
-      } catch (e) {
-        console.warn('[refreshBalance] Error:', e);
-      } finally {
+      } catch {}
+      finally {
         setIsSyncing(false);
         syncInProgressRef.current = false;
       }
@@ -489,17 +596,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const importWallet = useCallback(async (mnemonic: string, isNew: boolean = false) => {
     try {
-      console.log('[WalletContext] importWallet START');
       setIsLoadingWallet(true);
-
-      console.log('[WalletContext] Step 1: Deriving wallet from mnemonic...');
       const data = await walletService.importFromMnemonic(mnemonic);
-      console.log(`[WalletContext] Step 2: Wallet derived — ${data.address}`);
-
       const isSwitching = walletAddress && walletAddress.toLowerCase() !== data.address.toLowerCase();
 
       if (isNew || isSwitching) {
-        console.log('[WalletContext] Step 3: Clearing old wallet data...');
         await storageService.clearWallet();
         await AsyncStorage.multiRemove([
           'cw_transactions', 'cw_card_balance', 'cw_card_details',
@@ -511,16 +612,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setCardTransactions([]);
         setBalances({ ETH: 0, USDT: 0, USDC: 0, DAI: 0, BTC: 0, SOL: 0 });
         setEthBalance('0.0');
-        console.log('[WalletContext] Step 3: Old data cleared');
       }
 
       const defaultName = `Wallet ${data.address.slice(-4).toUpperCase()}`;
-      console.log('[WalletContext] Step 4: Saving wallet to SecureStore...');
       await storageService.saveWallet(data.privateKey, data.mnemonic, data.address);
       await storageService.saveWalletName(defaultName);
-      console.log('[WalletContext] Step 4: Wallet saved to SecureStore');
-
-      console.log('[WalletContext] Step 5: Clearing PIN and read-only flag...');
       await clearPin();
       await AsyncStorage.removeItem('cw_read_only');
       setPinEnabled(false);
@@ -529,18 +625,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setWalletNameState(defaultName);
       setHasWallet(true);
       setIsLoadingWallet(false);
-      console.log('[WalletContext] Step 5: DONE — wallet import complete ✓');
 
-      // Priority Sync after import (Background)
       transactionService.lastSyncTime = 0;
       transactionService.isLockedOut = false;
-      console.log('[WalletContext] Step 6: Starting background balance + tx sync...');
       (async () => {
         try {
           await fetchBalance(data.address, network);
-          console.log('[WalletContext] Step 6a: Balance fetched');
           const newTxs = await transactionService.syncIncoming(data.address, network, prices.ETH?.usd ?? 3500, true);
-          console.log(`[WalletContext] Step 6b: Tx sync done — ${Array.isArray(newTxs) ? newTxs.length : 0} new txs`);
           if (Array.isArray(newTxs) && newTxs.length > 0) {
             setTransactions(prev => {
               const existingHashes = new Set(prev.map(t => t.txHash).filter(Boolean));
@@ -548,12 +639,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
               return [...uniqueNew, ...prev];
             });
           }
-        } catch (e) {
-          console.warn('[WalletContext] Background sync error:', e);
-        }
+        } catch {}
       })();
     } catch (e: any) {
-      console.error('[WalletContext] importWallet FAILED:', e?.message);
       setIsLoadingWallet(false);
       throw new Error(e.message || 'Invalid seed phrase.');
     } finally {
@@ -621,55 +709,99 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (!privateKey) return { success: false, error: 'Private key not found' };
     
     const parsedAmt = parseFloat(amount);
-    const ethPrice = prices.ETH?.usd ?? 3450;
+    const ethPrice  = prices.ETH?.usd ?? 3450;
+    const usdValue  = (parsedAmt * ethPrice).toFixed(2);
     const pendingId = Date.now().toString();
-    
-    addTx({
-      type:     'sent',
-      coin:     'ETH',
-      amount,
-      usdValue: (parsedAmt * ethPrice).toFixed(2),
-      address:  toAddress,
-      status:   'pending',
-    });
+
+    addTx({ type: 'sent', coin: 'ETH', amount, usdValue, address: toAddress, status: 'pending' });
+
+    // Log pending tx to Supabase (fire-and-forget)
+    let dbTxId: string | undefined;
+    txService.log({
+      wallet_address: walletAddress,
+      type:       'send',
+      token:      'ETH',
+      amount:     parsedAmt,
+      usd_value:  parseFloat(usdValue),
+      status:     'pending',
+      to_address: toAddress,
+    }).then(r => { dbTxId = r.id; }).catch(() => {});
 
     const result = await ethereumService.sendETH(privateKey, toAddress, amount, network);
+    const finalStatus = result.success ? 'success' : 'failed';
+
     setTransactions(prev => prev.map(tx =>
-      tx.id === pendingId ? { ...tx, status: result.success ? 'success' : 'failed', txHash: result.hash } : tx
+      tx.id === pendingId ? { ...tx, status: finalStatus, txHash: result.hash } : tx
     ));
-    
+
+    // Update DB status
+    if (dbTxId) txService.updateStatus(dbTxId, finalStatus, result.hash).catch(() => {});
+
     if (result.success) {
       refreshBalance();
       notificationService.notifySendComplete('ETH', amount, toAddress).catch(() => {});
     }
     return result;
-  }, [network, prices, addTx, refreshBalance]);
+  }, [network, prices, walletAddress, addTx, refreshBalance]);
 
   const sendCrypto = useCallback((coin: string, amount: number, label: string) => {
     const coinPrice = prices[coin]?.usd ?? 1;
+    const usdValue  = (amount * coinPrice).toFixed(2);
     setBalances(prev => ({ ...prev, [coin]: Math.max(0, (prev[coin] || 0) - amount) }));
-    addTx({ type: 'swap', coin, amount: amount.toString(), usdValue: (amount * coinPrice).toFixed(2), address: label, status: 'success' });
-  }, [prices, addTx]);
+    addTx({ type: 'swap', coin, amount: amount.toString(), usdValue, address: label, status: 'success' });
+    // Log to Supabase
+    txService.log({
+      wallet_address: walletAddress,
+      type:      'swap',
+      token:     coin,
+      amount,
+      usd_value: parseFloat(usdValue),
+      status:    'success',
+      label,
+    }).catch(() => {});
+  }, [prices, walletAddress, addTx]);
 
   const topupCard = useCallback((coin: string, amount: number): boolean => {
-    const coinPrice  = prices[coin]?.usd ?? 1;
-    const usd = +(amount * coinPrice).toFixed(2);
+    const coinPrice = prices[coin]?.usd ?? 1;
+    const usd       = +(amount * coinPrice).toFixed(2);
     setCardBalance(prev => +(prev + usd).toFixed(2));
     addTx({ type: 'card_topup', coin, amount: amount.toString(), usdValue: usd.toFixed(2), address: 'Virtual Card', status: 'success' });
     addCardTx({ type: 'topup', amount: usd, label: `Top-up via ${coin}`, coin, coinAmount: amount, status: 'success' });
+    // Log to Supabase + update card balance
+    txService.log({
+      wallet_address: walletAddress,
+      type:      'card_topup',
+      token:     coin,
+      amount,
+      usd_value: usd,
+      status:    'success',
+      label:     `Top-up via ${coin}`,
+    }).catch(() => {});
+    dbCardService.updateBalance(walletAddress, +(cardBalance + usd).toFixed(2)).catch(() => {});
+    vccService.updateBalance(walletAddress, +(cardBalance + usd).toFixed(2)).catch(() => {});
     return true;
-  }, [prices, addTx, addCardTx]);
+  }, [prices, walletAddress, cardBalance, addTx, addCardTx]);
 
   const spendCard = useCallback((coin: string, amountUSD: number, label: string): boolean => {
     if (cardFrozen) return false;
-    setCardBalance(prev => {
-      if (amountUSD > prev) return prev;
-      return +(prev - amountUSD).toFixed(2);
-    });
+    if (amountUSD > cardBalance) return false;
+    setCardBalance(prev => +(prev - amountUSD).toFixed(2));
     addTx({ type: 'card_spend', coin, amount: amountUSD.toFixed(2), usdValue: amountUSD.toFixed(2), address: label, status: 'success' });
     addCardTx({ type: 'spend', amount: amountUSD, label, coin, status: 'success' });
+    // Log to Supabase + update card balance
+    txService.log({
+      wallet_address: walletAddress,
+      type:      'card_spend',
+      token:     coin,
+      amount:    amountUSD,
+      usd_value: amountUSD,
+      status:    'success',
+      label,
+    }).catch(() => {});
+    dbCardService.updateBalance(walletAddress, +(cardBalance - amountUSD).toFixed(2)).catch(() => {});
+    vccService.updateBalance(walletAddress, +(cardBalance - amountUSD).toFixed(2)).catch(() => {});
     return true;
-  }, [cardFrozen, addTx, addCardTx]);
+  }, [cardFrozen, cardBalance, walletAddress, addTx, addCardTx]);
 
   const generateCardDetails = useCallback(() => {
     setCardDetails(prev => cardService.getFixedCardDetails(prev.holderName, prev.design, walletAddress));
@@ -681,8 +813,30 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setCardCreated(true);
     AsyncStorage.setItem('cw_card_created', 'true');
     AsyncStorage.setItem('cw_card_details', JSON.stringify(details));
-    
-    // Add to global registry so it restores on other devices/logins
+
+    // Persist to Supabase — store last4 only, never full number
+    const rawNumber = details.number.replace(/\s/g, '');
+    const last4     = rawNumber.slice(-4);
+    const [expMonth, expYear] = details.expiry.split('/');
+    dbCardService.getCard(walletAddress).then(existing => {
+      if (existing) {
+        dbCardService.updateDesign(walletAddress, { holder_name: holderName, design }).catch(() => {});
+      } else {
+        dbCardService.createCard({
+          wallet_address: walletAddress,
+          card_last4:     last4,
+          expiry_month:   expMonth ?? '12',
+          expiry_year:    expYear  ?? '28',
+          card_type:      'classic',
+          balance:        0,
+          status:         'active',
+          holder_name:    holderName,
+          design,
+        }).catch(() => {});
+      }
+    }).catch(() => {});
+
+    // Add to global registry
     AsyncStorage.getItem('cw_global_card_registry').then(raw => {
       const registry = raw ? JSON.parse(raw) : {};
       registry[walletAddress.toLowerCase()] = true;
@@ -696,7 +850,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       AsyncStorage.setItem('cw_card_details', JSON.stringify(updated)).catch(() => {});
       return updated;
     });
-  }, []);
+    // Persist to Supabase
+    const dbPatch: { holder_name?: string; design?: string } = {};
+    if (patch.holderName) dbPatch.holder_name = patch.holderName;
+    if (patch.design)     dbPatch.design      = patch.design;
+    if (Object.keys(dbPatch).length > 0) {
+      dbCardService.updateDesign(walletAddress, dbPatch).catch(() => {});
+    }
+  }, [walletAddress]);
 
   const applySwapBalances = useCallback(async (sellTok: string, sellAmt: number, buyTok: string, buyAmt: number) => {
     setBalances(prev => {
@@ -723,6 +884,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const contextValue = useMemo(() => ({
     isDarkMode, toggleTheme,
+    accountType, accountTypeSet, setAccountType,
+    p2pCountry, p2pCurrency, setP2PPreferences,
+    lockedBalance, lockBalance, unlockBalance,
+    kycStatus, refreshKYCStatus,
     balanceVisible, toggleBalanceVisible,
     pinEnabled, refreshPinEnabled,
     walletAddress, walletName, setWalletName: handleSetWalletName,
@@ -734,7 +899,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     createWallet, importWallet, deleteWallet, enterReadOnlyMode, refreshBalance, fetchBalance,
     sendETH, sendCrypto, topupCard, spendCard, toggleFreezeCard, applySwapBalances, switchNetwork,
   }), [
-    isDarkMode, toggleTheme, balanceVisible, toggleBalanceVisible,
+    isDarkMode, toggleTheme, accountType, accountTypeSet, setAccountType,
+    p2pCountry, p2pCurrency, setP2PPreferences, lockedBalance, lockBalance, unlockBalance,
+    kycStatus, refreshKYCStatus, balanceVisible, toggleBalanceVisible,
     pinEnabled, refreshPinEnabled, addTx, walletAddress, walletName, handleSetWalletName,
     ethBalance, isLoadingBalance, hasWallet, isLoadingWallet, isReadOnly, isSyncing,
     balances, cardBalance, cardFrozen, network, transactions,

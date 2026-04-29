@@ -10,22 +10,20 @@ export type WalletData = {
 export const walletService = {
   // Just generate a random mnemonic without saving anything
   generateMnemonic(): string {
-    return ethers.Wallet.createRandom().mnemonic.phrase;
+    return ethers.Wallet.createRandom().mnemonic!.phrase;
   },
 
-  // Generate mnemonic + derive address for preview — does NOT save to storage
   generateWalletPreview(): { mnemonic: string; address: string } {
     const wallet = ethers.Wallet.createRandom();
-    return { mnemonic: wallet.mnemonic.phrase, address: wallet.address };
+    return { mnemonic: wallet.mnemonic!.phrase, address: wallet.address };
   },
 
-  // Create a brand new wallet with random mnemonic
   async createWallet(): Promise<WalletData> {
     const wallet = ethers.Wallet.createRandom();
     const data: WalletData = {
       address: wallet.address,
       privateKey: wallet.privateKey,
-      mnemonic: wallet.mnemonic.phrase,
+      mnemonic: wallet.mnemonic!.phrase,
     };
     await storageService.saveWallet(data.privateKey, data.mnemonic, data.address);
     return data;
@@ -39,7 +37,7 @@ export const walletService = {
     const t0 = Date.now();
     try {
       console.log('[WalletService] Step 1: Deriving wallet from mnemonic...');
-      const wallet = ethers.Wallet.fromMnemonic(normalized);
+      const wallet = ethers.Wallet.fromPhrase(normalized);
       console.log(`[WalletService] Step 2: Wallet derived — address: ${wallet.address} (${Date.now() - t0}ms)`);
       return {
         address:    wallet.address,
@@ -62,13 +60,13 @@ export const walletService = {
   // Derive a specific account index from a mnemonic
   deriveAccount(mnemonic: string, index: number): { address: string; privateKey: string } {
     const path = `m/44'/60'/0'/0/${index}`;
-    const wallet = ethers.Wallet.fromMnemonic(mnemonic, path);
+    const wallet = ethers.HDNodeWallet.fromPhrase(mnemonic, undefined, path);
     return { address: wallet.address, privateKey: wallet.privateKey };
   },
 
   // Validate an Ethereum address
   isValidAddress(address: string): boolean {
-    return ethers.utils.isAddress(address);
+    return ethers.isAddress(address);
   },
 
   async walletExists(): Promise<boolean> {

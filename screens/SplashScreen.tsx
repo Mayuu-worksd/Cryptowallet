@@ -1,9 +1,9 @@
 import React, { useEffect, useRef } from 'react';
+import { Theme } from '../constants';
 import {
   View, Text, StyleSheet, Animated, StatusBar, Dimensions, Image, ActivityIndicator,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { Theme } from '../constants';
 
 const { width, height } = Dimensions.get('window');
 
@@ -241,3 +241,4 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 });
+

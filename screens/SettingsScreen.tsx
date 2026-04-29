@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Theme } from '../constants';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Alert, Platform, Switch, TextInput, Modal, Image, ActivityIndicator,
@@ -7,7 +8,7 @@ import * as Clipboard from 'expo-clipboard';
 import { Feather } from '@expo/vector-icons';
 import { useWallet, useMarket } from '../store/WalletContext';
 import { storageService } from '../services/storageService';
-import { Theme, COIN_META, COIN_COLORS } from '../constants';
+import { COIN_META, COIN_COLORS } from '../constants';
 import Toast from '../components/Toast';
 import { haptics } from '../utils/haptics';
 import PinScreen from './PinScreen';
@@ -18,6 +19,34 @@ const NETWORKS = [
   { name: 'Ethereum', type: 'Mainnet', color: '#627EEA', iconUrl: 'https://assets.coingecko.com/coins/images/279/large/ethereum.png' },
   { name: 'Polygon',  type: 'Mainnet', color: '#8247E5', iconUrl: 'https://assets.coingecko.com/coins/images/4713/large/matic-token-icon.png' },
   { name: 'Arbitrum', type: 'Mainnet', color: '#2D374B', iconUrl: 'https://assets.coingecko.com/coins/images/16547/large/photo_2023-03-29_21.47.00.jpeg' },
+];
+
+const COUNTRIES = [
+  { name: 'India', flag: '🇮🇳', currency: 'INR' },
+  { name: 'United States', flag: '🇺🇸', currency: 'USD' },
+  { name: 'United Kingdom', flag: '🇬🇧', currency: 'GBP' },
+  { name: 'UAE', flag: '🇦🇪', currency: 'AED' },
+  { name: 'Singapore', flag: '🇸🇬', currency: 'SGD' },
+  { name: 'European Union', flag: '🇪🇺', currency: 'EUR' },
+  { name: 'Canada', flag: '🇨🇦', currency: 'CAD' },
+  { name: 'Australia', flag: '🇦🇺', currency: 'AUD' },
+  { name: 'Japan', flag: '🇯🇵', currency: 'JPY' },
+  { name: 'Germany', flag: '🇩🇪', currency: 'EUR' },
+  { name: 'France', flag: '🇫🇷', currency: 'EUR' },
+  { name: 'Switzerland', flag: '🇨🇭', currency: 'CHF' },
+];
+
+const CURRENCIES = [
+  { code: 'INR', name: 'Indian Rupee' },
+  { code: 'USD', name: 'US Dollar' },
+  { code: 'GBP', name: 'British Pound' },
+  { code: 'EUR', name: 'Euro' },
+  { code: 'AED', name: 'UAE Dirham' },
+  { code: 'SGD', name: 'Singapore Dollar' },
+  { code: 'JPY', name: 'Japanese Yen' },
+  { code: 'AUD', name: 'Australian Dollar' },
+  { code: 'CAD', name: 'Canadian Dollar' },
+  { code: 'CHF', name: 'Swiss Franc' },
 ];
 
 const CoinIcon = ({ symbol, size = 36 }: { symbol: string; size?: number }) => {
@@ -38,10 +67,24 @@ export default function SettingsScreen({ navigation }: any) {
   const {
     network, switchNetwork, walletAddress, walletName, setWalletName,
     deleteWallet, enterReadOnlyMode, isDarkMode, toggleTheme, balances, ethBalance,
-    pinEnabled, refreshPinEnabled, isReadOnly,
+    pinEnabled, refreshPinEnabled, isReadOnly, kycStatus, accountType, setAccountType,
+    p2pCountry, p2pCurrency, setP2PPreferences,
   } = useWallet();
   const { prices } = useMarket();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
+
+  const adminTapCount = React.useRef(0);
+  const adminTapTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleHeaderTap = () => {
+    adminTapCount.current += 1;
+    if (adminTapTimer.current) clearTimeout(adminTapTimer.current);
+    if (adminTapCount.current >= 5) {
+      adminTapCount.current = 0;
+      navigation.navigate('Admin');
+      return;
+    }
+    adminTapTimer.current = setTimeout(() => { adminTapCount.current = 0; }, 2000);
+  };
 
   // Refresh pin badge whenever screen comes into focus
   React.useEffect(() => {
@@ -50,12 +93,15 @@ export default function SettingsScreen({ navigation }: any) {
 
   const [renameModal, setRenameModal]   = useState(false);
   const [nameInput, setNameInput]       = useState(walletName);
+  const [accountTypeModal, setAccountTypeModal] = useState(false);
   const [phraseModal, setPhraseModal]   = useState(false);
   const [phrase, setPhrase]             = useState('');
   const [phraseLoading, setPhraseLoading] = useState(false);
   const [toast, setToast]               = useState({ visible: false, message: '', type: 'success' as 'success' | 'error' | 'info' });
   const [pinVerifyMode, setPinVerifyMode] = useState<'phrase' | 'toggle_off' | null>(null);
   const [showPinSetup, setShowPinSetup]   = useState(false);
+  const [showRegionModal, setShowRegionModal] = useState(false);
+  const [showCurrencyModal, setShowCurrencyModal] = useState(false);
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') =>
     setToast({ visible: true, message, type });
@@ -146,8 +192,59 @@ export default function SettingsScreen({ navigation }: any) {
 
   const styles = makeStyles(T);
 
+  const SelectionModal = ({ visible, onClose, title, items, selected, onSelect, type }: any) => (
+    <Modal visible={visible} transparent animationType="slide">
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalBox, { backgroundColor: T.surface }]}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <Text style={[styles.modalTitle, { color: T.text, marginBottom: 0 }]}>{title}</Text>
+            <TouchableOpacity onPress={onClose}>
+              <Feather name="x" size={22} color={T.textMuted} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={{ maxHeight: 400 }}>
+            {items.map((item: any) => {
+              const isSelected = type === 'country' ? selected === item.name : selected === item.code;
+              return (
+                <TouchableOpacity
+                  key={type === 'country' ? item.name : item.code}
+                  style={[styles.menuRow, { borderBottomWidth: 1, borderBottomColor: T.border }]}
+                  onPress={() => { onSelect(item); onClose(); }}
+                >
+                  <View style={styles.menuLeft}>
+                    {type === 'country' ? <Text style={styles.flagIcon}>{item.flag}</Text> : <Feather name="dollar-sign" size={16} color={T.textMuted} />}
+                    <Text style={[styles.menuLabel, { color: T.text }]}>{type === 'country' ? item.name : `${item.code} - ${item.name}`}</Text>
+                  </View>
+                  {isSelected && <Feather name="check" size={20} color={T.primary} />}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+
   return (
     <View style={styles.container}>
+      <SelectionModal 
+        visible={showRegionModal} 
+        onClose={() => setShowRegionModal(false)}
+        title="Select Region"
+        items={COUNTRIES}
+        selected={p2pCountry}
+        onSelect={(c: any) => { setP2PPreferences(c.name, c.currency); showToast(`Region updated to ${c.name}`, 'success'); }}
+        type="country"
+      />
+      <SelectionModal 
+        visible={showCurrencyModal} 
+        onClose={() => setShowCurrencyModal(false)}
+        title="Base Currency"
+        items={CURRENCIES}
+        selected={p2pCurrency}
+        onSelect={(c: any) => { setP2PPreferences(p2pCountry, c.code); showToast(`Currency updated to ${c.code}`, 'success'); }}
+        type="currency"
+      />
       <Toast
         visible={toast.visible}
         message={toast.message}
@@ -185,6 +282,73 @@ export default function SettingsScreen({ navigation }: any) {
             }}
             onCancel={() => setShowPinSetup(false)}
          />
+      </Modal>
+
+      {/* Account Type Modal */}
+      <Modal visible={accountTypeModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalBox, { backgroundColor: T.surface }]}>
+            {/* Header */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <Text style={[styles.modalTitle, { color: T.text, marginBottom: 0 }]}>Account Type</Text>
+              <TouchableOpacity onPress={() => setAccountTypeModal(false)}>
+                <Feather name="x" size={22} color={T.textMuted} />
+              </TouchableOpacity>
+            </View>
+            <Text style={[{ color: T.textMuted, fontSize: 13, marginBottom: 24, lineHeight: 20 }]}>
+              Choose how you use CryptoWallet. Switch anytime.
+            </Text>
+
+            {/* Personal Option */}
+            <TouchableOpacity
+              onPress={async () => { await setAccountType('personal'); setAccountTypeModal(false); showToast('Switched to Personal account', 'success'); }}
+              activeOpacity={0.85}
+              style={[styles.accountTypeOption, {
+                backgroundColor: accountType === 'personal' ? T.success + '12' : T.surfaceLow,
+                borderColor: accountType === 'personal' ? T.success : T.border,
+                borderWidth: accountType === 'personal' ? 2 : 1,
+              }]}
+            >
+              <View style={[styles.accountTypeIconWrap, { backgroundColor: T.success + '20' }]}>
+                <Feather name="user" size={22} color={T.success} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.accountTypeOptionTitle, { color: T.text }]}>Personal</Text>
+                <Text style={[styles.accountTypeOptionDesc, { color: T.textMuted }]}>Send, receive, swap & P2P trading</Text>
+              </View>
+              {accountType === 'personal' && (
+                <View style={[styles.activeCheck, { backgroundColor: T.success }]}>
+                  <Feather name="check" size={14} color="#FFF" />
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {/* Business Option */}
+            <TouchableOpacity
+              onPress={async () => { await setAccountType('business'); setAccountTypeModal(false); showToast('Switched to Business Merchant account', 'success'); }}
+              activeOpacity={0.85}
+              style={[styles.accountTypeOption, {
+                backgroundColor: accountType === 'business' ? T.primary + '12' : T.surfaceLow,
+                borderColor: accountType === 'business' ? T.primary : T.border,
+                borderWidth: accountType === 'business' ? 2 : 1,
+                marginBottom: 0,
+              }]}
+            >
+              <View style={[styles.accountTypeIconWrap, { backgroundColor: T.primary + '20' }]}>
+                <Feather name="briefcase" size={22} color={T.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.accountTypeOptionTitle, { color: T.text }]}>Business Merchant</Text>
+                <Text style={[styles.accountTypeOptionDesc, { color: T.textMuted }]}>Merchant QR, business KYC & multi-currency P2P</Text>
+              </View>
+              {accountType === 'business' && (
+                <View style={[styles.activeCheck, { backgroundColor: T.primary }]}>
+                  <Feather name="check" size={14} color="#FFF" />
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
 
       {/* Rename Modal */}
@@ -255,7 +419,9 @@ export default function SettingsScreen({ navigation }: any) {
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Main')} activeOpacity={0.7}>
           <Feather name="arrow-left" size={24} color={T.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Profile & Settings</Text>
+        <TouchableOpacity onPress={handleHeaderTap} activeOpacity={1}>
+          <Text style={styles.headerTitle}>Profile & Settings</Text>
+        </TouchableOpacity>
         <View style={{ width: 40 }} />
       </View>
 
@@ -283,6 +449,17 @@ export default function SettingsScreen({ navigation }: any) {
                 <Feather name="copy" size={14} color={T.primary} />
               </TouchableOpacity>
             </View>
+            {/* Account Type Badge */}
+            <TouchableOpacity
+              onPress={() => setAccountTypeModal(true)}
+              style={[styles.accountTypeBadge, { backgroundColor: accountType === 'business' ? T.primary + '20' : T.success + '20' }]}
+            >
+              <Feather name={accountType === 'business' ? 'briefcase' : 'user'} size={12} color={accountType === 'business' ? T.primary : T.success} />
+              <Text style={{ fontSize: 11, fontWeight: '800', color: accountType === 'business' ? T.primary : T.success, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                {accountType === 'business' ? 'Business Merchant' : 'Personal'}
+              </Text>
+              <Feather name="chevron-down" size={11} color={accountType === 'business' ? T.primary : T.success} />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -381,7 +558,76 @@ export default function SettingsScreen({ navigation }: any) {
         <Text style={[styles.sectionTitle, { color: T.textMuted }]}>General</Text>
         <View style={[styles.cardBlock, { backgroundColor: T.surface }]}>
 
-          {/* Virtual Card */}
+          {/* Merchant Dashboard */}
+          <TouchableOpacity
+            style={[styles.menuRow, { borderBottomWidth: 1, borderBottomColor: T.border }]}
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate('MerchantDashboard')}
+          >
+            <View style={styles.menuLeft}>
+              <View style={[styles.menuIconBox, { backgroundColor: T.background }]}>
+                <Feather name="briefcase" size={18} color={'#10B981'} />
+              </View>
+              <View>
+                <Text style={[styles.menuLabel, { color: T.text }]}>Merchant Dashboard</Text>
+                <Text style={[styles.menuSub, { color: T.textMuted }]}>QR payments & P2P marketplace</Text>
+              </View>
+            </View>
+            <Feather name="chevron-right" size={20} color={T.textMuted} />
+          </TouchableOpacity>
+
+          {/* KYC Verification — Personal shows personal KYC, Business shows Business KYC */}
+          <TouchableOpacity
+            style={[styles.menuRow, { borderBottomWidth: 1, borderBottomColor: T.border }]}
+            activeOpacity={0.7}
+            onPress={() => {
+              if (accountType === 'business') {
+                navigation.navigate('BusinessKYCForm');
+              } else {
+                navigation.navigate(kycStatus ? 'KYCStatus' : 'KYCForm');
+              }
+            }}
+          >
+            <View style={styles.menuLeft}>
+              <View style={[styles.menuIconBox, { backgroundColor: T.background }]}>
+                <Feather name="shield" size={18} color={
+                  kycStatus === 'verified'     ? T.success :
+                  kycStatus === 'under_review' ? '#3B82F6' :
+                  kycStatus === 'pending'      ? '#F59E0B' :
+                  kycStatus === 'rejected'     ? T.error : T.text
+                } />
+              </View>
+              <View>
+                <Text style={[styles.menuLabel, { color: T.text }]}>
+                  {accountType === 'business' ? 'Business KYC' : 'Identity Verification'}
+                </Text>
+                <Text style={[styles.menuSub, { color: T.textMuted }]}>
+                  {accountType === 'business' ? 'Verify your business to unlock merchant features' : 'KYC required for physical card'}
+                </Text>
+              </View>
+            </View>
+            <View style={[styles.pinBadge, { backgroundColor:
+              kycStatus === 'verified'     ? T.success + '20' :
+              kycStatus === 'under_review' ? '#3B82F620' :
+              kycStatus === 'pending'      ? '#F59E0B20' :
+              kycStatus === 'rejected'     ? T.error + '20' : T.border
+            }]}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color:
+                kycStatus === 'verified'     ? T.success :
+                kycStatus === 'under_review' ? '#3B82F6' :
+                kycStatus === 'pending'      ? '#F59E0B' :
+                kycStatus === 'rejected'     ? T.error : T.textMuted
+              }}>
+                {kycStatus === 'verified'     ? 'VERIFIED' :
+                 kycStatus === 'under_review' ? 'REVIEW' :
+                 kycStatus === 'pending'      ? 'PENDING' :
+                 kycStatus === 'rejected'     ? 'REJECTED' : 'START'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Virtual Card — Personal only */}
+          {accountType !== 'business' && (
           <TouchableOpacity
             style={[styles.menuRow, { borderBottomWidth: 1, borderBottomColor: T.border }]}
             activeOpacity={0.7}
@@ -398,6 +644,7 @@ export default function SettingsScreen({ navigation }: any) {
             </View>
             <Feather name="chevron-right" size={20} color={T.textMuted} />
           </TouchableOpacity>
+          )}
 
           {/* PIN Lock */}
           <TouchableOpacity
@@ -476,6 +723,51 @@ export default function SettingsScreen({ navigation }: any) {
               </View>
             </View>
             <Feather name="chevron-right" size={20} color={T.textMuted} />
+          </TouchableOpacity>
+
+          {/* Regional Preferences */}
+          <View style={[styles.menuRow, { borderBottomWidth: 1, borderBottomColor: T.border }]}>
+            <View style={styles.menuLeft}>
+              <View style={[styles.menuIconBox, { backgroundColor: T.background }]}>
+                <Feather name="globe" size={18} color={T.primary} />
+              </View>
+              <View>
+                <Text style={[styles.menuLabel, { color: T.text }]}>Regional Preferences</Text>
+                <Text style={[styles.menuSub, { color: T.textMuted }]}>Country & settlement currency</Text>
+              </View>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.menuRow, { borderBottomWidth: 1, borderBottomColor: T.border, paddingLeft: 40 }]}
+            activeOpacity={0.7}
+            onPress={() => setShowRegionModal(true)}
+          >
+            <View style={styles.menuLeft}>
+              <Text style={styles.flagIcon}>{p2pCountry === 'United States' ? '🇺🇸' : p2pCountry === 'United Kingdom' ? '🇬🇧' : p2pCountry === 'European Union' ? '🇪🇺' : '🏳️'}</Text>
+              <View>
+                <Text style={[styles.menuLabelSmall, { color: T.text }]}>{p2pCountry}</Text>
+                <Text style={[styles.menuSubSmall, { color: T.textMuted }]}>Operating Region</Text>
+              </View>
+            </View>
+            <Feather name="edit-2" size={14} color={T.textMuted} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.menuRow, { borderBottomWidth: 1, borderBottomColor: T.border, paddingLeft: 40 }]}
+            activeOpacity={0.7}
+            onPress={() => setShowCurrencyModal(true)}
+          >
+            <View style={styles.menuLeft}>
+              <View style={[styles.menuIconBoxSmall, { backgroundColor: T.background }]}>
+                <Feather name="dollar-sign" size={14} color={T.text} />
+              </View>
+              <View>
+                <Text style={[styles.menuLabelSmall, { color: T.text }]}>{p2pCurrency}</Text>
+                <Text style={[styles.menuSubSmall, { color: T.textMuted }]}>Default Currency</Text>
+              </View>
+            </View>
+            <Feather name="edit-2" size={14} color={T.textMuted} />
           </TouchableOpacity>
 
           {/* Help & Support */}
@@ -565,7 +857,6 @@ export default function SettingsScreen({ navigation }: any) {
             </TouchableOpacity>
           </View>
         )}
-
       </ScrollView>
     </View>
   );
@@ -575,74 +866,88 @@ const makeStyles = (T: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: T.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 24, paddingTop: Platform.OS === 'web' ? 24 : 60, paddingBottom: 16,
+    paddingHorizontal: 24, paddingTop: Platform.OS === 'ios' ? 60 : 48, paddingBottom: 16,
+    backgroundColor: T.background,
   },
-  backBtn: { width: 40, height: 40, justifyContent: 'center' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: T.text },
-  scroll: { paddingHorizontal: 24, paddingBottom: 120 },
+  backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center', borderRadius: 22, backgroundColor: T.surfaceLow },
+  headerTitle: { fontSize: 18, fontWeight: '900', color: T.text, letterSpacing: -0.5 },
+  scroll: { paddingHorizontal: 24, paddingBottom: 120, paddingTop: 12 },
 
   profileCard: {
-    flexDirection: 'row', alignItems: 'center', borderRadius: 20,
-    padding: 20, marginBottom: 32, marginTop: 12,
+    flexDirection: 'row', alignItems: 'center', borderRadius: 24,
+    padding: 24, marginBottom: 32,
+    borderWidth: 1, borderColor: T.surfaceHigh,
     shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 4,
   },
-  profileAvatar: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+  profileAvatar: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
   profileInfo: { flex: 1 },
-  profileName: { fontSize: 18, fontWeight: '700', marginBottom: 4 },
+  profileName: { fontSize: 20, fontWeight: '900', marginBottom: 4, letterSpacing: -0.5 },
   walletAddrRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  profileAddr: { fontSize: 13, fontFamily: 'monospace' },
-  copyIcon: { padding: 4, borderRadius: 6 },
+  profileAddr: { fontSize: 13, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', opacity: 0.7 },
+  copyIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  accountTypeBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, marginTop: 8, alignSelf: 'flex-start' },
+  accountTypeOption: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 18, marginBottom: 12 },
+  accountTypeIconWrap: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  accountTypeOptionTitle: { fontSize: 16, fontWeight: '800', marginBottom: 3 },
+  accountTypeOptionDesc: { fontSize: 12, lineHeight: 17, fontWeight: '500' },
+  activeCheck: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 
-  sectionTitle: { fontSize: 13, fontWeight: '700', textTransform: 'uppercase', marginBottom: 12, marginLeft: 4, letterSpacing: 0.5 },
-  cardBlock: { borderRadius: 20, marginBottom: 32, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 6, elevation: 1 },
+  sectionTitle: { fontSize: 12, fontWeight: '800', textTransform: 'uppercase', marginBottom: 16, marginLeft: 4, letterSpacing: 1.2, opacity: 0.6 },
+  cardBlock: { borderRadius: 24, marginBottom: 32, borderWidth: 1, borderColor: T.surfaceHigh, overflow: 'hidden' },
 
-  networkRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
-  holdingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
+  networkRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20 },
+  holdingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20 },
   networkLeft: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  networkIconCore: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  networkName: { fontSize: 16, fontWeight: '700', marginBottom: 2 },
-  networkType: { fontSize: 13, fontWeight: '500' },
-  pinBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-  radioEmpty: { width: 20, height: 20, borderRadius: 10, borderWidth: 2 },
+  networkIconCore: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  networkName: { fontSize: 17, fontWeight: '800', marginBottom: 2 },
+  networkType: { fontSize: 13, fontWeight: '600', opacity: 0.6 },
+  pinBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  radioEmpty: { width: 22, height: 22, borderRadius: 11, borderWidth: 2 },
 
-  menuRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
+  menuRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20 },
   menuLeft: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  menuIconBox: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  menuLabel: { fontSize: 16, fontWeight: '600', marginBottom: 2 },
-  menuSub: { fontSize: 13 },
+  menuIconBox: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  menuLabel: { fontSize: 17, fontWeight: '800', marginBottom: 2 },
+  menuSub: { fontSize: 13, opacity: 0.6 },
 
-  comingSoonChip: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 16, borderWidth: 1 },
-  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 16, paddingVertical: 16, gap: 10, borderWidth: 1 },
-  logoutBtnText: { fontSize: 16, fontWeight: '700' },
+  comingSoonChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 16, borderWidth: 1 },
+  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 20, paddingVertical: 18, gap: 10, borderWidth: 1, marginBottom: 12 },
+  logoutBtnText: { fontSize: 16, fontWeight: '900' },
   deleteBtn: {
     flexDirection: 'row', alignItems: 'center',
-    borderRadius: 16, paddingVertical: 14, paddingHorizontal: 20,
+    borderRadius: 20, paddingVertical: 16, paddingHorizontal: 20,
     gap: 14, borderWidth: 1,
   },
   importRestoreBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    borderRadius: 16, paddingVertical: 16, gap: 10,
+    borderRadius: 20, paddingVertical: 18, gap: 10,
   },
   readOnlyBanner: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 14,
-    padding: 16, borderRadius: 16, borderWidth: 1, marginBottom: 16,
+    padding: 20, borderRadius: 20, borderWidth: 1, marginBottom: 20,
+    marginTop: 10,
   },
+  flagIcon: { fontSize: 20, marginRight: 12 },
+  menuLabelSmall: { fontSize: 15, fontWeight: '700' },
+  menuSubSmall: { fontSize: 11, opacity: 0.6, marginTop: 1 },
+  menuIconBoxSmall: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
 
   // Modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', padding: 24 },
-  modalBox: { width: '100%', maxWidth: 400, borderRadius: 24, padding: 24 },
-  modalTitle: { fontSize: 18, fontWeight: '800', color: T.text, marginBottom: 16 },
-  modalInput: { borderWidth: 1, borderRadius: 14, padding: 16, fontSize: 16, fontWeight: '600', marginBottom: 20 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  modalBox: { width: '100%', maxWidth: 420, borderRadius: 32, padding: 28, borderWidth: 1, borderColor: T.surfaceHigh },
+  modalTitle: { fontSize: 22, fontWeight: '900', color: T.text, marginBottom: 20, letterSpacing: -0.5 },
+  modalInput: { borderWidth: 1, borderRadius: 18, padding: 18, fontSize: 16, fontWeight: '700', marginBottom: 24 },
   modalBtns: { flexDirection: 'row', gap: 12 },
-  modalBtn: { flex: 1, paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
-  modalBtnText: { fontSize: 15, fontWeight: '700' },
+  modalBtn: { flex: 1, paddingVertical: 16, borderRadius: 18, alignItems: 'center' },
+  modalBtnText: { fontSize: 16, fontWeight: '900' },
 
-  phraseGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 16, borderRadius: 16, marginBottom: 16 },
-  wordBox: { width: '30%', flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: T.border },
-  wordNum: { fontSize: 10, fontWeight: '700', minWidth: 14 },
-  wordText: { fontSize: 13, fontWeight: '700', flex: 1 },
-  copyPhraseBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 12, borderWidth: 1, marginBottom: 12 },
-  copyPhraseBtnText: { fontSize: 14, fontWeight: '700' },
-  phraseWarning: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, padding: 12, borderRadius: 12 },
-  phraseWarningText: { flex: 1, fontSize: 12, lineHeight: 18, fontWeight: '600' },
+  phraseGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, padding: 20, borderRadius: 20, marginBottom: 20 },
+  wordBox: { width: '30%', flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: T.border },
+  wordNum: { fontSize: 11, fontWeight: '800', minWidth: 16, opacity: 0.5 },
+  wordText: { fontSize: 14, fontWeight: '800', flex: 1 },
+  copyPhraseBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 14, borderRadius: 16, borderWidth: 1, marginBottom: 16 },
+  copyPhraseBtnText: { fontSize: 15, fontWeight: '800' },
+  phraseWarning: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 16, borderRadius: 16 },
+  phraseWarningText: { flex: 1, fontSize: 13, lineHeight: 20, fontWeight: '700' },
 });
+

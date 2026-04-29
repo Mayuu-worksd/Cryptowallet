@@ -152,6 +152,7 @@ APK download link appears in your [Expo dashboard](https://expo.dev/accounts/koo
 | API | Purpose | Key Required |
 |---|---|---|
 | **Alchemy** | Ethereum RPC — balance, gas, send | Yes |
+| **Supabase** | Real-time DB, merchant data, escrow state | Yes |
 | **CoinGecko** | Live prices, charts, news | No (free tier) |
 | **0x Protocol** | Token swap quotes + execution | Optional |
 | **Etherscan V2** | On-chain transaction history | Optional |
@@ -172,6 +173,7 @@ APK download link appears in your [Expo dashboard](https://expo.dev/accounts/koo
 | React Native | 0.81.5 | Core mobile framework |
 | Expo SDK | 54 | Build tooling, native modules |
 | ethers.js | 5.7.2 | Ethereum wallet, signing, RPC |
+| @supabase/supabase-js | 2.x | Backend integration |
 | expo-secure-store | 15.x | OS-level encrypted key storage |
 | React Navigation | 6.x | Stack + bottom tab navigation |
 | expo-camera | 17.x | QR code scanning |
@@ -191,27 +193,29 @@ CryptoWallet/
 ├── constants/               # Theme tokens, coin metadata, network config
 ├── screens/                 # All app screens
 │   ├── HomeScreen.tsx       # Dashboard — balance, assets, market, news
+│   ├── P2PMarketplaceScreen.tsx # NEW: Peer-to-peer trading hub
+│   ├── KYCIntroScreen.tsx   # NEW: Institutional verification entry
+│   ├── KYCUploadScreen.tsx  # NEW: Identity document processing
+│   ├── AccountTypeScreen.tsx # NEW: Personal vs Business selection
 │   ├── SendScreen.tsx       # Send ETH with gas estimation
 │   ├── ReceiveScreen.tsx    # QR code generation
 │   ├── SwapScreen.tsx       # Token swap via 0x Protocol
-│   ├── CardScreen.tsx       # Virtual card — top up, freeze, transactions
+│   ├── CardScreen.tsx       # Virtual card dashboard
+│   ├── VCCVariantScreen.tsx # NEW: Virtual card tier selection
+│   ├── VCCSuccessScreen.tsx # NEW: Card issuance confirmation
 │   ├── PortfolioScreen.tsx  # Full asset list with 24h change
 │   ├── HistoryScreen.tsx    # Transaction history
-│   ├── CoinChartScreen.tsx  # Per-coin price chart
 │   ├── SettingsScreen.tsx   # Network, PIN, theme, seed phrase
-│   ├── ScanScreen.tsx       # QR scanner
-│   ├── PinScreen.tsx        # PIN setup and verify
-│   ├── CreateWalletScreen.tsx
-│   ├── ImportWalletScreen.tsx
-│   └── OnboardingScreen.tsx
+│   └── OnboardingScreen.tsx # NEW: Premium 3-slide tutorial
 ├── services/                # All business logic
 │   ├── ethereumService.ts   # RPC calls
+│   ├── supabaseService.ts   # NEW: Real-time backend & DB
+│   ├── merchantService.ts   # NEW: P2P Merchant logic
+│   ├── escrowService.ts     # NEW: Secure trade escrow
 │   ├── walletService.ts     # Wallet creation + import
 │   ├── storageService.ts    # Secure key storage
 │   ├── marketService.ts     # CoinGecko prices + news
 │   ├── swapService.ts       # 0x Protocol swap
-│   ├── balanceService.ts    # On-chain balance fetching
-│   ├── etherscanService.ts  # Transaction history
 │   └── pinService.ts        # PIN hash + lockout
 ├── store/
 │   └── WalletContext.tsx    # Global state

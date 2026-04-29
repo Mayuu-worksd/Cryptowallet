@@ -128,7 +128,7 @@ function fromCardTx(tx: CardTx): UnifiedTx {
 
 function fromChainTx(tx: ChainTx, walletAddress: string, ethPriceUsd: number): UnifiedTx {
   const isSend  = tx.from.toLowerCase() === walletAddress.toLowerCase();
-  const ethAmt  = parseFloat(ethers.utils.formatEther(tx.value || '0'));
+  const ethAmt  = parseFloat(ethers.formatEther(tx.value || '0'));
   const usd     = (ethAmt * ethPriceUsd).toFixed(2);
   const date    = new Date(parseInt(tx.timeStamp, 10) * 1000).toISOString();
   const status: UnifiedTx['status'] = tx.isError === '0' ? 'completed' : 'failed';
@@ -315,22 +315,20 @@ export const transactionService = {
       // 1. Process ETH Txs (Incoming & Outgoing)
       for (const tx of chainTxs) {
         if (tx.isError !== '0' || knownHashes.has(tx.hash)) continue;
-        
         const isOut  = tx.from.toLowerCase() === walletAddress.toLowerCase();
-        const ethAmt = parseFloat(ethers.utils.formatEther(tx.value || '0'));
+        const ethAmt = parseFloat(ethers.formatEther(tx.value || '0'));
         if (ethAmt <= 0) continue;
-
         newTxs.push({
-          id:      tx.hash,
-          type:    isOut ? 'sent' : 'received',
-          coin:    'ETH',
-          amount:  ethAmt.toFixed(6),
+          id:       tx.hash,
+          type:     isOut ? 'sent' : 'received',
+          coin:     'ETH',
+          amount:   ethAmt.toFixed(6),
           usdValue: (ethAmt * ethPriceUsd).toFixed(2),
-          address: isOut ? tx.to : tx.from,
-          status:  'success',
-          date:    new Date(parseInt(tx.timeStamp, 10) * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-          rawDate: parseInt(tx.timeStamp, 10) * 1000,
-          txHash:  tx.hash,
+          address:  isOut ? tx.to : tx.from,
+          status:   'success',
+          date:     new Date(parseInt(tx.timeStamp, 10) * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          rawDate:  parseInt(tx.timeStamp, 10) * 1000,
+          txHash:   tx.hash,
         });
         knownHashes.add(tx.hash);
       }
@@ -338,21 +336,20 @@ export const transactionService = {
       // 1.5 Process Internal ETH Txs (Swaps/Contract Income)
       for (const tx of internalTxs) {
         if (tx.isError !== '0' || knownHashes.has(tx.hash)) continue;
-        const isOut  = tx.from.toLowerCase() === walletAddress.toLowerCase();
-        const ethAmt = parseFloat(ethers.utils.formatEther(tx.value || '0'));
-        if (ethAmt <= 0) continue;
-
+        const isOut   = tx.from.toLowerCase() === walletAddress.toLowerCase();
+        const ethAmt2 = parseFloat(ethers.formatEther(tx.value || '0'));
+        if (ethAmt2 <= 0) continue;
         newTxs.push({
-          id:      tx.hash + '_int',
-          type:    isOut ? 'sent' : 'received',
-          coin:    'ETH',
-          amount:  ethAmt.toFixed(6),
-          usdValue: (ethAmt * ethPriceUsd).toFixed(2),
-          address: isOut ? tx.to : tx.from,
-          status:  'success',
-          date:    new Date(parseInt(tx.timeStamp, 10) * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-          rawDate: parseInt(tx.timeStamp, 10) * 1000,
-          txHash:  tx.hash,
+          id:         tx.hash + '_int',
+          type:       isOut ? 'sent' : 'received',
+          coin:       'ETH',
+          amount:     ethAmt2.toFixed(6),
+          usdValue:   (ethAmt2 * ethPriceUsd).toFixed(2),
+          address:    isOut ? tx.to : tx.from,
+          status:     'success',
+          date:       new Date(parseInt(tx.timeStamp, 10) * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          rawDate:    parseInt(tx.timeStamp, 10) * 1000,
+          txHash:     tx.hash,
           isInternal: true,
         });
         knownHashes.add(tx.hash);
@@ -364,7 +361,7 @@ export const transactionService = {
         const isOut = tx.from.toLowerCase() === walletAddress.toLowerCase();
         const isCustom = tx.contractAddress.toLowerCase() === '0x351028A22C876E0431b30921c0dD0a836a14899E'.toLowerCase();
         
-        const amt = parseFloat(ethers.utils.formatUnits(tx.value, tx.tokenDecimal));
+        const amt = parseFloat(ethers.formatUnits(tx.value, parseInt(tx.tokenDecimal, 10)));
         if (amt <= 0) continue;
 
         newTxs.push({

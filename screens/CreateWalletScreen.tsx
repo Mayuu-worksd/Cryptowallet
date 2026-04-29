@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { Theme } from '../constants';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Platform, ActivityIndicator, Alert, Animated, Modal,
@@ -6,7 +7,6 @@ import {
 import { MaterialIcons, Feather } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { useWallet } from '../store/WalletContext';
-import { Theme } from '../constants';
 import Toast from '../components/Toast';
 
 const SAVING_STEPS = [
@@ -456,3 +456,4 @@ const ovStyles = StyleSheet.create({
   dot:        { height: 8, borderRadius: 4 },
   subtitle:   { fontSize: 13, fontWeight: '500', textAlign: 'center' },
 });
+

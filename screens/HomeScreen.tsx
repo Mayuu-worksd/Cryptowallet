@@ -1,4 +1,5 @@
 import React, { useCallback, useRef, memo, useMemo, useEffect } from 'react';
+import { Theme } from '../constants';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
@@ -6,7 +7,7 @@ import {
 } from 'react-native';
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { useWallet, useMarket } from '../store/WalletContext';
-import { Theme, COIN_META, COIN_COLORS } from '../constants';
+import { COIN_META, COIN_COLORS } from '../constants';
 import { NewsItem } from '../services/marketService';
 
 const { width } = Dimensions.get('window');
@@ -61,27 +62,30 @@ const ActionBtn = memo(({ icon, label, onPress, T, isDark }: {
   const scale      = useRef(new Animated.Value(1)).current;
   const onPressIn  = () => Animated.spring(scale, { toValue: 0.88, useNativeDriver: true, speed: 30, bounciness: 6 }).start();
   const onPressOut = () => Animated.spring(scale, { toValue: 1,    useNativeDriver: true, speed: 20, bounciness: 14 }).start();
-  const circleBg   = '#111111';
+  
+  // Use high-contrast black buttons for both modes as requested
+  const circleBg   = '#000000';
   const iconColor  = '#FFFFFF';
-  const labelColor = isDark ? T.textMuted  : '#444444';
+  const labelColor = isDark ? T.textMuted : '#444444';
+
   return (
     <Animated.View style={{ flex: 1, alignItems: 'center', transform: [{ scale }] }}>
       <TouchableOpacity
-        style={{ alignItems: 'center', gap: 8, width: '100%' }}
+        style={{ alignItems: 'center', gap: 10, width: '100%' }}
         onPress={onPress}
         onPressIn={onPressIn}
         onPressOut={onPressOut}
         activeOpacity={1}
       >
         <View style={{
-          width: 62, height: 62, borderRadius: 31, backgroundColor: circleBg,
+          width: 64, height: 64, borderRadius: 32, backgroundColor: circleBg,
           alignItems: 'center', justifyContent: 'center',
-          shadowColor: isDark ? T.primary : '#000',
-          shadowOffset: { width: 0, height: 4 }, shadowOpacity: isDark ? 0.22 : 0.14, shadowRadius: 8, elevation: 5,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 8,
         }}>
-          <MaterialIcons name={icon} size={26} color={iconColor} />
+          <MaterialIcons name={icon} size={28} color={iconColor} />
         </View>
-        <Text style={{ fontSize: 11, fontWeight: '700', color: labelColor, textTransform: 'uppercase', letterSpacing: 0.6 }}>{label}</Text>
+        <Text style={{ fontSize: 11, fontWeight: '800', color: labelColor, textTransform: 'uppercase', letterSpacing: 0.8 }}>{label}</Text>
       </TouchableOpacity>
     </Animated.View>
   );
@@ -103,15 +107,17 @@ const TokenRow = memo(({ symbol, amount, usd, change24h, T, hideBalance, onPress
           </Text>
         </View>
       </View>
-      <View style={{ alignItems: 'flex-end' }}>
-        <Text style={[styles.tokenUsd, { color: T.text }]}>
-          {hideBalance ? '••••' : `$${usd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-        </Text>
-        <Text style={{ fontSize: 12, fontWeight: '600', color: isUp ? T.success : T.error }}>
-          {isUp ? '▲' : '▼'} {Math.abs(change24h).toFixed(2)}%
-        </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={[styles.tokenUsd, { color: T.text }]}>
+            {hideBalance ? '••••' : `$${usd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+          </Text>
+          <Text style={{ fontSize: 12, fontWeight: '600', color: isUp ? T.success : T.error }}>
+            {isUp ? '▲' : '▼'} {Math.abs(change24h).toFixed(2)}%
+          </Text>
+        </View>
+        <Feather name="chevron-right" size={14} color={T.border} />
       </View>
-      <Feather name="chevron-right" size={14} color={T.border} style={{ marginLeft: 6 }} />
     </TouchableOpacity>
   );
 });
@@ -374,12 +380,27 @@ const STABLE_FALLBACK: Record<string, number> = {
   USDT: 1, 
   DAI: 1 
 };
+const ChangePill = memo(({ assetsList, T }: { assetsList: any[]; T: any }) => {
+  const avgChange = assetsList.reduce((s: number, a: any) => s + a.change24h, 0) / assetsList.length;
+  const isUp = avgChange >= 0;
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
+      <View style={[styles.changePill, { backgroundColor: isUp ? T.success + '20' : T.error + '20' }]}>
+        <Feather name={isUp ? 'trending-up' : 'trending-down'} size={12} color={isUp ? T.success : T.error} />
+        <Text style={{ fontSize: 12, fontWeight: '700', color: isUp ? T.success : T.error }}>
+          {isUp ? '+' : ''}{avgChange.toFixed(2)}% today
+        </Text>
+      </View>
+    </View>
+  );
+});
+
 // ─── Main screen ───────────────────────────────────────────────────────────────
 export default function HomeScreen({ navigation }: any) {
   const {
     ethBalance, balances, isDarkMode, walletName, walletAddress,
     isLoadingBalance, refreshBalance, isSyncing,
-    balanceVisible, toggleBalanceVisible, network, transactions,
+    balanceVisible, toggleBalanceVisible, network, transactions, accountType, lockedBalance,
   } = useWallet();
   const { prices, isPricesLoading, priceError, refreshPrices, news, isNewsLoading, refreshNews } = useMarket();
 
@@ -440,7 +461,7 @@ export default function HomeScreen({ navigation }: any) {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Text style={[styles.walletLabel, { color: T.text }]}>{walletName}</Text>
               <View style={{ backgroundColor: networkColor + '20', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6, borderWidth: 1, borderColor: networkColor + '40', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                {isSyncing && <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: networkColor }} />}
+                {isSyncing ? <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: networkColor }} /> : null}
                 <Text style={{ color: networkColor, fontSize: 8, fontWeight: '800', textTransform: 'uppercase' }}>
                   {isSyncing ? 'Syncing...' : network}
                 </Text>
@@ -515,53 +536,86 @@ export default function HomeScreen({ navigation }: any) {
               <Text style={[styles.balanceCurrency, { color: T.textMuted }]}>USD</Text>
             </View>
           )}
-          {!isInitialLoad && balanceVisible && assetsList.length > 0 && (() => {
-            const avgChange = assetsList.reduce((s, a) => s + a.change24h, 0) / assetsList.length;
-            const isUp = avgChange >= 0;
-            return (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
-                <View style={[styles.changePill, { backgroundColor: isUp ? T.success + '20' : T.error + '20' }]}>
-                  <Feather name={isUp ? 'trending-up' : 'trending-down'} size={12} color={isUp ? T.success : T.error} />
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: isUp ? T.success : T.error }}>
-                    {isUp ? '+' : ''}{avgChange.toFixed(2)}% today
-                  </Text>
-                </View>
+          {!isInitialLoad && balanceVisible && assetsList.length > 0 && (
+            <ChangePill assetsList={assetsList} T={T} />
+          )}
+          {/* Locked balance badge */}
+          {Object.entries(lockedBalance ?? {}).some(([, v]) => v > 0) && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 }}>
+              <View style={[styles.changePill, { backgroundColor: '#F59E0B20' }]}>
+                <Feather name="lock" size={11} color="#F59E0B" />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#F59E0B' }}>
+                  {Object.entries(lockedBalance).filter(([,v]) => v > 0).map(([k,v]) => `${v.toFixed(4)} ${k}`).join(' · ')} locked in P2P
+                </Text>
               </View>
-            );
-          })()}
+            </View>
+          )}
         </View>
 
         {/* ── Quick Actions ── */}
-        <View style={styles.actionsRow}>
-          <ActionBtn icon="add"         label="Deposit" onPress={() => navigation.navigate('Receive')} T={T} isDark={isDarkMode} />
-          <ActionBtn icon="swap-horiz"  label="Swap"    onPress={() => navigation.navigate('Swap')}    T={T} isDark={isDarkMode} />
-          <ActionBtn icon="send"        label="Send"    onPress={() => navigation.navigate('Send')}    T={T} isDark={isDarkMode} />
-          <ActionBtn icon="credit-card" label="Card"    onPress={() => navigation.navigate('Card')}    T={T} isDark={isDarkMode} />
-        </View>
+        {accountType === 'business' ? (
+          // Business Merchant: 4 merchant-specific quick actions
+          <View style={styles.actionsRow}>
+            <ActionBtn icon="grid-on"       label="QR Gen"    onPress={() => navigation.navigate('MerchantQR')}        T={T} isDark={isDarkMode} />
+            <ActionBtn icon="repeat"        label="P2P"       onPress={() => navigation.navigate('P2PMarketplace')}    T={T} isDark={isDarkMode} />
+            <ActionBtn icon="list-alt"      label="Orders"    onPress={() => navigation.navigate('MyP2POrders')}       T={T} isDark={isDarkMode} />
+            <ActionBtn icon="business"      label="Profile"   onPress={() => navigation.navigate('BusinessKYCForm')}   T={T} isDark={isDarkMode} />
+          </View>
+        ) : (
+          // Personal: original 4 actions
+          <View style={styles.actionsRow}>
+            <ActionBtn icon="add"           label="Deposit"   onPress={() => navigation.navigate('Receive')} T={T} isDark={isDarkMode} />
+            <ActionBtn icon="swap-horiz"    label="Swap"      onPress={() => navigation.navigate('Swap')}    T={T} isDark={isDarkMode} />
+            <ActionBtn icon="send"          label="Send"      onPress={() => navigation.navigate('Send')}    T={T} isDark={isDarkMode} />
+            <ActionBtn icon="credit-card"   label="Card"      onPress={() => navigation.navigate('Card')}    T={T} isDark={isDarkMode} />
+          </View>
+        )}
 
-        {/* ── Virtual Card Banner ── */}
-        <TouchableOpacity
-          style={[styles.cardBanner, { backgroundColor: T.surface, borderColor: T.border }]}
-          onPress={() => navigation.navigate('Card')}
-          activeOpacity={0.85}
-        >
-          <View style={[styles.cardBannerIcon, { backgroundColor: T.primary + '18' }]}>
-            <MaterialIcons name="credit-card" size={24} color={T.primary} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.cardBannerTitle, { color: T.text }]}>Virtual Card</Text>
-            <Text style={[styles.cardBannerSub, { color: T.textMuted }]}>Spend crypto anywhere, instantly</Text>
-          </View>
-          <View style={[styles.openBtn, { backgroundColor: T.primary }]}>
-            <Text style={styles.openBtnText}>Open</Text>
-          </View>
-        </TouchableOpacity>
+        {/* ── Merchant Banner (Business only) ── */}
+        {accountType === 'business' && (
+          <TouchableOpacity
+            style={[styles.cardBanner, { backgroundColor: T.surface, borderColor: T.primary + '40' }]}
+            onPress={() => navigation.navigate('MerchantDashboard')}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.cardBannerIcon, { backgroundColor: T.primary + '18' }]}>
+              <MaterialIcons name="store" size={24} color={T.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.cardBannerTitle, { color: T.text }]}>Merchant Dashboard</Text>
+              <Text style={[styles.cardBannerSub, { color: T.textMuted }]}>QR payments · P2P orders · Stats</Text>
+            </View>
+            <View style={[styles.openBtn, { backgroundColor: T.primary }]}>
+              <Text style={styles.openBtnText}>Open</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {/* ── Virtual Card Banner (Personal only) ── */}
+        {accountType !== 'business' && (
+          <TouchableOpacity
+            style={[styles.cardBanner, { backgroundColor: T.surface, borderColor: T.border }]}
+            onPress={() => navigation.navigate('Card')}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.cardBannerIcon, { backgroundColor: T.primary + '18' }]}>
+              <MaterialIcons name="credit-card" size={24} color={T.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.cardBannerTitle, { color: T.text }]}>Virtual Card</Text>
+              <Text style={[styles.cardBannerSub, { color: T.textMuted }]}>Spend crypto anywhere, instantly</Text>
+            </View>
+            <View style={[styles.openBtn, { backgroundColor: T.primary }]}>
+              <Text style={styles.openBtnText}>Open</Text>
+            </View>
+          </TouchableOpacity>
+        )}
 
         {/* ── My Assets ── */}
         <View style={[styles.assetsContainer, { backgroundColor: T.surface, borderColor: T.border }]}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: T.text }]}>My Assets</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Assets')} activeOpacity={0.7}>
+            <TouchableOpacity onPress={() => navigation.navigate('Portfolio')} activeOpacity={0.7}>
               <Text style={{ color: T.primary, fontSize: 13, fontWeight: '700' }}>View All →</Text>
             </TouchableOpacity>
           </View>
@@ -573,9 +627,12 @@ export default function HomeScreen({ navigation }: any) {
                   <SkeletonBox width={100} height={14} />
                   <SkeletonBox width={70} height={11} />
                 </View>
-                <View style={{ alignItems: 'flex-end', gap: 6 }}>
-                  <SkeletonBox width={70} height={14} />
-                  <SkeletonBox width={45} height={11} />
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                    <SkeletonBox width={70} height={14} />
+                    <SkeletonBox width={45} height={11} />
+                  </View>
+                  <Feather name="chevron-right" size={14} color={T.border} style={{ opacity: 0.3 }} />
                 </View>
               </View>
             ))
@@ -655,19 +712,20 @@ const styles = StyleSheet.create({
   walletLabel: { fontSize: 16, fontWeight: '800', letterSpacing: -0.5 },
   headerBtn: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 19 },
 
-  scroll: { paddingTop: 130, paddingHorizontal: 20, paddingBottom: 60 },
+  scroll: { paddingTop: Platform.OS === 'ios' ? 130 : 110, paddingHorizontal: 20, paddingBottom: 80 },
 
   getStartedBanner: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 16, borderWidth: 1, marginBottom: 14 },
   errorBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 12, borderWidth: 1, marginBottom: 14 },
   errorBannerText: { flex: 1, fontSize: 12, fontWeight: '600' },
 
-  balanceSection: { paddingVertical: 20 },
+  balanceSection: { paddingVertical: 24 },
   estText: { fontSize: 13, fontWeight: '600' },
   balanceValue: { fontSize: 46, fontWeight: '800', letterSpacing: -1.5 },
   balanceCurrency: { fontSize: 20, fontWeight: '700' },
   changePill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
 
   actionsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 },
+
 
   cardBanner: {
     flexDirection: 'row', alignItems: 'center', gap: 14,
@@ -680,7 +738,7 @@ const styles = StyleSheet.create({
   openBtn: { paddingHorizontal: 18, paddingVertical: 9, borderRadius: 20 },
   openBtnText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
 
-  assetsContainer: { borderRadius: 20, padding: 14, borderWidth: 1 },
+  assetsContainer: { borderRadius: 20, padding: 14, borderWidth: 1, marginBottom: 8 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   sectionTitle: { fontSize: 16, fontWeight: '900', letterSpacing: -0.2 },
 
@@ -704,3 +762,4 @@ const styles = StyleSheet.create({
   retryBtn: { marginTop: 8, paddingHorizontal: 24, paddingVertical: 10, borderRadius: 20 },
 
 });
+

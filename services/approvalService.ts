@@ -62,14 +62,14 @@ export async function checkAndRequestApproval({
 
   if (!tokenAddress) throw new Error(`Token ${tokenSymbol} not found on ${network}`);
 
-  const amtWei   = ethers.utils.parseUnits(amount, DECIMALS[tokenSymbol] ?? 18);
+  const amtWei   = ethers.parseUnits(amount, DECIMALS[tokenSymbol] ?? 18);
   const contract = new ethers.Contract(tokenAddress, ERC20_ABI, wallet);
 
-  const allowance: ethers.BigNumber = await contract.allowance(wallet.address, spenderAddress);
-  if (allowance.gte(amtWei)) return true;
+  const allowance: bigint = await contract.allowance(wallet.address, spenderAddress);
+  if (allowance >= amtWei) return true;
 
   onStatus?.(`Approving ${tokenSymbol}...`);
-  const tx = await contract.approve(spenderAddress, ethers.constants.MaxUint256);
+  const tx = await contract.approve(spenderAddress, ethers.MaxUint256);
   onStatus?.('Waiting for approval confirmation...');
   await tx.wait();
   onStatus?.(`${tokenSymbol} approved!`);

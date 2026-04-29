@@ -6,7 +6,11 @@
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
+    "sdkVersion": "54.0.0",
+    "jsEngine": "hermes",
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -17,8 +21,9 @@
       "bundleIdentifier": "com.karthick.cryptowallet",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "CryptoWallet uses the camera to scan QR codes for sending crypto.",
+        "NSCameraUsageDescription": "CryptoWallet uses the camera to scan QR codes and record face verification video.",
         "NSPhotoLibraryUsageDescription": "CryptoWallet may access your photo library for QR code images.",
+        "NSMicrophoneUsageDescription": "CryptoWallet needs microphone access to record face verification video.",
         "NSFaceIDUsageDescription": "CryptoWallet uses Face ID to secure your wallet access."
       }
     },
@@ -28,8 +33,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#101114"
       },
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
+      "edgeToEdgeEnabled": false,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
@@ -50,7 +54,9 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow CryptoWallet to scan QR codes for sending crypto."
+          "cameraPermission": "Allow CryptoWallet to use the camera for QR scanning and face verification.",
+          "microphonePermission": "Allow CryptoWallet to use the microphone for face verification video recording.",
+          "recordAudioAndroid": true
         }
       ],
       [
@@ -62,10 +68,10 @@
         }
       ]
     ],
-    "owner": "kooo455",
+    "owner": "karthiii56",
     "extra": {
       "eas": {
-        "projectId": "6995f7e5-466e-480a-848d-c546a7abef82"
+        "projectId": "d6707937-19c5-4993-8114-c2a7d0a9bb24"
       }
     }
   }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
+import { Theme } from '../constants';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   ScrollView, ActivityIndicator, Image, Platform, Modal,
@@ -6,7 +7,6 @@ import {
 } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useWallet, useMarket } from '../store/WalletContext';
-import { Theme } from '../constants';
 import Toast from '../components/Toast';
 import { swapService, SwapQuote, SUPPORTED_TOKENS, parseSwapError } from '../services/swapService';
 import { haptics } from '../utils/haptics';
@@ -550,7 +550,7 @@ export default function SwapScreen({ navigation }: any) {
 
 const makeStyles = (T: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: T.background },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: Platform.OS === 'web' ? 24 : 64, paddingBottom: 20 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 60 : 48, paddingBottom: 20 },
   headerTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.5 },
   headerIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   scroll: { paddingHorizontal: 20, paddingBottom: 60 },
@@ -579,10 +579,11 @@ const makeStyles = (T: any) => StyleSheet.create({
   mainAction: { height: 68, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   actionText: { color: '#FFF', fontSize: 17, fontWeight: '800', letterSpacing: 0.3 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  modalContent: { borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, maxHeight: '80%' },
+  modalContent: { borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, maxHeight: '85%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   modalTitle: { fontSize: 20, fontWeight: '800' },
   tokenItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderRadius: 12, paddingHorizontal: 8 },
   tokenItemSym: { fontSize: 16, fontWeight: '800', marginBottom: 2 },
   tokenItemName: { fontSize: 13 },
 });
+

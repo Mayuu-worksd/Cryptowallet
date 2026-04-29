@@ -1,4 +1,5 @@
 import React, { useState, useMemo, memo } from 'react';
+import { Theme } from '../constants';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Platform, Image,
@@ -6,7 +7,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useWallet, useMarket } from '../store/WalletContext';
-import { Theme, COIN_META, COIN_COLORS } from '../constants';
+import { COIN_META, COIN_COLORS } from '../constants';
 import Toast from '../components/Toast';
 import { haptics } from '../utils/haptics';
 
@@ -75,7 +76,7 @@ export default function PortfolioScreen({ navigation }: any) {
       />
 
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: isDarkMode ? 'rgba(19,19,19,0.95)' : 'rgba(247,249,251,0.95)' }]}>
+      <View style={[styles.header, { backgroundColor: T.background }]}>
         <TouchableOpacity onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Main')} style={styles.backBtn} activeOpacity={0.7}>
           <Feather name="arrow-left" size={22} color={T.text} />
         </TouchableOpacity>
@@ -125,7 +126,7 @@ export default function PortfolioScreen({ navigation }: any) {
             return (
               <TouchableOpacity
                 key={a.symbol}
-                style={[styles.assetCard, { backgroundColor: T.surfaceLow }]}
+                style={[styles.assetCard, { backgroundColor: T.surfaceLow, borderColor: T.border }]}
                 activeOpacity={0.8}
                 onPress={() => { haptics.selection(); navigation.navigate('CoinChart', { symbol: a.symbol }); }}
               >
@@ -138,16 +139,19 @@ export default function PortfolioScreen({ navigation }: any) {
                     <Text style={[styles.assetSymbol, { color: T.textMuted }]}>{a.symbol}</Text>
                   </View>
                 </View>
-                <View style={styles.assetValBox}>
-                  <Text style={[styles.assetAmountNum, { color: T.text }]}>
-                    {a.amount.toFixed(4)} {a.symbol}
-                  </Text>
-                  <Text style={[styles.assetUsd, { color: T.textMuted }]}>
-                    ${a.usd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </Text>
-                  <Text style={[styles.assetChange, { color: isUp ? T.success : T.error }]}>
-                    {isUp ? '▲' : '▼'} {Math.abs(a.change24h).toFixed(2)}%
-                  </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <View style={styles.assetValBox}>
+                    <Text style={[styles.assetAmountNum, { color: T.text }]}>
+                      {a.amount.toFixed(4)} {a.symbol}
+                    </Text>
+                    <Text style={[styles.assetUsd, { color: T.textMuted }]}>
+                      ${a.usd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </Text>
+                    <Text style={[styles.assetChange, { color: isUp ? T.success : T.error }]}>
+                      {isUp ? '▲' : '▼'} {Math.abs(a.change24h).toFixed(2)}%
+                    </Text>
+                  </View>
+                  <Feather name="chevron-right" size={14} color={T.border} />
                 </View>
               </TouchableOpacity>
             );
@@ -157,7 +161,7 @@ export default function PortfolioScreen({ navigation }: any) {
           {COMING_SOON.map(sym => (
             <TouchableOpacity
               key={sym}
-              style={[styles.assetCard, { backgroundColor: T.surfaceLow, opacity: 0.6 }]}
+              style={[styles.assetCard, { backgroundColor: T.surfaceLow, opacity: 0.6, borderColor: T.border }]}
               activeOpacity={0.8}
               onPress={showComingSoon}
             >
@@ -195,23 +199,22 @@ export default function PortfolioScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
-    position: 'absolute', top: 0, width: '100%', zIndex: 50,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingTop: Platform.OS === 'web' ? 24 : 60, paddingBottom: 16,
+    paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 60 : 40, paddingBottom: 16,
   },
   headerTitle: { fontSize: 20, fontWeight: '900', letterSpacing: -0.5, textAlign: 'center', flex: 1 },
   backBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
 
-  scroll: { paddingHorizontal: 24, paddingBottom: 100, paddingTop: 110 },
+  scroll: { paddingHorizontal: 24, paddingBottom: 100, paddingTop: 10 },
 
-  balanceContainer: { marginBottom: 28, marginTop: 8 },
+  balanceContainer: { marginBottom: 28, marginTop: 0 },
   editorialGradient: {
-    padding: 24, borderRadius: 20, overflow: 'hidden',
-    shadowColor: '#ff544e', shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3, shadowRadius: 20, elevation: 10,
+    padding: 24, borderRadius: 24, overflow: 'hidden',
+    shadowColor: '#ff544e', shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.4, shadowRadius: 24, elevation: 12,
   },
-  totalSubtitle: { fontSize: 10, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 2, color: 'rgba(255,255,255,0.8)', marginBottom: 8 },
-  totalValue: { fontSize: 36, fontWeight: '800', letterSpacing: -1, color: '#FFFFFF' },
+  totalSubtitle: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1.5, color: 'rgba(255,255,255,0.85)', marginBottom: 8 },
+  totalValue: { fontSize: 44, fontWeight: '900', letterSpacing: -1.5, color: '#FFFFFF' },
   changeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 16 },
   changeBadge: { backgroundColor: '#85f3fe', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 },
   changeBadgeText: { color: '#002022', fontSize: 12, fontWeight: '700' },
@@ -223,10 +226,10 @@ const styles = StyleSheet.create({
 
 
 
-  assetList: { gap: 12 },
+  assetList: { gap: 10 },
   assetCard: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    padding: 18, borderRadius: 20,
+    padding: 16, borderRadius: 20, borderWidth: 1,
   },
   assetLeft: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   coinWrapper: { width: 48, height: 48, borderRadius: 24, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
@@ -243,3 +246,4 @@ const styles = StyleSheet.create({
   comingSoonText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.3 },
   emptyBox: { padding: 40, alignItems: 'center' },
 });
+

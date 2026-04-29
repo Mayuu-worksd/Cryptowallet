@@ -1,7 +1,7 @@
 import React from 'react';
-import { ScrollView, View, Text, StyleSheet, TouchableOpacity, Platform, Dimensions } from 'react-native';
-import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { Theme } from '../constants';
+import { ScrollView, View, Text, StyleSheet, TouchableOpacity, Platform, Dimensions, Alert } from 'react-native';
+import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -9,6 +9,19 @@ export default function LandingScreen({ navigation }: any) {
   const { isDarkMode } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const isWeb = Platform.OS === 'web';
+  const tapCount = React.useRef(0);
+  const tapTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleLogoTap = () => {
+    tapCount.current += 1;
+    if (tapTimer.current) clearTimeout(tapTimer.current);
+    if (tapCount.current >= 5) {
+      tapCount.current = 0;
+      navigation.navigate('Admin');
+      return;
+    }
+    tapTimer.current = setTimeout(() => { tapCount.current = 0; }, 2000);
+  };
 
   if (isWeb) {
     return (
@@ -18,13 +31,13 @@ export default function LandingScreen({ navigation }: any) {
           <Text style={[styles.headerTitle, { color: T.primary, fontSize: 24 }]}>CryptoWallet</Text>
           <View style={{ flex: 1 }} />
           <View style={styles.webNavLinks}>
-            <TouchableOpacity onPress={() => alert('Feature coming soon!')} activeOpacity={0.7}>
+            <TouchableOpacity onPress={() => Alert.alert('Feature coming soon!')} activeOpacity={0.7}>
               <Text style={[styles.webNavLink, { color: T.textMuted }]}>Wealth Management</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => alert('Feature coming soon!')} activeOpacity={0.7}>
+            <TouchableOpacity onPress={() => Alert.alert('Feature coming soon!')} activeOpacity={0.7}>
               <Text style={[styles.webNavLink, { color: T.textMuted }]}>Security Ledger</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => alert('Feature coming soon!')} activeOpacity={0.7}>
+            <TouchableOpacity onPress={() => Alert.alert('Feature coming soon!')} activeOpacity={0.7}>
               <Text style={[styles.webNavLink, { color: T.textMuted }]}>Governance</Text>
             </TouchableOpacity>
             <TouchableOpacity 
@@ -133,7 +146,9 @@ export default function LandingScreen({ navigation }: any) {
       <View pointerEvents="none" style={[styles.glowRight, { backgroundColor: T.primary + '15' }]} />
 
       <View style={styles.header}>
-        <Text style={[styles.headerTitle, { color: T.primary }]}>CryptoWallet</Text>
+        <TouchableOpacity onPress={handleLogoTap} activeOpacity={1}>
+          <Text style={[styles.headerTitle, { color: T.primary }]}>CryptoWallet</Text>
+        </TouchableOpacity>
         <View style={[styles.langBadge, { backgroundColor: T.surface, borderColor: T.border }]}>
           <MaterialIcons name="language" size={16} color={T.primary} />
           <Text style={[styles.langText, { color: T.textMuted }]}>EN</Text>
@@ -280,3 +295,4 @@ const webLandingStyles = StyleSheet.create({
   statVal: { color: '#FFF', fontSize: 48, fontWeight: '900' },
   statLab: { color: 'rgba(255,255,255,0.5)', fontSize: 14, fontWeight: '800', letterSpacing: 1 },
 });
+

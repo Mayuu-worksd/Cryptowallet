@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { Theme } from '../constants';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   Platform, KeyboardAvoidingView, ScrollView, Animated, Modal,
 } from 'react-native';
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
-import { Theme } from '../constants';
 import { useWallet } from '../store/WalletContext';
 import Toast from '../components/Toast';
 
@@ -373,3 +373,4 @@ const styles = StyleSheet.create({
   invalidRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, paddingHorizontal: 4 },
   invalidText: { fontSize: 13, fontWeight: '700' },
 });
+

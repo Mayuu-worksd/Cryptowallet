@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Theme } from '../constants';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Platform, Dimensions, Share, Image, StatusBar, Modal,
@@ -7,7 +8,6 @@ import * as Clipboard from 'expo-clipboard';
 import QRCode from 'react-native-qrcode-svg';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
-import { Theme } from '../constants';
 import Toast from '../components/Toast';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -365,3 +365,4 @@ const styles = StyleSheet.create({
   shareGradient: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
   shareBtnText: { color: '#FFF', fontSize: 14, fontWeight: '900', letterSpacing: 1 },
 });
+

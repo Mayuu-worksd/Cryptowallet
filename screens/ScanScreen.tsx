@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Theme } from '../constants';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  Platform, Vibration, Animated, StatusBar,
+  Platform, Vibration, Animated, StatusBar, ActivityIndicator,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
-import { Theme } from '../constants';
 import { parseQRPayload } from './ReceiveScreen';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -20,6 +20,15 @@ export default function ScanScreen({ navigation }: any) {
   const [torchOn, setTorchOn]           = useState(false);
   const [lastScan, setLastScan]         = useState('');
   const [scanInfo, setScanInfo]         = useState('');
+  const [initTimeout, setInitTimeout]   = useState(false);
+
+  // Auto-recovery: if camera doesn't load in 5s, show a manual go back option
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!permission?.granted) setInitTimeout(true);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [permission]);
 
   // Corner bracket pulse animation
   const pulse = useRef(new Animated.Value(1)).current;
@@ -149,7 +158,20 @@ export default function ScanScreen({ navigation }: any) {
   if (!permission) {
     return (
       <View style={[styles.center, { backgroundColor: '#0A0A0C' }]}>
-        <Text style={{ color: T.textMuted, fontSize: 14 }}>Initializing Camera...</Text>
+        <StatusBar barStyle="light-content" />
+        <View style={{ alignItems: 'center', gap: 20 }}>
+          <ActivityIndicator size="large" color="#FF3B3B" />
+          <Text style={{ color: '#A1A5AB', fontSize: 14, fontWeight: '600' }}>Initializing Camera...</Text>
+          
+          {initTimeout && (
+            <TouchableOpacity 
+              style={[styles.permBtnPrimary, { marginTop: 40, width: 200 }]}
+              onPress={() => navigation.navigate('Main')}
+            >
+              <Text style={styles.permBtnText}>RETURN HOME</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
     );
   }
@@ -261,8 +283,8 @@ export default function ScanScreen({ navigation }: any) {
 
       {/* Premium Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
-          <Feather name="x" size={24} color="#FFF" />
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.navigate('Main')} activeOpacity={0.7}>
+          <Feather name="arrow-left" size={24} color="#FFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>SCAN QR</Text>
         <TouchableOpacity
@@ -359,3 +381,4 @@ const styles = StyleSheet.create({
   torchBtnActive: { backgroundColor: 'rgba(255,193,7,0.2)', borderWidth: 1, borderColor: '#FFC107' },
   headerTitle: { color: '#FFF', fontSize: 13, fontWeight: '800', letterSpacing: 2 },
 });
+

@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
+import { Theme } from '../constants';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ScrollView, Platform, Linking,
 } from 'react-native';
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
-import { Theme } from '../constants';
 import Toast from '../components/Toast';
 
 const FAQ_ITEMS = [
@@ -189,3 +189,4 @@ const styles = StyleSheet.create({
   faqQ: { fontSize: 15, fontWeight: '700', marginBottom: 0 },
   faqA: { fontSize: 13, lineHeight: 20, marginTop: 10 },
 });
+

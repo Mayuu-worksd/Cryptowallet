@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { getDesign } from './CardDesigns';
@@ -25,13 +25,19 @@ export default function CardPreview({ cardNumber, holderName, expiry, cvv = '•
     return `••••  ••••  ••••  ${last4}`;
   }, [cardNumber, showDetails]);
 
+  const formattedExpiry = useMemo(() => {
+    if (showDetails) return expiry;
+    return '••/••';
+  }, [expiry, showDetails]);
+
   const handleToggleDetails = () => {
     if (!showDetails) {
       setAuthenticating(true);
+      // Simulate biometric/secure check
       setTimeout(() => {
         setAuthenticating(false);
         setShowDetails(true);
-      }, 800);
+      }, 1000);
     } else {
       setShowDetails(false);
     }
@@ -74,18 +80,18 @@ export default function CardPreview({ cardNumber, holderName, expiry, cvv = '•
           </View>
           <View style={styles.footerItem}>
             <Text style={[styles.label, { color: design.mutedColor }]}>EXPIRES</Text>
-            <Text style={[styles.value, { color: design.textColor }]}>{expiry}</Text>
+            <Text style={[styles.value, { color: design.textColor }]}>{formattedExpiry}</Text>
           </View>
           <View style={styles.footerItem}>
             <Text style={[styles.label, { color: design.mutedColor }]}>CVV</Text>
             <Text style={[styles.value, { color: design.textColor }]}>{showDetails ? cvv : '•••'}</Text>
           </View>
           {!compact && (
-            <TouchableOpacity onPress={handleToggleDetails} style={styles.eyeBtn}>
+            <TouchableOpacity onPress={handleToggleDetails} style={[styles.eyeBtn, { backgroundColor: 'rgba(255,255,255,0.1)' }]}>
               {authenticating ? (
-                <View style={{ width: 13, height: 13, backgroundColor: design.mutedColor, borderRadius: 6.5, opacity: 0.5 }} />
+                <ActivityIndicator size="small" color={design.accentColor} />
               ) : (
-                <Feather name={showDetails ? 'eye' : 'eye-off'} size={13} color={design.mutedColor} />
+                <Feather name={showDetails ? 'eye' : 'eye-off'} size={14} color={design.accentColor} />
               )}
             </TouchableOpacity>
           )}
@@ -118,7 +124,7 @@ const styles = StyleSheet.create({
   },
   card: {
     aspectRatio: 1.586,
-    borderRadius: 22,
+    borderRadius: 24,
     padding: 28,
     justifyContent: 'space-between',
     overflow: 'hidden',
@@ -137,30 +143,37 @@ const styles = StyleSheet.create({
     borderRadius: 110,
   },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  bankName: { fontSize: 20, fontWeight: '900', letterSpacing: -0.5 },
-  cardType: { fontSize: 9, fontWeight: '800', letterSpacing: 2, marginTop: 2 },
+  bankName: { fontSize: 18, fontWeight: '900', letterSpacing: -0.5 },
+  cardType: { fontSize: 8, fontWeight: '800', letterSpacing: 1.5, marginTop: 2 },
   mcWrap: { flexDirection: 'row', alignItems: 'center' },
-  mcCircle: { width: 22, height: 22, borderRadius: 11 },
-  numberWrap: { marginVertical: 20 },
+  mcCircle: { width: 20, height: 20, borderRadius: 10 },
+  numberWrap: { marginVertical: 24 },
   number: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
-    letterSpacing: 3,
+    letterSpacing: 2.5,
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
-  numberCompact: { fontSize: 15, letterSpacing: 2 },
+  numberCompact: { fontSize: 16, letterSpacing: 1.5 },
   footer: { flexDirection: 'row', alignItems: 'flex-end' },
-  footerItem: { marginRight: 20 },
-  label: { fontSize: 7, fontWeight: '800', letterSpacing: 1, marginBottom: 3 },
-  value: { fontSize: 12, fontWeight: '700', letterSpacing: 0.3 },
-  eyeBtn: { marginLeft: 'auto', padding: 6, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.06)' },
+  footerItem: { marginRight: 24 },
+  label: { fontSize: 7, fontWeight: '800', letterSpacing: 0.8, marginBottom: 4, opacity: 0.8 },
+  value: { fontSize: 13, fontWeight: '700', letterSpacing: 0.3 },
+  eyeBtn: { 
+    marginLeft: 'auto', 
+    width: 36, 
+    height: 36, 
+    borderRadius: 12, 
+    alignItems: 'center', 
+    justifyContent: 'center' 
+  },
   frozenOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.65)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 20,
-    borderRadius: 22,
+    borderRadius: 24,
   },
   frozenText: { color: '#FFF', fontSize: 13, fontWeight: '900', marginTop: 10, letterSpacing: 2 },
 });

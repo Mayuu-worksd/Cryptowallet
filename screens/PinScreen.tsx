@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Theme } from '../constants';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   Animated, Platform, Vibration, StatusBar,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
-import { Theme } from '../constants';
 import { savePin, verifyPin, getLockoutState } from '../services/pinService';
 
 const PIN_LENGTH = 6;
@@ -378,3 +378,4 @@ const styles = StyleSheet.create({
   stepRow: { flexDirection: 'row', gap: 8, marginTop: 36, alignItems: 'center' },
   stepDot: { height: 8, borderRadius: 4 },
 });
+

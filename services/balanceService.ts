@@ -32,8 +32,8 @@ const TOKEN_CONTRACTS: Record<string, Record<string, string>> = {
     Arbitrum: '0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1',
   },
   CUSTOM: {
-    Sepolia:  '0x351028A22C876E0431b30921c0dD0a836a14899E',
-  }
+    Sepolia: '0x351028A22C876E0431b30921c0dD0a836a14899E',
+  },
 };
 
 const TOKEN_DECIMALS: Record<string, number> = { USDC: 6, USDT: 6, DAI: 18, CUSTOM: 18 };
@@ -54,30 +54,12 @@ export type WalletBalances = {
   [key: string]: number;
 };
 
-/**
- * StaticJsonRpcProvider skips the eth_chainId network-detection handshake
- * entirely because we supply chainId explicitly. This eliminates the
- * "could not detect network" race that JsonRpcProvider suffers when multiple
- * calls fire before the handshake completes.
- */
-function makeProvider(network: string): ethers.providers.StaticJsonRpcProvider {
+function makeProvider(network: string): ethers.JsonRpcProvider {
   const rpcUrl = RPC_URLS[network] ?? RPC_URLS['Sepolia'];
   const netCfg = NETWORK_CONFIG[network] ?? NETWORK_CONFIG['Sepolia'];
-  return new ethers.providers.StaticJsonRpcProvider(
-    { url: rpcUrl, timeout: 12000 },
-    { chainId: netCfg.chainId, name: netCfg.name }
-  );
+  return new ethers.JsonRpcProvider(rpcUrl, { chainId: netCfg.chainId, name: netCfg.name }, { staticNetwork: true });
 }
 
-/**
- * Fetches on-chain balances and merges with local state.
- *
- * Merge strategy:
- *  - ETH: always trust chain (gas is spent even on simulated swaps)
- *  - ERC20 on Sepolia: Math.max(chain, local) — simulated swaps don't move
- *    real tokens so chain returns 0, but local has the correct post-swap value
- *  - ERC20 on mainnet: always trust chain (real tokens moved)
- */
 export async function getWalletBalances(
   walletAddress: string,
   network: string,
@@ -89,19 +71,19 @@ export async function getWalletBalances(
 
   const [ethRaw, usdcRaw, usdtRaw, daiRaw, customRaw] = await Promise.allSettled([
     provider.getBalance(walletAddress),
-    fetchERC20(provider, walletAddress, TOKEN_CONTRACTS.USDC[network], TOKEN_DECIMALS.USDC, 'USDC'),
-    fetchERC20(provider, walletAddress, TOKEN_CONTRACTS.USDT[network], TOKEN_DECIMALS.USDT, 'USDT'),
-    fetchERC20(provider, walletAddress, TOKEN_CONTRACTS.DAI[network],  TOKEN_DECIMALS.DAI,  'DAI'),
-    fetchERC20(provider, walletAddress, TOKEN_CONTRACTS.CUSTOM[network], TOKEN_DECIMALS.CUSTOM, 'CUSTOM'),
+    fetchERC20(provider, walletAddress, TOKEN_CONTRACTS.USDC[network], TOKEN_DECIMALS.USDC),
+    fetchERC20(provider, walletAddress, TOKEN_CONTRACTS.USDT[network], TOKEN_DECIMALS.USDT),
+    fetchERC20(provider, walletAddress, TOKEN_CONTRACTS.DAI[network],  TOKEN_DECIMALS.DAI),
+    fetchERC20(provider, walletAddress, TOKEN_CONTRACTS.CUSTOM[network], TOKEN_DECIMALS.CUSTOM),
   ]);
 
-  const chainETH    = ethRaw.status    === 'fulfilled' ? parseFloat(ethers.utils.formatEther(ethRaw.value))  : null;
+  const chainETH    = ethRaw.status    === 'fulfilled' ? parseFloat(ethers.formatEther(ethRaw.value)) : null;
   const chainUSDC   = usdcRaw.status   === 'fulfilled' ? usdcRaw.value : null;
   const chainUSDT   = usdtRaw.status   === 'fulfilled' ? usdtRaw.value : null;
   const chainDAI    = daiRaw.status    === 'fulfilled' ? daiRaw.value  : null;
   const chainCUSTOM = customRaw.status === 'fulfilled' ? customRaw.value : null;
 
-  // ─── AUTO-HEAL: Calculate CUSTOM balance from history ─────────────────────
+  // AUTO-HEAL: Calculate CUSTOM balance from history
   let historyCUSTOM = 0;
   try {
     const raw = await AsyncStorage.getItem('cw_transactions').catch(() => null);
@@ -110,7 +92,6 @@ export async function getWalletBalances(
       txs.forEach(t => {
         const isSuccess = t.status === 'success' || t.status === 'completed';
         if (!isSuccess) return;
-        
         const isCustom = (t as any).contractAddress?.toLowerCase() === '0x351028A22C876E0431b30921c0dD0a836a14899E'.toLowerCase() || t.coin === 'CUSTOM';
         if (isCustom) {
           const amt = parseFloat((t as any).buyAmount || t.amount);
@@ -121,31 +102,19 @@ export async function getWalletBalances(
         }
       });
     }
-  } catch (_e) {
+  } catch {
     historyCUSTOM = local.CUSTOM || 0;
   }
 
   const balances: WalletBalances = {
-    // ETH: Always trust the chain if we have it, otherwise fallback to local
     ETH: chainETH !== null ? chainETH : (local.ETH ?? 0),
-
-    // ERC20: On Sepolia, simulated swaps might mean local is higher than chain (since chain is zero for tokens)
-    // On Mainnet, always trust chain.
-    USDC: isTestnet
-      ? Math.max(chainUSDC ?? 0, local.USDC ?? 0)
-      : (chainUSDC !== null ? chainUSDC : (local.USDC ?? 0)),
-    USDT: isTestnet
-      ? Math.max(chainUSDT ?? 0, local.USDT ?? 0)
-      : (chainUSDT !== null ? chainUSDT : (local.USDT ?? 0)),
-    DAI: isTestnet
-      ? Math.max(chainDAI ?? 0, local.DAI ?? 0)
-      : (chainDAI !== null ? chainDAI : (local.DAI ?? 0)),
-    CUSTOM: isTestnet
-      ? Math.max(chainCUSTOM ?? 0, historyCUSTOM, local.CUSTOM ?? 0)
-      : (chainCUSTOM !== null ? chainCUSTOM : (local.CUSTOM ?? 0)),
+    USDC: isTestnet ? Math.max(chainUSDC ?? 0, local.USDC ?? 0) : (chainUSDC !== null ? chainUSDC : (local.USDC ?? 0)),
+    USDT: isTestnet ? Math.max(chainUSDT ?? 0, local.USDT ?? 0) : (chainUSDT !== null ? chainUSDT : (local.USDT ?? 0)),
+    DAI:  isTestnet ? Math.max(chainDAI  ?? 0, local.DAI  ?? 0) : (chainDAI  !== null ? chainDAI  : (local.DAI  ?? 0)),
+    CUSTOM: isTestnet ? Math.max(chainCUSTOM ?? 0, historyCUSTOM, local.CUSTOM ?? 0) : (chainCUSTOM !== null ? chainCUSTOM : (local.CUSTOM ?? 0)),
   };
 
-  const hasAnyBalance = balances.ETH > 0 || balances.USDC > 0 || balances.USDT > 0 || balances.DAI > 0 || balances.CUSTOM > 0;
+  const hasAnyBalance = Object.values(balances).some(v => v > 0);
   if (hasAnyBalance || !isTestnet) {
     await AsyncStorage.setItem('cw_token_balances', JSON.stringify(balances)).catch(() => {});
   }
@@ -154,24 +123,17 @@ export async function getWalletBalances(
 }
 
 async function fetchERC20(
-  provider: ethers.providers.JsonRpcProvider,
+  provider: ethers.JsonRpcProvider,
   address: string,
   contractAddress: string | undefined,
   decimals: number,
-  symbol: string
 ): Promise<number> {
   if (!contractAddress) return 0;
-  
-  // Special case: CUSTOM is a locally-simulated demo asset
-  if (symbol === 'CUSTOM') return 0; 
-
   try {
     const contract = new ethers.Contract(contractAddress, ERC20_ABI, provider);
-    const raw: ethers.BigNumber = await contract.balanceOf(address);
-    const value = parseFloat(ethers.utils.formatUnits(raw, decimals));
-    return value;
-  } catch (e: any) {
-    // Squelch RPC errors for simulated/missing contracts to avoid UI hangs/terminal noise
+    const raw: bigint = await contract.balanceOf(address);
+    return parseFloat(ethers.formatUnits(raw, decimals));
+  } catch {
     return 0;
   }
 }

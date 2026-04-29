@@ -467,7 +467,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 56 : Platform.OS === 'web' ? 20 : 40,
+    paddingTop: Platform.OS === 'ios' ? 56 : Platform.OS === 'web' ? 20 : 48,
     paddingBottom: 12,
     borderBottomWidth: 1,
   },
@@ -506,7 +506,7 @@ const styles = StyleSheet.create({
   txLabel:  { fontSize: 14, fontWeight: '700' },
   txAddr:   { fontSize: 11, fontWeight: '500' },
   txDate:   { fontSize: 10, fontWeight: '500' },
-  txRight:  { alignItems: 'flex-end', gap: 3 },
+  txRight:  { alignItems: 'flex-end', gap: 3, maxWidth: 120 },
   txAmount: { fontSize: 13, fontWeight: '800' },
   txUsd:    { fontSize: 11, fontWeight: '600' },
 
@@ -515,3 +515,4 @@ const styles = StyleSheet.create({
   emptyTitle:   { fontSize: 18, fontWeight: '800' },
   emptySub:     { fontSize: 13, textAlign: 'center', lineHeight: 20 },
 });
+

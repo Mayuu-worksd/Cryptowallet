@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { Theme } from '../constants';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   TextInput, Platform, ActivityIndicator, StatusBar, Dimensions, SafeAreaView,
@@ -6,7 +7,6 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { useWallet, useMarket } from '../store/WalletContext';
-import { Theme } from '../constants';
 import Toast from '../components/Toast';
 import { CardDesignKey, CARD_DESIGNS } from '../components/card/CardDesigns';
 import CardPreview from '../components/card/CardPreview';
@@ -57,7 +57,7 @@ export default function CardScreen({ navigation, route }: any) {
     cardDetails, cardTransactions, cardCreated,
     balances, ethBalance, spendCard, topupCard, cardBalance,
     isDarkMode, network,
-    createCard, updateCardDetails,
+    createCard, updateCardDetails, kycStatus,
   } = useWallet();
   const { prices } = useMarket();
 
@@ -463,7 +463,7 @@ export default function CardScreen({ navigation, route }: any) {
                   onChangeText={v => setMerchant(p => ({ ...p, amount: v.replace(/[^0-9.]/g, '') }))}
                 />
                 <Text style={[styles.availLabel, { color: T.textDim }]}>
-                  ≈ {merchant.amount && !isNaN(parseFloat(merchant.amount))
+                  ≈ {merchant.amount.length > 0 && !isNaN(parseFloat(merchant.amount))
                     ? (parseFloat(merchant.amount) / conversionRate).toFixed(6)
                     : '0'} {topupToken}
                 </Text>
@@ -479,7 +479,7 @@ export default function CardScreen({ navigation, route }: any) {
                 {loading
                   ? <ActivityIndicator color={T.background} />
                   : <Text style={[styles.panelConfirmText, { color: T.background }]}>
-                      {merchant.name.trim() && merchant.amount
+                      {merchant.name.trim().length > 0 && merchant.amount.length > 0
                         ? `Pay $${parseFloat(merchant.amount || '0').toFixed(2)} to ${merchant.name.trim()}`
                         : 'Fill in details to pay'}
                     </Text>
@@ -495,6 +495,27 @@ export default function CardScreen({ navigation, route }: any) {
               <Text style={[styles.viewAllText, { color: CRIMSON }]}>View all</Text>
             </TouchableOpacity>
           </View>
+
+          {/* Physical Card CTA */}
+          <TouchableOpacity
+            style={[styles.physicalCardBtn, {
+              backgroundColor: T.surface,
+              borderColor: kycStatus === 'verified' ? T.success : T.border,
+            }]}
+            onPress={() => navigation.navigate(kycStatus === 'verified' ? 'ApplyPhysicalCard' : 'KYCStatus')}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.physicalCardIcon, { backgroundColor: kycStatus === 'verified' ? T.success + '20' : T.primary + '20' }]}>
+              <Feather name="credit-card" size={20} color={kycStatus === 'verified' ? T.success : CRIMSON} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.physicalCardTitle, { color: T.text }]}>Physical Card</Text>
+              <Text style={[styles.physicalCardSub, { color: T.textMuted }]}>
+                {kycStatus === 'verified' ? 'Apply for a physical card' : 'Complete KYC to apply'}
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={18} color={T.textMuted} />
+          </TouchableOpacity>
 
           <View style={[styles.transactionBox, { backgroundColor: T.surface }]}>
             {cardTransactions.length === 0 ? (
@@ -551,7 +572,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) + 12 : 12,
+    paddingTop: Platform.OS === 'ios' ? 60 : (StatusBar.currentHeight ?? 0) + 16,
     paddingBottom: 16,
   },
   pageTitle: { fontSize: 32, fontWeight: '900', letterSpacing: -1 },
@@ -652,4 +673,12 @@ const styles = StyleSheet.create({
   txAmountText: { fontSize: 16, fontWeight: '900' },
   emptyActivity: { padding: 48, alignItems: 'center', gap: 12 },
   emptyTextTitle: { fontSize: 14, fontWeight: '700' },
+  physicalCardBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    padding: 16, borderRadius: 18, borderWidth: 1.5, marginBottom: 24,
+  },
+  physicalCardIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  physicalCardTitle: { fontSize: 15, fontWeight: '700', marginBottom: 2 },
+  physicalCardSub: { fontSize: 12 },
 });
+

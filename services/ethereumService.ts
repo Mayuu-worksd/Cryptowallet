@@ -1,13 +1,11 @@
 import { ethers } from 'ethers';
 import { NETWORKS } from '../constants';
 
-// Minimal ERC-20 ABI — only balanceOf needed
 const ERC20_ABI = [
   'function balanceOf(address owner) view returns (uint256)',
   'function decimals() view returns (uint8)',
 ];
 
-// Token contract addresses per network
 const TOKEN_CONTRACTS: Record<string, Record<string, string>> = {
   USDT: {
     Ethereum: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
@@ -36,17 +34,14 @@ const NETWORK_CONFIG: Record<string, { chainId: number; name: string }> = {
   Arbitrum: { chainId: 42161,    name: 'arbitrum'  },
 };
 
-let provider: ethers.providers.StaticJsonRpcProvider | null = null;
+let provider: ethers.JsonRpcProvider | null = null;
 let currentNetwork = 'Sepolia';
 
-export function getProvider(network: string = currentNetwork): ethers.providers.StaticJsonRpcProvider {
+export function getProvider(network: string = currentNetwork): ethers.JsonRpcProvider {
   if (!provider || network !== currentNetwork) {
     const rpcUrl    = NETWORKS[network]    ?? NETWORKS['Sepolia'];
     const netConfig = NETWORK_CONFIG[network] ?? NETWORK_CONFIG['Sepolia'];
-    provider = new ethers.providers.StaticJsonRpcProvider(rpcUrl, {
-      chainId: netConfig.chainId,
-      name:    netConfig.name,
-    });
+    provider = new ethers.JsonRpcProvider(rpcUrl, { chainId: netConfig.chainId, name: netConfig.name }, { staticNetwork: true });
     currentNetwork = network;
   }
   return provider;
@@ -58,21 +53,17 @@ export const ethereumService = {
     currentNetwork = network;
   },
 
-  async getTokenBalance(
-    address: string,
-    tokenSymbol: string,
-    network: string = currentNetwork
-  ): Promise<number> {
+  async getTokenBalance(address: string, tokenSymbol: string, network: string = currentNetwork): Promise<number> {
     const contractAddress = TOKEN_CONTRACTS[tokenSymbol]?.[network];
     if (!contractAddress) return 0;
     try {
       const p        = getProvider(network);
       const contract = new ethers.Contract(contractAddress, ERC20_ABI, p);
-      const [raw, decimals]: [ethers.BigNumber, number] = await Promise.all([
+      const [raw, decimals]: [bigint, bigint] = await Promise.all([
         contract.balanceOf(address),
         contract.decimals(),
       ]);
-      return parseFloat(ethers.utils.formatUnits(raw, decimals));
+      return parseFloat(ethers.formatUnits(raw, Number(decimals)));
     } catch {
       return 0;
     }
@@ -81,32 +72,32 @@ export const ethereumService = {
   async getETHBalance(address: string, network?: string): Promise<string> {
     try {
       const bal = await getProvider(network).getBalance(address);
-      return ethers.utils.formatEther(bal);
+      return ethers.formatEther(bal);
     } catch {
       return '0.0';
     }
   },
 
-  // Returns { gasCostEth, gasPrice, gasLimit } for display in UI
   async estimateGas(
     from: string,
     to: string,
     amount: string,
     network?: string
-  ): Promise<{ gasCostEth: string; gasPrice: ethers.BigNumber; gasLimit: ethers.BigNumber }> {
+  ): Promise<{ gasCostEth: string; gasPrice: bigint; gasLimit: bigint }> {
+    const defaultGasPrice = ethers.parseUnits('20', 'gwei');
+    const defaultGasLimit = 21000n;
     const fallback = {
-      gasCostEth: ethers.utils.formatEther(ethers.BigNumber.from(21000).mul(ethers.utils.parseUnits('20', 'gwei'))),
-      gasPrice:   ethers.utils.parseUnits('20', 'gwei'),
-      gasLimit:   ethers.BigNumber.from(21000),
+      gasCostEth: ethers.formatEther(defaultGasLimit * defaultGasPrice),
+      gasPrice:   defaultGasPrice,
+      gasLimit:   defaultGasLimit,
     };
     if (!from || !to || !amount || parseFloat(amount) <= 0) return fallback;
     try {
-      const p = getProvider(network);
-      const gasLimit   = await p.estimateGas({ from, to, value: ethers.utils.parseEther(amount) });
-      const feeData    = await p.getFeeData();
-      const gasPrice   = feeData.maxFeePerGas ?? feeData.gasPrice ?? ethers.utils.parseUnits('20', 'gwei');
-      const gasCostWei = gasLimit.mul(gasPrice);
-      return { gasCostEth: ethers.utils.formatEther(gasCostWei), gasPrice, gasLimit };
+      const p        = getProvider(network);
+      const gasLimit = await p.estimateGas({ from, to, value: ethers.parseEther(amount) });
+      const feeData  = await p.getFeeData();
+      const gasPrice = feeData.maxFeePerGas ?? feeData.gasPrice ?? defaultGasPrice;
+      return { gasCostEth: ethers.formatEther(gasLimit * gasPrice), gasPrice, gasLimit };
     } catch {
       return fallback;
     }
@@ -119,47 +110,32 @@ export const ethereumService = {
     network?: string
   ): Promise<{ hash: string; success: boolean; error?: string; gasCostEth?: string }> {
     try {
-      // Sanitize inputs before any RPC call
       if (!privateKey || typeof privateKey !== 'string')
         return { hash: '', success: false, error: 'Wallet not available' };
-      if (!ethers.utils.isAddress(toAddress))
+      if (!ethers.isAddress(toAddress))
         return { hash: '', success: false, error: 'Invalid recipient address' };
       const parsedAmount = parseFloat(amount);
       if (isNaN(parsedAmount) || parsedAmount <= 0 || parsedAmount > 1_000_000)
         return { hash: '', success: false, error: 'Invalid amount' };
 
-      const p          = getProvider(network);
-      const wallet     = new ethers.Wallet(privateKey, p);
-      const balance    = await p.getBalance(wallet.address);
-      const sendAmount = ethers.utils.parseEther(amount);
+      const p           = getProvider(network);
+      const wallet      = new ethers.Wallet(privateKey, p);
+      const balance     = await p.getBalance(wallet.address);
+      const sendAmount  = ethers.parseEther(amount);
+      const { gasPrice, gasLimit, gasCostEth } = await ethereumService.estimateGas(wallet.address, toAddress, amount, network);
+      const totalNeeded = sendAmount + gasLimit * gasPrice;
 
-      // Get real gas estimate
-      const { gasPrice, gasLimit, gasCostEth } = await ethereumService.estimateGas(
-        wallet.address, toAddress, amount, network
-      );
-      const totalNeeded = sendAmount.add(gasLimit.mul(gasPrice));
-
-      if (balance.lt(totalNeeded)) {
-        const balEth  = parseFloat(ethers.utils.formatEther(balance)).toFixed(6);
-        const gasEth  = parseFloat(gasCostEth).toFixed(6);
-        return {
-          hash: '', success: false,
-          error: `Insufficient balance. You need ${amount} ETH + ${gasEth} ETH gas. Available: ${balEth} ETH`,
-        };
+      if (balance < totalNeeded) {
+        const balEth = parseFloat(ethers.formatEther(balance)).toFixed(6);
+        const gasEth = parseFloat(gasCostEth).toFixed(6);
+        return { hash: '', success: false, error: `Insufficient balance. You need ${amount} ETH + ${gasEth} ETH gas. Available: ${balEth} ETH` };
       }
 
-      const tx = await wallet.sendTransaction({
-        to:       toAddress,
-        value:    sendAmount,
-        gasPrice,
-        gasLimit,
-      });
-
+      const tx = await wallet.sendTransaction({ to: toAddress, value: sendAmount, gasPrice, gasLimit });
       await tx.wait(1);
       return { hash: tx.hash, success: true, gasCostEth };
     } catch (e: any) {
       const msg = e?.message ?? 'Transaction failed';
-      // Clean up ethers error messages for users
       if (msg.includes('insufficient funds'))
         return { hash: '', success: false, error: 'Insufficient funds for gas + amount' };
       if (msg.includes('nonce'))

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
+import { Theme } from '../constants';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   ActivityIndicator, Image, Platform, Animated, Dimensions,
@@ -6,7 +7,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { Svg, Path, Defs, LinearGradient, Stop, Polygon } from 'react-native-svg';
 import { useWallet, useMarket } from '../store/WalletContext';
-import { Theme, COIN_META, COIN_COLORS } from '../constants';
+import { COIN_META, COIN_COLORS } from '../constants';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CHART_W = SCREEN_W - 48;
@@ -288,15 +289,15 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingTop: Platform.OS === 'web' ? 20 : 56, paddingBottom: 14,
+    paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 56 : 48, paddingBottom: 14,
     borderBottomWidth: 1,
   },
-  backBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+  backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center', borderRadius: 22, backgroundColor: 'transparent' },
   headerIcon: { width: 36, height: 36, borderRadius: 18 },
   headerTitle: { fontSize: 17, fontWeight: '800' },
   headerSym: { fontSize: 12, fontWeight: '600', marginTop: 1 },
 
-  scroll: { paddingHorizontal: 24, paddingBottom: 48, paddingTop: 20 },
+  scroll: { paddingHorizontal: 24, paddingBottom: 80, paddingTop: 20 },
 
   priceSection: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
   price: { fontSize: 36, fontWeight: '800', letterSpacing: -1 },
@@ -323,3 +324,4 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 14, fontWeight: '500' },
   statValue: { fontSize: 14, fontWeight: '700' },
 });
+
