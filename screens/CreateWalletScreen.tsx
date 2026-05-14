@@ -181,6 +181,7 @@ export default function CreateWalletScreen({ navigation }: any) {
         visible={toast.visible}
         message={toast.message}
         type={toast.type}
+        isDarkMode={isDarkMode}
         onHide={() => setToast(p => ({ ...p, visible: false }))}
       />
 

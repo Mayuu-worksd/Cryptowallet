@@ -38,6 +38,10 @@ let provider: ethers.JsonRpcProvider | null = null;
 let currentNetwork = 'Sepolia';
 
 export function getProvider(network: string = currentNetwork): ethers.JsonRpcProvider {
+  // Prevent TRON networks from being used with EVM provider
+  if (network === 'TRON' || network === 'TRON Nile') {
+    throw new Error(`Cannot use EVM provider for ${network}. Use tronService instead.`);
+  }
   if (!provider || network !== currentNetwork) {
     const rpcUrl    = NETWORKS[network]    ?? NETWORKS['Sepolia'];
     const netConfig = NETWORK_CONFIG[network] ?? NETWORK_CONFIG['Sepolia'];

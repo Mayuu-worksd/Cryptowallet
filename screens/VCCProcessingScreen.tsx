@@ -83,7 +83,9 @@ export default function VCCProcessingScreen({ navigation, route }: any) {
       } else if (msg === 'NAME_MISMATCH') {
         setFailed('Card name must match your KYC verified name exactly. Go back and correct it.');
       } else {
-        setFailed(msg || 'Something went wrong. Please try again.');
+        // Sanitize error message — strip any HTML tags before displaying to user
+        const safe = msg.replace(/<[^>]*>/g, '').replace(/[\r\n]/g, ' ').trim();
+        setFailed(safe || 'Something went wrong. Please try again.');
       }
     }
   };

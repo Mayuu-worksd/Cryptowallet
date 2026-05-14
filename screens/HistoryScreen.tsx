@@ -1,6 +1,7 @@
 import React, {
   useState, useEffect, useCallback, useRef, memo, useMemo,
 } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   RefreshControl, Platform, Linking, Modal, ActivityIndicator,
@@ -8,20 +9,22 @@ import {
 } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useWallet, useMarket } from '../store/WalletContext';
-import { Theme } from '../constants';
+import { Theme, Fonts } from '../constants';
 import Toast from '../components/Toast';
 import { transactionService, UnifiedTx } from '../services/transactionService';
 
 // ─── Filter tabs ──────────────────────────────────────────────────────────────
-const FILTERS = ['All', 'Send', 'Receive', 'Swap', 'Card'] as const;
+const FILTERS = ['All', 'Send', 'Receive', 'Swap', 'Card', 'P2P'] as const;
 type Filter = typeof FILTERS[number];
 
 // ─── Explorer URLs ────────────────────────────────────────────────────────────
 const EXPLORER: Record<string, string> = {
-  Sepolia:  'https://sepolia.etherscan.io/tx/',
-  Ethereum: 'https://etherscan.io/tx/',
-  Polygon:  'https://polygonscan.com/tx/',
-  Arbitrum: 'https://arbiscan.io/tx/',
+  Sepolia:     'https://sepolia.etherscan.io/tx/',
+  Ethereum:    'https://etherscan.io/tx/',
+  Polygon:     'https://polygonscan.com/tx/',
+  Arbitrum:    'https://arbiscan.io/tx/',
+  TRON:        'https://tronscan.org/#/transaction/',
+  'TRON Nile': 'https://nile.tronscan.org/#/transaction/',
 };
 
 // ─── Type → visual config ─────────────────────────────────────────────────────
@@ -29,11 +32,29 @@ type TxConfig = { label: string; color: string; bg: string; icon: React.ReactNod
 
 function useTxConfig(T: any): Record<UnifiedTx['type'], TxConfig> {
   return useMemo(() => ({
-    send:    { label: 'Sent',         color: T.error,   bg: T.error   + '18', icon: <Feather name="arrow-up-right"  size={18} color={T.error}   /> },
-    receive: { label: 'Received',     color: T.success, bg: T.success + '18', icon: <Feather name="arrow-down-left" size={18} color={T.success} /> },
-    swap:    { label: 'Swap',         color: '#0891B2', bg: '#0891B218',       icon: <MaterialCommunityIcons name="swap-horizontal" size={18} color="#0891B2" /> },
-    card:    { label: 'Card',         color: '#7C3AED', bg: '#7C3AED18',       icon: <Feather name="credit-card"     size={18} color="#7C3AED"  /> },
+    send:    { label: 'Sent',     color: T.error,   bg: T.error   + '18', icon: <Feather name="arrow-up-right"  size={18} color={T.error}   /> },
+    receive: { label: 'Received', color: T.success, bg: T.success + '18', icon: <Feather name="arrow-down-left" size={18} color={T.success} /> },
+    swap:    { label: 'Swap',     color: '#0891B2', bg: '#0891B218',       icon: <MaterialCommunityIcons name="swap-horizontal" size={18} color="#0891B2" /> },
+    card:    { label: 'Card',     color: '#7C3AED', bg: '#7C3AED18',       icon: <Feather name="credit-card" size={18} color="#7C3AED" /> },
   }), [T]);
+}
+
+// P2P label detector
+function isP2PTx(tx: UnifiedTx) {
+  return tx.label?.includes('P2P');
+}
+
+// Returns P2P-specific config if applicable, otherwise the standard config
+function getTxConfig(tx: UnifiedTx, cfgMap: Record<UnifiedTx['type'], TxConfig>): TxConfig {
+  if (isP2PTx(tx)) {
+    return {
+      label: tx.label.includes('Buy') ? 'P2P Buy' : 'P2P Sale',
+      color: '#F59E0B',
+      bg:    '#F59E0B18',
+      icon:  <Feather name="repeat" size={18} color="#F59E0B" />,
+    };
+  }
+  return cfgMap[tx.type];
 }
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
@@ -54,7 +75,7 @@ const StatusBadge = memo(({ status, T }: { status: UnifiedTx['status']; T: any }
 const badgeStyles = StyleSheet.create({
   wrap: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
   dot:  { width: 5, height: 5, borderRadius: 3 },
-  text: { fontSize: 10, fontWeight: '800', letterSpacing: 0.3 },
+  text: { fontSize: 10, fontFamily: Fonts.extraBold, letterSpacing: 0.3 },
 });
 
 // ─── Skeleton row ─────────────────────────────────────────────────────────────
@@ -231,17 +252,17 @@ const modal = StyleSheet.create({
   sheet:       { borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, paddingBottom: Platform.OS === 'ios' ? 48 : 32 },
   handle:      { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
   header:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-  title:       { fontSize: 18, fontWeight: '800' },
+  title:       { fontSize: 18, fontFamily: Fonts.extraBold },
   hero:        { alignItems: 'center', marginBottom: 24, gap: 8 },
   heroIcon:    { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
-  heroAmount:  { fontSize: 30, fontWeight: '900', letterSpacing: -1 },
-  heroUsd:     { fontSize: 15, fontWeight: '600' },
+  heroAmount:  { fontSize: 30, fontFamily: Fonts.extraBold, letterSpacing: -1 },
+  heroUsd:     { fontSize: 15, fontFamily: Fonts.semiBold },
   detailBox:   { borderRadius: 20, marginBottom: 20, overflow: 'hidden' },
   detailRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 13 },
-  detailLabel: { fontSize: 13, fontWeight: '600' },
-  detailValue: { fontSize: 13, fontWeight: '700', maxWidth: '55%', textAlign: 'right' },
+  detailLabel: { fontSize: 13, fontFamily: Fonts.semiBold },
+  detailValue: { fontSize: 13, fontFamily: Fonts.bold, maxWidth: '55%', textAlign: 'right' },
   explorerBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16, borderRadius: 16 },
-  explorerText:{ fontSize: 14, fontWeight: '700' },
+  explorerText:{ fontSize: 14, fontFamily: Fonts.bold },
 });
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
@@ -274,7 +295,8 @@ export default function HistoryScreen({ navigation }: any) {
   const [selectedTx,   setSelectedTx]  = useState<UnifiedTx | null>(null);
   const [toast,        setToast]        = useState({ visible: false, message: '', type: 'success' as 'success' | 'error' | 'info' });
 
-  const ethPrice = prices.ETH?.usd ?? 3450;
+  const ethPriceRef = useRef(3450);
+  useEffect(() => { if (prices.ETH?.usd) ethPriceRef.current = prices.ETH.usd; }, [prices.ETH?.usd]);
 
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToast({ visible: true, message, type });
@@ -287,7 +309,7 @@ export default function HistoryScreen({ navigation }: any) {
 
     try {
       const { txs: fetched, fromCache: cached } = await transactionService.fetchAll(
-        walletAddress, network, ethPrice
+        walletAddress, network, ethPriceRef.current
       );
       setTxs(fetched);
       setFromCache(cached);
@@ -303,9 +325,11 @@ export default function HistoryScreen({ navigation }: any) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [walletAddress, network, ethPrice, showToast]);
+  }, [walletAddress, network, showToast]);
 
-  useEffect(() => { load(); }, [load]);
+  useFocusEffect(
+    useCallback(() => { load(); }, [load])
+  );
 
   const filtered = useMemo(() => {
     if (activeFilter === 'All') return txs;
@@ -315,18 +339,23 @@ export default function HistoryScreen({ navigation }: any) {
       Receive: ['receive'],
       Swap:    ['swap'],
       Card:    ['card'],
+      P2P:     ['swap', 'send'],
     };
+    if (activeFilter === 'P2P') {
+      return txs.filter(tx => isP2PTx(tx));
+    }
     return txs.filter(tx => map[activeFilter].includes(tx.type));
   }, [txs, activeFilter]);
 
   // Count per tab for badges
   const counts = useMemo(() => {
-    const c: Record<Filter, number> = { All: txs.length, Send: 0, Receive: 0, Swap: 0, Card: 0 };
+    const c: Record<Filter, number> = { All: txs.length, Send: 0, Receive: 0, Swap: 0, Card: 0, P2P: 0 };
     for (const tx of txs) {
       if (tx.type === 'send')    c.Send++;
       if (tx.type === 'receive') c.Receive++;
       if (tx.type === 'swap')    c.Swap++;
       if (tx.type === 'card')    c.Card++;
+      if ((tx.type === 'swap' || tx.type === 'send') && isP2PTx(tx)) c.P2P++;;
     }
     return c;
   }, [txs]);
@@ -339,13 +368,14 @@ export default function HistoryScreen({ navigation }: any) {
         visible={toast.visible}
         message={toast.message}
         type={toast.type}
+        isDarkMode={isDarkMode}
         onHide={() => setToast(p => ({ ...p, visible: false }))}
       />
 
       <DetailModal
         tx={selectedTx}
         T={T}
-        cfg={selectedTx ? cfgMap[selectedTx.type] : null}
+        cfg={selectedTx ? getTxConfig(selectedTx, cfgMap) : null}
         network={network}
         onClose={() => setSelectedTx(null)}
       />
@@ -448,7 +478,7 @@ export default function HistoryScreen({ navigation }: any) {
               key={tx.id ? `${tx.id}-${index}` : `tx-${index}`}
               tx={tx}
               T={T}
-              cfg={cfgMap[tx.type]}
+              cfg={getTxConfig(tx, cfgMap)}
               onPress={() => setSelectedTx(tx)}
             />
           ))
@@ -472,8 +502,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   headerBtn:   { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20 },
-  headerTitle: { fontSize: 18, fontWeight: '800', textAlign: 'center' },
-  cacheNote:   { fontSize: 10, fontWeight: '700', textAlign: 'center', letterSpacing: 0.3 },
+  headerTitle: { fontSize: 18, fontFamily: Fonts.extraBold, textAlign: 'center' },
+  cacheNote:   { fontSize: 10, fontFamily: Fonts.bold, textAlign: 'center', letterSpacing: 0.3 },
 
   tabsWrap: { borderBottomWidth: 1 },
   tabs:     { paddingHorizontal: 16, gap: 4 },
@@ -482,20 +512,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 14,
     borderBottomWidth: 2, borderBottomColor: 'transparent',
   },
-  tabText:      { fontSize: 14, fontWeight: '700' },
+  tabText:      { fontSize: 14, fontFamily: Fonts.bold },
   tabBadge:     { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10 },
-  tabBadgeText: { fontSize: 10, fontWeight: '800' },
+  tabBadgeText: { fontSize: 10, fontFamily: Fonts.extraBold },
 
   cacheBanner: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     marginHorizontal: 16, marginTop: 12,
     padding: 12, borderRadius: 12, borderWidth: 1,
   },
-  cacheBannerText: { flex: 1, fontSize: 12, fontWeight: '600' },
+  cacheBannerText: { flex: 1, fontSize: 12, fontFamily: Fonts.semiBold },
 
   scroll:      { paddingHorizontal: 16, paddingTop: 12 },
   summaryRow:  { marginBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  summaryText: { fontSize: 12, fontWeight: '600' },
+  summaryText: { fontSize: 12, fontFamily: Fonts.semiBold },
 
   txRow: {
     flexDirection: 'row', alignItems: 'center',
@@ -503,16 +533,16 @@ const styles = StyleSheet.create({
   },
   txIcon:   { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
   txMid:    { flex: 1, gap: 2 },
-  txLabel:  { fontSize: 14, fontWeight: '700' },
-  txAddr:   { fontSize: 11, fontWeight: '500' },
-  txDate:   { fontSize: 10, fontWeight: '500' },
+  txLabel:  { fontSize: 14, fontFamily: Fonts.bold },
+  txAddr:   { fontSize: 11, fontFamily: Fonts.medium },
+  txDate:   { fontSize: 10, fontFamily: Fonts.medium },
   txRight:  { alignItems: 'flex-end', gap: 3, maxWidth: 120 },
-  txAmount: { fontSize: 13, fontWeight: '800' },
-  txUsd:    { fontSize: 11, fontWeight: '600' },
+  txAmount: { fontSize: 13, fontFamily: Fonts.extraBold },
+  txUsd:    { fontSize: 11, fontFamily: Fonts.semiBold },
 
   emptyWrap:    { alignItems: 'center', paddingVertical: 64, paddingHorizontal: 32, gap: 14 },
   emptyIconBox: { width: 72, height: 72, borderRadius: 36, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  emptyTitle:   { fontSize: 18, fontWeight: '800' },
+  emptyTitle:   { fontSize: 18, fontFamily: Fonts.extraBold },
   emptySub:     { fontSize: 13, textAlign: 'center', lineHeight: 20 },
 });
 

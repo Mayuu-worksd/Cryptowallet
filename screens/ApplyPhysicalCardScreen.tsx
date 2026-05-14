@@ -291,7 +291,7 @@ export default function ApplyPhysicalCardScreen({ navigation }: any) {
   return (
     <View style={{ flex: 1, backgroundColor: T.background }}>
       <Toast
-        visible={toast.visible} message={toast.message} type={toast.type}
+        visible={toast.visible} message={toast.message} type={toast.type} isDarkMode={isDarkMode}
         onHide={() => setToast(p => ({ ...p, visible: false }))}
       />
 

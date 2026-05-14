@@ -6,9 +6,10 @@ import { View, Text, ActivityIndicator, Platform, useWindowDimensions, Animated,
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Feather } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold } from '@expo-google-fonts/inter';
 const { useMemo, useCallback } = React;
 
-import { Theme } from './constants';
+import { Theme, Fonts } from './constants';
 
 const navigationRef = createNavigationContainerRef<any>();
 
@@ -220,6 +221,69 @@ function CenterQRButton({ TC }: { TC: any }) {
   );
 }
 
+function DoubleTapProfileButton({ children, color, focused, TC, onPress: originalPress }: { children: React.ReactNode; color: string; focused: boolean; TC: any; onPress?: (e?: any) => void }) {
+  const { accountType, setAccountType } = useWallet();
+  const lastTap = React.useRef(0);
+  const toastAnim = React.useRef(new Animated.Value(0)).current;
+  const [toastMsg, setToastMsg] = React.useState('');
+
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    Animated.sequence([
+      Animated.timing(toastAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.delay(1400),
+      Animated.timing(toastAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
+    ]).start();
+  };
+
+  const handlePress = async (originalPress?: (e?: any) => void) => {
+    const now = Date.now();
+    if (now - lastTap.current < 350) {
+      // Double tap — toggle account type
+      const next = accountType === 'personal' ? 'business' : 'personal';
+      await setAccountType(next);
+      showToast(next === 'business' ? '🏢 Switched to Business' : '👤 Switched to Personal');
+    } else {
+      // Single tap — navigate normally
+      originalPress?.();
+    }
+    lastTap.current = now;
+  };
+
+  return (
+    <TouchableOpacity
+      onPress={() => handlePress(originalPress)}
+      activeOpacity={0.7}
+      style={{ alignItems: 'center', justifyContent: 'center', flex: 1 }}
+    >
+      {children}
+      {/* Toast popup */}
+      <Animated.View style={{
+        position: 'absolute',
+        bottom: 60,
+        backgroundColor: TC.surface,
+        borderRadius: 20,
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderWidth: 1,
+        borderColor: TC.border,
+        opacity: toastAnim,
+        transform: [{ translateY: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }],
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 8,
+        zIndex: 999,
+        minWidth: 180,
+        alignItems: 'center',
+      }}>
+        <Text style={{ color: TC.text, fontSize: 13, fontWeight: '800' }}>{toastMsg}</Text>
+      </Animated.View>
+    </TouchableOpacity>
+  );
+}
+
 function Tabs() {
   const { isDarkMode, accountType } = useWallet();
   const TC = isDarkMode ? Theme.colors : Theme.lightColors;
@@ -238,7 +302,7 @@ function Tabs() {
     tabBarStyle,
     tabBarActiveTintColor: TC.primary,
     tabBarInactiveTintColor: TC.textMuted,
-    tabBarLabelStyle: { fontSize: 11, fontWeight: '700' as const, marginTop: 4 },
+    tabBarLabelStyle: { fontSize: 11, fontFamily: Fonts.bold, marginTop: 4 },
     tabBarBackground: () => (
       <View style={{ flex: 1, backgroundColor: TC.surface, borderTopWidth: 1, borderTopColor: TC.border }} />
     ),
@@ -271,6 +335,12 @@ function Tabs() {
         <Tab.Screen name="Profile" component={SettingsScreen} options={{
           tabBarLabel: 'Profile',
           tabBarIcon: ({ color, focused }) => <TabIcon name="user" color={color} focused={focused} />,
+          tabBarButton: (props) => (
+            <DoubleTapProfileButton color={props.accessibilityState?.selected ? TC.primary : TC.textMuted} focused={!!props.accessibilityState?.selected} TC={TC} onPress={props.onPress}>
+              <TabIcon name="user" color={props.accessibilityState?.selected ? TC.primary : TC.textMuted} focused={!!props.accessibilityState?.selected} />
+              <Text style={{ fontSize: 11, fontWeight: '700', color: props.accessibilityState?.selected ? TC.primary : TC.textMuted, marginTop: 4 }}>Profile</Text>
+            </DoubleTapProfileButton>
+          ),
         }} />
       </Tab.Navigator>
     );
@@ -302,6 +372,12 @@ function Tabs() {
       <Tab.Screen name="Profile" component={SettingsScreen} options={{
         tabBarLabel: 'Profile',
         tabBarIcon: ({ color, focused }) => <TabIcon name="user" color={color} focused={focused} />,
+        tabBarButton: (props) => (
+          <DoubleTapProfileButton color={props.accessibilityState?.selected ? TC.primary : TC.textMuted} focused={!!props.accessibilityState?.selected} TC={TC} onPress={props.onPress}>
+            <TabIcon name="user" color={props.accessibilityState?.selected ? TC.primary : TC.textMuted} focused={!!props.accessibilityState?.selected} />
+            <Text style={{ fontSize: 11, fontWeight: '700', color: props.accessibilityState?.selected ? TC.primary : TC.textMuted, marginTop: 4 }}>Profile</Text>
+          </DoubleTapProfileButton>
+        ),
       }} />
     </Tab.Navigator>
   );
@@ -345,7 +421,7 @@ const tabStyles = StyleSheet.create({
   },
   centerLabel: {
     fontSize: 11,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     marginTop: 6,
   },
   miniMenu: {
@@ -461,6 +537,8 @@ function MobileNavigator() {
   const handlePinSetupSuccess = React.useCallback(() => setPinState('unlocked'), []);
   const handlePinSetupCancel  = React.useCallback(() => setPinState('unlocked'), []);
 
+  const bgTimeRef = React.useRef<number>(0);
+
   // Auto-lock after 5 minutes in background
   React.useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
@@ -475,8 +553,6 @@ function MobileNavigator() {
     });
     return () => sub.remove();
   }, [pinState]);
-
-  const bgTimeRef = React.useRef<number>(0);
 
   if (isLoadingWallet || pinState === 'checking' || !accountTypeChecked) {
     return (
@@ -662,13 +738,34 @@ export default function App() {
   const [showSplash, setShowSplash]           = React.useState(true);
   const [showOnboarding, setShowOnboarding]   = React.useState<boolean | null>(null);
 
+  const [fontsLoaded] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+    Inter_800ExtraBold,
+  });
+
   React.useEffect(() => {
     shouldShowOnboarding().then(show => setShowOnboarding(show));
     notificationService.requestPermissions();
+    // OTA update check — only runs in real EAS builds, never in Expo Go
+    if (Platform.OS !== 'web') {
+      import('expo-updates').then(async (Updates) => {
+        try {
+          if (!Updates.isEmbeddedLaunch) return;
+          const update = await Updates.checkForUpdateAsync();
+          if (update.isAvailable) {
+            await Updates.fetchUpdateAsync();
+            await Updates.reloadAsync();
+          }
+        } catch (_e) {}
+      });
+    }
   }, []);
 
-  if (showOnboarding === null) {
-    // Wait for onboarding check before rendering anything
+  if (showOnboarding === null || !fontsLoaded) {
+    // Wait for onboarding check and fonts before rendering anything
     return (
       <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#101114' }}>
         <View style={{ flex: 1, backgroundColor: T.background }} />

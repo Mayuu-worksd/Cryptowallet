@@ -1,7 +1,29 @@
 import { supabase } from './supabaseClient';
 import type { KYCRecord, CardRequest } from './supabaseService';
 
-export type AdminKYCRow = KYCRecord & { created_at: string; updated_at: string };
+export type AdminKYCRow = KYCRecord & {
+  created_at: string; updated_at: string;
+  admin_notes?: string; selfie_url?: string; selfie_video_url?: string;
+};
+
+export type AdminBusinessKYCRow = {
+  id?: string;
+  wallet_address: string;
+  business_name: string;
+  business_type: string;
+  registration_number: string;
+  vat_tax_id?: string;
+  business_address: string;
+  country: string;
+  director_name?: string;
+  director_nationality?: string;
+  document_url?: string;
+  status: string;
+  admin_notes?: string;
+  created_at: string;
+  updated_at?: string;
+};
+
 export type AdminCardRequest = CardRequest & {
   full_name?: string;
   email?: string;
@@ -12,27 +34,41 @@ export type AdminCardRequest = CardRequest & {
 
 export const adminService = {
 
-  // ── KYC ────────────────────────────────────────────────────────────────────
+  // ── Personal KYC ──────────────────────────────────────────────────────────
 
   async getAllKYC(status?: string): Promise<AdminKYCRow[]> {
-    let q = supabase.from('kyc').select('*').order('created_at', { ascending: false });
-    if (status && status !== 'all') q = q.eq('status', status);
-    const { data, error } = await q;
+    const { data, error } = await supabase.rpc('admin_get_all_kyc', {
+      p_status: (status && status !== 'all') ? status : null,
+    });
     if (error) throw error;
-    return data ?? [];
+    return (data ?? []) as AdminKYCRow[];
   },
 
-  async updateKYCStatus(
-    walletAddress: string,
-    status: 'verified' | 'rejected',
-    notes?: string,
-  ): Promise<void> {
-    const patch: any = { status };
-    if (notes) patch.admin_notes = notes;
-    const { error } = await supabase
-      .from('kyc')
-      .update(patch)
-      .eq('wallet_address', walletAddress.toLowerCase());
+  async updateKYCStatus(walletAddress: string, status: 'verified' | 'rejected', notes?: string): Promise<void> {
+    const { error } = await supabase.rpc('admin_update_kyc', {
+      p_wallet: walletAddress.toLowerCase(),
+      p_status: status,
+      p_notes:  notes ?? null,
+    });
+    if (error) throw error;
+  },
+
+  // ── Business KYC ──────────────────────────────────────────────────────────
+
+  async getAllBusinessKYC(status?: string): Promise<AdminBusinessKYCRow[]> {
+    const { data, error } = await supabase.rpc('admin_get_business_kyc', {
+      p_status: (status && status !== 'all') ? status : null,
+    });
+    if (error) throw error;
+    return (data ?? []) as AdminBusinessKYCRow[];
+  },
+
+  async updateBusinessKYCStatus(walletAddress: string, status: 'approved' | 'rejected' | 'under_review' | 'pending', notes?: string): Promise<void> {
+    const { error } = await supabase.rpc('admin_update_business_kyc', {
+      p_wallet: walletAddress.toLowerCase(),
+      p_status: status,
+      p_notes:  notes ?? null,
+    });
     if (error) throw error;
   },
 
@@ -44,15 +80,12 @@ export const adminService = {
     const { data, error } = await q;
     if (error) throw error;
 
-    // Enrich with KYC name/email
     const rows = data ?? [];
     const wallets = [...new Set(rows.map(r => r.wallet_address))];
     if (wallets.length === 0) return rows;
 
     const { data: kycRows } = await supabase
-      .from('kyc')
-      .select('wallet_address, full_name, email')
-      .in('wallet_address', wallets);
+      .from('kyc').select('wallet_address, full_name, email').in('wallet_address', wallets);
 
     const kycMap: Record<string, { full_name: string; email: string }> = {};
     (kycRows ?? []).forEach(k => { kycMap[k.wallet_address] = k; });
@@ -65,57 +98,49 @@ export const adminService = {
   },
 
   async approveCardRequest(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('card_requests')
-      .update({ status: 'approved' })
-      .eq('id', id);
+    const { error } = await supabase.from('card_requests').update({ status: 'approved' }).eq('id', id);
     if (error) throw error;
   },
 
   async rejectCardRequest(id: string, notes?: string): Promise<void> {
     const patch: any = { status: 'rejected' };
     if (notes) patch.admin_notes = notes;
-    const { error } = await supabase
-      .from('card_requests')
-      .update(patch)
-      .eq('id', id);
+    const { error } = await supabase.from('card_requests').update(patch).eq('id', id);
     if (error) throw error;
   },
 
   async markShipped(id: string, trackingNumber: string, notes?: string): Promise<void> {
-    const patch: any = {
-      status:          'shipped',
-      tracking_number: trackingNumber,
-      shipped_at:      new Date().toISOString(),
-    };
+    const patch: any = { status: 'shipped', tracking_number: trackingNumber, shipped_at: new Date().toISOString() };
     if (notes) patch.admin_notes = notes;
-    const { error } = await supabase
-      .from('card_requests')
-      .update(patch)
-      .eq('id', id);
+    const { error } = await supabase.from('card_requests').update(patch).eq('id', id);
     if (error) throw error;
   },
 
   // ── Stats ──────────────────────────────────────────────────────────────────
 
-  async getStats(): Promise<{
-    kyc: Record<string, number>;
-    cards: Record<string, number>;
-  }> {
-    const [{ data: kycData }, { data: cardData }] = await Promise.all([
-      supabase.from('kyc').select('status'),
+  async getStats(): Promise<{ kyc: Record<string, number>; businessKyc: Record<string, number>; cards: Record<string, number> }> {
+    const [{ data: kycStats }, { data: cardData }, { data: bizData }] = await Promise.all([
+      supabase.rpc('admin_get_kyc_stats'),
       supabase.from('card_requests').select('status'),
+      supabase.rpc('admin_get_business_kyc', { p_status: null }),
     ]);
 
     const count = (arr: any[], val: string) => (arr ?? []).filter(r => r.status === val).length;
 
     return {
       kyc: {
-        total:        (kycData ?? []).length,
-        pending:      count(kycData ?? [], 'pending'),
-        under_review: count(kycData ?? [], 'under_review'),
-        verified:     count(kycData ?? [], 'verified'),
-        rejected:     count(kycData ?? [], 'rejected'),
+        total:        kycStats?.total        ?? 0,
+        pending:      kycStats?.pending      ?? 0,
+        under_review: kycStats?.under_review ?? 0,
+        verified:     kycStats?.verified     ?? 0,
+        rejected:     kycStats?.rejected     ?? 0,
+      },
+      businessKyc: {
+        total:        (bizData ?? []).length,
+        pending:      count(bizData ?? [], 'pending'),
+        under_review: count(bizData ?? [], 'under_review'),
+        approved:     count(bizData ?? [], 'approved'),
+        rejected:     count(bizData ?? [], 'rejected'),
       },
       cards: {
         total:    (cardData ?? []).length,

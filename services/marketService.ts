@@ -1,5 +1,18 @@
-const COINGECKO_URL =
-  'https://api.coingecko.com/api/v3/simple/price?ids=ethereum,bitcoin,tether,usd-coin,dai,solana,matic-network,binancecoin&vs_currencies=usd&include_24hr_change=true';
+// Single source of truth — symbol ↔ CoinGecko ID mapping
+export const SYMBOL_TO_COINGECKO_ID: Record<string, string> = {
+  ETH:   'ethereum',
+  BTC:   'bitcoin',
+  USDT:  'tether',
+  USDC:  'usd-coin',
+  DAI:   'dai',
+  SOL:   'solana',
+  MATIC: 'matic-network',
+  BNB:   'binancecoin',
+  TRX:   'tron',
+};
+
+const COINGECKO_IDS_CSV = Object.values(SYMBOL_TO_COINGECKO_ID).join(',');
+const COINGECKO_URL = `https://api.coingecko.com/api/v3/simple/price?ids=${COINGECKO_IDS_CSV}&vs_currencies=usd&include_24hr_change=true`;
 
 const COINGECKO_NEWS_URL =
   'https://api.coingecko.com/api/v3/news?per_page=10';
@@ -29,16 +42,10 @@ export type NewsItem = {
   thumbnail?: string;
 };
 
-const ID_TO_SYMBOL: Record<string, string> = {
-  ethereum:        'ETH',
-  bitcoin:         'BTC',
-  tether:          'USDT',
-  'usd-coin':      'USDC',
-  dai:             'DAI',
-  solana:          'SOL',
-  'matic-network': 'MATIC',
-  binancecoin:     'BNB',
-};
+// Reverse map — derived from SYMBOL_TO_COINGECKO_ID so it's always in sync
+const ID_TO_SYMBOL: Record<string, string> = Object.fromEntries(
+  Object.entries(SYMBOL_TO_COINGECKO_ID).map(([sym, id]) => [id, sym])
+);
 
 const STATIC_NEWS: NewsItem[] = [
   { id: 1, title: 'Bitcoin Continues to Dominate Crypto Market Cap',            url: 'https://coinmarketcap.com/headlines/news/', published_at: new Date().toISOString(),                          source: { title: 'CoinMarketCap' }, thumbnail: '' },

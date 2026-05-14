@@ -16,7 +16,7 @@ const AsyncStorage = Platform.OS === 'web'
     }
   : AsyncStorageNative;
 
-// ─── Cache key ────────────────────────────────────────────────────────────────
+const CUSTOM_TOKEN_ADDRESS = (process.env.EXPO_PUBLIC_CUSTOM_TOKEN ?? '0x351028A22C876E0431b30921c0dD0a836a14899E').toLowerCase();
 const CACHE_KEY = 'tx_history_cache';
 
 // ─── Unified transaction shape ────────────────────────────────────────────────
@@ -192,10 +192,8 @@ export const transactionService = {
     let tokenTxs: TokenTx[] = [];
     let etherscanFailed = false;
     try {
-      [chainTxs, tokenTxs] = await Promise.all([
-        etherscanService.fetchTransactions(walletAddress, network),
-        etherscanService.fetchTokenTransactions(walletAddress, network),
-      ]);
+      chainTxs = await etherscanService.fetchTransactions(walletAddress, network);
+      tokenTxs = await etherscanService.fetchTokenTransactions(walletAddress, network);
     } catch {
       etherscanFailed = true;
     }
@@ -284,20 +282,18 @@ export const transactionService = {
       return [];
     }
 
-    // 2. Standard Cooldown (15s) — Bypass if force is true
-    if (!force && (now - this.lastSyncTime < 15000)) {
+    // 2. Standard Cooldown (30s) — Bypass if force is true
+    if (!force && (now - this.lastSyncTime < 30000)) {
       return [];
     }
     this.lastSyncTime = now;
 
     try {
 
-      // 1. Fetch Txs in parallel
-      const [chainTxs, tokenTxs, internalTxs] = await Promise.all([
-        etherscanService.fetchTransactions(walletAddress, network),
-        etherscanService.fetchTokenTransactions(walletAddress, network),
-        etherscanService.fetchInternalTransactions(walletAddress, network),
-      ]);
+      // 1. Fetch Txs sequentially to avoid rate limit
+      const chainTxs   = await etherscanService.fetchTransactions(walletAddress, network);
+      const tokenTxs   = await etherscanService.fetchTokenTransactions(walletAddress, network);
+      const internalTxs = await etherscanService.fetchInternalTransactions(walletAddress, network);
       
       // Success! Clear lockout
       this.isLockedOut = false;
@@ -359,7 +355,7 @@ export const transactionService = {
       for (const tx of tokenTxs) {
         if (knownHashes.has(tx.hash)) continue;
         const isOut = tx.from.toLowerCase() === walletAddress.toLowerCase();
-        const isCustom = tx.contractAddress.toLowerCase() === '0x351028A22C876E0431b30921c0dD0a836a14899E'.toLowerCase();
+        const isCustom = tx.contractAddress.toLowerCase() === CUSTOM_TOKEN_ADDRESS;
         
         const amt = parseFloat(ethers.formatUnits(tx.value, parseInt(tx.tokenDecimal, 10)));
         if (amt <= 0) continue;

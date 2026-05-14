@@ -79,19 +79,46 @@ export default function KYCProcessingScreen({ navigation, route }: any) {
     setSteps(['loading', 'waiting', 'waiting', 'waiting']);
 
     try {
+      // FIRST: check current status — never call submitKYC for verified/under_review users
+      const existing = await kycService.getStatus(walletAddress);
+
+      if (existing?.status === 'verified') {
+        // Already verified — skip everything, go to result
+        setSteps(['done', 'done', 'done', 'done']);
+        setTimeout(() => navigation.replace('KYCResult'), 800);
+        return;
+      }
+
+      if (existing?.status === 'under_review') {
+        // Already submitted — skip everything, go to result
+        setSteps(['done', 'done', 'done', 'done']);
+        setTimeout(() => navigation.replace('KYCResult'), 800);
+        return;
+      }
+
       const docTypeValue = kycData?.document_type ?? docType ?? '';
+
+      // Step 0: save/update personal details (only for pending/rejected/new)
       try {
         await kycService.submitKYC(walletAddress, {
-          full_name: kycData?.name ?? '', email: kycData?.email ?? '',
-          phone: kycData?.phone ?? '', nationality: kycData?.nationality ?? '',
-          dob: kycData?.dob ?? '', address: kycData?.address ?? '',
+          full_name:     kycData?.name ?? kycData?.full_name ?? '',
+          email:         kycData?.email ?? '',
+          phone:         kycData?.phone ?? '',
+          nationality:   kycData?.nationality ?? '',
+          dob:           kycData?.dob ?? '',
+          address:       kycData?.address ?? '',
           document_type: docTypeValue,
         });
       } catch (err: any) {
         const msg = err?.message ?? '';
-        if (msg.startsWith('ALREADY_SUBMITTED')) {
-          await kycService.updateDetails(walletAddress, { document_type: docTypeValue } as any);
-        } else throw err;
+        if (msg.includes('ALREADY_SUBMITTED')) {
+          // Update doc type only, don't touch anything else
+          if (docTypeValue) {
+            await kycService.updateDetails(walletAddress, { document_type: docTypeValue } as any).catch(() => {});
+          }
+        } else {
+          throw err;
+        }
       }
       setStep(0, 'done');
     } catch {

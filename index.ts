@@ -5,6 +5,10 @@ global.Buffer = global.Buffer || require('buffer').Buffer;
 import '@ethersproject/shims';
 import { registerRootComponent } from 'expo';
 import App from './App';
+import { setupLogger } from './utils/logger';
+
+// 🔴 Must be first — catches all errors, warnings, and crashes
+setupLogger();
 
 console.log('[Boot] index.ts loaded');
 console.log('[Boot] Platform:', require('react-native').Platform.OS);

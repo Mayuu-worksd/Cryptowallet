@@ -1,13 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 
-// ─── DEMO CONFIG ─────────────────────────────────────────────────────────────
-// Replace these with your actual Supabase project URL and anon key.
-// Get them from: https://supabase.com → Project Settings → API
-export const SUPABASE_URL = 'https://hxmacphgbpedazdvgdnz.supabase.co';
-export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4bWFjcGhnYnBlZGF6ZHZnZG56Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcxMDIyNjAsImV4cCI6MjA5MjY3ODI2MH0.CPQgakkjwT6N7DX1B56yPEVjGe9H9jjMCWCBCC0qM1M';
+export const SUPABASE_URL      = process.env.EXPO_PUBLIC_SUPABASE_URL      ?? '';
+export const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
-// ─── Storage adapter for React Native ────────────────────────────────────────
 let storageAdapter: any;
 if (Platform.OS === 'web') {
   storageAdapter = {
@@ -28,8 +24,53 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     detectSessionInUrl: false,
   },
   realtime: {
-    // Disable realtime WebSocket — not needed for this app and
-    // avoids the ws/zlib Node built-in issue on React Native.
     params: { eventsPerSecond: 0 },
   } as any,
 });
+
+// ─── RLS wallet context ───────────────────────────────────────────────────────
+// NEVER cache the wallet address — always call set_wallet before every
+// Supabase query that touches wallet-scoped tables.
+// This prevents stale RLS sessions after wallet import/switch.
+let _currentWallet = '';
+
+export async function setWallet(walletAddress: string): Promise<void> {
+  const addr = walletAddress.toLowerCase().trim();
+  if (!addr) return;
+  try {
+    await supabase.rpc('set_wallet', { wallet: addr });
+    _currentWallet = addr;
+  } catch (e: any) {
+    console.warn('[supabaseClient] set_wallet failed:', e?.message);
+    _currentWallet = '';
+  }
+}
+
+// Call this on logout/wallet switch to invalidate the session
+export function clearWalletSession(): void {
+  _currentWallet = '';
+  // Fire-and-forget to clear the Postgres session variable
+  supabase.rpc('set_wallet', { wallet: '' }).catch(() => {});
+}
+
+export function getCurrentWallet(): string {
+  return _currentWallet;
+}
+
+// ─── Signed URL helper for KYC docs (private bucket) ─────────────────────────
+export async function getKYCSignedUrl(storagePath: string, expiresInSeconds = 3600): Promise<string> {
+  const { data, error } = await supabase.storage
+    .from('kyc-docs')
+    .createSignedUrl(storagePath, expiresInSeconds);
+  if (error || !data?.signedUrl) throw new Error(`Failed to get signed URL: ${error?.message}`);
+  return data.signedUrl;
+}
+
+export function extractStoragePath(publicUrl: string): string {
+  // Handle already-relative paths (e.g. 'kyc/abc/doc.jpg' or 'business_kyc/abc/doc.jpg')
+  if (!publicUrl.startsWith('http')) return publicUrl;
+  const marker = '/object/public/kyc-docs/';
+  const idx = publicUrl.indexOf(marker);
+  if (idx === -1) return publicUrl;
+  return publicUrl.slice(idx + marker.length);
+}

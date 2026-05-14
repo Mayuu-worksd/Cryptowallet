@@ -143,7 +143,7 @@ export default function KYCUploadScreen({ navigation, route }: any) {
   return (
     <View style={{ flex: 1, backgroundColor: T.background }}>
       <Toast
-        visible={toast.visible} message={toast.message} type={toast.type}
+        visible={toast.visible} message={toast.message} type={toast.type} isDarkMode
         onHide={() => setToast(p => ({ ...p, visible: false }))}
       />
 

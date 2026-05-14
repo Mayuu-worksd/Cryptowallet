@@ -1,3 +1,9 @@
+/**
+ * cardService.ts
+ * Local card helpers — balance and freeze state via AsyncStorage.
+ * Card number/CVV/expiry are generated randomly in vccService (supabaseService.ts)
+ * and shown once on issuance. Never derived from wallet address.
+ */
 import { Platform } from 'react-native';
 
 let AsyncStorage: any;
@@ -16,13 +22,12 @@ export type Merchant = {
   icon: string;
 };
 
-/** Parse an ethereum: payment URI — returns merchant name + USD amount if value present */
+/** Parse an ethereum: payment URI */
 export function parsePaymentQR(data: string): { address: string; amountEth?: number; label?: string } | null {
   try {
-    // ethereum:0xADDR?value=WEI&label=NAME
     if (data.startsWith('ethereum:')) {
       const [addrPart, queryPart] = data.slice(9).split('?');
-      const address = addrPart.split('@')[0]; // strip chain id
+      const address = addrPart.split('@')[0];
       if (!/^0x[0-9a-fA-F]{40}$/.test(address)) return null;
       const params = new URLSearchParams(queryPart ?? '');
       const valueWei = params.get('value');
@@ -30,7 +35,6 @@ export function parsePaymentQR(data: string): { address: string; amountEth?: num
       const amountEth = valueWei ? parseFloat(valueWei) / 1e18 : undefined;
       return { address, amountEth, label };
     }
-    // Plain address
     if (/^0x[0-9a-fA-F]{40}$/.test(data.trim())) {
       return { address: data.trim() };
     }
@@ -40,77 +44,7 @@ export function parsePaymentQR(data: string): { address: string; amountEth?: num
   }
 }
 
-/**
- * Generates a deterministic-but-unique card number from a wallet address.
- * Same address always produces the same card — but different addresses get different cards.
- * Format: XXXX XXXX XXXX XXXX (16 digits, Luhn-valid last digit)
- */
-function generateCardNumber(walletAddress: string): string {
-  // Use last 12 hex chars of address as seed
-  const seed = walletAddress.replace('0x', '').slice(-12).toUpperCase();
-  // Convert hex pairs to decimal digits (0-9) by taking mod 10
-  const digits: number[] = [];
-  for (let i = 0; i < 12; i += 2) {
-    digits.push(parseInt(seed.slice(i, i + 2), 16) % 10);
-  }
-  // Pad to 15 digits with address-derived values
-  while (digits.length < 15) {
-    digits.push(parseInt(walletAddress.slice(digits.length + 2, digits.length + 4) || '42', 16) % 10);
-  }
-  // Luhn checksum for last digit
-  let sum = 0;
-  for (let i = 0; i < 15; i++) {
-    let d = digits[i];
-    if ((15 - i) % 2 === 0) { d *= 2; if (d > 9) d -= 9; }
-    sum += d;
-  }
-  digits.push((10 - (sum % 10)) % 10);
-  // Format as XXXX XXXX XXXX XXXX
-  return [
-    digits.slice(0, 4).join(''),
-    digits.slice(4, 8).join(''),
-    digits.slice(8, 12).join(''),
-    digits.slice(12, 16).join(''),
-  ].join(' ');
-}
-
-/**
- * Generates a deterministic expiry date from wallet address.
- * Always 3–5 years in the future from a fixed base, unique per address.
- */
-function generateExpiry(walletAddress: string): string {
-  const seed = parseInt(walletAddress.slice(-4), 16);
-  const month = (seed % 12) + 1;
-  const year  = 2027 + (seed % 4); // 2027–2030
-  return `${String(month).padStart(2, '0')}/${String(year).slice(-2)}`;
-}
-
-/**
- * Generates a deterministic 3-digit CVV from wallet address.
- */
-function generateCVV(walletAddress: string): string {
-  const seed = parseInt(walletAddress.slice(-6), 16);
-  return String(100 + (seed % 900)); // 100–999
-}
-
 export const cardService = {
-  /**
-   * Returns card details unique to this wallet address.
-   * Card number, expiry, and CVV are derived from the address — not hardcoded.
-   */
-  getFixedCardDetails: (holderName: string, design: string, walletAddress?: string) => {
-    const addr = walletAddress ?? '0x0000000000000000000000000000000000000000';
-    return {
-      number:     generateCardNumber(addr),
-      expiry:     generateExpiry(addr),
-      cvv:        generateCVV(addr),
-      brand:      'VISA' as const,
-      holderName: holderName.toUpperCase().trim() || 'CARD HOLDER',
-      design,
-    };
-  },
-
-  // Storage key aligned with WalletContext ('cw_card_balance')
   getCardBalance: async (): Promise<number> => {
     try {
       const bal = await AsyncStorage.getItem('cw_card_balance');

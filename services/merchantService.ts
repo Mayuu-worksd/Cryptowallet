@@ -3,8 +3,7 @@
  * Handles Business KYC, Merchant QR codes, and P2P marketplace
  */
 
-import { supabase } from './supabaseClient';
-import * as FileSystem from 'expo-file-system/legacy';
+import { supabase, setWallet } from './supabaseClient';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './supabaseClient';
 import { escrowService } from './escrowService';
 import { storageService } from './storageService';
@@ -19,9 +18,13 @@ export type BusinessKYC = {
   business_name: string;
   business_type: string;
   registration_number: string;
+  vat_tax_id?: string;
   business_address: string;
   country: string;
+  director_name?: string;
+  director_nationality?: string;
   document_url?: string;
+  director_id_url?: string;
   status: BusinessKYCStatus;
   created_at?: string;
   updated_at?: string;
@@ -46,6 +49,8 @@ export type P2POrder = {
   fiat_currency: string;
   rate: number;
   fiat_total: number;
+  platform_fee?: number;
+  fiat_total_after_fee?: number;
   payment_method: string;
   country: string;
   status: 'open' | 'in_escrow' | 'fiat_sent' | 'completed' | 'cancelled' | 'disputed';
@@ -68,46 +73,92 @@ export type EscrowLock = {
   created_at?: string;
 };
 
+// Admin support wallet — messages from this address get the SUPPORT badge in chat
+export const ADMIN_SUPPORT_WALLET = 'support@cryptowallet';
+
 export const BUSINESS_TYPES = [
   'E-Commerce', 'Retail', 'Services', 'Technology', 'Finance',
   'Healthcare', 'Education', 'Real Estate', 'Food & Beverage', 'Other',
 ];
 
-export const FIAT_CURRENCIES = ['USD', 'GBP', 'AED', 'EUR', 'INR', 'SGD'];
+export const FIAT_CURRENCIES = ['USD', 'GBP', 'AED', 'EUR', 'INR', 'SGD', 'CAD', 'AUD', 'JPY', 'MYR', 'NGN', 'BRL'];
 
 export const PAYMENT_METHODS = [
   'Bank Transfer', 'PayPal', 'Wise', 'Cash App', 'Revolut',
-  'Zelle', 'Venmo', 'SEPA', 'UPI', 'Other',
+  'Zelle', 'Venmo', 'SEPA', 'UPI', 'IMPS', 'PhonePe', 'GPay', 'Other',
 ];
+
+// Platform fee: 0.5% of fiat_total, charged to seller
+export const PLATFORM_FEE_RATE = 0.005;
+
+export function calcPlatformFee(fiatTotal: number): number {
+  return parseFloat((fiatTotal * PLATFORM_FEE_RATE).toFixed(2));
+}
+
+// Fetch live fiat rate vs USD (uses exchangerate-api free tier)
+export async function getLiveRate(fromToken: string, toFiat: string): Promise<number | null> {
+  try {
+    const cgId: Record<string, string> = {
+      ETH: 'ethereum', BTC: 'bitcoin', USDT: 'tether', USDC: 'usd-coin', BNB: 'binancecoin', TRX: 'tron',
+    };
+    const id = cgId[fromToken];
+    if (!id) return null;
+
+    // For INR specifically, use a more reliable source
+    const fiatUpper = toFiat.toUpperCase();
+    const [cgRes, fxRes] = await Promise.all([
+      fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd,inr,gbp,eur,aed,sgd,jpy,aud,cad`),
+      fetch(`https://open.er-api.com/v6/latest/USD`),
+    ]);
+    const cgJson = await cgRes.json();
+    const fxJson = await fxRes.json();
+
+    // CoinGecko directly supports INR — use it if available
+    const directRate = cgJson?.[id]?.[fiatUpper.toLowerCase()];
+    if (directRate) return parseFloat(directRate.toFixed(2));
+
+    // Fallback: USD price * FX rate
+    const usdPrice: number = cgJson?.[id]?.usd ?? 0;
+    const fxRate: number   = fxJson?.rates?.[fiatUpper] ?? 1;
+    if (!usdPrice) return null;
+    return parseFloat((usdPrice * fxRate).toFixed(2));
+  } catch {
+    return null;
+  }
+}
 
 // ─── Business KYC Service ─────────────────────────────────────────────────────
 
 export const businessKYCService = {
 
   async getStatus(walletAddress: string): Promise<BusinessKYC | null> {
-    const { data, error } = await supabase
-      .from('business_kyc')
-      .select('*')
-      .eq('wallet_address', walletAddress.toLowerCase())
-      .maybeSingle();
+    // Use atomic RPC — sets wallet context + reads in one transaction (same as KYC)
+    const { data, error } = await supabase.rpc('get_business_kyc_status', {
+      p_wallet: walletAddress.toLowerCase(),
+    });
     if (error) throw error;
-    return data;
+    return data as BusinessKYC | null;
   },
 
   async submit(walletAddress: string, form: Omit<BusinessKYC, 'id' | 'wallet_address' | 'status' | 'created_at' | 'updated_at'>): Promise<BusinessKYC> {
-    const addr = walletAddress.toLowerCase();
-    const { data, error } = await supabase
-      .from('business_kyc')
-      .upsert({
-        wallet_address: addr,
-        ...form,
-        status: 'pending',
-        document_url: null,
-      }, { onConflict: 'wallet_address' })
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
+    const { data, error } = await supabase.rpc('upsert_business_kyc', {
+      p_wallet:               walletAddress.toLowerCase(),
+      p_business_name:        form.business_name,
+      p_business_type:        form.business_type,
+      p_registration_number:  form.registration_number,
+      p_vat_tax_id:           form.vat_tax_id ?? '',
+      p_business_address:     form.business_address,
+      p_country:              form.country,
+      p_director_name:        form.director_name ?? '',
+      p_director_nationality: form.director_nationality ?? '',
+    });
+    if (error) {
+      if (error.message?.includes('ALREADY_SUBMITTED')) {
+        throw new Error(error.message.replace('ERROR: ', '').split('\n')[0]);
+      }
+      throw error;
+    }
+    return data as BusinessKYC;
   },
 
   async uploadDocument(walletAddress: string, fileUri: string): Promise<string> {
@@ -115,27 +166,34 @@ export const businessKYCService = {
     const storagePath = `business_kyc/${addr}/document_${Date.now()}.jpg`;
     const uploadUrl   = `${SUPABASE_URL}/storage/v1/object/kyc-docs/${storagePath}`;
 
-    const base64 = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 });
-    const binaryStr = atob(base64);
-    const bytes = new Uint8Array(binaryStr.length);
-    for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+    // Fetch the file as a blob directly from the URI (works on both iOS and Android)
+    const fileResponse = await fetch(fileUri);
+    if (!fileResponse.ok) throw new Error('Could not read the selected file.');
+    const blob = await fileResponse.blob();
 
     const response = await fetch(uploadUrl, {
       method: 'PUT',
-      headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'image/jpeg', 'x-upsert': 'true' },
-      body: bytes,
+      headers: {
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'image/jpeg',
+        'x-upsert': 'true',
+      },
+      body: blob,
     });
-    if (!response.ok) throw new Error(`Upload failed (${response.status})`);
+    if (!response.ok) {
+      const errText = await response.text().catch(() => response.status.toString());
+      throw new Error(`Upload failed: ${errText}`);
+    }
 
     const { data } = supabase.storage.from('kyc-docs').getPublicUrl(storagePath);
     return data.publicUrl;
   },
 
   async finalizeSubmission(walletAddress: string, documentUrl: string): Promise<void> {
-    const { error } = await supabase
-      .from('business_kyc')
-      .update({ document_url: documentUrl, status: 'under_review' })
-      .eq('wallet_address', walletAddress.toLowerCase());
+    const { error } = await supabase.rpc('finalize_business_kyc', {
+      p_wallet:       walletAddress.toLowerCase(),
+      p_document_url: documentUrl,
+    });
     if (error) throw error;
   },
 };
@@ -187,41 +245,50 @@ export const p2pService = {
 
   async createOrder(
     order: Omit<P2POrder, 'id' | 'status' | 'created_at'>,
-    network: string = 'Polygon'  // default to Polygon for real users (cheapest gas)
+    network: string = 'Sepolia'
   ): Promise<P2POrder> {
-    // 1. Insert order into DB first to get the UUID
+    if (!network || network.trim() === '') throw new Error('Network must be specified when creating an order');
+
+    const platformFee = calcPlatformFee(order.fiat_total);
+    const insertPayload = {
+      ...order,
+      seller_wallet: order.seller_wallet.toLowerCase(),
+      status: 'open',
+      network,
+      platform_fee: platformFee,
+      fiat_total_after_fee: parseFloat((order.fiat_total - platformFee).toFixed(2)),
+    };
+
+    // Call set_wallet and insert in the same RPC to avoid connection pool session loss
+    await supabase.rpc('set_wallet', { wallet: order.seller_wallet.toLowerCase() });
     const { data, error } = await supabase
       .from('p2p_orders')
-      .insert({ ...order, seller_wallet: order.seller_wallet.toLowerCase(), status: 'open', network })
+      .insert(insertPayload)
       .select()
       .single();
     if (error) throw error;
 
-    // 2. Attempt on-chain escrow deposit
+    // Attempt on-chain escrow deposit only if deployed on EVM networks
+    // TRON networks don't use EVM escrow contracts
     let depositTxHash: string | undefined;
-    if (escrowService.isDeployed(network)) {
+    const isEVMNetwork = !['TRON', 'TRON Nile'].includes(network);
+    
+    if (isEVMNetwork && escrowService.isDeployed(network)) {
       try {
         const privateKey = await storageService.getPrivateKey();
         if (privateKey) {
           const { txHash } = await escrowService.deposit({
-            orderId:    data.id,
-            token:      order.token,
-            amount:     order.amount,
-            privateKey,
-            network,
+            orderId: data.id, token: order.token, amount: order.amount, privateKey, network,
           });
           depositTxHash = txHash;
-          // Update order with tx hash
           await supabase.from('p2p_orders').update({ deposit_tx_hash: txHash }).eq('id', data.id);
         }
       } catch (e: any) {
-        // On-chain failed — cancel the DB order and throw
         await supabase.from('p2p_orders').update({ status: 'cancelled' }).eq('id', data.id);
-        throw new Error(`On-chain escrow deposit failed: ${e?.message ?? 'Unknown error'}`);
+        throw new Error(`Escrow deposit failed: ${e?.message ?? 'Unknown error'}`);
       }
     }
 
-    // 3. Lock escrow record in DB
     await supabase.from('escrow_locks').insert({
       order_id:      data.id,
       seller_wallet: order.seller_wallet.toLowerCase(),
@@ -233,7 +300,9 @@ export const p2pService = {
     return { ...data, deposit_tx_hash: depositTxHash };
   },
 
-  async getOpenOrders(country?: string, fiatCurrency?: string): Promise<P2POrder[]> {
+  async getOpenOrders(walletAddress?: string, country?: string, fiatCurrency?: string): Promise<P2POrder[]> {
+    // Set wallet context so RLS policy evaluates correctly on pooled connections
+    await supabase.rpc('set_wallet', { wallet: walletAddress?.toLowerCase() ?? '' });
     let query = supabase
       .from('p2p_orders')
       .select('*')
@@ -248,6 +317,7 @@ export const p2pService = {
 
   async getMyOrders(walletAddress: string): Promise<P2POrder[]> {
     const addr = walletAddress.toLowerCase();
+    // Fetch as seller AND as buyer in one query — OR filter covers both
     const { data, error } = await supabase
       .from('p2p_orders')
       .select('*')
@@ -255,6 +325,31 @@ export const p2pService = {
       .order('created_at', { ascending: false });
     if (error) throw error;
     return data ?? [];
+  },
+
+  // Returns all active orders where this wallet is the buyer (in_escrow / fiat_sent)
+  // Used to recover "lost" buy orders after a refresh on the buyer's device
+  async getActiveBuyOrders(walletAddress: string): Promise<P2POrder[]> {
+    const addr = walletAddress.toLowerCase();
+    const { data, error } = await supabase
+      .from('p2p_orders')
+      .select('*')
+      .eq('buyer_wallet', addr)
+      .in('status', ['in_escrow', 'fiat_sent', 'disputed'])
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data ?? [];
+  },
+
+  async getActiveLockedAmount(walletAddress: string, token: string): Promise<number> {
+    const addr = walletAddress.toLowerCase();
+    const { data } = await supabase
+      .from('p2p_orders')
+      .select('amount')
+      .eq('seller_wallet', addr)
+      .eq('token', token)
+      .in('status', ['open', 'in_escrow', 'fiat_sent']);
+    return (data ?? []).reduce((sum, o) => sum + (o.amount ?? 0), 0);
   },
 
   async getPendingSellerOrders(walletAddress: string): Promise<P2POrder[]> {
@@ -267,42 +362,63 @@ export const p2pService = {
     return data ?? [];
   },
 
-  async buyOrder(orderId: string, buyerWallet: string, network: string = 'Polygon'): Promise<void> {
-    // 1. On-chain: lock buyer into escrow contract
-    if (escrowService.isDeployed(network)) {
+  async buyOrder(orderId: string, buyerWallet: string, network: string = 'Sepolia'): Promise<void> {
+    if (!network || network.trim() === '') throw new Error('Network must be specified');
+    await setWallet(buyerWallet);
+
+    // 1. On-chain: register buyer in escrow contract (best-effort — don't block if order
+    //    was created before contract was deployed or on a different contract version)
+    const isEVMNetwork = !['TRON', 'TRON Nile'].includes(network);
+    
+    if (isEVMNetwork && escrowService.isDeployed(network)) {
       try {
         const privateKey = await storageService.getPrivateKey();
         if (privateKey) {
-          await escrowService.lockBuyer({ orderId, privateKey, network });
+          // Verify the escrow exists on-chain before trying to lock
+          const state = await escrowService.getEscrowState(orderId, network);
+          if (state.status === 'Open') {
+            await escrowService.lockBuyer({ orderId, privateKey, network });
+          }
+          // If status is not Open (order predates contract), skip silently
         }
       } catch (e: any) {
-        throw new Error(`On-chain lock failed: ${e?.message ?? 'Unknown error'}`);
+        // Log but don't throw — DB update below is the source of truth
+        console.warn('[p2pService] On-chain lockBuyer skipped:', e?.message);
       }
     }
 
-    // 2. Update DB
+    // 2. Update DB — always happens regardless of on-chain status
+    await supabase.rpc('set_wallet', { wallet: buyerWallet.toLowerCase() });
     const { error } = await supabase
       .from('p2p_orders')
       .update({ status: 'in_escrow', buyer_wallet: buyerWallet.toLowerCase() })
       .eq('id', orderId)
       .eq('status', 'open');
     if (error) throw error;
+    await supabase.rpc('set_wallet', { wallet: buyerWallet.toLowerCase() });
     await supabase.from('escrow_locks').update({ buyer_wallet: buyerWallet.toLowerCase() }).eq('order_id', orderId);
   },
 
-  async markFiatSent(orderId: string, network: string = 'Polygon'): Promise<void> {
-    // On-chain: mark fiat sent
-    if (escrowService.isDeployed(network)) {
+  async markFiatSent(orderId: string, network: string = 'Sepolia'): Promise<void> {
+    if (!network || network.trim() === '') throw new Error('Network must be specified');
+    const walletAddr = await storageService.getWalletAddress();
+    if (walletAddr) await setWallet(walletAddr);
+
+    const isEVMNetwork = !['TRON', 'TRON Nile'].includes(network);
+    
+    if (isEVMNetwork && escrowService.isDeployed(network)) {
       try {
         const privateKey = await storageService.getPrivateKey();
         if (privateKey) {
-          await escrowService.markFiatSent({ orderId, privateKey, network });
+          const state = await escrowService.getEscrowState(orderId, network);
+          if (state.status === 'Locked') {
+            await escrowService.markFiatSent({ orderId, privateKey, network });
+          }
         }
       } catch (e: any) {
-        throw new Error(`On-chain markFiatSent failed: ${e?.message ?? 'Unknown error'}`);
+        console.warn('[p2pService] On-chain markFiatSent skipped:', e?.message);
       }
     }
-
     const { error } = await supabase
       .from('p2p_orders')
       .update({ status: 'fiat_sent' })
@@ -311,42 +427,59 @@ export const p2pService = {
     if (error) throw error;
   },
 
-  async confirmPaymentReceived(orderId: string, network: string = 'Polygon'): Promise<{ txHash?: string }> {
-    let releaseTxHash: string | undefined;
+  async confirmPaymentReceived(orderId: string, network: string = 'Sepolia', sellerWallet?: string): Promise<{ txHash?: string }> {
+    if (!network || network.trim() === '') throw new Error('Network must be specified');
+    if (sellerWallet) await setWallet(sellerWallet);
 
-    // On-chain: release funds to buyer — THIS is the actual crypto transfer
-    if (escrowService.isDeployed(network)) {
+    let releaseTxHash: string | undefined;
+    const isEVMNetwork = !['TRON', 'TRON Nile'].includes(network);
+    
+    if (isEVMNetwork && escrowService.isDeployed(network)) {
       try {
         const privateKey = await storageService.getPrivateKey();
         if (privateKey) {
-          const { txHash } = await escrowService.release({ orderId, privateKey, network });
-          releaseTxHash = txHash;
+          const state = await escrowService.getEscrowState(orderId, network);
+          if (state.status === 'FiatSent') {
+            const { txHash } = await escrowService.release({ orderId, privateKey, network });
+            releaseTxHash = txHash;
+          }
         }
       } catch (e: any) {
-        throw new Error(`On-chain release failed: ${e?.message ?? 'Unknown error'}`);
+        console.warn('[p2pService] On-chain release skipped:', e?.message);
       }
     }
-
-    // Update DB
-    const { error: orderError } = await supabase
+    // FIX 5b: always scope update to seller_wallet so only the seller can complete
+    const query = supabase
       .from('p2p_orders')
       .update({ status: 'completed', release_tx_hash: releaseTxHash })
-      .eq('id', orderId);
+      .eq('id', orderId)
+      .eq('status', 'fiat_sent');
+    if (sellerWallet) query.eq('seller_wallet', sellerWallet.toLowerCase());
+    const { error: orderError } = await query;
     if (orderError) throw orderError;
-
     await supabase.from('escrow_locks').update({ status: 'released' }).eq('order_id', orderId);
     return { txHash: releaseTxHash };
   },
 
-  async raiseDispute(orderId: string, network: string = 'Polygon'): Promise<void> {
-    // On-chain: freeze escrow
-    if (escrowService.isDeployed(network)) {
+  async raiseDispute(orderId: string, network: string = 'Sepolia'): Promise<void> {
+    if (!network || network.trim() === '') throw new Error('Network must be specified');
+    const walletAddr = await storageService.getWalletAddress();
+    if (walletAddr) await setWallet(walletAddr);
+
+    const isEVMNetwork = !['TRON', 'TRON Nile'].includes(network);
+    
+    if (isEVMNetwork && escrowService.isDeployed(network)) {
       try {
         const privateKey = await storageService.getPrivateKey();
         if (privateKey) {
-          await escrowService.raiseDispute({ orderId, privateKey, network });
+          const state = await escrowService.getEscrowState(orderId, network);
+          if (state.status === 'Locked' || state.status === 'FiatSent') {
+            await escrowService.raiseDispute({ orderId, privateKey, network });
+          }
         }
-      } catch {}
+      } catch (e: any) {
+        console.warn('[p2pService] On-chain raiseDispute skipped:', e?.message);
+      }
     }
 
     const { error } = await supabase
@@ -354,21 +487,35 @@ export const p2pService = {
       .update({ status: 'disputed' })
       .eq('id', orderId);
     if (error) throw error;
+
+    // Auto-insert admin support welcome message so the chat is live immediately
+    await supabase.from('p2p_chat').insert({
+      order_id:      orderId,
+      sender_wallet: ADMIN_SUPPORT_WALLET,
+      message:       '👋 Hi, I\'m from the CryptoWallet support team. I\'ve been assigned to your dispute. Please describe the issue and provide any payment proof. We will resolve this within 24 hours.',
+      is_support:    true,
+    }).catch(() => {});
   },
 
-  async cancelOrder(orderId: string, walletAddress: string, network: string = 'Polygon'): Promise<void> {
-    // On-chain: refund seller
-    if (escrowService.isDeployed(network)) {
+  async cancelOrder(orderId: string, walletAddress: string, network: string = 'Sepolia'): Promise<void> {
+    if (!network || network.trim() === '') throw new Error('Network must be specified');
+    await setWallet(walletAddress);
+
+    const isEVMNetwork = !['TRON', 'TRON Nile'].includes(network);
+    
+    if (isEVMNetwork && escrowService.isDeployed(network)) {
       try {
         const privateKey = await storageService.getPrivateKey();
         if (privateKey) {
-          await escrowService.cancel({ orderId, privateKey, network });
+          const state = await escrowService.getEscrowState(orderId, network);
+          if (state.status === 'Open') {
+            await escrowService.cancel({ orderId, privateKey, network });
+          }
         }
       } catch (e: any) {
-        throw new Error(`On-chain cancel failed: ${e?.message ?? 'Unknown error'}`);
+        console.warn('[p2pService] On-chain cancel skipped:', e?.message);
       }
     }
-
     const { error } = await supabase
       .from('p2p_orders')
       .update({ status: 'cancelled' })

@@ -246,7 +246,27 @@ INSERT INTO shipping_fees (country_name, country_code, fee_usd) VALUES
   ('Other',          'XX', 24.99)
 ON CONFLICT DO NOTHING;
 
--- ─── Storage bucket ───────────────────────────────────────────────────────────
+-- ─── P2P Orders: platform fee columns (add to existing table) ───────────────
+ALTER TABLE p2p_orders ADD COLUMN IF NOT EXISTS platform_fee           NUMERIC(18,8) DEFAULT 0;
+ALTER TABLE p2p_orders ADD COLUMN IF NOT EXISTS fiat_total_after_fee   NUMERIC(18,8) DEFAULT 0;
+
+-- ─── P2P Chat Table (Supabase Realtime) ──────────────────────────────────────
+CREATE TABLE IF NOT EXISTS p2p_chat (
+  id            UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  order_id      UUID NOT NULL REFERENCES p2p_orders(id) ON DELETE CASCADE,
+  sender_wallet TEXT NOT NULL,
+  message       TEXT NOT NULL,
+  is_support    BOOLEAN DEFAULT FALSE,
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_p2p_chat_order_id ON p2p_chat(order_id);
+ALTER TABLE p2p_chat ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "p2p_chat_all" ON p2p_chat;
+CREATE POLICY "p2p_chat_all" ON p2p_chat FOR ALL TO anon USING (true) WITH CHECK (true);
+-- IMPORTANT: In Supabase Dashboard → Database → Replication, add p2p_chat to supabase_realtime publication
+
+-- ─── KYC: admin_notes column ─────────────────────────────────────────────────
+ALTER TABLE kyc ADD COLUMN IF NOT EXISTS admin_notes TEXT;
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('kyc-docs', 'kyc-docs', true)
 ON CONFLICT (id) DO UPDATE SET public = true;

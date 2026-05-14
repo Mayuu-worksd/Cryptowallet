@@ -107,27 +107,6 @@ const CountryModal = ({ visible, onClose, onSelect, selectedCountry, T, isDarkMo
   );
 };
 
-const BottomNav = ({ activeTab, T }: { activeTab: string, T: any }) => (
-  <View style={[styles.bottomNav, { backgroundColor: T.background, borderTopColor: T.border }]}>
-    {[
-      { name: 'wallet', icon: 'grid', label: 'WALLET' },
-      { name: 'markets', icon: 'trending-up', label: 'MARKETS' },
-      { name: 'exchange', icon: 'repeat', label: 'EXCHANGE' },
-      { name: 'account', icon: 'user', label: 'ACCOUNT' },
-    ].map(tab => (
-      <View key={tab.name} style={styles.navItem}>
-        <Feather 
-          name={tab.icon as any} 
-          size={20} 
-          color={activeTab === tab.name ? '#FF1E1E' : T.textDim} 
-        />
-        <Text style={[styles.navLabel, { color: activeTab === tab.name ? '#FF1E1E' : T.textDim }]}>
-          {tab.label}
-        </Text>
-      </View>
-    ))}
-  </View>
-);
 
 export default function AccountTypeScreen({ onSelect }: any) {
   const { setP2PPreferences, isDarkMode } = useWallet();
@@ -276,7 +255,6 @@ export default function AccountTypeScreen({ onSelect }: any) {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      <BottomNav activeTab="account" T={T} />
 
       <CountryModal 
         visible={showCountryModal}

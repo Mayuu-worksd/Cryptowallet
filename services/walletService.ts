@@ -1,9 +1,12 @@
 import { ethers } from 'ethers';
 import { storageService } from './storageService';
+import { deriveTronAddress } from './tronService';
 
 export type WalletData = {
-  address: string;
-  privateKey: string;
+  address: string;      // EVM address (0x...)
+  tronAddress: string;  // TRON address (T...)
+  privateKey: string;   // EVM private key
+  tronPrivateKey: string;
   mnemonic: string;
 };
 
@@ -20,12 +23,16 @@ export const walletService = {
 
   async createWallet(): Promise<WalletData> {
     const wallet = ethers.Wallet.createRandom();
+    const mnemonic = wallet.mnemonic!.phrase;
+    const tron = await deriveTronAddress(mnemonic);
     const data: WalletData = {
-      address: wallet.address,
-      privateKey: wallet.privateKey,
-      mnemonic: wallet.mnemonic!.phrase,
+      address:        wallet.address,
+      tronAddress:    tron.address,
+      privateKey:     wallet.privateKey,
+      tronPrivateKey: tron.privateKey,
+      mnemonic,
     };
-    await storageService.saveWallet(data.privateKey, data.mnemonic, data.address);
+    await storageService.saveWallet(data.privateKey, data.mnemonic, data.address, data.tronAddress);
     return data;
   },
 
@@ -36,13 +43,15 @@ export const walletService = {
     console.log(`[WalletService] importFromMnemonic START — ${wordCount} words`);
     const t0 = Date.now();
     try {
-      console.log('[WalletService] Step 1: Deriving wallet from mnemonic...');
       const wallet = ethers.Wallet.fromPhrase(normalized);
-      console.log(`[WalletService] Step 2: Wallet derived — address: ${wallet.address} (${Date.now() - t0}ms)`);
+      const tron   = await deriveTronAddress(normalized);
+      console.log(`[WalletService] EVM: ${wallet.address} | TRON: ${tron.address} (${Date.now() - t0}ms)`);
       return {
-        address:    wallet.address,
-        privateKey: wallet.privateKey,
-        mnemonic:   normalized,
+        address:        wallet.address,
+        tronAddress:    tron.address,
+        privateKey:     wallet.privateKey,
+        tronPrivateKey: tron.privateKey,
+        mnemonic:       normalized,
       };
     } catch (e: any) {
       console.error(`[WalletService] FAILED after ${Date.now() - t0}ms —`, e?.message);

@@ -8,11 +8,13 @@ import { getWalletBalances } from '../services/balanceService';
 import { storageService } from '../services/storageService';
 import { marketService, NewsItem } from '../services/marketService';
 import { hasPinSetup, clearPin } from '../services/pinService';
-import { kycService, KYCStatus, txService, dbCardService, vccService, cardVariantService, VCCCard } from '../services/supabaseService';
+import { kycService, KYCStatus, txService, dbCardService, vccService, cardVariantService, VCCCard, profileService } from '../services/supabaseService';
 import { transactionService } from '../services/transactionService';
 import { cardService } from '../services/cardService';
+import { supabase, setWallet, clearWalletSession } from '../services/supabaseClient';
 import { notificationService } from '../services/notificationService';
-import { DEFAULT_NETWORK } from '../constants';
+import { DEFAULT_NETWORK, NETWORK_INFO } from '../constants';
+import { ESCROW_CONTRACTS } from '../services/escrowService';
 
 export type Transaction = {
   id: string;
@@ -69,6 +71,7 @@ type WalletContextType = {
   kycStatus: KYCStatus;
   refreshKYCStatus: () => Promise<void>;
   walletAddress: string;
+  tronAddress: string;
   walletName: string;
   setWalletName: (name: string) => void;
   ethBalance: string;
@@ -85,7 +88,8 @@ type WalletContextType = {
   isSyncing: boolean;
   toggleBalanceVisible: () => void;
   pinEnabled: boolean;
-  addTx: (tx: Omit<Transaction, 'id' | 'date'>) => void;
+  addTx: (tx: Omit<Transaction, 'id' | 'date'>) => string;
+  updateTxStatus: (id: string, status: Transaction['status']) => void;
   refreshPinEnabled: () => Promise<void>;
   generateMnemonic: () => string;
   createWallet: () => Promise<{ mnemonic: string; address: string }>;
@@ -93,6 +97,7 @@ type WalletContextType = {
   deleteWallet: () => Promise<void>;
   enterReadOnlyMode: () => Promise<void>;
   refreshBalance: () => Promise<void>;
+  refreshCardData: () => Promise<void>;
   fetchBalance: (address: string, net: string) => Promise<void>;
   sendETH: (toAddress: string, amount: string) => Promise<{ success: boolean; error?: string; hash?: string }>;
   sendCrypto: (coin: string, amount: number, label: string) => void;
@@ -107,32 +112,38 @@ type WalletContextType = {
   generateCardDetails: () => void;
   applySwapBalances: (sellToken: string, sellAmt: number, buyToken: string, buyAmt: number) => Promise<void>;
   switchNetwork: (n: string) => void;
+  creditP2PBalance: (token: string, amount: number) => void;
+  resetLockedBalances: () => void;
 };
 
 const WalletContext = createContext<WalletContextType>({} as WalletContextType);
 
+// Zero fallback — real prices always come from CoinGecko via marketService.
+// Using 0 ensures the UI shows a loading state rather than stale hardcoded values.
 const FALLBACK_PRICES: Record<string, CoinPrice> = {
-  ETH:   { usd: 3450,  change24h: 0 },
-  BTC:   { usd: 64000, change24h: 0 },
-  USDT:  { usd: 1,     change24h: 0 },
-  USDC:  { usd: 1,     change24h: 0 },
-  DAI:   { usd: 1,     change24h: 0 },
-  SOL:   { usd: 180,   change24h: 0 },
-  MATIC: { usd: 0.85,  change24h: 0 },
-  BNB:   { usd: 580,   change24h: 0 },
+  ETH:   { usd: 0, change24h: 0 },
+  BTC:   { usd: 0, change24h: 0 },
+  USDT:  { usd: 0, change24h: 0 },
+  USDC:  { usd: 0, change24h: 0 },
+  DAI:   { usd: 0, change24h: 0 },
+  SOL:   { usd: 0, change24h: 0 },
+  MATIC: { usd: 0, change24h: 0 },
+  BNB:   { usd: 0, change24h: 0 },
+  TRX:   { usd: 0, change24h: 0 },
 };
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [isDarkMode,       setIsDarkMode]       = useState(true);
   const [accountType,      setAccountTypeState] = useState<'personal' | 'business'>('personal');
   const [accountTypeSet,   setAccountTypeSet]   = useState(false);
-  const [p2pCountry,       setP2PCountryState]  = useState('United States');
-  const [p2pCurrency,      setP2PCurrencyState] = useState('USD');
+  const [p2pCountry,       setP2PCountryState]  = useState('India');
+  const [p2pCurrency,      setP2PCurrencyState] = useState('INR');
   const [lockedBalance,    setLockedBalance]    = useState<Record<string, number>>({});
   const [kycStatus,        setKycStatus]        = useState<KYCStatus>(null);
   const [balanceVisible,   setBalanceVisible]   = useState(true);
   const [pinEnabled,       setPinEnabled]       = useState(false);
   const [walletAddress,    setWalletAddress]    = useState('');
+  const [tronAddress,      setTronAddress]      = useState('');
   const [walletName,       setWalletNameState]  = useState('Account 1');
   const [ethBalance,       setEthBalance]       = useState('0.0');
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);
@@ -154,7 +165,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [network,         setNetworkState]  = useState(DEFAULT_NETWORK);
   const [transactions,    setTransactions]  = useState<Transaction[]>([]);
   const [balances, setBalances] = useState<Record<string, number>>({
-    ETH: 0, USDC: 0, USDT: 0, DAI: 0, BTC: 0, SOL: 0, CUSTOM: 0
+    ETH: 0, USDC: 0, USDT: 0, DAI: 0, BTC: 0, SOL: 0, CUSTOM: 0, TRX: 0
   });
   const [prices,          setPrices]        = useState<Record<string, CoinPrice>>(FALLBACK_PRICES);
   const [isPricesLoading, setIsPricesLoading] = useState(true);
@@ -186,14 +197,20 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setAccountTypeState(type);
     setAccountTypeSet(true);
     await AsyncStorage.setItem('cw_account_type', type);
-  }, []);
+    if (walletAddress) {
+      profileService.upsert(walletAddress, { account_type: type }).catch(() => {});
+    }
+  }, [walletAddress]);
 
   const setP2PPreferences = useCallback(async (country: string, currency: string) => {
     setP2PCountryState(country);
     setP2PCurrencyState(currency);
     await AsyncStorage.setItem('cw_p2p_country', country);
     await AsyncStorage.setItem('cw_p2p_currency', currency);
-  }, []);
+    if (walletAddress) {
+      profileService.upsert(walletAddress, { p2p_country: country, p2p_currency: currency }).catch(() => {});
+    }
+  }, [walletAddress]);
 
   const lockBalance = useCallback((token: string, amount: number) => {
     setLockedBalance(prev => {
@@ -210,6 +227,64 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       return updated;
     });
   }, []);
+
+  const resetLockedBalances = useCallback(() => {
+    setLockedBalance({});
+    AsyncStorage.removeItem('cw_locked_balance').catch(() => {});
+  }, []);
+
+  // Directly credit a P2P received amount into local balance state.
+  // Testnet: no real on-chain transfer — update local state directly.
+  // Mainnet with contract deployed: real ETH moved on-chain — poll RPC until balance updates.
+  // Mainnet without contract: same as testnet (simulated).
+  const creditP2PBalance = useCallback((token: string, amount: number) => {
+    const isTestnet = NETWORK_INFO[network]?.type === 'Testnet';
+    const contractDeployed = !!(ESCROW_CONTRACTS && ESCROW_CONTRACTS[network]);
+    const isRealOnChain = !isTestnet && contractDeployed;
+
+    if (isRealOnChain) {
+      // Real on-chain transfer happened — poll RPC every 3s until balance reflects it
+      const expectedMin = token === 'ETH'
+        ? parseFloat(ethBalanceRef.current) + amount * 0.99 // allow for gas
+        : (balancesRef.current[token] || 0) + amount * 0.99;
+
+      let attempts = 0;
+      const poll = async () => {
+        attempts++;
+        await fetchBalance(walletAddress, network);
+        const current = token === 'ETH'
+          ? parseFloat(ethBalanceRef.current)
+          : (balancesRef.current[token] || 0);
+        if (current >= expectedMin || attempts >= 20) return; // stop after 60s
+        setTimeout(poll, 3000);
+      };
+      poll();
+      return;
+    }
+
+    // Testnet or no contract — update local state directly
+    if (token === 'ETH') {
+      setEthBalance(prev => {
+        const next = Math.max(0, parseFloat(prev) + amount).toFixed(6);
+        ethBalanceRef.current = next;
+        setBalances(b => {
+          const nb = { ...b, ETH: parseFloat(next) };
+          balancesRef.current = nb;
+          AsyncStorage.setItem('cw_token_balances', JSON.stringify(nb)).catch(() => {});
+          return nb;
+        });
+        return next;
+      });
+    } else {
+      setBalances(prev => {
+        const next = { ...prev, [token]: Math.max(0, (prev[token] || 0) + amount) };
+        balancesRef.current = next;
+        AsyncStorage.setItem('cw_token_balances', JSON.stringify(next)).catch(() => {});
+        return next;
+      });
+    }
+  }, [network, walletAddress, fetchBalance]);
+
   const toggleBalanceVisible = useCallback(() => setBalanceVisible(p => !p), []);
   const toggleFreezeCard = useCallback(() => {
     setCardFrozen(p => {
@@ -237,12 +312,44 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   useEffect(() => { refreshPinEnabled(); }, []);
 
   const addTx = useCallback((tx: Omit<Transaction, 'id' | 'date'>) => {
+    const id = Date.now().toString();
     setTransactions(prev => [{
       ...tx,
-      id:      Date.now().toString(),
+      id,
       date:    new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
       rawDate: Date.now(),
     }, ...prev]);
+    return id;
+  }, []);
+
+  const updateTxStatus = useCallback((id: string, status: Transaction['status']) => {
+    setTransactions(prev => prev.map(tx => tx.id === id ? { ...tx, status } : tx));
+  }, []);
+
+  // On startup: heal any P2P pending txs by checking their order status in Supabase
+  const healP2PPendingTxs = useCallback(async (address: string, txList: Transaction[]) => {
+    const pendingP2P = txList.filter(
+      t => t.status === 'pending' && t.type === 'received' &&
+      t.address?.includes('P2P Buy')
+    );
+    if (pendingP2P.length === 0) return;
+    try {
+      const { supabase } = await import('../services/supabaseClient');
+      const { data: completedOrders } = await supabase
+        .from('p2p_orders')
+        .select('id, status, token, amount, fiat_total, fiat_currency')
+        .eq('buyer_wallet', address.toLowerCase())
+        .eq('status', 'completed');
+      if (!completedOrders || completedOrders.length === 0) return;
+      // Match pending txs to completed orders by token + amount
+      setTransactions(prev => prev.map(tx => {
+        if (tx.status !== 'pending' || tx.type !== 'received' || !tx.address?.includes('P2P Buy')) return tx;
+        const match = completedOrders.find(
+          o => o.token === tx.coin && Math.abs(o.amount - parseFloat(tx.amount)) < 0.000001
+        );
+        return match ? { ...tx, status: 'success' } : tx;
+      }));
+    } catch {}
   }, []);
 
   const addCardTx = useCallback((tx: Omit<CardTransaction, 'id' | 'timestamp'>) => {
@@ -267,44 +374,30 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         if (savedP2PCurrency) setP2PCurrencyState(savedP2PCurrency);
         if (savedLockedBal)   setLockedBalance(JSON.parse(savedLockedBal));
 
-        // Mark onboarding complete if critical prefs exist
         if (savedAccountType && savedP2PCountry && savedP2PCurrency) {
           setAccountTypeSet(true);
         }
 
-        // Load wallet data
         const address = await storageService.getWalletAddress();
         if (address) {
           setWalletAddress(address);
           setHasWallet(true);
-          // Load KYC status
-          kycService.getStatus(address).then(r => setKycStatus(r?.status ?? null)).catch(() => {});
-          // Load card from Supabase
-          vccService.getCard(address).then(async vcc => {
-            if (vcc) {
-              setCardCreated(true);
-              setCardBalance(vcc.balance);
-              setCardFrozen(vcc.card_status === 'frozen');
-              const variants = await cardVariantService.getVariants();
-              const variant  = variants.find(v => v.id === vcc.card_variant);
-              const details = cardService.getFixedCardDetails(vcc.card_holder_name, variant?.color_hex || 'dark', address);
-              setCardDetails(details);
-              AsyncStorage.setItem('cw_card_created', 'true').catch(() => {});
-              AsyncStorage.setItem('cw_card_details', JSON.stringify(details)).catch(() => {});
-            } else {
-              dbCardService.getCard(address).then(dbCard => {
-                if (dbCard) {
-                  setCardCreated(true);
-                  setCardBalance(dbCard.balance);
-                  setCardFrozen(dbCard.status === 'frozen');
-                  const details = cardService.getFixedCardDetails(dbCard.holder_name, dbCard.design, address);
-                  setCardDetails(details);
-                }
-              }).catch(() => {});
-            }
+          // FIX 1: set wallet in Supabase session so RLS policies work
+          setWallet(address).catch(() => {});
+          // Load TRON address — derive from mnemonic if not yet stored
+          storageService.getTronAddress().then(async t => {
+            if (t) { setTronAddress(t); return; }
+            const mnemonic = await storageService.getMnemonic();
+            if (!mnemonic) return;
+            const { deriveTronAddress } = await import('../services/tronService');
+            const tron = await deriveTronAddress(mnemonic);
+            setTronAddress(tron.address);
+            storageService.saveTronAddress(tron.address).catch(() => {});
           }).catch(() => {});
-          
-          const [savedName, savedTxs, savedCard, savedDetails, savedCardCreated, savedTokenBals, savedFrozen, savedReadOnly] = await Promise.all([
+
+          // ── Step 1: Load everything from AsyncStorage instantly (existing users) ──
+          const [savedName, savedTxs, savedCard, savedDetails, savedCardCreated,
+                 savedTokenBals, savedFrozen, savedReadOnly, savedCardTxs] = await Promise.all([
             storageService.getWalletName(),
             AsyncStorage.getItem('cw_transactions'),
             AsyncStorage.getItem('cw_card_balance'),
@@ -313,34 +406,56 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             AsyncStorage.getItem('cw_token_balances'),
             cardService.getCardFrozen(),
             AsyncStorage.getItem('cw_read_only'),
+            AsyncStorage.getItem('cw_card_transactions'),
           ]);
 
-          // Check if we're in read-only mode (Delete Account was used)
           const readOnly = savedReadOnly === 'true';
           setIsReadOnly(readOnly);
-
-          if (savedName) setWalletNameState(savedName);
-          if (!readOnly && savedTxs)  setTransactions(JSON.parse(savedTxs));
-          if (savedCard) setCardBalance(parseFloat(savedCard));
-          if (savedDetails) setCardDetails(JSON.parse(savedDetails));
-          if (savedCardCreated) setCardCreated(savedCardCreated === 'true');
-          
-          // 2.5 Global Card Registry Check (Restore if not found locally)
-          if (!savedCardCreated || savedCardCreated !== 'true') {
-            AsyncStorage.getItem('cw_global_card_registry').then(raw => {
-              if (raw) {
-                const registry = JSON.parse(raw);
-                if (registry[address.toLowerCase()]) {
-                  setCardCreated(true);
-                  const details = cardService.getFixedCardDetails('CARD HOLDER', 'dark', address);
-                  setCardDetails(details);
-                  AsyncStorage.setItem('cw_card_created', 'true');
-                  AsyncStorage.setItem('cw_card_details', JSON.stringify(details));
+          if (savedName)        setWalletNameState(savedName);
+          if (!readOnly && savedTxs) {
+            const parsed: Transaction[] = JSON.parse(savedTxs);
+            // Check if any P2P pending txs need healing before loading into state
+            const hasPendingP2P = parsed.some(
+              t => t.status === 'pending' && (t.type === 'received' || t.type === 'swap') &&
+              (t.address?.includes('P2P') || t.address?.includes('p2p'))
+            );
+            if (hasPendingP2P) {
+              // Heal inline: query Supabase for completed orders, fix before setState
+              try {
+                const { supabase } = await import('../services/supabaseClient');
+                const { data: completedOrders } = await supabase
+                  .from('p2p_orders')
+                  .select('token, amount')
+                  .eq('buyer_wallet', address.toLowerCase())
+                  .eq('status', 'completed');
+                if (completedOrders && completedOrders.length > 0) {
+                  const healed = parsed.map(t => {
+                    if (t.status !== 'pending') return t;
+                    if (t.type !== 'received' && t.type !== 'swap') return t;
+                    if (!t.address?.includes('P2P') && !t.address?.includes('p2p')) return t;
+                    const match = completedOrders.find(
+                      o => o.token === t.coin &&
+                      Math.abs(Number(o.amount) - parseFloat(t.amount)) < 0.000001
+                    );
+                    return match ? { ...t, type: 'received' as const, status: 'success' as const } : t;
+                  });
+                  setTransactions(healed);
+                  // Persist healed txs immediately
+                  AsyncStorage.setItem('cw_transactions', JSON.stringify(healed)).catch(() => {});
+                } else {
+                  setTransactions(parsed);
                 }
+              } catch {
+                setTransactions(parsed);
               }
-            }).catch(() => {});
+            } else {
+              setTransactions(parsed);
+            }
           }
-
+          if (savedCard)        setCardBalance(parseFloat(savedCard));
+          if (savedDetails)     setCardDetails(JSON.parse(savedDetails));
+          if (savedCardCreated) setCardCreated(savedCardCreated === 'true');
+          if (savedCardTxs)     setCardTransactions(JSON.parse(savedCardTxs));
           setCardFrozen(savedFrozen);
           if (savedTokenBals) {
             const parsed = JSON.parse(savedTokenBals);
@@ -348,10 +463,106 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             balancesRef.current = parsed;
           }
 
-          // 3. Auto-Healing: Restore balances from transaction history if missing
-          if (savedTxs) {
-            const txs: any[] = JSON.parse(savedTxs);
-            // ... (rest of healing logic is already handled by the transactions watcher)
+          // ── Step 2: Supabase sync — AWAITED so card/txs restore before UI renders ──
+          // set_wallet must complete first so RLS policies allow the queries
+          try {
+            await setWallet(address);
+            const [vcc, dbCard, dbTxs, variants, kycRecord] = await Promise.all([
+              vccService.getCard(address),
+              dbCardService.getCard(address),
+              txService.getAll(address, 200),
+              cardVariantService.getVariants(),
+              kycService.getStatus(address),
+            ]);
+
+            // KYC
+            setKycStatus(kycRecord?.status ?? null);
+
+            // ── Card restore: Supabase wins over AsyncStorage ──
+            if (vcc || dbCard) supabaseCardRestoredRef.current = true;
+            if (vcc) {
+              const variant = variants.find(v => v.id === vcc.card_variant);
+              const restoredDetails = {
+                number:     savedDetails ? JSON.parse(savedDetails).number : '•••• •••• •••• ••••',
+                expiry:     vcc.expiry_mm_yy,
+                cvv:        '•••',
+                brand:      (vcc.card_network === 'Mastercard' ? 'MASTERCARD' : 'VISA') as 'VISA' | 'MASTERCARD',
+                holderName: vcc.card_holder_name,
+                design:     variant?.color_hex ?? 'dark',
+              };
+              setCardCreated(true);
+              setCardBalance(vcc.balance);
+              setCardFrozen(vcc.card_status === 'frozen');
+              setCardDetails(restoredDetails);
+              await AsyncStorage.multiSet([
+                ['cw_card_created', 'true'],
+                ['cw_card_balance', String(vcc.balance)],
+                ['cw_card_details', JSON.stringify(restoredDetails)],
+              ]);
+            } else if (dbCard) {
+              const restoredDetails = savedDetails
+                ? JSON.parse(savedDetails)
+                : { number: '•••• •••• •••• ••••', expiry: dbCard.expiry_month + '/' + dbCard.expiry_year, cvv: '•••', brand: 'VISA' as const, holderName: dbCard.holder_name, design: dbCard.design };
+              setCardCreated(true);
+              setCardBalance(dbCard.balance);
+              setCardFrozen(dbCard.status === 'frozen');
+              setCardDetails(restoredDetails);
+              await AsyncStorage.multiSet([
+                ['cw_card_created', 'true'],
+                ['cw_card_balance', String(dbCard.balance)],
+                ['cw_card_details', JSON.stringify(restoredDetails)],
+              ]);
+            } else if (savedCardCreated === 'true' && savedDetails) {
+              // Local card exists but not yet in Supabase — push it up
+              const localDetails = JSON.parse(savedDetails);
+              const last4 = (localDetails.number ?? '').replace(/\s/g, '').slice(-4) || '0000';
+              const [expMonth, expYear] = (localDetails.expiry ?? '12/28').split('/');
+              dbCardService.createCard({
+                wallet_address: address,
+                card_last4:     last4,
+                expiry_month:   expMonth ?? '12',
+                expiry_year:    expYear  ?? '28',
+                card_type:      'classic',
+                balance:        savedCard ? parseFloat(savedCard) : 0,
+                status:         'active',
+                holder_name:    localDetails.holderName ?? 'CARD HOLDER',
+                design:         localDetails.design ?? 'dark',
+              }).catch(() => {});
+            }
+
+            // ── Transaction restore: merge Supabase + AsyncStorage ──
+            const dbCardTxs: CardTransaction[] = dbTxs
+              .filter(t => t.type === 'card_topup' || t.type === 'card_spend')
+              .map(t => ({
+                id:         t.id ?? Date.now().toString(),
+                type:       t.type === 'card_topup' ? 'topup' as const : 'spend' as const,
+                amount:     t.usd_value,
+                label:      t.label ?? (t.type === 'card_topup' ? 'Top-up' : 'Spend'),
+                coin:       t.token,
+                coinAmount: t.amount,
+                status:     'success' as const,
+                timestamp:  t.created_at ?? new Date().toISOString(),
+              }));
+            if (dbCardTxs.length > 0) {
+              setCardTransactions(dbCardTxs);
+              AsyncStorage.setItem('cw_card_transactions', JSON.stringify(dbCardTxs)).catch(() => {});
+            } else if (savedCardTxs) {
+              // Migrate local card txs up to Supabase
+              const localCardTxs: CardTransaction[] = JSON.parse(savedCardTxs);
+              localCardTxs.forEach(t => {
+                txService.log({
+                  wallet_address: address,
+                  type:      t.type === 'topup' ? 'card_topup' : 'card_spend',
+                  token:     t.coin ?? 'USD',
+                  amount:    t.coinAmount ?? t.amount,
+                  usd_value: t.amount,
+                  status:    'success',
+                  label:     t.label,
+                }).catch(() => {});
+              });
+            }
+          } catch {
+            // Supabase offline — AsyncStorage data already loaded above, nothing lost
           }
 
           setHasWallet(true);
@@ -370,7 +581,26 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const fetchBalance = useCallback(async (address: string, net: string) => {
     setIsLoadingBalance(true);
     try {
-      const onChain = await getWalletBalances(address, net, balancesRef.current);
+      // TRON networks need the T... address, not the EVM 0x... address
+      const isTronNet = net === 'TRON' || net === 'TRON Nile';
+      let fetchAddr = address;
+      if (isTronNet) {
+        const stored = await storageService.getTronAddress();
+        if (stored) {
+          fetchAddr = stored;
+        } else {
+          // derive on the fly if not stored yet
+          const mnemonic = await storageService.getMnemonic();
+          if (mnemonic) {
+            const { deriveTronAddress } = await import('../services/tronService');
+            const tron = await deriveTronAddress(mnemonic);
+            fetchAddr = tron.address;
+            setTronAddress(tron.address);
+            storageService.saveTronAddress(tron.address).catch(() => {});
+          }
+        }
+      }
+      const onChain = await getWalletBalances(fetchAddr, net, balancesRef.current);
       setEthBalance(onChain.ETH.toFixed(6));
       ethBalanceRef.current = onChain.ETH.toFixed(6);
       setBalances(onChain);
@@ -383,24 +613,30 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshBalance = useCallback(async () => {
-    if (walletAddress && !syncInProgressRef.current) {
-      setIsSyncing(true);
-      syncInProgressRef.current = true;
-      try {
-        await fetchBalance(walletAddress, network);
-        const newTxs = await transactionService.syncIncoming(walletAddress, network, prices.ETH?.usd ?? 3500);
-        if (Array.isArray(newTxs) && newTxs.length > 0) {
-          setTransactions(prev => {
-            const existingHashes = new Set(prev.map(t => t.txHash).filter(Boolean));
-            const uniqueNew = newTxs.filter((t: any) => !t.txHash || !existingHashes.has(t.txHash));
-            return [...uniqueNew, ...prev];
-          });
-        }
-      } catch {}
-      finally {
-        setIsSyncing(false);
-        syncInProgressRef.current = false;
+    if (!walletAddress) return;
+    // If already syncing, force-reset the lock after 10s to prevent permanent block
+    if (syncInProgressRef.current) {
+      const lockAge = Date.now() - (syncInProgressRef as any).lockedAt;
+      if (lockAge < 10000) return;
+      syncInProgressRef.current = false;
+    }
+    setIsSyncing(true);
+    syncInProgressRef.current = true;
+    (syncInProgressRef as any).lockedAt = Date.now();
+    try {
+      await fetchBalance(walletAddress, network);
+      const newTxs = await transactionService.syncIncoming(walletAddress, network, prices.ETH?.usd ?? 3500);
+      if (Array.isArray(newTxs) && newTxs.length > 0) {
+        setTransactions(prev => {
+          const existingHashes = new Set(prev.map(t => t.txHash).filter(Boolean));
+          const uniqueNew = newTxs.filter((t: any) => !t.txHash || !existingHashes.has(t.txHash));
+          return uniqueNew.length > 0 ? [...uniqueNew, ...prev] : prev;
+        });
       }
+    } catch {}
+    finally {
+      setIsSyncing(false);
+      syncInProgressRef.current = false;
     }
   }, [walletAddress, network, prices, fetchBalance]);
 
@@ -431,9 +667,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [dataLoaded, fetchBalance]);
 
-  // ─── 4. Live Balance Healer: Chronological History Replay Engine ───
+  // ─── Live Balance Healer: Chronological History Replay Engine ───
+  // Only runs when Supabase has NOT already restored card data
+  const supabaseCardRestoredRef = useRef(false);
+  useEffect(() => { supabaseCardRestoredRef.current = false; }, [walletAddress]);
   useEffect(() => {
-    if (transactions.length > 0) {
+    if (transactions.length > 0 && !supabaseCardRestoredRef.current) {
       
       const recoveredTokenBals: Record<string, number> = { 
         USDC: 0, USDT: 0, DAI: 0, BTC: 0, SOL: 0, CUSTOM: 0 
@@ -588,7 +827,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const handleSetWalletName = useCallback(async (name: string) => {
     setWalletNameState(name);
     await storageService.saveWalletName(name);
-  }, []);
+    // Persist to Supabase so it survives logout/re-login
+    if (walletAddress) {
+      profileService.upsert(walletAddress, { wallet_name: name }).catch(() => {});
+    }
+  }, [walletAddress]);
 
   const createWallet = useCallback(async (): Promise<{ mnemonic: string; address: string }> => {
     return walletService.generateWalletPreview();
@@ -597,38 +840,236 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const importWallet = useCallback(async (mnemonic: string, isNew: boolean = false) => {
     try {
       setIsLoadingWallet(true);
+
+      // Clear all in-memory state immediately
+      setCardBalance(0);
+      setCardCreated(false);
+      setCardTransactions([]);
+      setTransactions([]);
+      setTronAddress('');
+
       const data = await walletService.importFromMnemonic(mnemonic);
       const isSwitching = walletAddress && walletAddress.toLowerCase() !== data.address.toLowerCase();
 
+      // Always wipe local storage on any import so Supabase is the single source of truth
+      await storageService.clearWallet();
+      await AsyncStorage.multiRemove([
+        'cw_transactions', 'cw_token_balances',
+        'cw_locked_balance', 'cw_read_only',
+        'tx_history_cache', 'swap_transactions',
+      ]);
+
       if (isNew || isSwitching) {
-        await storageService.clearWallet();
-        await AsyncStorage.multiRemove([
-          'cw_transactions', 'cw_card_balance', 'cw_card_details',
-          'cw_card_transactions', 'cw_card_created', 'cw_token_balances'
-        ]);
-        setTransactions([]);
-        setCardBalance(0);
-        setCardCreated(false);
-        setCardTransactions([]);
         setBalances({ ETH: 0, USDT: 0, USDC: 0, DAI: 0, BTC: 0, SOL: 0 });
         setEthBalance('0.0');
+        setLockedBalance({});
       }
 
-      const defaultName = `Wallet ${data.address.slice(-4).toUpperCase()}`;
-      await storageService.saveWallet(data.privateKey, data.mnemonic, data.address);
-      await storageService.saveWalletName(defaultName);
+      await storageService.saveWallet(data.privateKey, data.mnemonic, data.address, (data as any).tronAddress);
       await clearPin();
-      await AsyncStorage.removeItem('cw_read_only');
       setPinEnabled(false);
       setIsReadOnly(false);
       setWalletAddress(data.address);
-      setWalletNameState(defaultName);
+      if ((data as any).tronAddress) setTronAddress((data as any).tronAddress);
       setHasWallet(true);
+
+      try {
+        await setWallet(data.address);
+
+        // ── Fetch everything from Supabase in parallel ──
+        const [vcc, dbCard, dbTxs, variants, kycRecord, p2pOrders] = await Promise.all([
+          vccService.getCard(data.address),
+          dbCardService.getCard(data.address),
+          txService.getAll(data.address, 500),
+          cardVariantService.getVariants(),
+          kycService.getStatus(data.address),
+          supabase
+            .from('p2p_orders')
+            .select('*')
+            .or(`seller_wallet.eq.${data.address.toLowerCase()},buyer_wallet.eq.${data.address.toLowerCase()}`)
+            .order('created_at', { ascending: false })
+            .then(r => r.data ?? []),
+        ]);
+
+        // ── Restore KYC status ──
+        setKycStatus(kycRecord?.status ?? null);
+
+        // ── Restore wallet name from Supabase profile or keep address-based default ──
+        // Restore wallet profile (name, account type, p2p prefs) from Supabase
+        try {
+          const profile = await profileService.get(data.address);
+          if (profile) {
+            const name = profile.wallet_name || `Wallet ${data.address.slice(-4).toUpperCase()}`;
+            setWalletNameState(name);
+            await storageService.saveWalletName(name);
+            if (profile.account_type) {
+              setAccountTypeState(profile.account_type);
+              setAccountTypeSet(true);
+              await AsyncStorage.setItem('cw_account_type', profile.account_type);
+            }
+            if (profile.p2p_country) {
+              setP2PCountryState(profile.p2p_country);
+              await AsyncStorage.setItem('cw_p2p_country', profile.p2p_country);
+            }
+            if (profile.p2p_currency) {
+              setP2PCurrencyState(profile.p2p_currency);
+              await AsyncStorage.setItem('cw_p2p_currency', profile.p2p_currency);
+            }
+          } else {
+            const defaultName = `Wallet ${data.address.slice(-4).toUpperCase()}`;
+            setWalletNameState(defaultName);
+            await storageService.saveWalletName(defaultName);
+            profileService.upsert(data.address, { wallet_name: defaultName }).catch(() => {});
+          }
+        } catch {
+          const defaultName = `Wallet ${data.address.slice(-4).toUpperCase()}`;
+          setWalletNameState(defaultName);
+          await storageService.saveWalletName(defaultName);
+        }
+
+        // ── Restore card (vcc_cards takes priority over cards table) ──
+        if (vcc) {
+          const variant = variants.find(v => v.id === vcc.card_variant);
+          const restoredDetails = {
+            number:     '•••• •••• •••• ' + vcc.card_last4,
+            expiry:     vcc.expiry_mm_yy,
+            cvv:        '•••',
+            brand:      (vcc.card_network === 'Mastercard' ? 'MASTERCARD' : 'VISA') as 'VISA' | 'MASTERCARD',
+            holderName: vcc.card_holder_name,
+            design:     variant?.color_hex ?? 'dark',
+          };
+          setCardCreated(true);
+          setCardBalance(vcc.balance);
+          setCardFrozen(vcc.card_status === 'frozen');
+          setCardDetails(restoredDetails);
+          await AsyncStorage.multiSet([
+            ['cw_card_created', 'true'],
+            ['cw_card_balance', String(vcc.balance)],
+            ['cw_card_details', JSON.stringify(restoredDetails)],
+          ]);
+        } else if (dbCard) {
+          const restoredDetails = {
+            number:     '•••• •••• •••• ' + dbCard.card_last4,
+            expiry:     dbCard.expiry_month + '/' + dbCard.expiry_year,
+            cvv:        '•••',
+            brand:      'VISA' as const,
+            holderName: dbCard.holder_name,
+            design:     dbCard.design,
+          };
+          setCardCreated(true);
+          setCardBalance(dbCard.balance);
+          setCardFrozen(dbCard.status === 'frozen');
+          setCardDetails(restoredDetails);
+          await AsyncStorage.multiSet([
+            ['cw_card_created', 'true'],
+            ['cw_card_balance', String(dbCard.balance)],
+            ['cw_card_details', JSON.stringify(restoredDetails)],
+          ]);
+        }
+
+        // ── Restore card transactions ──
+        const restoredCardTxs: CardTransaction[] = dbTxs
+          .filter(t => t.type === 'card_topup' || t.type === 'card_spend')
+          .map(t => ({
+            id:         t.id ?? Date.now().toString(),
+            type:       t.type === 'card_topup' ? 'topup' as const : 'spend' as const,
+            amount:     t.usd_value,
+            label:      t.label ?? (t.type === 'card_topup' ? 'Top-up' : 'Spend'),
+            coin:       t.token,
+            coinAmount: t.amount,
+            status:     'success' as const,
+            timestamp:  t.created_at ?? new Date().toISOString(),
+          }));
+        if (restoredCardTxs.length > 0) {
+          setCardTransactions(restoredCardTxs);
+          await AsyncStorage.setItem('cw_card_transactions', JSON.stringify(restoredCardTxs));
+        }
+
+        // ── Restore wallet transactions (send/receive/swap) ──
+        const typeMap: Record<string, string> = {
+          send: 'sent', receive: 'received', swap: 'swap',
+          card_topup: 'card_topup', card_spend: 'card_spend',
+        };
+        const restoredTxs: Transaction[] = dbTxs
+          .filter(t => !['card_topup', 'card_spend', 'fee'].includes(t.type))
+          .map(t => ({
+            id:       t.id ?? Date.now().toString(),
+            type:     (typeMap[t.type] ?? t.type) as Transaction['type'],
+            coin:     t.token,
+            amount:   String(t.amount),
+            usdValue: String(t.usd_value),
+            address:  t.to_address ?? t.label ?? '',
+            status:   (t.status === 'success' ? 'success' : t.status === 'failed' ? 'failed' : 'pending') as Transaction['status'],
+            date:     t.created_at
+              ? new Date(t.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+              : new Date().toLocaleDateString(),
+            txHash:   t.tx_hash,
+          }));
+
+        // ── Restore P2P orders as transactions ──
+        const p2pTxs: Transaction[] = (p2pOrders as any[]).map((o: any) => {
+          const isSeller = o.seller_wallet?.toLowerCase() === data.address.toLowerCase();
+          const statusMap: Record<string, Transaction['status']> = {
+            completed: 'success', cancelled: 'failed',
+            open: 'pending', in_escrow: 'pending', fiat_sent: 'pending', disputed: 'pending',
+          };
+          return {
+            id:       `p2p_${o.id}`,
+            type:     isSeller ? 'sent' as const : 'received' as const,
+            coin:     o.token,
+            amount:   String(o.amount),
+            usdValue: String(o.fiat_total ?? 0),
+            address:  isSeller
+              ? `P2P Sale · ${o.token} → ${o.fiat_currency}`
+              : `P2P Buy · ${o.fiat_currency} → ${o.token}`,
+            status:   statusMap[o.status] ?? 'pending',
+            date:     o.created_at
+              ? new Date(o.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+              : new Date().toLocaleDateString(),
+          };
+        });
+
+        // Merge: Supabase txs + P2P txs, deduplicate by id
+        const allTxs = [...restoredTxs, ...p2pTxs];
+        const seenIds = new Set<string>();
+        const dedupedTxs = allTxs.filter(t => {
+          if (seenIds.has(t.id)) return false;
+          seenIds.add(t.id);
+          return true;
+        });
+
+        if (dedupedTxs.length > 0) {
+          setTransactions(dedupedTxs);
+          await AsyncStorage.setItem('cw_transactions', JSON.stringify(dedupedTxs));
+        }
+
+        // ── Restore locked balances from active P2P orders ──
+        const activeLocks: Record<string, number> = {};
+        (p2pOrders as any[]).forEach((o: any) => {
+          if (!['open', 'in_escrow', 'fiat_sent'].includes(o.status)) return;
+          if (o.seller_wallet?.toLowerCase() === data.address.toLowerCase()) {
+            activeLocks[o.token] = (activeLocks[o.token] || 0) + o.amount;
+          }
+        });
+        if (Object.keys(activeLocks).length > 0) {
+          setLockedBalance(activeLocks);
+          await AsyncStorage.setItem('cw_locked_balance', JSON.stringify(activeLocks));
+        }
+
+      } catch (e) {
+        console.warn('[importWallet] Supabase restore failed:', e);
+        // Still set a wallet name even if Supabase fails
+        const defaultName = `Wallet ${data.address.slice(-4).toUpperCase()}`;
+        await storageService.saveWalletName(defaultName);
+        setWalletNameState(defaultName);
+      }
+
       setIsLoadingWallet(false);
 
       transactionService.lastSyncTime = 0;
       transactionService.isLockedOut = false;
-      (async () => {
+      // Fetch on-chain balance + new txs in background
+      ;(async () => {
         try {
           await fetchBalance(data.address, network);
           const newTxs = await transactionService.syncIncoming(data.address, network, prices.ETH?.usd ?? 3500, true);
@@ -636,7 +1077,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             setTransactions(prev => {
               const existingHashes = new Set(prev.map(t => t.txHash).filter(Boolean));
               const uniqueNew = newTxs.filter((t: any) => !t.txHash || !existingHashes.has(t.txHash));
-              return [...uniqueNew, ...prev];
+              return uniqueNew.length > 0 ? [...uniqueNew, ...prev] : prev;
             });
           }
         } catch {}
@@ -644,8 +1085,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     } catch (e: any) {
       setIsLoadingWallet(false);
       throw new Error(e.message || 'Invalid seed phrase.');
-    } finally {
-      setIsLoadingWallet(false);
     }
   }, [walletAddress, network, prices, fetchBalance]);
 
@@ -654,11 +1093,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     // AsyncStorage data (txns, balances) is preserved so re-importing
     // the same phrase on this device restores everything instantly.
     await storageService.clearKeysOnly(); // removes privateKey, mnemonic, AND wallet_address
+    clearWalletSession();
     await clearPin();
     await AsyncStorage.removeItem('cw_read_only');
     // Fully reset in-memory state → App.tsx re-renders Landing stack
     setHasWallet(false);
     setWalletAddress('');
+    setTronAddress('');
     setEthBalance('0.0');
     setIsReadOnly(false);
     setPinEnabled(false);
@@ -713,7 +1154,22 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const usdValue  = (parsedAmt * ethPrice).toFixed(2);
     const pendingId = Date.now().toString();
 
+    const newTx = {
+      id: pendingId,
+      type: 'sent' as const,
+      coin: 'ETH',
+      amount,
+      usdValue,
+      address: toAddress,
+      status: 'pending' as const,
+      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    };
     addTx({ type: 'sent', coin: 'ETH', amount, usdValue, address: toAddress, status: 'pending' });
+    // Immediately persist so HistoryScreen can read it on focus
+    AsyncStorage.getItem('cw_transactions').then(raw => {
+      const existing = raw ? JSON.parse(raw) : [];
+      AsyncStorage.setItem('cw_transactions', JSON.stringify([newTx, ...existing])).catch(() => {});
+    }).catch(() => {});
 
     // Log pending tx to Supabase (fire-and-forget)
     let dbTxId: string | undefined;
@@ -804,20 +1260,83 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, [cardFrozen, cardBalance, walletAddress, addTx, addCardTx]);
 
   const generateCardDetails = useCallback(() => {
-    setCardDetails(prev => cardService.getFixedCardDetails(prev.holderName, prev.design, walletAddress));
+    // no-op: card details are set at creation time and restored from Supabase
+  }, []);
+
+  // Refresh card balance + transactions from Supabase on demand
+  const refreshCardData = useCallback(async () => {
+    if (!walletAddress) return;
+    try {
+      await setWallet(walletAddress);
+      const [vcc, dbCard, dbTxs, variants] = await Promise.all([
+        vccService.getCard(walletAddress),
+        dbCardService.getCard(walletAddress),
+        txService.getAll(walletAddress, 200),
+        cardVariantService.getVariants(),
+      ]);
+      if (vcc) {
+        const variant = variants.find(v => v.id === vcc.card_variant);
+        const details = {
+          number:     '•••• •••• •••• ' + vcc.card_last4,
+          expiry:     vcc.expiry_mm_yy,
+          cvv:        '•••',
+          brand:      (vcc.card_network === 'Mastercard' ? 'MASTERCARD' : 'VISA') as 'VISA' | 'MASTERCARD',
+          holderName: vcc.card_holder_name,
+          design:     variant?.color_hex ?? 'dark',
+        };
+        setCardCreated(true);
+        setCardBalance(vcc.balance);
+        setCardFrozen(vcc.card_status === 'frozen');
+        setCardDetails(details);
+        AsyncStorage.setItem('cw_card_balance', String(vcc.balance)).catch(() => {});
+      } else if (dbCard) {
+        setCardCreated(true);
+        setCardBalance(dbCard.balance);
+        setCardFrozen(dbCard.status === 'frozen');
+        AsyncStorage.setItem('cw_card_balance', String(dbCard.balance)).catch(() => {});
+      }
+      const cardTxs: CardTransaction[] = dbTxs
+        .filter(t => t.type === 'card_topup' || t.type === 'card_spend')
+        .map(t => ({
+          id:         t.id ?? Date.now().toString(),
+          type:       t.type === 'card_topup' ? 'topup' as const : 'spend' as const,
+          amount:     t.usd_value,
+          label:      t.label ?? (t.type === 'card_topup' ? 'Top-up' : 'Spend'),
+          coin:       t.token,
+          coinAmount: t.amount,
+          status:     'success' as const,
+          timestamp:  t.created_at ?? new Date().toISOString(),
+        }));
+      if (cardTxs.length > 0) {
+        setCardTransactions(cardTxs);
+        AsyncStorage.setItem('cw_card_transactions', JSON.stringify(cardTxs)).catch(() => {});
+      }
+    } catch {}
   }, [walletAddress]);
 
   const createCard = useCallback((holderName: string, design: string) => {
-    const details = cardService.getFixedCardDetails(holderName, design, walletAddress);
+    // Generate random card details (not wallet-derived)
+    const arr = new Uint8Array(14);
+    crypto.getRandomValues(arr);
+    const digits = [4, ...Array.from(arr).map(b => b % 10)];
+    let sum = 0;
+    for (let i = 0; i < 15; i++) { let d = digits[i]; if ((15 - i) % 2 === 0) { d *= 2; if (d > 9) d -= 9; } sum += d; }
+    digits.push((10 - (sum % 10)) % 10);
+    const cardNumber = digits.join('').replace(/(.{4})/g, '$1 ').trim();
+    const now = new Date();
+    const expiry = `${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getFullYear() + 3).slice(-2)}`;
+    const cvvArr = new Uint8Array(1);
+    crypto.getRandomValues(cvvArr);
+    const cvv = String(100 + (cvvArr[0] % 900));
+    const last4 = cardNumber.replace(/\s/g, '').slice(-4);
+    const [expMonth, expYear] = expiry.split('/');
+
+    const details = { number: cardNumber, expiry, cvv, brand: 'VISA' as const, holderName: holderName.toUpperCase().trim() || 'CARD HOLDER', design };
     setCardDetails(details);
     setCardCreated(true);
     AsyncStorage.setItem('cw_card_created', 'true');
     AsyncStorage.setItem('cw_card_details', JSON.stringify(details));
 
-    // Persist to Supabase — store last4 only, never full number
-    const rawNumber = details.number.replace(/\s/g, '');
-    const last4     = rawNumber.slice(-4);
-    const [expMonth, expYear] = details.expiry.split('/');
     dbCardService.getCard(walletAddress).then(existing => {
       if (existing) {
         dbCardService.updateDesign(walletAddress, { holder_name: holderName, design }).catch(() => {});
@@ -834,13 +1353,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           design,
         }).catch(() => {});
       }
-    }).catch(() => {});
-
-    // Add to global registry
-    AsyncStorage.getItem('cw_global_card_registry').then(raw => {
-      const registry = raw ? JSON.parse(raw) : {};
-      registry[walletAddress.toLowerCase()] = true;
-      AsyncStorage.setItem('cw_global_card_registry', JSON.stringify(registry));
     }).catch(() => {});
   }, [walletAddress]);
 
@@ -886,27 +1398,28 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     isDarkMode, toggleTheme,
     accountType, accountTypeSet, setAccountType,
     p2pCountry, p2pCurrency, setP2PPreferences,
-    lockedBalance, lockBalance, unlockBalance,
+    lockedBalance, lockBalance, unlockBalance, resetLockedBalances, creditP2PBalance,
     kycStatus, refreshKYCStatus,
     balanceVisible, toggleBalanceVisible,
     pinEnabled, refreshPinEnabled,
-    walletAddress, walletName, setWalletName: handleSetWalletName,
+    walletAddress, tronAddress, walletName, setWalletName: handleSetWalletName,
     ethBalance, isLoadingBalance, hasWallet, isLoadingWallet, isReadOnly, isSyncing,
     balances, cardBalance, cardFrozen, network, transactions,
     cardDetails, cardCreated, createCard, updateCardDetails, generateCardDetails, cardTransactions,
     addTx,
+    updateTxStatus,
     generateMnemonic: () => walletService.generateMnemonic(),
-    createWallet, importWallet, deleteWallet, enterReadOnlyMode, refreshBalance, fetchBalance,
+    createWallet, importWallet, deleteWallet, enterReadOnlyMode, refreshBalance, refreshCardData, fetchBalance,
     sendETH, sendCrypto, topupCard, spendCard, toggleFreezeCard, applySwapBalances, switchNetwork,
   }), [
     isDarkMode, toggleTheme, accountType, accountTypeSet, setAccountType,
-    p2pCountry, p2pCurrency, setP2PPreferences, lockedBalance, lockBalance, unlockBalance,
+    p2pCountry, p2pCurrency, setP2PPreferences, lockedBalance, lockBalance, unlockBalance, resetLockedBalances, creditP2PBalance,
     kycStatus, refreshKYCStatus, balanceVisible, toggleBalanceVisible,
-    pinEnabled, refreshPinEnabled, addTx, walletAddress, walletName, handleSetWalletName,
+    pinEnabled, refreshPinEnabled, addTx, updateTxStatus, walletAddress, tronAddress, walletName, handleSetWalletName,
     ethBalance, isLoadingBalance, hasWallet, isLoadingWallet, isReadOnly, isSyncing,
     balances, cardBalance, cardFrozen, network, transactions,
     cardDetails, cardCreated, createCard, updateCardDetails, generateCardDetails, cardTransactions,
-    createWallet, importWallet, deleteWallet, enterReadOnlyMode, refreshBalance, fetchBalance,
+    createWallet, importWallet, deleteWallet, enterReadOnlyMode, refreshBalance, refreshCardData, fetchBalance,
     sendETH, sendCrypto, topupCard, spendCard, toggleFreezeCard, applySwapBalances, switchNetwork,
   ]);
 

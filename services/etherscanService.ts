@@ -1,6 +1,18 @@
 // Etherscan V2 — single endpoint, network selected via chainid
 const V2_BASE = 'https://api.etherscan.io/v2/api';
 
+// ─── Serial request queue (prevents >3 req/sec on free tier) ─────────────────
+let _lastRequestTime = 0;
+const REQUEST_GAP_MS = 400; // 2.5 req/sec max — safely under the 3/sec limit
+
+async function rateLimitedFetch(url: string): Promise<Response> {
+  const now = Date.now();
+  const wait = REQUEST_GAP_MS - (now - _lastRequestTime);
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  _lastRequestTime = Date.now();
+  return fetch(url, { headers: { Accept: 'application/json' } });
+}
+
 const CHAIN_ID: Record<string, string> = {
   Ethereum: '1',
   Sepolia:  '11155111',
@@ -49,7 +61,7 @@ export const etherscanService = {
       ...(EXPLORER_KEY ? { apikey: EXPLORER_KEY } : {}),
     });
 
-    const res = await fetch(`${V2_BASE}?${params}`, { headers: { 'Accept': 'application/json' } });
+    const res = await rateLimitedFetch(`${V2_BASE}?${params}`);
     if (!res.ok) throw new Error('HTTP error');
 
     const data = await res.json();
@@ -77,7 +89,7 @@ export const etherscanService = {
       ...(EXPLORER_KEY ? { apikey: EXPLORER_KEY } : {}),
     });
 
-    const res = await fetch(`${V2_BASE}?${params}`, { headers: { 'Accept': 'application/json' } });
+    const res = await rateLimitedFetch(`${V2_BASE}?${params}`);
     if (!res.ok) return [];
 
     const data = await res.json();
@@ -102,7 +114,7 @@ export const etherscanService = {
       ...(EXPLORER_KEY ? { apikey: EXPLORER_KEY } : {}),
     });
 
-    const res = await fetch(`${V2_BASE}?${params}`, { headers: { 'Accept': 'application/json' } });
+    const res = await rateLimitedFetch(`${V2_BASE}?${params}`);
     if (!res.ok) return [];
 
     const data = await res.json();

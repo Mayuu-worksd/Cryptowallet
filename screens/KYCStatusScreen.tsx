@@ -14,7 +14,7 @@ const { width } = Dimensions.get('window');
 
 const STATUS_CFG: Record<NonNullable<KYCStatus>, { icon: any; color: string; grad: [string,string]; label: string; desc: string }> = {
   pending:      { icon: 'upload-cloud', color: '#F59E0B', grad: ['#F59E0B', '#D97706'], label: 'Identity Pending',  desc: 'Finish your verification to unlock premium features.' },
-  under_review: { icon: 'clock',        color: '#6366F1', grad: ['#6366F1', '#4338CA'], label: 'Under Review',     desc: 'Our security team is currently reviewing your documents.' },
+  under_review: { icon: 'clock',        color: '#EC2629', grad: ['#EC2629', '#93000d'], label: 'Under Review',     desc: 'Our security team is currently reviewing your documents.' },
   verified:     { icon: 'shield',       color: '#10B981', grad: ['#10B981', '#059669'], label: 'Account Verified',  desc: 'Your identity is confirmed. Your account is fully secured.' },
   rejected:     { icon: 'x-circle',     color: '#EF4444', grad: ['#EF4444', '#DC2626'], label: 'Action Needed',    desc: 'Verification failed. Please re-submit clear documents.' },
 };

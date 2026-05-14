@@ -3,6 +3,17 @@ const path = require('path');
 
 const config = getDefaultConfig(__dirname);
 
+// ── Fast Refresh + verbose logging ───────────────────────────────────────────
+config.server = {
+  ...config.server,
+  enhanceMiddleware: (middleware) => middleware,
+};
+
+// Watch all source files for instant hot reload
+config.watchFolders = [
+  path.resolve(__dirname),
+];
+
 const NOOP = path.resolve(__dirname, 'utils/noopModule.js');
 
 // Intercept 'ws' — it's a Node-only WebSocket lib bundled inside @supabase/realtime-js.

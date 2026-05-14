@@ -10,6 +10,8 @@ const AsyncStorage = Platform.OS === 'web'
     }
   : AsyncStorageNative;
 
+const CUSTOM_TOKEN_ADDRESS = (process.env.EXPO_PUBLIC_CUSTOM_TOKEN ?? '0x351028A22C876E0431b30921c0dD0a836a14899E').toLowerCase();
+
 const ERC20_ABI = ['function balanceOf(address owner) view returns (uint256)'];
 
 const TOKEN_CONTRACTS: Record<string, Record<string, string>> = {
@@ -32,7 +34,7 @@ const TOKEN_CONTRACTS: Record<string, Record<string, string>> = {
     Arbitrum: '0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1',
   },
   CUSTOM: {
-    Sepolia: '0x351028A22C876E0431b30921c0dD0a836a14899E',
+    Sepolia: CUSTOM_TOKEN_ADDRESS,
   },
 };
 
@@ -51,6 +53,7 @@ export type WalletBalances = {
   USDT: number;
   DAI: number;
   CUSTOM: number;
+  TRX: number;
   [key: string]: number;
 };
 
@@ -65,9 +68,26 @@ export async function getWalletBalances(
   network: string,
   localBalances?: Partial<WalletBalances>
 ): Promise<WalletBalances> {
+  const local = localBalances ?? {};
+
+  // TRON networks — use TronGrid REST API + tronService for full token balances
+  if (network === 'TRON' || network === 'TRON Nile') {
+    try {
+      const { tronService } = await import('./tronService');
+      const tronBals = await tronService.getAllBalances(walletAddress, network);
+      const balances: WalletBalances = {
+        ETH: 0, USDC: tronBals.USDC, USDT: tronBals.USDT, DAI: 0, CUSTOM: 0,
+        TRX: tronBals.TRX,
+      };
+      await AsyncStorage.setItem('cw_token_balances', JSON.stringify(balances)).catch(() => {});
+      return balances;
+    } catch {
+      return { ETH: 0, USDC: 0, USDT: local.USDT ?? 0, DAI: 0, CUSTOM: 0, TRX: local.TRX ?? 0 };
+    }
+  }
+
   const provider  = makeProvider(network);
   const isTestnet = network === 'Sepolia';
-  const local     = localBalances ?? {};
 
   const [ethRaw, usdcRaw, usdtRaw, daiRaw, customRaw] = await Promise.allSettled([
     provider.getBalance(walletAddress),
@@ -92,7 +112,7 @@ export async function getWalletBalances(
       txs.forEach(t => {
         const isSuccess = t.status === 'success' || t.status === 'completed';
         if (!isSuccess) return;
-        const isCustom = (t as any).contractAddress?.toLowerCase() === '0x351028A22C876E0431b30921c0dD0a836a14899E'.toLowerCase() || t.coin === 'CUSTOM';
+        const isCustom = (t as any).contractAddress?.toLowerCase() === CUSTOM_TOKEN_ADDRESS || t.coin === 'CUSTOM';
         if (isCustom) {
           const amt = parseFloat((t as any).buyAmount || t.amount);
           if (!isNaN(amt)) {
@@ -112,6 +132,7 @@ export async function getWalletBalances(
     USDT: isTestnet ? Math.max(chainUSDT ?? 0, local.USDT ?? 0) : (chainUSDT !== null ? chainUSDT : (local.USDT ?? 0)),
     DAI:  isTestnet ? Math.max(chainDAI  ?? 0, local.DAI  ?? 0) : (chainDAI  !== null ? chainDAI  : (local.DAI  ?? 0)),
     CUSTOM: isTestnet ? Math.max(chainCUSTOM ?? 0, historyCUSTOM, local.CUSTOM ?? 0) : (chainCUSTOM !== null ? chainCUSTOM : (local.CUSTOM ?? 0)),
+    TRX: 0,
   };
 
   const hasAnyBalance = Object.values(balances).some(v => v > 0);

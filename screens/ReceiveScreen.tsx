@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Theme } from '../constants';
+import { Theme, Fonts } from '../constants';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Platform, Dimensions, Share, Image, StatusBar, Modal,
@@ -14,11 +14,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 const { width } = Dimensions.get('window');
 
 const NETWORKS = [
-  { id: 'Ethereum', label: 'Ethereum', symbol: 'ETH',  color: '#627EEA', chainId: 1,        iconUrl: 'https://assets.coingecko.com/coins/images/279/large/ethereum.png' },
-  { id: 'Polygon',  label: 'Polygon',  symbol: 'MATIC',color: '#8247E5', chainId: 137,      iconUrl: 'https://assets.coingecko.com/coins/images/4713/large/matic-token-icon.png' },
-  { id: 'BNB Chain',label: 'BNB Chain',symbol: 'BNB',  color: '#F3BA2F', chainId: 56,       iconUrl: 'https://assets.coingecko.com/coins/images/825/large/bnb-icon2_2x.png' },
-  { id: 'Arbitrum', label: 'Arbitrum', symbol: 'ARB',  color: '#00A3FF', chainId: 42161,    iconUrl: 'https://assets.coingecko.com/coins/images/16547/large/photo_2023-03-29_21.47.00.jpeg' },
-  { id: 'Sepolia',  label: 'Sepolia',  symbol: 'ETH',  color: '#F59E0B', chainId: 11155111, iconUrl: 'https://assets.coingecko.com/coins/images/279/large/ethereum.png' },
+  { id: 'Ethereum',  label: 'Ethereum',  symbol: 'ETH',  color: '#627EEA', chainId: 1,          iconUrl: 'https://coin-images.coingecko.com/coins/images/279/large/ethereum.png' },
+  { id: 'Polygon',   label: 'Polygon',   symbol: 'MATIC',color: '#8247E5', chainId: 137,        iconUrl: 'https://coin-images.coingecko.com/coins/images/4713/large/matic-token-icon.png' },
+  { id: 'BNB Chain', label: 'BNB Chain', symbol: 'BNB',  color: '#F3BA2F', chainId: 56,         iconUrl: 'https://coin-images.coingecko.com/coins/images/825/large/bnb-icon2_2x.png' },
+  { id: 'Arbitrum',  label: 'Arbitrum',  symbol: 'ARB',  color: '#00A3FF', chainId: 42161,      iconUrl: 'https://coin-images.coingecko.com/coins/images/16547/large/photo_2023-03-29_21.47.00.jpeg' },
+  { id: 'TRON',      label: 'TRON',      symbol: 'TRX',  color: '#EF0027', chainId: 728126428,  iconUrl: 'https://coin-images.coingecko.com/coins/images/1094/large/tron-logo.png' },
+  { id: 'TRON Nile', label: 'TRON Nile', symbol: 'TRX',  color: '#FF6B6B', chainId: 3448148188, iconUrl: 'https://coin-images.coingecko.com/coins/images/1094/large/tron-logo.png' },
+  { id: 'Sepolia',   label: 'Sepolia',   symbol: 'ETH',  color: '#F59E0B', chainId: 11155111,   iconUrl: 'https://coin-images.coingecko.com/coins/images/279/large/ethereum.png' },
 ];
 
 export type QRPayload = {
@@ -82,7 +84,7 @@ function NetworkIcon({ net, size = 32 }: { net: typeof NETWORKS[number]; size?: 
 }
 
 export default function ReceiveScreen({ navigation }: any) {
-  const { walletAddress, network: globalNetwork, isDarkMode } = useWallet();
+  const { walletAddress, tronAddress, network: globalNetwork, isDarkMode } = useWallet() as any;
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
 
   const defaultNet = NETWORKS.find(n => n.id === globalNetwork) ?? NETWORKS[0];
@@ -95,23 +97,26 @@ export default function ReceiveScreen({ navigation }: any) {
     setSelectedNet(net);
   }, [globalNetwork]);
 
-  const qrValue = walletAddress ? buildQRPayload(walletAddress, selectedNet.id) : '';
+  // Use TRON address when on TRON network, EVM address otherwise
+  const isTron = selectedNet.id === 'TRON' || selectedNet.id === 'TRON Nile';
+  const displayAddress = isTron ? (tronAddress || walletAddress) : walletAddress;
+  const qrValue = displayAddress ? buildQRPayload(displayAddress, selectedNet.id) : '';
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') =>
     setToast({ visible: true, message, type });
 
   const handleCopy = async () => {
-    if (walletAddress) {
-      await Clipboard.setStringAsync(walletAddress);
+    if (displayAddress) {
+      await Clipboard.setStringAsync(displayAddress);
       showToast('Address copied!', 'success');
     }
   };
 
   const handleShare = async () => {
-    if (!walletAddress) return;
+    if (!displayAddress) return;
     try {
       await Share.share({
-        message: `My ${selectedNet.label} address: ${walletAddress}`,
+        message: `My ${selectedNet.label} address: ${displayAddress}`,
         title: 'Wallet Address',
       });
     } catch {
@@ -126,6 +131,7 @@ export default function ReceiveScreen({ navigation }: any) {
         visible={toast.visible}
         message={toast.message}
         type={toast.type}
+        isDarkMode={isDarkMode}
         onHide={() => setToast(p => ({ ...p, visible: false }))}
       />
 
@@ -247,9 +253,11 @@ export default function ReceiveScreen({ navigation }: any) {
           <TouchableOpacity style={[styles.addressBox, { backgroundColor: T.surface, borderColor: T.border }]} onPress={handleCopy} activeOpacity={0.9}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.addressValue, { color: T.text }]} numberOfLines={1}>
-                {walletAddress || '0x...'}
+                {displayAddress || (isTron ? 'T...' : '0x...')}
               </Text>
-              <Text style={[styles.addressMeta, { color: T.textMuted }]}>Standard {selectedNet.symbol} Address</Text>
+              <Text style={[styles.addressMeta, { color: T.textMuted }]}>
+                {isTron ? 'TRON (TRC20) Address' : `Standard ${selectedNet.symbol} Address`}
+              </Text>
             </View>
             <TouchableOpacity style={[styles.copyIconButton, { backgroundColor: T.surfaceLow }]} onPress={handleCopy}>
               <Feather name="copy" size={18} color={T.primary} />
@@ -296,13 +304,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 60 : 40, paddingBottom: 16,
   },
   backBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 13, fontWeight: '900', letterSpacing: 2 },
+  headerTitle: { fontSize: 13, fontFamily: Fonts.extraBold, letterSpacing: 2 },
 
   scroll: { paddingHorizontal: 24, paddingBottom: 150 },
 
   heroSection: { marginTop: 12, marginBottom: 24 },
-  heroTitle: { fontSize: 32, fontWeight: '800', letterSpacing: -1, marginBottom: 6 },
-  heroSubTitle: { fontSize: 14, lineHeight: 20, fontWeight: '500' },
+  heroTitle: { fontSize: 32, fontFamily: Fonts.extraBold, letterSpacing: -1, marginBottom: 6 },
+  heroSubTitle: { fontSize: 14, lineHeight: 20, fontFamily: Fonts.medium },
 
   selectorContainer: { marginBottom: 32 },
   selectorLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5, marginBottom: 10 },
@@ -310,8 +318,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     borderRadius: 20, padding: 16, gap: 14, borderWidth: 1,
   },
-  networkNameText: { fontSize: 16, fontWeight: '800', marginBottom: 2 },
-  networkStatusText: { fontSize: 12, fontWeight: '600' },
+  networkNameText: { fontSize: 16, fontFamily: Fonts.extraBold, marginBottom: 2 },
+  networkStatusText: { fontSize: 12, fontFamily: Fonts.semiBold },
   chevronBox: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
 
   // Modal
@@ -323,15 +331,15 @@ const styles = StyleSheet.create({
   },
   modalIndicator: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 24 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  modalTitle: { fontSize: 20, fontWeight: '800' },
+  modalTitle: { fontSize: 20, fontFamily: Fonts.extraBold },
   modalCloseBtn: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   modalNetRow: {
     flexDirection: 'row', alignItems: 'center', padding: 18, borderRadius: 20,
     marginBottom: 10, gap: 14, borderWidth: 1,
   },
   modalNetIconBox: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  modalNetName: { fontSize: 16, fontWeight: '700', marginBottom: 2 },
-  modalNetSub: { fontSize: 12, fontWeight: '600' },
+  modalNetName: { fontSize: 16, fontFamily: Fonts.bold, marginBottom: 2 },
+  modalNetSub: { fontSize: 12, fontFamily: Fonts.semiBold },
   activeCheck: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
 
   // QR
@@ -344,25 +352,25 @@ const styles = StyleSheet.create({
   qrFooter: { marginTop: 20 },
   networkBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 100, gap: 8, borderWidth: 1 },
   miniDot: { width: 6, height: 6, borderRadius: 3 },
-  networkBadgeText: { fontSize: 12, fontWeight: '700' },
+  networkBadgeText: { fontSize: 12, fontFamily: Fonts.bold },
 
   // Address
   addressContainer: { marginBottom: 24 },
   sectionLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5, marginBottom: 12 },
   addressBox: { flexDirection: 'row', alignItems: 'center', borderRadius: 24, padding: 20, gap: 16, borderWidth: 1 },
   addressValue: { fontSize: 15, fontWeight: '700', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', marginBottom: 4 },
-  addressMeta: { fontSize: 12, fontWeight: '600' },
+  addressMeta: { fontSize: 12, fontFamily: Fonts.semiBold },
   copyIconButton: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
 
   // Info
   infoGrid: { flexDirection: 'row', gap: 12 },
   infoCard: { flex: 1, flexDirection: 'row', alignItems: 'center', borderRadius: 20, padding: 16, gap: 10, borderWidth: 1 },
-  infoCardText: { fontSize: 13, fontWeight: '700' },
+  infoCardText: { fontSize: 13, fontFamily: Fonts.bold },
 
   // Footer
   footerContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: Platform.OS === 'ios' ? 40 : 24, borderTopWidth: 1 },
   primaryShareBtn: { height: 60, borderRadius: 30, overflow: 'hidden' },
   shareGradient: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
-  shareBtnText: { color: '#FFF', fontSize: 14, fontWeight: '900', letterSpacing: 1 },
+  shareBtnText: { color: '#FFF', fontSize: 14, fontFamily: Fonts.extraBold, letterSpacing: 1 },
 });
 

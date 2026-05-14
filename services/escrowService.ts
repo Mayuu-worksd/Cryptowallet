@@ -16,11 +16,15 @@ import { ethers } from 'ethers';
 import { getProvider } from './ethereumService';
 
 // ─── Paste deployed contract addresses here after deploying ──────────────────
+// EVM networks only — TRON uses TRC20 contracts, not EVM escrow
 export const ESCROW_CONTRACTS: Record<string, string> = {
-  Sepolia:  '',   // paste Sepolia address here
-  Ethereum: '',   // paste Ethereum mainnet address here
-  Polygon:  '',   // ← PASTE YOUR POLYGON ADDRESS HERE after deploying
-  Arbitrum: '',   // paste Arbitrum address here
+  Sepolia:  '0x12a09612eFc1538406f23B78E89a1dB094dc4Ac6',
+  Ethereum: '',   // deploy when ready: npm run deploy:ethereum inside escrow-deploy folder
+  Polygon:  '',
+  Arbitrum: '',
+  // TRON networks: no EVM escrow contract (use TRC20 directly)
+  TRON:        '',
+  'TRON Nile': '',
 };
 
 // ─── Token contract addresses per network ────────────────────────────────────
@@ -76,6 +80,10 @@ export function orderIdToBytes32(orderId: string): string {
 }
 
 function getContract(network: string, signerOrProvider: ethers.Signer | ethers.Provider) {
+  // TRON networks don't use EVM escrow contracts
+  if (network === 'TRON' || network === 'TRON Nile') {
+    throw new Error(`Escrow contract not available on ${network}. Use TRC20 tokens directly.`);
+  }
   const address = ESCROW_CONTRACTS[network];
   if (!address) throw new Error(`Escrow contract not deployed on ${network} yet. Add address to ESCROW_CONTRACTS in escrowService.ts`);
   return new ethers.Contract(address, ESCROW_ABI, signerOrProvider);

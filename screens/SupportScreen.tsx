@@ -46,6 +46,7 @@ export default function SupportScreen({ navigation }: any) {
         visible={toast.visible}
         message={toast.message}
         type={toast.type}
+        isDarkMode={isDarkMode}
         onHide={() => setToast(p => ({ ...p, visible: false }))}
       />
 
@@ -90,13 +91,13 @@ export default function SupportScreen({ navigation }: any) {
           <TouchableOpacity
             style={[styles.contactCard, { backgroundColor: T.surfaceLow, borderColor: T.border }]}
             activeOpacity={0.7}
-            onPress={() => showToast('Live chat coming soon! Use email for now.', 'info')}
+            onPress={() => Linking.openURL('https://t.me/cryptowalletapp')}
           >
-            <View style={[styles.contactIconBox, { backgroundColor: T.success + '20' }]}>
-              <MaterialIcons name="chat-bubble-outline" size={22} color={T.success} />
+            <View style={[styles.contactIconBox, { backgroundColor: '#229ED918' }]}>
+              <MaterialIcons name="send" size={22} color="#229ED9" />
             </View>
-            <Text style={[styles.contactCardTitle, { color: T.text }]}>Live Chat</Text>
-            <Text style={[styles.contactCardSub, { color: T.textMuted }]}>Coming soon</Text>
+            <Text style={[styles.contactCardTitle, { color: T.text }]}>Telegram</Text>
+            <Text style={[styles.contactCardSub, { color: T.textMuted }]}>@cryptowalletapp</Text>
           </TouchableOpacity>
         </View>
 

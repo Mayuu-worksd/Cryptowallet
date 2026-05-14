@@ -3,7 +3,7 @@
  * wallet_address (lowercase) is the primary link across all tables.
  */
 
-import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from './supabaseClient';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY, getKYCSignedUrl, extractStoragePath, setWallet } from './supabaseClient';
 import * as FileSystem from 'expo-file-system/legacy';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -155,56 +155,51 @@ export const COUNTRIES = Object.keys(SHIPPING_FEES);
 export const kycService = {
 
   async getStatus(walletAddress: string): Promise<KYCRecord | null> {
-    const { data, error } = await supabase
-      .from('kyc')
-      .select('*')
-      .eq('wallet_address', walletAddress.toLowerCase())
-      .maybeSingle();
+    const addr = walletAddress.toLowerCase();
+    // Use atomic RPC — sets wallet context + reads in one transaction
+    // Direct table query fails due to RLS session variable not persisting
+    const { data, error } = await supabase.rpc('get_kyc_status', { p_wallet: addr });
     if (error) throw error;
-    return data;
+    return data as KYCRecord | null;
   },
 
   async submitKYC(walletAddress: string, form: KYCFormData): Promise<KYCRecord> {
     const addr = walletAddress.toLowerCase();
-    const existing = await kycService.getStatus(addr);
 
-    const canSubmit = !existing
-      || existing.status === 'rejected'
-      || (existing.status === 'pending' && !existing.document_url);
+    // Use atomic RPC — sets wallet context + upserts in one transaction
+    // This avoids RLS failures caused by session variable not persisting
+    const { data, error } = await supabase.rpc('upsert_kyc', {
+      p_wallet:        addr,
+      p_full_name:     form.full_name.trim(),
+      p_email:         form.email.trim(),
+      p_phone:         form.phone.trim(),
+      p_address:       form.address.trim(),
+      p_nationality:   form.nationality.trim(),
+      p_dob:           form.dob.trim(),
+      p_document_type: form.document_type,
+    });
 
-    if (!canSubmit) throw new Error(`ALREADY_SUBMITTED:${existing!.status}`);
-
-    const payload = {
-      wallet_address: addr,
-      full_name:      form.full_name.trim(),
-      email:          form.email.trim(),
-      phone:          form.phone.trim(),
-      address:        form.address.trim(),
-      nationality:    form.nationality.trim(),
-      dob:            form.dob.trim(),
-      document_type:  form.document_type,
-      status:         'pending' as KYCStatus,
-      document_url:   null,
-      selfie_url:     null,
-    };
-
-    const { data, error } = await supabase
-      .from('kyc')
-      .upsert(payload, { onConflict: 'wallet_address' })
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
+    if (error) {
+      // RPC raises ALREADY_SUBMITTED:status as an exception
+      if (error.message?.includes('ALREADY_SUBMITTED')) {
+        throw new Error(error.message.replace('ERROR: ', '').split('\n')[0]);
+      }
+      throw error;
+    }
+    return data as KYCRecord;
   },
 
   async updateDetails(
     walletAddress: string,
     patch: Partial<Pick<KYCFormData, 'full_name' | 'email' | 'phone' | 'address' | 'nationality' | 'dob' | 'document_type'>>,
   ): Promise<void> {
+    const addr = walletAddress.toLowerCase();
+    await setWallet(addr);
     const { error } = await supabase
       .from('kyc')
       .update(patch)
-      .eq('wallet_address', walletAddress.toLowerCase());
+      .eq('wallet_address', walletAddress.toLowerCase())
+      .in('status', ['pending', 'rejected']);
     if (error) throw error;
   },
 
@@ -247,8 +242,8 @@ export const kycService = {
     for (let i = 0; i < 3; i++) {
       try {
         await attempt();
-        const { data } = supabase.storage.from('kyc-docs').getPublicUrl(storagePath);
-        return data.publicUrl;
+        // FIX 4: return storage path (not public URL) — display via signed URL
+        return storagePath;
       } catch (e: any) {
         lastError = e;
         if (i < 2) await new Promise(r => setTimeout(r, 1000 * (i + 1)));
@@ -263,31 +258,31 @@ export const kycService = {
     selfieUrl: string,
     extra?: { selfieVideoUrl?: string; uniqueCode?: string },
   ): Promise<void> {
-    const patch: Record<string, any> = {
-      document_url: documentUrl,
-      selfie_url:   selfieUrl,
-      status:       'under_review',
-    };
-    // Only include optional columns if they have a value — avoids
-    // "column not found" errors if the DB schema doesn't have them yet
+    const addr = walletAddress.toLowerCase();
+
+    // Use atomic RPC to avoid RLS session variable issues
+    const { error } = await supabase.rpc('finalize_kyc', {
+      p_wallet:       addr,
+      p_document_url: documentUrl,
+      p_selfie_url:   selfieUrl,
+    });
+    if (error) throw error;
+
+    // Optional extra fields — best-effort after main finalize
     if (extra?.selfieVideoUrl) {
-      try {
-        const { error } = await supabase.from('kyc').update({ selfie_video_url: extra.selfieVideoUrl }).eq('wallet_address', walletAddress.toLowerCase());
-        if (error) console.warn('selfie_video_url column missing, skipping:', error.message);
-      } catch {}
+      await setWallet(addr);
+      supabase.from('kyc').update({ selfie_video_url: extra.selfieVideoUrl })
+        .eq('wallet_address', addr).then(({ error: e }) => {
+          if (e) console.warn('selfie_video_url update skipped:', e.message);
+        });
     }
     if (extra?.uniqueCode) {
-      try {
-        const { error } = await supabase.from('kyc').update({ unique_code: extra.uniqueCode }).eq('wallet_address', walletAddress.toLowerCase());
-        if (error) console.warn('unique_code column missing, skipping:', error.message);
-      } catch {}
+      await setWallet(addr);
+      supabase.from('kyc').update({ unique_code: extra.uniqueCode })
+        .eq('wallet_address', addr).then(({ error: e }) => {
+          if (e) console.warn('unique_code update skipped:', e.message);
+        });
     }
-
-    const { error } = await supabase
-      .from('kyc')
-      .update(patch)
-      .eq('wallet_address', walletAddress.toLowerCase());
-    if (error) throw error;
   },
 };
 
@@ -379,12 +374,23 @@ export const vccService = {
     return data;
   },
 
-  // Generates card number locally — never stored in full
+  // FIX 2: Card number is cryptographically random — NOT derived from wallet address
   generateCardNumber(network: 'Visa' | 'Mastercard'): string {
     const prefix = network === 'Visa' ? '4' : '5';
-    let num = prefix;
-    while (num.length < 16) num += Math.floor(Math.random() * 10);
-    return num.replace(/(.{4})/g, '$1 ').trim();
+    const digits: number[] = [parseInt(prefix)];
+    // Fill 14 random digits
+    const arr = new Uint8Array(14);
+    crypto.getRandomValues(arr);
+    arr.forEach(b => digits.push(b % 10));
+    // Luhn checksum for digit 16
+    let sum = 0;
+    for (let i = 0; i < 15; i++) {
+      let d = digits[i];
+      if ((15 - i) % 2 === 0) { d *= 2; if (d > 9) d -= 9; }
+      sum += d;
+    }
+    digits.push((10 - (sum % 10)) % 10);
+    return digits.join('').replace(/(.{4})/g, '$1 ').trim();
   },
 
   generateExpiry(): string {
@@ -394,8 +400,11 @@ export const vccService = {
     return `${mm}/${yy}`;
   },
 
+  // FIX 2: CVV is random — NOT derived from wallet address
   generateCVV(): string {
-    return String(Math.floor(100 + Math.random() * 900));
+    const arr = new Uint8Array(1);
+    crypto.getRandomValues(arr);
+    return String(100 + (arr[0] % 900));
   },
 
   async applyCard(
@@ -542,6 +551,38 @@ export const cardRequestService = {
       .single();
     if (error) throw error;
     return data;
+  },
+};
+
+// ─── Wallet Profile Service ─────────────────────────────────────────────────
+
+export type WalletProfile = {
+  wallet_address: string;
+  wallet_name: string;
+  account_type: 'personal' | 'business';
+  p2p_country: string;
+  p2p_currency: string;
+};
+
+export const profileService = {
+
+  async get(walletAddress: string): Promise<WalletProfile | null> {
+    const { data, error } = await supabase.rpc('get_wallet_profile', {
+      p_wallet: walletAddress.toLowerCase(),
+    });
+    if (error) throw error;
+    return data as WalletProfile | null;
+  },
+
+  async upsert(walletAddress: string, patch: Partial<Omit<WalletProfile, 'wallet_address'>>): Promise<void> {
+    const { error } = await supabase.rpc('upsert_wallet_profile', {
+      p_wallet:       walletAddress.toLowerCase(),
+      p_name:         patch.wallet_name    ?? null,
+      p_account_type: patch.account_type   ?? null,
+      p_p2p_country:  patch.p2p_country    ?? null,
+      p_p2p_currency: patch.p2p_currency   ?? null,
+    });
+    if (error) throw error;
   },
 };
 

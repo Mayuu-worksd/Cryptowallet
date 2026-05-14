@@ -15,4 +15,6 @@ export const RPC_URLS: Record<string, string> = {
   Ethereum: ethRpc,
   Polygon:  polygonRpc,
   Arbitrum: arbitrumRpc,
+  TRON:     'https://api.trongrid.io',
+  'TRON Nile': 'https://nile.trongrid.io',
 };

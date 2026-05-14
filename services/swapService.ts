@@ -55,18 +55,18 @@ const ZRX_APIS: Record<string, string> = {
 const ALLOWED_ZRX_HOSTS = ['api.0x.org', 'polygon.api.0x.org', 'arbitrum.api.0x.org'];
 
 const COINGECKO_IDS: Record<string, string> = {
-  ETH: 'ethereum', USDC: 'usd-coin', USDT: 'tether', DAI: 'dai',
+  ETH: 'ethereum', USDC: 'usd-coin', USDT: 'tether', DAI: 'dai', TRX: 'tron',
 };
 
 // Hardcoded fallback prices so the app NEVER fails to show a quote
 const FALLBACK_PRICES: Record<string, number> = {
-  ETH: 3500, USDC: 1, USDT: 1, DAI: 1, CUSTOM: 0.1,
+  ETH: 3500, USDC: 1, USDT: 1, DAI: 1, CUSTOM: 0.1, TRX: 0.12,
 };
 
-export const SUPPORTED_TOKENS = ['ETH', 'USDC', 'USDT', 'DAI', 'CUSTOM'];
+export const SUPPORTED_TOKENS = ['ETH', 'USDC', 'USDT', 'DAI', 'TRX', 'CUSTOM'];
 
 export const TOKEN_DECIMALS: Record<string, number> = {
-  ETH: 18, WETH: 18, DAI: 18, USDC: 6, USDT: 6, CUSTOM: 18,
+  ETH: 18, WETH: 18, DAI: 18, USDC: 6, USDT: 6, CUSTOM: 18, TRX: 6,
 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -246,9 +246,11 @@ async function tryUniswapSepoliaQuote(
     const tokenIn   = from === 'ETH' ? SEPOLIA_TOKENS.WETH : SEPOLIA_TOKENS[from];
     const tokenOut  = to   === 'ETH' ? SEPOLIA_TOKENS.WETH : SEPOLIA_TOKENS[to];
     const amtIn     = ethers.parseUnits(amount, TOKEN_DECIMALS[from] ?? 18);
-    const amtOut: bigint = await quoter.quoteExactInputSingle.staticCall(
-      tokenIn, tokenOut, POOL_FEE, amtIn, 0
-    );
+    // Hard 6s timeout — Sepolia RPC can be slow
+    const amtOut: bigint = await Promise.race([
+      quoter.quoteExactInputSingle.staticCall(tokenIn, tokenOut, POOL_FEE, amtIn, 0),
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 6000)),
+    ]);
     const buyAmt = parseFloat(ethers.formatUnits(amtOut, TOKEN_DECIMALS[to] ?? 18));
     const rate   = buyAmt / parseFloat(amount);
     return {
@@ -276,10 +278,12 @@ async function tryCoinGeckoQuote(from: string, to: string, amount: string): Prom
   const toId   = COINGECKO_IDS[to];
   if (!fromId || !toId) return null;
   try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
     const res = await fetch(
       `https://api.coingecko.com/api/v3/simple/price?ids=${fromId},${toId}&vs_currencies=usd`,
-      { headers: { 'Accept': 'application/json' } }
-    );
+      { headers: { 'Accept': 'application/json' }, signal: controller.signal }
+    ).finally(() => clearTimeout(timer));
     if (!res.ok) return null;
     const data = await res.json();
     const fromUsd = data[fromId]?.usd;
@@ -485,6 +489,18 @@ export async function executeSwap(
   walletAddress: string, network: string,
   onStatus?: (msg: string) => void
 ): Promise<SwapResult> {
+  // Hard 60s global timeout — prevents infinite loading
+  const timeoutPromise = new Promise<SwapResult>((_, rej) =>
+    setTimeout(() => rej(new Error('Swap timed out. Network may be congested. Please try again.')), 60000)
+  );
+  return Promise.race([_doExecuteSwap(quote, privateKey, rpcUrl, walletAddress, network, onStatus), timeoutPromise]);
+}
+
+async function _doExecuteSwap(
+  quote: SwapQuote, privateKey: string, rpcUrl: string,
+  walletAddress: string, network: string,
+  onStatus?: (msg: string) => void
+): Promise<SwapResult> {
   try {
     // MAINNET SAFETY: Block simulated swaps on real mainnet only
     const isRealMainnet = network === 'Ethereum' || network === 'Polygon' || network === 'Arbitrum';
@@ -523,7 +539,8 @@ export async function executeSwap(
 
 // ─── Shim ─────────────────────────────────────────────────────────────────────
 export const swapService = {
-  isNetworkSupported: (network: string) => network === 'Sepolia' || !!ZRX_APIS[network],
+  isNetworkSupported: (network: string) =>
+    network === 'Sepolia' || network === 'TRON' || network === 'TRON Nile' || !!ZRX_APIS[network],
   getQuote: (from: string, to: string, amount: string, network: string, rpcUrl?: string, walletAddress?: string) =>
     getSwapQuote(from, to, amount, network, rpcUrl, walletAddress),
   executeSwap: (quote: SwapQuote, privateKey: string, rpcUrl: string, walletAddress: string, network: string, onStatus?: (msg: string) => void) =>

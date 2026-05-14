@@ -1,5 +1,5 @@
 import React from 'react';
-import { Theme } from '../constants';
+import { Theme, Fonts } from '../constants';
 import { ScrollView, View, Text, StyleSheet, TouchableOpacity, Platform, Dimensions, Alert } from 'react-native';
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
@@ -218,55 +218,55 @@ const styles = StyleSheet.create({
   webNavLinks: { flexDirection: 'row', alignItems: 'center', gap: 40 },
   webNavLink: { fontSize: 16, fontWeight: '600', cursor: 'pointer' as any },
   webNavBtn: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 },
-  webNavBtnText: { color: '#FFF', fontWeight: '800', fontSize: 15 },
+  webNavBtnText: { color: '#FFF', fontFamily: Fonts.extraBold, fontSize: 15 },
 
   heroSection: { flexDirection: 'row', paddingHorizontal: 60, paddingVertical: 120, alignItems: 'center', minHeight: 700 },
   heroContent: { flex: 1, paddingRight: 40 },
-  heroTitle: { fontSize: 80, fontWeight: '900', letterSpacing: -2, lineHeight: 88, marginBottom: 24 },
+  heroTitle: { fontSize: 80, fontFamily: Fonts.extraBold, letterSpacing: -2, lineHeight: 88, marginBottom: 24 },
   heroSub: { fontSize: 22, lineHeight: 36, marginBottom: 48, maxWidth: 800 },
   heroActions: { flexDirection: 'row', gap: 20 },
   primaryBtn: { height: 72, paddingHorizontal: 32, borderRadius: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
-  primaryBtnText: { color: '#FFF', fontSize: 18, fontWeight: '800' },
+  primaryBtnText: { color: '#FFF', fontSize: 18, fontFamily: Fonts.extraBold },
   secondaryBtn: { height: 72, paddingHorizontal: 32, borderRadius: 20, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
-  secondaryBtnText: { fontSize: 17, fontWeight: '700' },
+  secondaryBtnText: { fontSize: 17, fontFamily: Fonts.bold },
 
   featuresGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 24, paddingVertical: 40 },
   featureCard: { flex: 1, minWidth: 280, padding: 40, borderRadius: 40, borderWidth: 1 },
   featureIconWrap: { width: 64, height: 64, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 32 },
-  featureTitle: { fontSize: 24, fontWeight: '800', marginBottom: 16 },
+  featureTitle: { fontSize: 24, fontFamily: Fonts.extraBold, marginBottom: 16 },
   featureDesc: { fontSize: 16, lineHeight: 26 },
 
   webFooter: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 60, paddingVertical: 60, borderTopWidth: 1 },
-  webFooterText: { fontSize: 15, fontWeight: '600' },
+  webFooterText: { fontSize: 15, fontFamily: Fonts.semiBold },
   webFooterLinks: { flexDirection: 'row', gap: 48 },
-  webFooterLink: { fontSize: 15, fontWeight: '700' },
+  webFooterLink: { fontSize: 15, fontFamily: Fonts.bold },
 
   header: { position: 'absolute', top: 0, width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingTop: 60, zIndex: 10 },
-  headerTitle: { fontSize: 22, fontWeight: '900', letterSpacing: -1 },
+  headerTitle: { fontSize: 22, fontFamily: Fonts.extraBold, letterSpacing: -1 },
   langBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
-  langText: { fontSize: 11, fontWeight: '700', letterSpacing: 1 },
+  langText: { fontSize: 11, fontFamily: Fonts.bold, letterSpacing: 1 },
 
   content: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32, zIndex: 5 },
   graphicContainer: { width: 180, height: 180, marginBottom: 40, justifyContent: 'center', alignItems: 'center' },
   graphicCore: { width: 140, height: 140, borderRadius: 40, alignItems: 'center', justifyContent: 'center', shadowColor: '#FF3B3B', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.4, shadowRadius: 32, elevation: 12 },
   floatingIcon: { position: 'absolute', padding: 12, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
 
-  title: { fontSize: 32, fontWeight: '900', textAlign: 'center', marginBottom: 16, letterSpacing: -1, lineHeight: 40 },
+  title: { fontSize: 32, fontFamily: Fonts.extraBold, textAlign: 'center', marginBottom: 16, letterSpacing: -1, lineHeight: 40 },
   subtitle: { fontSize: 15, textAlign: 'center', marginBottom: 32, lineHeight: 24, paddingHorizontal: 8 },
 
   pillRow: { flexDirection: 'row', gap: 8, marginBottom: 48 },
   pill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 24, borderWidth: 1 },
-  pillText: { fontSize: 12, fontWeight: '800' },
+  pillText: { fontSize: 12, fontFamily: Fonts.extraBold },
 
   actions: { width: '100%', maxWidth: 340, gap: 16 },
-  btnHint: { fontSize: 12, fontWeight: '500', textAlign: 'center', marginTop: -8, marginBottom: 4 },
+  btnHint: { fontSize: 12, fontFamily: Fonts.medium, textAlign: 'center', marginTop: -8, marginBottom: 4 },
   getStartedBtn: { height: 64, borderRadius: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, shadowColor: '#FF3B3B', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.3, shadowRadius: 24, elevation: 8 },
-  getStartedText: { color: '#FFF', fontSize: 17, fontWeight: '800' },
+  getStartedText: { color: '#FFF', fontSize: 17, fontFamily: Fonts.extraBold },
   restoreBtn: { height: 60, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  restoreText: { fontSize: 16, fontWeight: '700' },
+  restoreText: { fontSize: 16, fontFamily: Fonts.bold },
 
   footer: { position: 'absolute', bottom: 32, width: '100%', alignItems: 'center' },
-  footerText: { fontSize: 11, fontWeight: '800', letterSpacing: 2, textAlign: 'center', opacity: 0.5 },
+  footerText: { fontSize: 11, fontFamily: Fonts.extraBold, letterSpacing: 2, textAlign: 'center', opacity: 0.5 },
 });
 
 const webLandingStyles = StyleSheet.create({
@@ -281,18 +281,18 @@ const webLandingStyles = StyleSheet.create({
      marginBottom: 32,
      alignSelf: 'flex-start'
   },
-  securityPillText: { fontSize: 13, fontWeight: '900', letterSpacing: 1.5 },
+  securityPillText: { fontSize: 13, fontFamily: Fonts.extraBold, letterSpacing: 1.5 },
   valueProps: { paddingHorizontal: 60, paddingVertical: 100 },
-  sectionLabel: { fontSize: 14, fontWeight: '800', letterSpacing: 3, marginBottom: 20 },
-  sectionTitle: { fontSize: 48, fontWeight: '900', letterSpacing: -1.5, marginBottom: 40 },
+  sectionLabel: { fontSize: 14, fontFamily: Fonts.extraBold, letterSpacing: 3, marginBottom: 20 },
+  sectionTitle: { fontSize: 48, fontFamily: Fonts.extraBold, letterSpacing: -1.5, marginBottom: 40 },
   securityStrip: { paddingHorizontal: 60, paddingVertical: 100 },
   securityInner: { borderRadius: 48, padding: 80, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   securityText: { flex: 1.5, paddingRight: 80 },
-  securityTitle: { color: '#FFF', fontSize: 42, fontWeight: '900', marginBottom: 24 },
+  securityTitle: { color: '#FFF', fontSize: 42, fontFamily: Fonts.extraBold, marginBottom: 24 },
   securityDesc: { color: 'rgba(255,255,255,0.7)', fontSize: 18, lineHeight: 30 },
   securityStats: { flex: 1, flexDirection: 'row', gap: 60 },
   statBox: { gap: 8 },
-  statVal: { color: '#FFF', fontSize: 48, fontWeight: '900' },
-  statLab: { color: 'rgba(255,255,255,0.5)', fontSize: 14, fontWeight: '800', letterSpacing: 1 },
+  statVal: { color: '#FFF', fontSize: 48, fontFamily: Fonts.extraBold },
+  statLab: { color: 'rgba(255,255,255,0.5)', fontSize: 14, fontFamily: Fonts.extraBold, letterSpacing: 1 },
 });
 

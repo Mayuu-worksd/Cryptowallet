@@ -8,7 +8,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import Svg, { Path, Rect, Circle, Defs, LinearGradient as SvgLinearGradient, Stop, G, Polygon, Ellipse } from 'react-native-svg';
 import { useWallet } from '../store/WalletContext';
-import { Theme } from '../constants';
+import { Theme, Fonts } from '../constants';
 
 const AsyncStorage = Platform.OS === 'web'
   ? {
@@ -307,7 +307,7 @@ const styles = StyleSheet.create({
     zIndex: 10, 
     padding: 12,
   },
-  skipText: { fontSize: 16, fontWeight: '600' },
+  skipText: { fontSize: 16, fontFamily: Fonts.semiBold },
 
   slide: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   slideContent: { alignItems: 'center', paddingHorizontal: 40, width: '100%', marginBottom: 60 },
@@ -328,7 +328,7 @@ const styles = StyleSheet.create({
 
   title: {
     fontSize: 36, 
-    fontWeight: '800', 
+    fontFamily: Fonts.extraBold, 
     textAlign: 'center',
     letterSpacing: -1, 
     lineHeight: 44, 
@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
     fontSize: 17, 
     textAlign: 'center', 
     lineHeight: 28, 
-    fontWeight: '500',
+    fontFamily: Fonts.medium,
     paddingHorizontal: 10,
   },
 
@@ -381,5 +381,5 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 8,
   },
-  nextBtnText: { color: '#FFF', fontSize: 18, fontWeight: '800' },
+  nextBtnText: { color: '#FFF', fontSize: 18, fontFamily: Fonts.extraBold },
 });

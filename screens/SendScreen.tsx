@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Theme } from '../constants';
+import { Theme, Fonts } from '../constants';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   ScrollView, ActivityIndicator, Platform, KeyboardAvoidingView,
@@ -11,6 +11,9 @@ import { ethereumService } from '../services/ethereumService';
 import Toast from '../components/Toast';
 import { LinearGradient } from 'expo-linear-gradient';
 import { haptics } from '../utils/haptics';
+import TransactionLoader from '../components/ui/TransactionLoader';
+import { tronService } from '../services/tronService';
+import { storageService } from '../services/storageService';
 
 export default function SendScreen({ navigation, route }: any) {
   const { ethBalance, sendETH, isDarkMode, walletAddress, network } = useWallet();
@@ -38,7 +41,9 @@ export default function SendScreen({ navigation, route }: any) {
     if (scannedAddr) validateAddress(scannedAddr);
   }, [scannedAddr]);
 
-  const ethPrice     = prices.ETH?.usd ?? 3450;
+  const isTronNetwork = network === 'TRON' || network === 'TRON Nile';
+  const coinLabel = isTronNetwork ? 'TRX' : 'ETH';
+  const ethPrice     = prices[isTronNetwork ? 'TRX' : 'ETH']?.usd ?? (isTronNetwork ? 0.12 : 3450);
   const parsedAmount = parseFloat(amount) || 0;
   const gasEthNum    = parseFloat(gasEth) || 0;
   const totalETH     = (parsedAmount + gasEthNum).toFixed(6);
@@ -52,16 +57,20 @@ export default function SendScreen({ navigation, route }: any) {
 
   const validateAddress = useCallback((val: string) => {
     if (!val) { setAddressError(''); return; }
-    setAddressError(/^0x[0-9a-fA-F]{40}$/.test(val) ? '' : 'Invalid Ethereum address');
-  }, []);
+    if (isTronNetwork) {
+      setAddressError(/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(val) ? '' : 'Invalid TRON address (starts with T)');
+    } else {
+      setAddressError(/^0x[0-9a-fA-F]{40}$/.test(val) ? '' : 'Invalid Ethereum address');
+    }
+  }, [isTronNetwork]);
 
   const validateAmount = useCallback((val: string, currentGasEth?: string) => {
     if (!val) { setAmountError(''); return; }
     const p = parseFloat(val);
     if (isNaN(p) || p <= 0) { setAmountError('Enter a valid amount'); return; }
-    if (p > availBal)        { setAmountError(`Exceeds balance (${availBal.toFixed(6)} ETH)`); return; }
+    if (p > availBal)        { setAmountError(`Exceeds balance (${availBal.toFixed(6)} ${coinLabel})`); return; }
     const gas = parseFloat(currentGasEth ?? gasEth) || 0.0005;
-    if (p + gas > availBal)  { setAmountError(`Insufficient for gas. Max sendable: ${Math.max(0, availBal - gas).toFixed(6)} ETH`); return; }
+    if (p + gas > availBal)  { setAmountError(`Insufficient for gas. Max sendable: ${Math.max(0, availBal - gas).toFixed(6)} ${coinLabel}`); return; }
     setAmountError('');
   }, [availBal, gasEth]);
 
@@ -89,10 +98,13 @@ export default function SendScreen({ navigation, route }: any) {
 
   const handleReview = () => {
     let err = false;
-    if (!address || !/^0x[0-9a-fA-F]{40}$/.test(address)) { setAddressError('Valid Ethereum address required'); err = true; }
+    const addrValid = isTronNetwork
+      ? /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(address)
+      : /^0x[0-9a-fA-F]{40}$/.test(address);
+    if (!address || !addrValid) { setAddressError(isTronNetwork ? 'Valid TRON address required (starts with T)' : 'Valid Ethereum address required'); err = true; }
     if (!amount || parsedAmount <= 0)                       { setAmountError('Enter a valid amount'); err = true; }
     else if (parsedAmount > availBal)                       { setAmountError('Insufficient balance'); err = true; }
-    else if (parsedAmount + (gasEthNum || 0.0005) > availBal) { setAmountError(`Insufficient for gas. Max sendable: ${Math.max(0, availBal - (gasEthNum || 0.0005)).toFixed(6)} ETH`); err = true; }
+    else if (parsedAmount + (gasEthNum || 0.0005) > availBal) { setAmountError(`Insufficient for gas. Max sendable: ${Math.max(0, availBal - (gasEthNum || 0.0005)).toFixed(6)} ${coinLabel}`); err = true; }
     if (err) { haptics.error(); return; }
     haptics.selection();
 
@@ -101,11 +113,11 @@ export default function SendScreen({ navigation, route }: any) {
       Animated.spring(btnScale, { toValue: 1,    useNativeDriver: true, speed: 20, bounciness: 8 }),
     ]).start();
 
-    if (network !== 'Sepolia') {
+    if (network !== 'Sepolia' && network !== 'TRON Nile') {
       const { Alert } = require('react-native');
       Alert.alert(
         '⚠️ Real Funds Warning',
-        `You are on ${network} Mainnet. This transaction uses REAL ETH.\n\nAmount: ${parsedAmount.toFixed(6)} ETH ($${usdValue})`,
+        `You are on ${network} Mainnet. This transaction uses REAL ${coinLabel}.\n\nAmount: ${parsedAmount.toFixed(6)} ${coinLabel} ($${usdValue})`,
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'I Understand, Continue', style: 'destructive', onPress: () => setShowConfirm(true) },
@@ -127,14 +139,33 @@ export default function SendScreen({ navigation, route }: any) {
     setTimeout(() => setSendStatus('Broadcasting to network...'), 1500);
     setTimeout(() => setSendStatus('Waiting for confirmation...'), 4000);
 
-    const result = await sendETH(address, amount);
+    let result: { success: boolean; error?: string; hash?: string };
+
+    if (isTronNetwork) {
+      // TRON send
+      const privateKey = await storageService.getPrivateKey();
+      if (!privateKey) {
+        result = { success: false, error: 'Private key not found' };
+      } else {
+        const tronResult = await tronService.sendTRX({
+          privateKey,
+          toAddress: address,
+          amount: parsedAmount,
+          network,
+        });
+        result = { success: tronResult.success, error: tronResult.error, hash: tronResult.txHash };
+      }
+    } else {
+      result = await sendETH(address, amount);
+    }
+
     setSending(false);
     setSendStatus('');
     sendingRef.current = false;
 
     if (result.success) {
       haptics.success();
-      showToast(`ETH sent! Your transaction is on its way. ✓`, 'success');
+      showToast(`${coinLabel} sent successfully. Your transaction is on its way.`, 'success');
       setTimeout(() => navigation.goBack(), 2200);
     } else {
       haptics.error();
@@ -153,7 +184,8 @@ export default function SendScreen({ navigation, route }: any) {
   return (
     <KeyboardAvoidingView style={[styles.container, { backgroundColor: T.background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <StatusBar barStyle="light-content" />
-      <Toast visible={toast.visible} message={toast.message} type={toast.type} onHide={() => setToast(p => ({ ...p, visible: false }))} />
+      <Toast visible={toast.visible} message={toast.message} type={toast.type} isDarkMode={isDarkMode} onHide={() => setToast(p => ({ ...p, visible: false }))} />
+      <TransactionLoader visible={sending} title="Sending Transaction" subtitle={sendStatus || 'Broadcasting to network...'} isDarkMode={isDarkMode} type="send" />
 
       {/* ── Confirmation Modal ── */}
       <Modal visible={showConfirm} transparent animationType="slide">
@@ -171,8 +203,8 @@ export default function SendScreen({ navigation, route }: any) {
             <View style={styles.modalDetails}>
               {[
                 { label: 'Recipient',   value: `${address.slice(0, 10)}...${address.slice(-10)}` },
-                { label: 'Amount',      value: `${parsedAmount.toFixed(6)} ETH`, sub: `$${usdValue}` },
-                { label: 'Network Fee', value: gasEth ? `${parseFloat(gasEth).toFixed(6)} ETH` : 'Estimating...', sub: gasEth ? `$${gasUSD}` : '' },
+                { label: 'Amount',      value: `${parsedAmount.toFixed(6)} ${coinLabel}`, sub: `$${usdValue}` },
+                { label: 'Network Fee', value: gasEth ? `${parseFloat(gasEth).toFixed(6)} ${coinLabel}` : 'Estimating...', sub: gasEth ? `$${gasUSD}` : '' },
               ].map((row, i) => (
                 <View key={row.label} style={styles.detailRow}>
                   <Text style={styles.detailLabel}>{row.label}</Text>
@@ -186,7 +218,7 @@ export default function SendScreen({ navigation, route }: any) {
               <View style={styles.detailRow}>
                 <Text style={styles.totalLabel}>Total Deducted from Wallet</Text>
                 <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={styles.totalValue}>{totalETH} ETH</Text>
+                  <Text style={styles.totalValue}>{totalETH} {coinLabel}</Text>
                   <Text style={styles.totalSub}>${totalUSD}</Text>
                 </View>
               </View>
@@ -216,7 +248,7 @@ export default function SendScreen({ navigation, route }: any) {
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
           <Feather name="chevron-left" size={28} color="#FFF" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>SEND CRYPTO</Text>
+        <Text style={styles.headerTitle}>{isTronNetwork ? 'SEND TRX' : 'SEND CRYPTO'}</Text>
         <TouchableOpacity style={styles.qrBtn} onPress={() => navigation.navigate('Scan')} activeOpacity={0.7}>
           <Ionicons name="qr-code-outline" size={22} color={T.primary} />
         </TouchableOpacity>
@@ -230,7 +262,7 @@ export default function SendScreen({ navigation, route }: any) {
             <View style={styles.balanceDot} />
             <Text style={styles.balanceTitle}>Available to Send</Text>
           </View>
-          <Text style={styles.balanceAmount}>{availBal.toFixed(6)} ETH</Text>
+          <Text style={styles.balanceAmount}>{availBal.toFixed(6)} {coinLabel}</Text>
           <Text style={styles.balanceUsd}>Total Balance: ${(availBal * ethPrice).toFixed(2)}</Text>
         </View>
 
@@ -240,7 +272,7 @@ export default function SendScreen({ navigation, route }: any) {
           <View style={[styles.addressInputBox, addressError ? styles.inputError : null]}>
             <TextInput
               style={styles.addressInput}
-              placeholder="0x... or ENS domain"
+              placeholder={isTronNetwork ? 'T... TRON address' : '0x... or ENS domain'}
               placeholderTextColor={T.textDim}
               value={address}
               onChangeText={val => { setAddress(val); validateAddress(val); }}
@@ -286,7 +318,7 @@ export default function SendScreen({ navigation, route }: any) {
                 onChangeText={val => { setAmount(val); validateAmount(val, gasEth); }}
                 keyboardType="decimal-pad"
               />
-              <Text style={styles.ethBrand}>ETH</Text>
+              <Text style={styles.ethBrand}>{coinLabel}</Text>
             </View>
             <View style={styles.usdPreviewContainer}>
                <Text style={styles.usdPreviewText}>≈ ${usdValue}</Text>
@@ -315,7 +347,7 @@ export default function SendScreen({ navigation, route }: any) {
                 <ActivityIndicator size="small" color={T.primary} />
               ) : (
                 <Text style={styles.gasValue}>
-                  {gasEth ? `${parseFloat(gasEth).toFixed(6)} ETH ($${gasUSD})` : '—'}
+                  {gasEth ? `${parseFloat(gasEth).toFixed(6)} ${coinLabel} ($${gasUSD})` : '—'}
                 </Text>
               )}
            </View>
@@ -337,10 +369,10 @@ export default function SendScreen({ navigation, route }: any) {
             activeOpacity={0.8}
           >
             {sending ? (
-               <View style={{ alignItems: 'center', gap: 6 }}>
-                 <ActivityIndicator color="#FFF" />
-                 {!!sendStatus && <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '600' }}>{sendStatus}</Text>}
-               </View>
+               <LinearGradient colors={[T.primary, '#D32F2F']} style={styles.btnGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+                 <ActivityIndicator color="#FFF" size="small" />
+                 <Text style={styles.btnText}>SENDING...</Text>
+               </LinearGradient>
             ) : (
               <LinearGradient
                 colors={canReview ? [T.primary, '#D32F2F'] : ['#2A2B31', '#2A2B31']}
@@ -368,7 +400,7 @@ const makeStyles = (T: any) => StyleSheet.create({
     backgroundColor: T.background,
   },
   backBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: T.surfaceLow, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { color: T.text, fontSize: 13, fontWeight: '800', letterSpacing: 2 },
+  headerTitle: { color: T.text, fontSize: 13, fontFamily: Fonts.extraBold, letterSpacing: 2 },
   qrBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: T.surfaceLow, alignItems: 'center', justifyContent: 'center' },
 
   scroll: { paddingHorizontal: 24, paddingBottom: 160 },
@@ -376,14 +408,14 @@ const makeStyles = (T: any) => StyleSheet.create({
   balanceContainer: { marginTop: 24, marginBottom: 32 },
   balanceBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   balanceDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Theme.colors.success },
-  balanceTitle: { color: T.textMuted, fontSize: 13, fontWeight: '700', letterSpacing: 0.5 },
-  balanceAmount: { color: T.text, fontSize: 34, fontWeight: '800', letterSpacing: -1 },
-  balanceUsd: { color: T.textDim, fontSize: 14, fontWeight: '600', marginTop: 4 },
+  balanceTitle: { color: T.textMuted, fontSize: 13, fontFamily: Fonts.bold, letterSpacing: 0.5 },
+  balanceAmount: { color: T.text, fontSize: 34, fontFamily: Fonts.extraBold, letterSpacing: -1 },
+  balanceUsd: { color: T.textDim, fontSize: 14, fontFamily: Fonts.semiBold, marginTop: 4 },
 
   section: { marginBottom: 28 },
   labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  sectionLabel: { color: T.textDim, fontSize: 11, fontWeight: '900', letterSpacing: 1.5 },
-  maxText: { color: T.primary, fontSize: 12, fontWeight: '800' },
+  sectionLabel: { color: T.textDim, fontSize: 11, fontFamily: Fonts.extraBold, letterSpacing: 1.5 },
+  maxText: { color: T.primary, fontSize: 12, fontFamily: Fonts.extraBold },
   
   addressInputBox: { 
     height: 64, 
@@ -395,7 +427,7 @@ const makeStyles = (T: any) => StyleSheet.create({
     borderWidth: 1.5,
     borderColor: 'transparent'
   },
-  addressInput: { flex: 1, color: T.text, fontSize: 15, fontWeight: '600' },
+  addressInput: { flex: 1, color: T.text, fontSize: 15, fontFamily: Fonts.semiBold },
   scanActionBtn: { padding: 8 },
   
   amountInputBox: { 
@@ -406,27 +438,27 @@ const makeStyles = (T: any) => StyleSheet.create({
     borderColor: 'transparent'
   },
   amountDisplay: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, marginBottom: 8 },
-  amountField: { color: T.text, fontSize: 32, fontWeight: '800', minWidth: 120 },
-  ethBrand: { color: T.textMuted, fontSize: 14, fontWeight: '800', marginBottom: 8 },
+  amountField: { color: T.text, fontSize: 32, fontFamily: Fonts.extraBold, minWidth: 120 },
+  ethBrand: { color: T.textMuted, fontSize: 14, fontFamily: Fonts.extraBold, marginBottom: 8 },
   usdPreviewContainer: { borderTopWidth: 1, borderTopColor: T.border, paddingTop: 12 },
-  usdPreviewText: { color: T.textMuted, fontSize: 15, fontWeight: '600' },
+  usdPreviewText: { color: T.textMuted, fontSize: 15, fontFamily: Fonts.semiBold },
   
   inputError: { borderColor: T.primary + '80' },
-  errorLabel: { color: T.primary, fontSize: 12, fontWeight: '600', marginTop: 8, marginLeft: 4 },
+  errorLabel: { color: T.primary, fontSize: 12, fontFamily: Fonts.semiBold, marginTop: 8, marginLeft: 4 },
 
   gasSection: { backgroundColor: T.surfaceLow, borderRadius: 24, padding: 20 },
   gasHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 20 },
   gasIconBox: { width: 32, height: 32, borderRadius: 10, backgroundColor: T.primary + '18', alignItems: 'center', justifyContent: 'center' },
-  gasTitle: { color: T.text, fontSize: 14, fontWeight: '700' },
+  gasTitle: { color: T.text, fontSize: 14, fontFamily: Fonts.bold },
   gasRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  gasLabel: { color: T.textDim, fontSize: 13, fontWeight: '600' },
-  gasValue: { color: T.text, fontSize: 13, fontWeight: '700' },
+  gasLabel: { color: T.textDim, fontSize: 13, fontFamily: Fonts.semiBold },
+  gasValue: { color: T.text, fontSize: 13, fontFamily: Fonts.bold },
 
   actionBar: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 24, paddingBottom: Platform.OS === 'ios' ? 40 : 24, paddingTop: 20, backgroundColor: T.background + 'F0' },
   mainBtn: { height: 64, borderRadius: 100, overflow: 'hidden' },
   btnGradient: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
   btnDisabled: { opacity: 0.5 },
-  btnText: { color: '#FFF', fontSize: 15, fontWeight: '900', letterSpacing: 1 },
+  btnText: { color: '#FFF', fontSize: 15, fontFamily: Fonts.extraBold, letterSpacing: 1 },
 
   // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
@@ -434,22 +466,22 @@ const makeStyles = (T: any) => StyleSheet.create({
   modalIndicator: { width: 40, height: 4, backgroundColor: T.border, borderRadius: 2, alignSelf: 'center', marginBottom: 24 },
   modalHeader: { alignItems: 'center', marginBottom: 28 },
   modalIconBox: { width: 56, height: 56, borderRadius: 28, backgroundColor: T.primary + '18', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  modalTitle: { color: T.text, fontSize: 22, fontWeight: '800', marginBottom: 8 },
+  modalTitle: { color: T.text, fontSize: 22, fontFamily: Fonts.extraBold, marginBottom: 8 },
   modalSub: { color: T.textMuted, fontSize: 14, textAlign: 'center' },
   modalDetails: { backgroundColor: T.surfaceLow, borderRadius: 24, padding: 20, marginBottom: 28 },
   detailRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12 },
-  detailLabel: { color: T.textDim, fontSize: 13, fontWeight: '700' },
-  detailValue: { color: T.text, fontSize: 14, fontWeight: '700' },
-  detailSub: { color: T.textDim, fontSize: 11, fontWeight: '600', marginTop: 2 },
+  detailLabel: { color: T.textDim, fontSize: 13, fontFamily: Fonts.bold },
+  detailValue: { color: T.text, fontSize: 14, fontFamily: Fonts.bold },
+  detailSub: { color: T.textDim, fontSize: 11, fontFamily: Fonts.semiBold, marginTop: 2 },
   detailDivider: { height: 1, backgroundColor: T.border, marginVertical: 8 },
-  totalLabel: { color: T.text, fontSize: 15, fontWeight: '800' },
-  totalValue: { color: T.primary, fontSize: 18, fontWeight: '900' },
-  totalSub: { color: T.textMuted, fontSize: 12, fontWeight: '700', marginTop: 2 },
+  totalLabel: { color: T.text, fontSize: 15, fontFamily: Fonts.extraBold },
+  totalValue: { color: T.primary, fontSize: 18, fontFamily: Fonts.extraBold },
+  totalSub: { color: T.textMuted, fontSize: 12, fontFamily: Fonts.bold, marginTop: 2 },
   modalActions: { flexDirection: 'row', gap: 12 },
   modalCancel: { flex: 1, height: 56, borderRadius: 28, backgroundColor: T.surfaceLow, alignItems: 'center', justifyContent: 'center' },
-  modalCancelText: { color: T.textMuted, fontSize: 14, fontWeight: '800', letterSpacing: 1 },
+  modalCancelText: { color: T.textMuted, fontSize: 14, fontFamily: Fonts.extraBold, letterSpacing: 1 },
   modalConfirm: { flex: 2, height: 56, borderRadius: 28, overflow: 'hidden' },
   confirmGradient: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  modalConfirmText: { color: '#FFF', fontSize: 14, fontWeight: '900', letterSpacing: 1 },
+  modalConfirmText: { color: '#FFF', fontSize: 14, fontFamily: Fonts.extraBold, letterSpacing: 1 },
 });
 

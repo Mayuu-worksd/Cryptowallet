@@ -1,8 +1,8 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Theme } from '../constants';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  TextInput, Platform, ActivityIndicator, StatusBar, Dimensions, SafeAreaView,
+  TextInput, Platform, ActivityIndicator, StatusBar, Dimensions, SafeAreaView, RefreshControl,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
@@ -58,6 +58,7 @@ export default function CardScreen({ navigation, route }: any) {
     balances, ethBalance, spendCard, topupCard, cardBalance,
     isDarkMode, network,
     createCard, updateCardDetails, kycStatus,
+    refreshCardData, refreshBalance,
   } = useWallet();
   const { prices } = useMarket();
 
@@ -77,6 +78,14 @@ export default function CardScreen({ navigation, route }: any) {
   const [toast, setToast]             = useState({
     visible: false, message: '', type: 'success' as 'success' | 'error' | 'info',
   });
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([refreshCardData(), refreshBalance()]);
+    setRefreshing(false);
+  }, [refreshCardData, refreshBalance]);
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') =>
     setToast({ visible: true, message, type });
@@ -106,7 +115,7 @@ export default function CardScreen({ navigation, route }: any) {
   const handleCardCreated = (holderName: string, design: CardDesignKey) => {
     createCard(holderName, design);
     setShowCreate(false);
-    showToast('Card Created Successfully ✅', 'success');
+    showToast('Card created successfully', 'success');
   };
 
   const handleTopup = async () => {
@@ -119,7 +128,7 @@ export default function CardScreen({ navigation, route }: any) {
     const ok = topupCard(topupToken, amt);
     setTopupLoading(false);
     if (ok) {
-      showToast(`+$${topupUSD.toFixed(2)} added to card ✅`, 'success');
+      showToast(`$${topupUSD.toFixed(2)} added to card balance`, 'success');
       setTopupAmount('');
       setShowTopup(false);
     } else showToast('Top-up failed. Check balance.', 'error');
@@ -138,7 +147,7 @@ export default function CardScreen({ navigation, route }: any) {
     const ok = spendCard(topupToken, amtUSD, `${merchant.icon} ${merchant.name.trim()}`);
     setLoading(false);
     if (ok) {
-      showToast(`Paid $${amtUSD.toFixed(2)} to ${merchant.name.trim()} ✅`, 'success');
+      showToast(`Payment of $${amtUSD.toFixed(2)} to ${merchant.name.trim()} successful`, 'success');
       setMerchant({ name: '', amount: '', icon: '🛍️' });
       setShowSpend(false);
     } else showToast('Payment failed. Try again.', 'error');
@@ -152,8 +161,17 @@ export default function CardScreen({ navigation, route }: any) {
     return (
       <SafeAreaView style={[styles.root, { backgroundColor: T.background }]}>
         <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-        <Toast visible={toast.visible} message={toast.message} type={toast.type}
+        <Toast visible={toast.visible} message={toast.message} type={toast.type} isDarkMode={isDarkMode}
           onHide={() => setToast(p => ({ ...p, visible: false }))} />
+        <View style={styles.pageHeader}>
+          <TouchableOpacity
+            style={[styles.backBtn, { backgroundColor: T.surface }]}
+            onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Main')}
+            activeOpacity={0.7}
+          >
+            <Feather name="arrow-left" size={20} color={T.text} />
+          </TouchableOpacity>
+        </View>
         <NoCardState onCreatePress={() => setShowCreate(true)} isDarkMode={isDarkMode} />
       </SafeAreaView>
     );
@@ -166,7 +184,7 @@ export default function CardScreen({ navigation, route }: any) {
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: T.background }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <Toast visible={toast.visible} message={toast.message} type={toast.type}
+      <Toast visible={toast.visible} message={toast.message} type={toast.type} isDarkMode={isDarkMode}
         onHide={() => setToast(p => ({ ...p, visible: false }))} />
 
       <EditCardSheet
@@ -175,24 +193,55 @@ export default function CardScreen({ navigation, route }: any) {
         currentDesign={currentDesignKey}
         cardNumber={cardDetails.number}
         expiry={cardDetails.expiry}
-        onSave={patch => { updateCardDetails(patch); showToast('Card updated ✅', 'success'); }}
+        onSave={patch => { updateCardDetails(patch); showToast('Card updated successfully', 'success'); }}
         onClose={() => setShowEdit(false)}
       />
 
       {/* Header */}
       <View style={styles.pageHeader}>
-        <Text style={[styles.pageTitle, { color: T.text }]}>Vault Card</Text>
-        <TouchableOpacity
-          style={[styles.editPill, { backgroundColor: T.surface }]}
-          onPress={() => setShowEdit(true)}
-          activeOpacity={0.75}
-        >
-          <Feather name="settings" size={14} color={CRIMSON} />
-          <Text style={[styles.editPillText, { color: T.text }]}>Settings</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <TouchableOpacity
+            style={[styles.backBtn, { backgroundColor: T.surface }]}
+            onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Main')}
+            activeOpacity={0.7}
+          >
+            <Feather name="arrow-left" size={20} color={T.text} />
+          </TouchableOpacity>
+          <Text style={[styles.pageTitle, { color: T.text }]}>Vault Card</Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <TouchableOpacity
+            style={[styles.editPill, { backgroundColor: T.surface }]}
+            onPress={onRefresh}
+            activeOpacity={0.75}
+          >
+            {refreshing
+              ? <ActivityIndicator size="small" color={CRIMSON} />
+              : <Feather name="refresh-cw" size={14} color={CRIMSON} />}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.editPill, { backgroundColor: T.surface }]}
+            onPress={() => setShowEdit(true)}
+            activeOpacity={0.75}
+          >
+            <Feather name="settings" size={14} color={CRIMSON} />
+            <Text style={[styles.editPillText, { color: T.text }]}>Settings</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={CRIMSON}
+            colors={[CRIMSON]}
+          />
+        }
+      >
 
         {/* Card carousel */}
         <ScrollView
@@ -239,7 +288,10 @@ export default function CardScreen({ navigation, route }: any) {
             style={[styles.applyBtn, { borderColor: CRIMSON }]}
             onPress={() => {
               updateCardDetails({ design: carouselDesign });
-              showToast('Design updated ✨', 'info');
+              showToast('Card design updated', 'info');
+              // Snap activeIndex to the newly applied design so the button disappears
+              const newIndex = CARD_DESIGNS.findIndex(d => d.key === carouselDesign);
+              if (newIndex !== -1) setActiveIndex(newIndex);
             }}
             activeOpacity={0.75}
           >
@@ -576,6 +628,10 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   pageTitle: { fontSize: 32, fontWeight: '900', letterSpacing: -1 },
+  backBtn: {
+    width: 38, height: 38, borderRadius: 19,
+    alignItems: 'center', justifyContent: 'center',
+  },
   editPill: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     paddingHorizontal: 16, paddingVertical: 10, borderRadius: 24,

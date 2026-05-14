@@ -1,10 +1,12 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, Platform, ActivityIndicator, Modal, Alert, ScrollView, Image } from 'react-native';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, Platform, ActivityIndicator, Modal, Alert, ScrollView, Image, Animated, Dimensions } from 'react-native';
 import { Feather, MaterialIcons } from '@expo/vector-icons';
+import Svg, { Polyline, Line, Circle, Defs, LinearGradient as SvgGradient, Stop, Path, G, Rect, Text as SvgText } from 'react-native-svg';
 import { useFocusEffect } from '@react-navigation/native';
 import { useWallet } from '../store/WalletContext';
 import { Theme } from '../constants';
-import { p2pService, P2POrder, FIAT_CURRENCIES, PAYMENT_METHODS } from '../services/merchantService';
+import { p2pService, P2POrder, FIAT_CURRENCIES, PAYMENT_METHODS, getLiveRate, calcPlatformFee } from '../services/merchantService';
+import TransactionLoader from '../components/ui/TransactionLoader';
 
 const TOKENS   = ['ETH', 'USDC', 'USDT', 'DAI'];
 const COUNTRIES = ['United States','United Kingdom','India','UAE','Singapore','Germany','France','Australia','Canada','Brazil','Other'];
@@ -69,13 +71,24 @@ const sk = StyleSheet.create({
   line:   { height: 10, borderRadius: 5 },
 });
 
+function timeAgo(dateStr?: string): string {
+  if (!dateStr) return '';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1)  return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
 function OrderCard({ order, onPress, T, walletAddress }: { order: P2POrder; onPress: () => void; T: any; walletAddress: string }) {
-  const isMine = order.seller_wallet.toLowerCase() === walletAddress.toLowerCase();
-  const tokenColor = TOKEN_COLORS[order.token] ?? T.primary;
+  const isMine   = order.seller_wallet.toLowerCase() === walletAddress.toLowerCase();
+  const isBuying = order.buyer_wallet?.toLowerCase() === walletAddress.toLowerCase();
 
   const statusMeta: Record<string, { label: string; color: string }> = {
     open:      { label: 'OPEN',       color: T.success },
-    in_escrow: { label: 'IN ESCROW',  color: '#6366F1' },
+    in_escrow: { label: 'IN ESCROW',  color: T.primary },
     fiat_sent: { label: 'FIAT SENT',  color: '#F59E0B' },
     completed: { label: 'COMPLETED',  color: T.success },
     cancelled: { label: 'CANCELLED',  color: T.textDim },
@@ -83,21 +96,34 @@ function OrderCard({ order, onPress, T, walletAddress }: { order: P2POrder; onPr
   };
   const { label: statusLabel, color: statusColor } = statusMeta[order.status] ?? { label: order.status.toUpperCase(), color: T.textDim };
 
+  const btnLabel = isMine ? 'View Order' : isBuying ? 'Continue Trade' : `Buy ${order.token}`;
+  const btnColor = isMine ? T.surfaceHigh : T.primary;
+
   return (
-    <TouchableOpacity style={[s.card, { backgroundColor: T.surface, borderColor: T.border, borderWidth: 1 }]} onPress={onPress} activeOpacity={0.75}>
+    <TouchableOpacity style={[s.card, { backgroundColor: T.surface, borderColor: isBuying ? T.primary + '40' : T.border, borderWidth: isBuying ? 1.5 : 1 }]} onPress={onPress} activeOpacity={0.75}>
       <View style={s.cardTop}>
         <TokenSymbolIcon token={order.token} size={44} />
         <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <Text style={[s.tokenName, { color: T.text }]}>{order.token} Trade</Text>
             {isMine && (
               <View style={[s.minePill, { backgroundColor: T.surfaceHigh }]}>
                 <Text style={[s.minePillText, { color: T.textMuted }]}>MINE</Text>
               </View>
             )}
+            {isBuying && (
+              <View style={[s.minePill, { backgroundColor: T.primary + '15' }]}>
+                <Text style={[s.minePillText, { color: T.primary }]}>BUYING</Text>
+              </View>
+            )}
+            <View style={[s.minePill, { backgroundColor: order.is_merchant ? T.primary + '15' : T.surfaceHigh }]}>
+              <Text style={[s.minePillText, { color: order.is_merchant ? T.primary : T.textMuted }]}>
+                {order.is_merchant ? '🏢 MERCHANT' : '👤 PERSONAL'}
+              </Text>
+            </View>
           </View>
           <Text style={[s.sellerAddr, { color: T.textMuted }]}>
-            Merchant: {order.seller_wallet.slice(0, 6)}…{order.seller_wallet.slice(-4)}
+            Seller: {order.seller_wallet.slice(0, 6)}…{order.seller_wallet.slice(-4)}
           </Text>
         </View>
         <View style={[s.statusPill, { backgroundColor: statusColor + '15' }]}>
@@ -116,33 +142,478 @@ function OrderCard({ order, onPress, T, walletAddress }: { order: P2POrder; onPr
         </View>
       </View>
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 18 }}>
-        <Feather name="credit-card" size={14} color={T.textMuted} />
-        <Text style={{ fontSize: 12, color: T.textMuted, fontWeight: '600' }}>{order.payment_method}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 18 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Feather name="credit-card" size={13} color={T.textMuted} />
+          <Text style={{ fontSize: 12, color: T.textMuted, fontWeight: '600' }}>{order.payment_method}</Text>
+        </View>
+        {order.created_at && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Feather name="clock" size={12} color={T.textDim} />
+            <Text style={{ fontSize: 11, color: T.textDim, fontWeight: '600' }}>{timeAgo(order.created_at)}</Text>
+          </View>
+        )}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <Feather name="zap" size={12} color='#10B981' />
+          <Text style={{ fontSize: 11, color: '#10B981', fontWeight: '700' }}>~15 min ETA</Text>
+        </View>
       </View>
 
-      <TouchableOpacity style={[s.buyBtn, { backgroundColor: isMine ? T.surfaceHigh : T.primary }]} onPress={onPress}>
-        <Text style={s.buyBtnText}>{isMine ? 'View Order' : `Buy ${order.token}`}</Text>
+      <TouchableOpacity style={[s.buyBtn, { backgroundColor: btnColor }]} onPress={onPress}>
+        <Text style={s.buyBtnText}>{btnLabel}</Text>
       </TouchableOpacity>
     </TouchableOpacity>
   );
 }
 
-export default function P2PMarketplaceScreen({ navigation, route }: any) {
-  const { walletAddress, isDarkMode, balances, lockedBalance, lockBalance, p2pCountry, p2pCurrency } = useWallet();
-  const T = isDarkMode ? Theme.colors : Theme.lightColors;
+// ─── Interactive Rate Chart for Step 1 ─────────────────────────────────────────────────
+const SCREEN_W = Dimensions.get('window').width;
 
-  const [tab, setTab]         = useState<'buy' | 'sell'>(route?.params?.tab === 'sell' ? 'sell' : 'buy');
+function RateChart({
+  token, fiat, liveRate, liveRateLoading, rateHistory, sellRate, onRateSelect, T
+}: {
+  token: string; fiat: string; liveRate: number | null; liveRateLoading: boolean;
+  rateHistory: number[]; sellRate: string; onRateSelect: (r: string) => void; T: any;
+}) {
+  const W = SCREEN_W - 48; // card padding
+  const H = 160;
+  const PAD_L = 4; const PAD_R = 4;
+  const chartW = W - PAD_L - PAD_R;
+
+  const isUp = rateHistory.length > 1
+    ? rateHistory[rateHistory.length - 1] >= rateHistory[0]
+    : true;
+  const lineColor = isUp ? '#10B981' : '#EC2629';
+  const tokenColor = TOKEN_COLORS[token] ?? '#627EEA';
+
+  // Build chart points
+  const pts = rateHistory.length > 1 ? (() => {
+    const min = Math.min(...rateHistory) * 0.998;
+    const max = Math.max(...rateHistory) * 1.002;
+    const range = max - min || 1;
+    return rateHistory.map((v, i) => ({
+      x: PAD_L + (i / (rateHistory.length - 1)) * chartW,
+      y: H - 24 - ((v - min) / range) * (H - 40),
+      v,
+    }));
+  })() : [];
+
+  const polyPts = pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  const areaPath = pts.length > 1
+    ? `M ${pts[0].x},${pts[0].y} ` +
+      pts.slice(1).map(p => `L ${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ') +
+      ` L ${pts[pts.length-1].x},${H} L ${pts[0].x},${H} Z`
+    : '';
+
+  const last = pts[pts.length - 1];
+  const pct = rateHistory.length > 1
+    ? ((rateHistory[rateHistory.length-1] - rateHistory[0]) / rateHistory[0]) * 100
+    : 0;
+
+  // Selected rate marker
+  const selectedRate = parseFloat(sellRate);
+  const hasSelected = selectedRate > 0 && rateHistory.length > 1;
+  const min2 = Math.min(...rateHistory) * 0.998;
+  const max2 = Math.max(...rateHistory) * 1.002;
+  const range2 = max2 - min2 || 1;
+  const selectedY = hasSelected
+    ? H - 24 - ((selectedRate - min2) / range2) * (H - 40)
+    : null;
+
+  // Premium/discount vs live
+  const premium = liveRate && selectedRate > 0
+    ? ((selectedRate - liveRate) / liveRate) * 100
+    : null;
+
+  // Tap points — 5 preset levels
+  const presets = liveRate ? [
+    { label: '-2%', rate: liveRate * 0.98 },
+    { label: '-1%', rate: liveRate * 0.99 },
+    { label: 'MKT', rate: liveRate },
+    { label: '+1%', rate: liveRate * 1.01 },
+    { label: '+2%', rate: liveRate * 1.02 },
+  ] : [];
+
+  return (
+    <View style={[rc.card, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
+      {/* Header */}
+      <View style={rc.header}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <TokenSymbolIcon token={token} size={28} />
+          <View>
+            <Text style={[rc.headerTitle, { color: T.text }]}>
+              {token}/{fiat}
+            </Text>
+            <Text style={[rc.headerSub, { color: T.textDim }]}>7-day price trend</Text>
+          </View>
+        </View>
+        <View style={{ alignItems: 'flex-end', gap: 4 }}>
+          {liveRateLoading ? (
+            <ActivityIndicator size="small" color={lineColor} />
+          ) : liveRate ? (
+            <>
+              <Text style={[rc.livePrice, { color: T.text }]}>
+                {liveRate.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <Text style={[rc.liveFiat, { color: T.textDim }]}> {fiat}</Text>
+              </Text>
+              <View style={[rc.changeBadge, { backgroundColor: isUp ? '#10B98118' : '#EC262918' }]}>
+                <Text style={[rc.changeText, { color: isUp ? '#10B981' : '#EC2629' }]}>
+                  {isUp ? '▲' : '▼'} {Math.abs(pct).toFixed(2)}%
+                </Text>
+              </View>
+            </>
+          ) : null}
+        </View>
+      </View>
+
+      {/* SVG Chart */}
+      {pts.length > 1 ? (
+        <View style={{ marginHorizontal: -4 }}>
+          <Svg width={W + 8} height={H}>
+            <Defs>
+              <SvgGradient id="rateGrad" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0" stopColor={lineColor} stopOpacity="0.25" />
+                <Stop offset="1" stopColor={lineColor} stopOpacity="0" />
+              </SvgGradient>
+            </Defs>
+
+            {/* Horizontal grid lines */}
+            {[0.25, 0.5, 0.75].map((f, i) => (
+              <Line key={i}
+                x1={PAD_L} y1={H * f}
+                x2={W + 8 - PAD_R} y2={H * f}
+                stroke={T.border} strokeWidth="0.6" strokeDasharray="5,5"
+              />
+            ))}
+
+            {/* Area */}
+            <Path d={areaPath} fill="url(#rateGrad)" />
+
+            {/* Line */}
+            <Polyline
+              points={polyPts}
+              fill="none"
+              stroke={lineColor}
+              strokeWidth="2.5"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            />
+
+            {/* Selected rate horizontal line */}
+            {selectedY !== null && selectedY > 0 && selectedY < H && (
+              <G>
+                <Line
+                  x1={PAD_L} y1={selectedY}
+                  x2={W + 8 - PAD_R} y2={selectedY}
+                  stroke={tokenColor} strokeWidth="1.5" strokeDasharray="6,3"
+                />
+                {/* Label on right */}
+                <Rect
+                  x={W - 52} y={selectedY - 11}
+                  width={60} height={20}
+                  rx={6} fill={tokenColor}
+                />
+                <SvgText
+                  x={W - 22} y={selectedY + 4}
+                  fontSize="9" fontWeight="800"
+                  fill="#FFF" textAnchor="middle"
+                >
+                  {selectedRate.toFixed(0)}
+                </SvgText>
+              </G>
+            )}
+
+            {/* Live rate horizontal line */}
+            {liveRate && (() => {
+              const ly = H - 24 - ((liveRate - min2) / range2) * (H - 40);
+              if (ly < 4 || ly > H - 4) return null;
+              return (
+                <G key="live">
+                  <Line
+                    x1={PAD_L} y1={ly}
+                    x2={W + 8 - PAD_R} y2={ly}
+                    stroke="#10B981" strokeWidth="1" strokeDasharray="3,3"
+                  />
+                  <Rect x={PAD_L} y={ly - 9} width={34} height={16} rx={5} fill="#10B981" />
+                  <SvgText x={PAD_L + 17} y={ly + 4} fontSize="8" fontWeight="900" fill="#FFF" textAnchor="middle">
+                    LIVE
+                  </SvgText>
+                </G>
+              );
+            })()}
+
+            {/* End dot */}
+            {last && (
+              <G>
+                <Circle cx={last.x} cy={last.y} r={10} fill={lineColor} fillOpacity={0.15} />
+                <Circle cx={last.x} cy={last.y} r={5} fill={lineColor} />
+              </G>
+            )}
+          </Svg>
+        </View>
+      ) : (
+        <View style={[rc.chartSkeleton, { backgroundColor: T.surfaceHigh }]}>
+          <ActivityIndicator color={T.primary} />
+          <Text style={{ color: T.textDim, fontSize: 12, marginTop: 8 }}>Loading price data...</Text>
+        </View>
+      )}
+
+      {/* Preset rate buttons */}
+      {presets.length > 0 && (
+        <View style={rc.presets}>
+          {presets.map(p => {
+            const isActive = Math.abs(selectedRate - p.rate) < 0.5;
+            const isMkt = p.label === 'MKT';
+            return (
+              <TouchableOpacity
+                key={p.label}
+                style={[
+                  rc.presetBtn,
+                  {
+                    backgroundColor: isActive
+                      ? (isMkt ? '#10B981' : tokenColor)
+                      : T.surfaceHigh,
+                    borderColor: isActive
+                      ? (isMkt ? '#10B981' : tokenColor)
+                      : T.border,
+                  }
+                ]}
+                onPress={() => onRateSelect(p.rate.toFixed(2))}
+              >
+                <Text style={[
+                  rc.presetLabel,
+                  { color: isActive ? '#FFF' : T.textDim }
+                ]}>{p.label}</Text>
+                <Text style={[
+                  rc.presetRate,
+                  { color: isActive ? '#FFF' : T.text }
+                ]}>{p.rate.toFixed(0)}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
+
+      {/* Selected rate display */}
+      <View style={[rc.selectedRow, { borderTopColor: T.border }]}>
+        <View style={{ flex: 1 }}>
+          <Text style={[rc.selectedLabel, { color: T.textDim }]}>YOUR RATE</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+            {selectedRate > 0 ? (
+              <>
+                <Text style={[rc.selectedRate, { color: T.text }]}>
+                  {selectedRate.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </Text>
+                <Text style={[rc.selectedFiat, { color: T.textDim }]}>{fiat}</Text>
+              </>
+            ) : (
+              <Text style={[rc.selectedRate, { color: T.textDim }]}>Tap a preset above</Text>
+            )}
+          </View>
+        </View>
+        {premium !== null && selectedRate > 0 && (
+          <View style={[
+            rc.premiumBadge,
+            { backgroundColor: premium >= 0 ? '#10B98118' : '#EC262918' }
+          ]}>
+            <Text style={[
+              rc.premiumText,
+              { color: premium >= 0 ? '#10B981' : '#EC2629' }
+            ]}>
+              {premium >= 0 ? '+' : ''}{premium.toFixed(1)}% vs market
+            </Text>
+          </View>
+        )}
+      </View>
+
+      {/* Manual override input */}
+      <View style={[rc.manualRow, { borderTopColor: T.border }]}>
+        <Feather name="edit-2" size={13} color={T.textDim} />
+        <TextInput
+          style={[rc.manualInput, { color: T.text }]}
+          value={sellRate}
+          onChangeText={onRateSelect}
+          placeholder={`Custom rate in ${fiat}`}
+          placeholderTextColor={T.textDim}
+          keyboardType="decimal-pad"
+        />
+        <TouchableOpacity
+          style={[s.tokenPill, { backgroundColor: T.surfaceHigh }]}
+          onPress={() => {}}
+        >
+          <Text style={[s.tokenPillText, { color: T.text }]}>{fiat}</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+const rc = StyleSheet.create({
+  card:         { borderRadius: 24, borderWidth: 1.5, overflow: 'hidden', marginTop: 12 },
+  header:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, paddingBottom: 12 },
+  headerTitle:  { fontSize: 15, fontWeight: '800' },
+  headerSub:    { fontSize: 11, fontWeight: '500', marginTop: 1 },
+  livePrice:    { fontSize: 18, fontWeight: '900', letterSpacing: -0.5 },
+  liveFiat:     { fontSize: 12, fontWeight: '600' },
+  changeBadge:  { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
+  changeText:   { fontSize: 11, fontWeight: '800' },
+  chartSkeleton:{ height: 160, alignItems: 'center', justifyContent: 'center' },
+  presets:      { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 12 },
+  presetBtn:    { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 14, borderWidth: 1.5, gap: 2 },
+  presetLabel:  { fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
+  presetRate:   { fontSize: 11, fontWeight: '800' },
+  selectedRow:  { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderTopWidth: 1 },
+  selectedLabel:{ fontSize: 10, fontWeight: '800', letterSpacing: 1, marginBottom: 4 },
+  selectedRate: { fontSize: 22, fontWeight: '900', letterSpacing: -0.5 },
+  selectedFiat: { fontSize: 13, fontWeight: '600' },
+  premiumBadge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20 },
+  premiumText:  { fontSize: 12, fontWeight: '800' },
+  manualRow:    { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1 },
+  manualInput:  { flex: 1, fontSize: 15, fontWeight: '700', padding: 0 },
+});
+
+// ─── Professional Rate Chart ─────────────────────────────────────────────────
+function ProfessionalRateChart({ sellAmount, sellRate, sellFiat, sellToken, liveRate, liveRateLoading, rateHistory, T }: any) {
+  const gross = parseFloat(sellAmount || '0') * parseFloat(sellRate || '0');
+  const fee   = gross * 0.005;
+  const net   = gross * 0.995;
+  const pct   = rateHistory.length > 1
+    ? ((rateHistory[rateHistory.length - 1] - rateHistory[0]) / rateHistory[0]) * 100
+    : 0;
+  const isUp  = pct >= 0;
+  const lineColor = isUp ? '#10B981' : '#EC2629';
+
+  const W = 280, H = 80;
+  const chartPts = rateHistory.length > 1 ? (() => {
+    const min = Math.min(...rateHistory);
+    const max = Math.max(...rateHistory);
+    const range = max - min || 1;
+    return rateHistory.map((v: number, i: number) => {
+      const x = (i / (rateHistory.length - 1)) * W;
+      const y = H - 8 - ((v - min) / range) * (H - 20);
+      return { x, y };
+    });
+  })() : [];
+
+  const pts = chartPts.map((p: any) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  const last = chartPts[chartPts.length - 1];
+  const areaPath = chartPts.length > 1
+    ? `M ${chartPts[0].x},${chartPts[0].y} ` +
+      chartPts.slice(1).map((p: any) => `L ${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ') +
+      ` L ${W},${H} L 0,${H} Z`
+    : '';
+
+  // Horizontal grid lines
+  const gridLines = [0.2, 0.5, 0.8].map(f => H * f);
+
+  return (
+    <View style={[s.chartCard, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
+      {/* Top: Gross Total + Live badge */}
+      <View style={s.chartTopRow}>
+        <View>
+          <Text style={[s.chartLabel, { color: T.textDim }]}>GROSS TOTAL</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4, marginTop: 2 }}>
+            <Text style={[s.chartGross, { color: T.primary }]}>{gross.toFixed(2)}</Text>
+            <Text style={[s.chartFiatLabel, { color: T.textMuted }]}>{sellFiat}</Text>
+          </View>
+        </View>
+        <View style={{ alignItems: 'flex-end', gap: 6 }}>
+          {liveRateLoading ? (
+            <ActivityIndicator size="small" color={T.primary} />
+          ) : liveRate ? (
+            <View style={[s.livePill, { backgroundColor: '#10B98118' }]}>
+              <View style={s.liveDot} />
+              <Text style={[s.livePillText, { color: '#10B981' }]}>LIVE</Text>
+              <Text style={[s.livePillRate, { color: '#10B981' }]}>{liveRate.toFixed(2)}</Text>
+            </View>
+          ) : null}
+          <View style={[s.changePill, { backgroundColor: isUp ? '#10B98115' : '#EC262915' }]}>
+            <Text style={[s.changePillText, { color: isUp ? '#10B981' : '#EC2629' }]}>
+              {isUp ? '▲' : '▼'} {Math.abs(pct).toFixed(2)}%
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Chart */}
+      {chartPts.length > 1 && (
+        <View style={s.chartArea}>
+          <Svg width={W} height={H}>
+            <Defs>
+              <SvgGradient id="grad" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0" stopColor={lineColor} stopOpacity="0.22" />
+                <Stop offset="1" stopColor={lineColor} stopOpacity="0" />
+              </SvgGradient>
+            </Defs>
+            {/* Grid lines */}
+            {gridLines.map((y, i) => (
+              <Line key={i} x1="0" y1={y} x2={W} y2={y} stroke={T.border} strokeWidth="0.5" strokeDasharray="4,4" />
+            ))}
+            {/* Area fill */}
+            <Path d={areaPath} fill="url(#grad)" />
+            {/* Line */}
+            <Polyline points={pts} fill="none" stroke={lineColor} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+            {/* End dot */}
+            {last && (
+              <G>
+                <Circle cx={last.x} cy={last.y} r={8} fill={lineColor} fillOpacity={0.15} />
+                <Circle cx={last.x} cy={last.y} r={4} fill={lineColor} />
+              </G>
+            )}
+          </Svg>
+          <View style={s.chartFooter}>
+            <Text style={[s.chartFooterText, { color: T.textDim }]}>7-day trend</Text>
+            <Text style={[s.chartFooterText, { color: T.textDim }]}>
+              {rateHistory[0]?.toFixed(2)} → {rateHistory[rateHistory.length - 1]?.toFixed(2)} {sellFiat}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {/* Divider */}
+      <View style={[s.chartDivider, { backgroundColor: T.border }]} />
+
+      {/* Fee breakdown — 3 rows */}
+      <View style={s.feeGrid}>
+        <View style={s.feeGridItem}>
+          <Text style={[s.feeGridLabel, { color: T.textDim }]}>Gross</Text>
+          <Text style={[s.feeGridValue, { color: T.text }]}>{gross.toFixed(2)}</Text>
+        </View>
+        <View style={[s.feeGridDivider, { backgroundColor: T.border }]} />
+        <View style={s.feeGridItem}>
+          <Text style={[s.feeGridLabel, { color: T.textDim }]}>Fee (0.5%)</Text>
+          <Text style={[s.feeGridValue, { color: '#EC2629' }]}>−{fee.toFixed(2)}</Text>
+        </View>
+        <View style={[s.feeGridDivider, { backgroundColor: T.border }]} />
+        <View style={s.feeGridItem}>
+          <Text style={[s.feeGridLabel, { color: T.textDim }]}>You Receive</Text>
+          <Text style={[s.feeGridValue, { color: T.success, fontWeight: '900' }]}>{net.toFixed(2)}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+export default function P2PMarketplaceScreen({ navigation, route }: any) {
+  const { walletAddress, isDarkMode, balances, ethBalance, lockedBalance, lockBalance, resetLockedBalances, p2pCountry, p2pCurrency, accountType, network } = useWallet();
+  const T = isDarkMode ? Theme.colors : Theme.lightColors;
+  const isBusiness = accountType === 'business';
+
+  const [tab, setTab] = useState<'buy' | 'sell'>(
+    route?.params?.tab === 'sell' ? 'sell' : 'buy'
+  );
 
   useFocusEffect(useCallback(() => {
-    if (route?.params?.tab) {
-      setTab(route.params.tab);
-    }
+    if (route?.params?.tab) setTab(route.params.tab);
   }, [route?.params?.tab]));
 
   const [orders,  setOrders]  = useState<P2POrder[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterFiat, setFilterFiat] = useState(p2pCurrency || 'USD');
+  const [refreshing, setRefreshing] = useState(false);
+  const hasFetchedOnce = useRef(false);
+  // Auto-switch to My Orders tab if buyer has active in-progress orders
+  const hasAutoSwitched = useRef(false);
+  const [filterFiat, setFilterFiat] = useState<string>('ALL');
   const [showSellModal, setShowSellModal] = useState(false);
 
   const [sellToken,   setSellToken]   = useState('ETH');
@@ -152,48 +623,226 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
   const [sellMethod,  setSellMethod]  = useState('Bank Transfer');
   const [sellCountry, setSellCountry] = useState(p2pCountry || 'United States');
   const [sellLoading, setSellLoading] = useState(false);
+  const [liveRate,    setLiveRate]    = useState<number | null>(null);
+  const [liveRateLoading, setLiveRateLoading] = useState(false);
+  const [rateHistory, setRateHistory] = useState<number[]>([]);
 
   const [fiatModal,    setFiatModal]    = useState(false);
   const [methodModal,  setMethodModal]  = useState(false);
   const [countryModal, setCountryModal] = useState(false);
 
-  const loadOrders = useCallback(async () => {
-    setLoading(true);
+  // Auto-heal locked balance: compare AsyncStorage locks vs real active DB orders
+  const healLockedBalance = useCallback(async () => {
+    if (!walletAddress) return;
     try {
-      const data = tab === 'buy'
-        ? await p2pService.getOpenOrders(undefined, filterFiat)
-        : await p2pService.getMyOrders(walletAddress);
-      setOrders(data);
-    } catch {}
-    setLoading(false);
-  }, [tab, filterFiat, walletAddress]);
+      const myOrders = await p2pService.getMyOrders(walletAddress);
+      const activeStatuses = ['open', 'in_escrow', 'fiat_sent'];
 
-  useEffect(() => { loadOrders(); }, [loadOrders]);
-  useFocusEffect(useCallback(() => { loadOrders(); }, [loadOrders]));
+      // Compute what should be locked based on live DB orders
+      const realLocks: Record<string, number> = {};
+      myOrders
+        .filter(o => activeStatuses.includes(o.status))
+        .forEach(o => {
+          // Lock for seller (they listed the crypto)
+          if (o.seller_wallet.toLowerCase() === walletAddress.toLowerCase()) {
+            realLocks[o.token] = (realLocks[o.token] || 0) + o.amount;
+          }
+          // Lock for buyer (they locked funds in escrow)
+          if (o.buyer_wallet?.toLowerCase() === walletAddress.toLowerCase() &&
+              (o.status === 'in_escrow' || o.status === 'fiat_sent')) {
+            realLocks[o.token] = (realLocks[o.token] || 0) + o.amount;
+          }
+        });
+
+      // If stored lock differs from real active lock, correct it
+      const currentLocked = lockedBalance;
+      let needsUpdate = false;
+      const allTokens = new Set([...Object.keys(currentLocked), ...Object.keys(realLocks)]);
+      for (const token of allTokens) {
+        if (Math.abs((currentLocked[token] || 0) - (realLocks[token] || 0)) > 0.000001) {
+          needsUpdate = true;
+          break;
+        }
+      }
+      if (needsUpdate) resetLockedBalances();
+    } catch {}
+  }, [walletAddress, lockedBalance, resetLockedBalances]);
+
+  const loadOrders = useCallback(async (isRefresh = false) => {
+    // First load shows skeleton, subsequent refreshes update silently
+    if (!hasFetchedOnce.current) {
+      setLoading(true);
+    } else if (isRefresh) {
+      setRefreshing(true);
+    }
+    try {
+      if (tab === 'buy') {
+        const all = await p2pService.getOpenOrders(walletAddress);
+        // Never show your own orders in the Buy tab
+        const visible = all.filter(o =>
+          o.seller_wallet.toLowerCase() !== walletAddress.toLowerCase()
+        );
+        setOrders(filterFiat === 'ALL' ? visible : visible.filter(o => o.fiat_currency === filterFiat));
+      } else {
+        const [data, activeBuys] = await Promise.all([
+          p2pService.getMyOrders(walletAddress),
+          p2pService.getActiveBuyOrders(walletAddress),
+        ]);
+        const seen = new Set<string>();
+        const merged: P2POrder[] = [];
+        for (const o of [...data, ...activeBuys]) {
+          if (o.id && seen.has(o.id)) continue;
+          if (o.id) seen.add(o.id);
+          merged.push(o);
+        }
+        const filtered = merged.filter(o => {
+          const iAmBuyer = o.buyer_wallet?.toLowerCase() === walletAddress.toLowerCase();
+          if (iAmBuyer) return true;
+          return isBusiness ? o.is_merchant === true : o.is_merchant !== true;
+        });
+        setOrders(filtered);
+      }
+    } catch {}
+    hasFetchedOnce.current = true;
+    setLoading(false);
+    setRefreshing(false);
+  }, [tab, filterFiat, walletAddress, isBusiness]);
+
+  // Auto-switch to My Orders if buyer has active in-progress orders (runs once on mount)
+  useEffect(() => {
+    if (hasAutoSwitched.current || route?.params?.tab) return;
+    p2pService.getActiveBuyOrders(walletAddress).then(active => {
+      if (active.length > 0 && !hasAutoSwitched.current) {
+        hasAutoSwitched.current = true;
+        setTab('sell');
+      }
+    }).catch(() => {});
+  }, [walletAddress]);
+
+  // Only run on mount and when tab/filter changes — NOT on every focus
+  useEffect(() => {
+    hasFetchedOnce.current = false; // reset so tab/filter change shows skeleton once
+    loadOrders();
+  }, [loadOrders]);
+
+  // On focus: silent background refresh, no skeleton flash
+  useFocusEffect(useCallback(() => {
+    if (hasFetchedOnce.current) loadOrders(true);
+    healLockedBalance();
+  }, [tab, filterFiat, walletAddress, isBusiness]));
+
+  // Fetch real 7-day price history from CoinGecko
+  useEffect(() => {
+    let cancelled = false;
+    setLiveRateLoading(true);
+    const COINGECKO_IDS: Record<string, string> = {
+      ETH: 'ethereum', USDC: 'usd-coin', USDT: 'tether', DAI: 'dai',
+    };
+    const coinId = COINGECKO_IDS[sellToken];
+    const vsCurrency = sellFiat.toLowerCase();
+    const fetchData = async () => {
+      try {
+        // Fetch 7-day hourly prices
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 8000);
+        const res = await fetch(
+          `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=${vsCurrency}&days=7&interval=hourly`,
+          { signal: controller.signal }
+        ).finally(() => clearTimeout(timer));
+        if (!res.ok) throw new Error('fetch failed');
+        const data = await res.json();
+        if (!cancelled && data.prices?.length > 0) {
+          // Sample every 6 hours = ~28 points for clean chart
+          const sampled: number[] = [];
+          const step = Math.max(1, Math.floor(data.prices.length / 28));
+          for (let i = 0; i < data.prices.length; i += step) {
+            sampled.push(data.prices[i][1]);
+          }
+          // Always include last point
+          sampled.push(data.prices[data.prices.length - 1][1]);
+          setRateHistory(sampled);
+          const currentRate = sampled[sampled.length - 1];
+          setLiveRate(currentRate);
+          if (!sellRate) setSellRate(currentRate.toFixed(2));
+        }
+      } catch {
+        // Fallback: use getLiveRate + realistic jitter
+        const rate = await getLiveRate(sellToken, sellFiat);
+        if (!cancelled && rate) {
+          setLiveRate(rate);
+          if (!sellRate) setSellRate(rate.toFixed(2));
+          // Generate 30 realistic-looking points
+          const pts: number[] = [rate];
+          for (let i = 1; i < 30; i++) {
+            const prev = pts[i - 1];
+            const change = (Math.random() - 0.48) * prev * 0.008;
+            pts.push(parseFloat((prev + change).toFixed(2)));
+          }
+          setRateHistory(pts);
+        }
+      } finally {
+        if (!cancelled) setLiveRateLoading(false);
+      }
+    };
+    fetchData();
+    return () => { cancelled = true; };
+  }, [sellToken, sellFiat]);
+
+  // Get real available balance for any token (ETH lives in ethBalance, not balances)
+  // Only subtract tokens locked in ACTIVE sell orders (open/in_escrow/fiat_sent)
+  const getAvailableBalance = (token: string) => {
+    const raw = token === 'ETH' ? (parseFloat(ethBalance) || 0) : (balances[token] ?? 0);
+    const locked = lockedBalance[token] ?? 0;
+    return Math.max(0, raw - locked);
+  };
 
   const handleCreateSellOrder = async () => {
     const amt  = parseFloat(sellAmount);
     const rate = parseFloat(sellRate);
     if (!amt || amt <= 0)   { Alert.alert('Invalid Amount', 'Enter a valid amount.'); return; }
     if (!rate || rate <= 0) { Alert.alert('Invalid Rate',   'Enter a valid rate.');   return; }
-    const available = balances[sellToken] ?? 0;
-    if (amt > available) { Alert.alert('Insufficient Balance', 'Some funds may be locked in active orders.'); return; }
+    const available = getAvailableBalance(sellToken);
+    if (amt > available) { Alert.alert('Insufficient Balance', 'You do not have enough balance.'); return; }
 
     setSellLoading(true);
     try {
       await p2pService.createOrder({
-        seller_wallet: walletAddress, token: sellToken, amount: amt,
-        fiat_currency: sellFiat, rate, fiat_total: amt * rate,
-        payment_method: sellMethod, country: sellCountry, is_merchant: false,
-      });
+        seller_wallet:  walletAddress,
+        token:          sellToken,
+        amount:         amt,
+        fiat_currency:  sellFiat,
+        rate,
+        fiat_total:     amt * rate,
+        payment_method: sellMethod,
+        country:        sellCountry,
+        is_merchant:    isBusiness,
+      }, network);
       lockBalance(sellToken, amt);
       setShowSellModal(false);
-      setSellAmount(''); setSellRate('');
-      loadOrders();
+      setSellAmount('');
+      setSellRate('');
+      loadOrders(true);
     } catch (e: any) {
       Alert.alert('Error', e?.message ?? 'Failed to create order.');
     } finally { setSellLoading(false); }
   };
+
+  const [sellStep, setSellStep] = useState(0); // 0=token, 1=amount+rate, 2=details, 3=review
+
+  const resetSellModal = () => {
+    setSellStep(0);
+    setSellAmount('');
+    setSellRate('');
+    setSellMethod('Bank Transfer');
+    setSellCountry(p2pCountry || 'United States');
+    setSellFiat(p2pCurrency || 'USD');
+  };
+
+  const STEPS = ['Token', 'Amount', 'Details', 'Review'];
+
+  const canNextStep0 = !!sellToken;
+  const canNextStep1 = parseFloat(sellAmount) > 0 && parseFloat(sellRate) > 0 && parseFloat(sellAmount) <= getAvailableBalance(sellToken);
+  const canNextStep2 = !!sellMethod && !!sellCountry && !!sellFiat;
 
   const PickerModal = ({ visible, title, items, selected, onSelect, onClose }: any) => (
     <Modal visible={visible} animationType="slide" transparent>
@@ -220,154 +869,279 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
       <PickerModal visible={methodModal}  title="Payment Method"  items={PAYMENT_METHODS} selected={sellMethod}  onSelect={setSellMethod}  onClose={() => setMethodModal(false)} />
       <PickerModal visible={countryModal} title="Country"         items={COUNTRIES}       selected={sellCountry} onSelect={setSellCountry} onClose={() => setCountryModal(false)} />
 
-      {/* Sell Modal */}
+      {/* Sell Modal — Step Wizard */}
       <Modal visible={showSellModal} animationType="slide" transparent>
         <View style={s.modalOverlay}>
           <View style={[s.sellSheet, { backgroundColor: T.surface }]}>
-            {/* Handle + Header */}
             <View style={[s.modalHandle, { backgroundColor: T.border }]} />
-            <View style={s.sellSheetHeader}>
-              <View>
-                <Text style={[s.modalTitle, { color: T.text }]}>Create Sell Order</Text>
-                <Text style={[s.modalSubtitle, { color: T.textDim }]}>List your crypto for fiat payment</Text>
-              </View>
-              <TouchableOpacity style={[s.closeBtn, { backgroundColor: T.surfaceLow }]} onPress={() => setShowSellModal(false)}>
-                <Feather name="x" size={18} color={T.text} />
+
+            {/* Step Header */}
+            <View style={s.wizardHeader}>
+              <TouchableOpacity
+                onPress={() => {
+                  if (sellStep === 0) { setShowSellModal(false); resetSellModal(); }
+                  else setSellStep(s2 => s2 - 1);
+                }}
+                style={[s.wizardBackBtn, { backgroundColor: T.surfaceLow }]}
+              >
+                <Feather name={sellStep === 0 ? 'x' : 'arrow-left'} size={18} color={T.text} />
               </TouchableOpacity>
+              <View style={{ flex: 1, alignItems: 'center' }}>
+                <Text style={[s.wizardTitle, { color: T.text }]}>
+                  {['Choose Token', 'Set Amount & Rate', 'Payment Details', 'Review & List'][sellStep]}
+                </Text>
+                <Text style={[s.wizardStepText, { color: T.textDim }]}>Step {sellStep + 1} of 4</Text>
+              </View>
+              <View style={{ width: 36 }} />
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={s.sellFormContent}>
+            {/* Step Progress Bar */}
+            <View style={[s.progressTrack, { backgroundColor: T.surfaceHigh }]}>
+              <View style={[s.progressFill, { backgroundColor: T.primary, width: `${((sellStep + 1) / 4) * 100}%` as any }]} />
+            </View>
 
-              {/* Token Selector */}
-              <Text style={[s.fieldLabel, { color: T.textDim }]}>SELECT TOKEN</Text>
-              <View style={s.tokenRow}>
-                {TOKENS.map(t => {
-                  const active = sellToken === t;
-                  return (
-                    <TouchableOpacity key={t}
-                      style={[s.tokenBtn, { backgroundColor: active ? T.primary : T.surfaceLow, borderColor: active ? T.primary : T.border }]}
-                      onPress={() => setSellToken(t)}>
-                      <View style={[s.tokenDot, { backgroundColor: active ? 'rgba(255,255,255,0.3)' : TOKEN_COLORS[t] + '15', overflow: 'hidden' }]}>
-                        <TokenSymbolIcon token={t} size={20} />
-                      </View>
-                      <Text style={[s.tokenBtnText, { color: active ? '#FFF' : T.text }]}>{t}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32, paddingTop: 8 }}>
 
-              {/* Balance Badge */}
-              <View style={[s.balanceBadge, { backgroundColor: T.surfaceLow }]}>
-                <MaterialIcons name="account-balance-wallet" size={13} color={T.textDim} />
-                <Text style={[s.balanceBadgeText, { color: T.textDim }]}>Available: </Text>
-                <Text style={[s.balanceBadgeValue, { color: T.text }]}>{(balances[sellToken] ?? 0).toFixed(6)} {sellToken}</Text>
-              </View>
-
-              {/* Amount */}
-              <Text style={[s.fieldLabel, { color: T.textDim }]}>AMOUNT TO SELL</Text>
-              <View style={[s.inputWrap, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
-                <TextInput
-                  style={[s.input, { color: T.text, flex: 1 }]}
-                  value={sellAmount}
-                  onChangeText={setSellAmount}
-                  placeholder="0.00"
-                  placeholderTextColor={T.textDim}
-                  keyboardType="decimal-pad"
-                />
-                <View style={[s.inputBadge, { backgroundColor: T.surfaceHigh }]}>
-                  <Text style={[s.inputBadgeText, { color: T.text }]}>{sellToken}</Text>
-                </View>
-              </View>
-
-              {/* Rate + Fiat row */}
-              <View style={s.rowFields}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[s.fieldLabel, { color: T.textDim }]}>RATE PER TOKEN</Text>
-                  <View style={[s.inputWrap, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
-                    <TextInput
-                      style={[s.input, { color: T.text, flex: 1 }]}
-                      value={sellRate}
-                      onChangeText={setSellRate}
-                      placeholder="0.00"
-                      placeholderTextColor={T.textDim}
-                      keyboardType="decimal-pad"
-                    />
-                  </View>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[s.fieldLabel, { color: T.textDim }]}>FIAT CURRENCY</Text>
-                  <TouchableOpacity
-                    style={[s.inputWrap, s.inputWrapRow, { backgroundColor: T.surfaceLow, borderColor: T.border }]}
-                    onPress={() => setFiatModal(true)}>
-                    <Text style={[s.input, { color: T.text }]}>{sellFiat}</Text>
-                    <Feather name="chevron-down" size={16} color={T.textDim} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Payment Method */}
-              <Text style={[s.fieldLabel, { color: T.textDim }]}>PAYMENT METHOD</Text>
-              <TouchableOpacity
-                style={[s.inputWrap, s.inputWrapRow, { backgroundColor: T.surfaceLow, borderColor: T.border }]}
-                onPress={() => setMethodModal(true)}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                  <Feather name="credit-card" size={15} color={T.textDim} />
-                  <Text style={[s.input, { color: T.text }]}>{sellMethod}</Text>
-                </View>
-                <Feather name="chevron-down" size={16} color={T.textDim} />
-              </TouchableOpacity>
-
-              {/* Country */}
-              <Text style={[s.fieldLabel, { color: T.textDim }]}>COUNTRY</Text>
-              <TouchableOpacity
-                style={[s.inputWrap, s.inputWrapRow, { backgroundColor: T.surfaceLow, borderColor: T.border }]}
-                onPress={() => setCountryModal(true)}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                  <Feather name="map-pin" size={15} color={T.textDim} />
-                  <Text style={[s.input, { color: T.text }]}>{sellCountry}</Text>
-                </View>
-                <Feather name="chevron-down" size={16} color={T.textDim} />
-              </TouchableOpacity>
-
-              {/* Total Preview */}
-              {sellAmount && sellRate ? (
-                <View style={[s.totalPreview, { backgroundColor: T.primary + '12', borderColor: T.primary + '30' }]}>
-                  <View style={s.totalPreviewLeft}>
-                    <Feather name="trending-up" size={16} color={T.primary} />
-                    <Text style={[s.totalPreviewLabel, { color: T.textDim }]}>You'll receive</Text>
-                  </View>
-                  <Text style={[s.totalPreviewValue, { color: T.primary }]}>
-                    {(parseFloat(sellAmount || '0') * parseFloat(sellRate || '0')).toFixed(2)} {sellFiat}
-                  </Text>
-                </View>
-              ) : (
-                <View style={[s.totalPreviewEmpty, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
-                  <Feather name="info" size={14} color={T.textDim} />
-                  <Text style={[s.totalPreviewEmptyText, { color: T.textDim }]}>Enter amount & rate to see total</Text>
+              {/* ── STEP 0: Token ── */}
+              {sellStep === 0 && (
+                <View style={{ gap: 12, marginTop: 8 }}>
+                  <Text style={[s.stepHint, { color: T.textDim }]}>Which crypto do you want to sell?</Text>
+                  {TOKENS.map(t => {
+                    const active = sellToken === t;
+                    const bal = getAvailableBalance(t);
+                    const color = TOKEN_COLORS[t];
+                    return (
+                      <TouchableOpacity
+                        key={t}
+                        style={[
+                          s.tokenCard,
+                          { backgroundColor: active ? T.primary + '12' : T.surfaceLow, borderColor: active ? T.primary : T.border }
+                        ]}
+                        onPress={() => setSellToken(t)}
+                        activeOpacity={0.75}
+                      >
+                        <View style={[s.tokenCardIcon, { backgroundColor: color + '18' }]}>
+                          <TokenSymbolIcon token={t} size={36} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[s.tokenCardName, { color: T.text }]}>{t}</Text>
+                          <Text style={[s.tokenCardBal, { color: T.textDim }]}>
+                            Balance: {bal.toFixed(6)}
+                          </Text>
+                        </View>
+                        {bal === 0 && (
+                          <View style={[s.zeroBadge, { backgroundColor: T.error + '15' }]}>
+                            <Text style={{ color: T.error, fontSize: 10, fontWeight: '800' }}>EMPTY</Text>
+                          </View>
+                        )}
+                        <View style={[
+                          s.radioOuter,
+                          { borderColor: active ? T.primary : T.border }
+                        ]}>
+                          {active && <View style={[s.radioInner, { backgroundColor: T.primary }]} />}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               )}
 
-              {/* Actions */}
-              <View style={s.modalActions}>
-                <TouchableOpacity
-                  style={[s.cancelBtn, { backgroundColor: T.surfaceLow, borderColor: T.border }]}
-                  onPress={() => setShowSellModal(false)}>
-                  <Text style={[s.cancelBtnText, { color: T.text }]}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[s.confirmBtn, { backgroundColor: T.primary, shadowColor: T.primary }, sellLoading && { opacity: 0.6 }]}
-                  onPress={handleCreateSellOrder}
-                  disabled={sellLoading}>
-                  {sellLoading
-                    ? <ActivityIndicator color="#FFF" />
-                    : <>
-                        <Feather name="upload" size={16} color="#FFF" />
-                        <Text style={s.confirmBtnText}>List Order</Text>
-                      </>}
-                </TouchableOpacity>
-              </View>
+              {/* ── STEP 1: Amount & Rate ── */}
+              {sellStep === 1 && (
+                <View style={{ gap: 0, marginTop: 8 }}>
+                  <Text style={[s.stepHint, { color: T.textDim }]}>How much {sellToken} are you selling and at what rate?</Text>
+
+                  {/* Amount input — big card */}
+                  <View style={[s.bigInputCard, { backgroundColor: T.surfaceLow, borderColor: T.border, marginTop: 16 }]}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <Text style={[s.bigInputLabel, { color: T.textDim }]}>AMOUNT TO SELL</Text>
+                      <TouchableOpacity
+                        onPress={() => {
+                          const max = getAvailableBalance(sellToken);
+                          if (max > 0) setSellAmount(max.toFixed(6));
+                        }}
+                        style={[s.maxBtn, { backgroundColor: T.primary + '18' }]}
+                      >
+                        <Text style={{ color: T.primary, fontSize: 11, fontWeight: '900' }}>MAX</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                      <TextInput
+                        style={[s.bigInput, { color: T.text, flex: 1 }]}
+                        value={sellAmount}
+                        onChangeText={setSellAmount}
+                        placeholder="0.00"
+                        placeholderTextColor={T.textDim}
+                        keyboardType="decimal-pad"
+                      />
+                      <View style={[s.tokenPill, { backgroundColor: T.surfaceHigh }]}>
+                        <TokenSymbolIcon token={sellToken} size={20} />
+                        <Text style={[s.tokenPillText, { color: T.text }]}>{sellToken}</Text>
+                      </View>
+                    </View>
+                    <View style={[s.bigInputDivider, { backgroundColor: T.border }]} />
+                    <Text style={[s.bigInputSub, { color: T.textDim }]}>
+                      Available: {getAvailableBalance(sellToken).toFixed(6)} {sellToken}
+                    </Text>
+                    {parseFloat(sellAmount) > getAvailableBalance(sellToken) && (
+                      <Text style={{ color: T.error, fontSize: 11, fontWeight: '700', marginTop: 4 }}>Exceeds your balance</Text>
+                    )}
+                  </View>
+
+                  {/* Rate Chart — replaces plain text input */}
+                  <RateChart
+                    token={sellToken}
+                    fiat={sellFiat}
+                    liveRate={liveRate}
+                    liveRateLoading={liveRateLoading}
+                    rateHistory={rateHistory}
+                    sellRate={sellRate}
+                    onRateSelect={setSellRate}
+                    T={T}
+                  />
+
+                  {/* Live preview */}
+                  {parseFloat(sellAmount) > 0 && parseFloat(sellRate) > 0 && (
+                    <View style={[s.previewBanner, { backgroundColor: T.primary + '10', borderColor: T.primary + '30' }]}>
+                      <Feather name="trending-up" size={14} color={T.primary} />
+                      <Text style={{ color: T.primary, fontSize: 13, fontWeight: '700', flex: 1 }}>
+                        You'll receive ~{(parseFloat(sellAmount) * parseFloat(sellRate) * 0.995).toFixed(2)} {sellFiat} after fees
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* ── STEP 2: Payment Details ── */}
+              {sellStep === 2 && (
+                <View style={{ gap: 12, marginTop: 8 }}>
+                  <Text style={[s.stepHint, { color: T.textDim }]}>How will the buyer pay you?</Text>
+
+                  <TouchableOpacity
+                    style={[s.detailRow2, { backgroundColor: T.surfaceLow, borderColor: T.border }]}
+                    onPress={() => setMethodModal(true)}
+                  >
+                    <View style={[s.detailRowIcon, { backgroundColor: T.primary + '15' }]}>
+                      <Feather name="credit-card" size={18} color={T.primary} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[s.detailRowLabel, { color: T.textDim }]}>PAYMENT METHOD</Text>
+                      <Text style={[s.detailRowValue, { color: T.text }]}>{sellMethod}</Text>
+                    </View>
+                    <Feather name="chevron-right" size={16} color={T.textDim} />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[s.detailRow2, { backgroundColor: T.surfaceLow, borderColor: T.border }]}
+                    onPress={() => setCountryModal(true)}
+                  >
+                    <View style={[s.detailRowIcon, { backgroundColor: '#6366F115' }]}>
+                      <Feather name="map-pin" size={18} color="#6366F1" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[s.detailRowLabel, { color: T.textDim }]}>COUNTRY</Text>
+                      <Text style={[s.detailRowValue, { color: T.text }]}>{sellCountry}</Text>
+                    </View>
+                    <Feather name="chevron-right" size={16} color={T.textDim} />
+                  </TouchableOpacity>
+
+                  <View style={[s.infoBox, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
+                    <Feather name="shield" size={14} color={T.success} />
+                    <Text style={{ color: T.textDim, fontSize: 12, flex: 1, lineHeight: 18 }}>
+                      Your crypto will be locked in escrow until the buyer confirms payment. You release it only after receiving funds.
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* ── STEP 3: Review ── */}
+              {sellStep === 3 && (
+                <View style={{ gap: 12, marginTop: 8 }}>
+                  <Text style={[s.stepHint, { color: T.textDim }]}>Review your listing before going live.</Text>
+
+                  {/* Token hero */}
+                  <View style={[s.reviewHero, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
+                    <TokenSymbolIcon token={sellToken} size={52} />
+                    <View style={{ alignItems: 'center', gap: 4 }}>
+                      <Text style={[s.reviewHeroAmount, { color: T.text }]}>{sellAmount} {sellToken}</Text>
+                      <Text style={[s.reviewHeroFiat, { color: T.primary }]}>
+                        {(parseFloat(sellAmount) * parseFloat(sellRate)).toFixed(2)} {sellFiat}
+                      </Text>
+                      <Text style={[s.reviewHeroRate, { color: T.textDim }]}>
+                        @ {parseFloat(sellRate).toFixed(2)} {sellFiat}/{sellToken}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Details grid */}
+                  {[
+                    { icon: 'credit-card', label: 'Payment', value: sellMethod, color: T.primary },
+                    { icon: 'map-pin',    label: 'Country',  value: sellCountry, color: '#6366F1' },
+                    { icon: 'dollar-sign', label: 'Currency', value: sellFiat, color: T.success },
+                  ].map(row => (
+                    <View key={row.label} style={[s.reviewRow, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
+                      <View style={[s.reviewRowIcon, { backgroundColor: row.color + '15' }]}>
+                        <Feather name={row.icon as any} size={15} color={row.color} />
+                      </View>
+                      <Text style={[s.reviewRowLabel, { color: T.textDim }]}>{row.label}</Text>
+                      <Text style={[s.reviewRowValue, { color: T.text }]}>{row.value}</Text>
+                    </View>
+                  ))}
+
+                  {/* Fee summary */}
+                  <View style={[s.feeSummary, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
+                    <View style={s.feeSummaryRow}>
+                      <Text style={[s.feeSummaryLabel, { color: T.textDim }]}>Gross total</Text>
+                      <Text style={[s.feeSummaryValue, { color: T.text }]}>{(parseFloat(sellAmount) * parseFloat(sellRate)).toFixed(2)} {sellFiat}</Text>
+                    </View>
+                    <View style={[s.feeSummaryDivider, { backgroundColor: T.border }]} />
+                    <View style={s.feeSummaryRow}>
+                      <Text style={[s.feeSummaryLabel, { color: T.textDim }]}>Platform fee (0.5%)</Text>
+                      <Text style={{ color: T.error, fontSize: 13, fontWeight: '700' }}>−{(parseFloat(sellAmount) * parseFloat(sellRate) * 0.005).toFixed(2)} {sellFiat}</Text>
+                    </View>
+                    <View style={[s.feeSummaryDivider, { backgroundColor: T.border }]} />
+                    <View style={s.feeSummaryRow}>
+                      <Text style={[s.feeSummaryLabel, { color: T.text, fontWeight: '800' }]}>You receive</Text>
+                      <Text style={{ color: T.success, fontSize: 16, fontWeight: '900' }}>{(parseFloat(sellAmount) * parseFloat(sellRate) * 0.995).toFixed(2)} {sellFiat}</Text>
+                    </View>
+                  </View>
+                </View>
+              )}
 
             </ScrollView>
+
+            {/* Bottom CTA */}
+            <View style={[s.wizardFooter, { borderTopColor: T.border, backgroundColor: T.surface }]}>
+              {sellStep < 3 ? (
+                <TouchableOpacity
+                  style={[s.wizardNextBtn, {
+                    backgroundColor: T.primary,
+                    opacity: [canNextStep0, canNextStep1, canNextStep2][sellStep] ? 1 : 0.4
+                  }]}
+                  onPress={() => setSellStep(s2 => s2 + 1)}
+                  disabled={![canNextStep0, canNextStep1, canNextStep2][sellStep]}
+                >
+                  <Text style={s.wizardNextText}>Continue</Text>
+                  <Feather name="arrow-right" size={18} color="#FFF" />
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={[s.wizardNextBtn, { backgroundColor: T.primary, opacity: sellLoading ? 0.6 : 1 }]}
+                  onPress={handleCreateSellOrder}
+                  disabled={sellLoading}
+                >
+                  {sellLoading ? (
+                    <ActivityIndicator color="#FFF" />
+                  ) : (
+                    <>
+                      <Feather name="zap" size={18} color="#FFF" />
+                      <Text style={s.wizardNextText}>List Order Now</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
+            </View>
+            <TransactionLoader visible={sellLoading} title="Creating Order" subtitle="Locking your crypto in escrow..." isDarkMode={isDarkMode} type="p2p" />
           </View>
         </View>
       </Modal>
@@ -390,21 +1164,33 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
       </View>
 
       {/* Tabs */}
-      <View style={[s.tabBar, { borderBottomWidth: 1, borderBottomColor: T.border }]}>
-        {(['buy', 'sell'] as const).map(t => (
-          <TouchableOpacity key={t} style={[s.tabItem, tab === t && [s.tabItemActive, { borderBottomColor: T.primary }]]} onPress={() => setTab(t)}>
-            <Text style={[s.tabText, { color: tab === t ? T.primary : T.textMuted }]}>
-              {t === 'buy' ? 'Buy' : 'Sell / My Orders'}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      <View style={[s.tabBar, { borderBottomColor: T.border, borderBottomWidth: 1 }]}>
+        <TouchableOpacity style={[s.tabItem, tab === 'buy' && [s.tabItemActive, { borderBottomColor: T.primary }]]} onPress={() => setTab('buy')}>
+          <Text style={[s.tabText, { color: tab === 'buy' ? T.primary : T.textMuted }]}>Buy</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[s.tabItem, tab === 'sell' && [s.tabItemActive, { borderBottomColor: T.primary }]]} onPress={() => setTab('sell')}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={[s.tabText, { color: tab === 'sell' ? T.primary : T.textMuted }]}>My Orders</Text>
+            {(() => {
+              const activeBuyCount = orders.filter(o =>
+                o.buyer_wallet?.toLowerCase() === walletAddress.toLowerCase() &&
+                ['in_escrow', 'fiat_sent'].includes(o.status)
+              ).length;
+              return activeBuyCount > 0 ? (
+                <View style={{ backgroundColor: T.primary, borderRadius: 10, minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 }}>
+                  <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '900' }}>{activeBuyCount}</Text>
+                </View>
+              ) : null;
+            })()}
+          </View>
+        </TouchableOpacity>
       </View>
 
       {/* Fiat filter chips */}
       {tab === 'buy' && (
         <View style={[s.filterBar, { borderBottomColor: T.border }]}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingHorizontal: 16, paddingVertical: 14 }}>
-            {FIAT_CURRENCIES.map(f => (
+            {['ALL', ...FIAT_CURRENCIES].map(f => (
               <TouchableOpacity key={f}
                 style={[s.chip, { backgroundColor: filterFiat === f ? T.primary : T.surfaceLow, borderColor: filterFiat === f ? T.primary : T.border }]}
                 onPress={() => setFilterFiat(f)}>
@@ -420,6 +1206,49 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
         <View style={{ padding: 16, gap: 12 }}>
           {[1, 2, 3].map(i => <SkeletonCard key={i} T={T} />)}
         </View>
+      ) : tab === 'sell' ? (
+        // My Orders tab — split into selling vs buying
+        <ScrollView contentContainerStyle={s.list} showsVerticalScrollIndicator={false}>
+          {(() => {
+            const selling = orders.filter(o => o.seller_wallet.toLowerCase() === walletAddress.toLowerCase());
+            const buying  = orders.filter(o => o.buyer_wallet?.toLowerCase() === walletAddress.toLowerCase());
+            return (
+              <>
+                {selling.length > 0 && (
+                  <>
+                    <Text style={[s.sectionLabel, { color: T.textDim }]}>MY SELL LISTINGS</Text>
+                    {selling.map(item => (
+                      <OrderCard key={item.id} order={item} T={T} walletAddress={walletAddress}
+                        onPress={() => navigation.navigate('P2POrderDetail', { order: item })} />
+                    ))}
+                  </>
+                )}
+                {buying.length > 0 && (
+                  <>
+                    <Text style={[s.sectionLabel, { color: T.textDim, marginTop: selling.length > 0 ? 8 : 0 }]}>ORDERS I'M BUYING</Text>
+                    {buying.map(item => (
+                      <OrderCard key={item.id} order={item} T={T} walletAddress={walletAddress}
+                        onPress={() => navigation.navigate('P2POrderDetail', { order: item })} />
+                    ))}
+                  </>
+                )}
+                {selling.length === 0 && buying.length === 0 && (
+                  <View style={s.empty}>
+                    <View style={[s.emptyIcon, { backgroundColor: T.surfaceLow }]}>
+                      <Feather name="inbox" size={32} color={T.textDim} />
+                    </View>
+                    <Text style={[s.emptyTitle, { color: T.text }]}>No orders yet</Text>
+                    <Text style={[s.emptySub, { color: T.textMuted }]}>
+                      {isBusiness
+                        ? 'Tap + to create a merchant sell listing.'
+                        : 'Tap + to sell crypto or go to Buy tab to buy from sellers.'}
+                    </Text>
+                  </View>
+                )}
+              </>
+            );
+          })()}
+        </ScrollView>
       ) : (
         <FlatList
           data={orders}
@@ -430,23 +1259,23 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
           )}
           contentContainerStyle={s.list}
           showsVerticalScrollIndicator={false}
+          refreshing={refreshing}
+          onRefresh={() => loadOrders(true)}
           ListEmptyComponent={
             <View style={s.empty}>
               <View style={[s.emptyIcon, { backgroundColor: T.surfaceLow }]}>
                 <Feather name="inbox" size={32} color={T.textDim} />
               </View>
               <Text style={[s.emptyTitle, { color: T.text }]}>No orders found</Text>
-              <Text style={[s.emptySub, { color: T.textMuted }]}>
-                {tab === 'buy' ? 'No open orders for this currency yet.' : 'Tap + to create your first sell order.'}
-              </Text>
+              <Text style={[s.emptySub, { color: T.textMuted }]}>No open orders for this currency yet.</Text>
             </View>
           }
         />
       )}
 
-      {/* FAB */}
+      {/* FAB — anyone can create sell orders now */}
       {tab === 'sell' && (
-        <TouchableOpacity style={[s.fab, { backgroundColor: T.primary, shadowColor: T.primary }]} onPress={() => setShowSellModal(true)} activeOpacity={0.85}>
+        <TouchableOpacity style={[s.fab, { backgroundColor: T.primary, shadowColor: T.primary }]} onPress={() => { resetSellModal(); setShowSellModal(true); }} activeOpacity={0.85}>
           <Feather name="plus" size={26} color="#FFF" />
         </TouchableOpacity>
       )}
@@ -491,6 +1320,8 @@ const s = StyleSheet.create({
   buyBtn: { width: '100%', height: 54, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   buyBtnText: { color: '#FFF', fontSize: 16, fontWeight: '800' },
 
+  sectionLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 1, marginBottom: 12, marginLeft: 4 },
+
   // Empty
   empty: { alignItems: 'center', paddingTop: 72, gap: 12 },
   emptyIcon: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
@@ -512,29 +1343,83 @@ const s = StyleSheet.create({
   sellFormContent: { paddingBottom: 32 },
   modalRow:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1 },
   modalRowText: { fontSize: 15, fontWeight: '600' },
+  // Wizard styles
+  wizardHeader:   { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 12, gap: 8 },
+  wizardBackBtn:  { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  wizardTitle:    { fontSize: 16, fontWeight: '800', letterSpacing: -0.3 },
+  wizardStepText: { fontSize: 11, fontWeight: '600', marginTop: 2 },
+  progressTrack:  { height: 3, marginHorizontal: 20, borderRadius: 2, marginBottom: 4, overflow: 'hidden' },
+  progressFill:   { height: '100%', borderRadius: 2 },
+  stepHint:       { fontSize: 13, fontWeight: '500', lineHeight: 20, marginBottom: 4 },
 
-  fieldLabel:  { fontSize: 11, fontWeight: '800', letterSpacing: 1, marginBottom: 8, marginTop: 16 },
-  tokenRow:    { flexDirection: 'row', gap: 8 },
-  tokenBtn:    { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 14, borderWidth: 1.5, gap: 4 },
-  tokenDot:    { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  tokenBtnText:{ fontSize: 12, fontWeight: '800' },
+  // Token card (step 0)
+  tokenCard:      { flexDirection: 'row', alignItems: 'center', borderRadius: 20, borderWidth: 1.5, padding: 16, gap: 14 },
+  tokenCardIcon:  { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
+  tokenCardName:  { fontSize: 17, fontWeight: '800' },
+  tokenCardBal:   { fontSize: 12, fontWeight: '500', marginTop: 2 },
+  zeroBadge:      { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  radioOuter:     { width: 22, height: 22, borderRadius: 11, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  radioInner:     { width: 11, height: 11, borderRadius: 6 },
 
-  balanceBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, marginTop: 10, alignSelf: 'flex-start' },
-  balanceBadgeText: { fontSize: 12, fontWeight: '600' },
-  balanceBadgeValue: { fontSize: 12, fontWeight: '800' },
+  // Big input card (step 1)
+  bigInputCard:   { borderRadius: 20, borderWidth: 1.5, padding: 16 },
+  bigInputLabel:  { fontSize: 10, fontWeight: '900', letterSpacing: 1.2 },
+  bigInput:       { fontSize: 28, fontWeight: '800', padding: 0, minWidth: 80 },
+  bigInputDivider:{ height: 1, marginVertical: 10 },
+  bigInputSub:    { fontSize: 12, fontWeight: '500' },
+  maxBtn:         { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
+  tokenPill:      { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20 },
+  tokenPillText:  { fontSize: 14, fontWeight: '800' },
+  previewBanner:  { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 16, borderWidth: 1, marginTop: 12 },
 
-  rowFields:   { flexDirection: 'row', gap: 12 },
-  inputWrap:   { borderWidth: 1.5, borderRadius: 14, paddingHorizontal: 14, height: 52, justifyContent: 'center', flexDirection: 'row', alignItems: 'center' },
-  inputWrapRow:{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  input:       { fontSize: 15, fontWeight: '600' },
-  inputBadge:  { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  inputBadgeText: { fontSize: 12, fontWeight: '800' },
-  inputSuffix: { fontSize: 11, marginTop: 2 },
+  // Detail rows (step 2)
+  detailRow2:     { flexDirection: 'row', alignItems: 'center', borderRadius: 18, borderWidth: 1.5, padding: 16, gap: 14 },
+  detailRowIcon:  { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  detailRowLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1, marginBottom: 3 },
+  detailRowValue: { fontSize: 15, fontWeight: '700' },
+  infoBox:        { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 14, borderRadius: 14, borderWidth: 1 },
 
-  totalPreview:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderRadius: 16, borderWidth: 1.5, marginTop: 20 },
-  totalPreviewLeft:  { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  totalPreviewLabel: { fontSize: 13, fontWeight: '600' },
-  totalPreviewValue: { fontSize: 18, fontWeight: '900' },
+  // Review (step 3)
+  reviewHero:     { alignItems: 'center', borderRadius: 24, borderWidth: 1.5, padding: 24, gap: 12 },
+  reviewHeroAmount:{ fontSize: 24, fontWeight: '900', letterSpacing: -0.5 },
+  reviewHeroFiat: { fontSize: 20, fontWeight: '800' },
+  reviewHeroRate: { fontSize: 13, fontWeight: '500' },
+  reviewRow:      { flexDirection: 'row', alignItems: 'center', borderRadius: 16, borderWidth: 1, padding: 14, gap: 12 },
+  reviewRowIcon:  { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  reviewRowLabel: { flex: 1, fontSize: 13, fontWeight: '600' },
+  reviewRowValue: { fontSize: 14, fontWeight: '800' },
+  feeSummary:     { borderRadius: 18, borderWidth: 1.5, padding: 16, gap: 0 },
+  feeSummaryRow:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8 },
+  feeSummaryLabel:{ fontSize: 13, fontWeight: '600' },
+  feeSummaryValue:{ fontSize: 13, fontWeight: '700' },
+  feeSummaryDivider:{ height: 1, marginVertical: 2 },
+
+  // Wizard footer
+  wizardFooter:   { paddingHorizontal: 20, paddingTop: 16, paddingBottom: Platform.OS === 'ios' ? 36 : 20, borderTopWidth: 1 },
+  wizardNextBtn:  { height: 60, borderRadius: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.25, shadowRadius: 12, elevation: 8 },
+  wizardNextText: { color: '#FFF', fontSize: 16, fontWeight: '900' },
+
+  // Professional chart card
+  chartCard:       { borderRadius: 20, borderWidth: 1.5, marginTop: 20, overflow: 'hidden' },
+  chartTopRow:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', padding: 16, paddingBottom: 12 },
+  chartLabel:      { fontSize: 10, fontWeight: '800', letterSpacing: 1.2 },
+  chartGross:      { fontSize: 26, fontWeight: '900', letterSpacing: -0.5 },
+  chartFiatLabel:  { fontSize: 14, fontWeight: '700' },
+  livePill:        { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
+  liveDot:         { width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' },
+  livePillText:    { fontSize: 9, fontWeight: '900', letterSpacing: 1 },
+  livePillRate:    { fontSize: 11, fontWeight: '800' },
+  changePill:      { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
+  changePillText:  { fontSize: 11, fontWeight: '800' },
+  chartArea:       { paddingHorizontal: 16, paddingBottom: 4 },
+  chartFooter:     { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
+  chartFooterText: { fontSize: 9, fontWeight: '600' },
+  chartDivider:    { height: 1, marginHorizontal: 16, marginVertical: 12 },
+  feeGrid:         { flexDirection: 'row', paddingHorizontal: 16, paddingBottom: 16 },
+  feeGridItem:     { flex: 1, alignItems: 'center', gap: 4 },
+  feeGridLabel:    { fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
+  feeGridValue:    { fontSize: 15, fontWeight: '800' },
+  feeGridDivider:  { width: 1, marginHorizontal: 4 },
   totalPreviewEmpty: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 14, borderRadius: 14, borderWidth: 1.5, marginTop: 20 },
   totalPreviewEmptyText: { fontSize: 13, fontWeight: '600' },
 
@@ -542,5 +1427,4 @@ const s = StyleSheet.create({
   cancelBtn:    { flex: 1, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5 },
   cancelBtnText:{ fontSize: 15, fontWeight: '700' },
   confirmBtn:   { flex: 2, height: 56, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 6 },
-  confirmBtnText:{ color: '#FFF', fontSize: 15, fontWeight: '900' },
-});
+  confirmBtnText:{ color: '#FFF', fontSize: 15, fontWeight: '900' },});

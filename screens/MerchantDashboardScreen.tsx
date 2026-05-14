@@ -32,7 +32,7 @@ export default function MerchantDashboardScreen({ navigation }: any) {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const MENU = [
-    { icon: 'grid', label: 'QR Generator',   sub: 'Create payment QR codes',     screen: 'MerchantQR',    color: '#6366F1' },
+    { icon: 'grid', label: 'QR Generator',   sub: 'Create payment QR codes',     screen: 'MerchantQR',    color: T.primary },
     { icon: 'repeat', label: 'P2P Marketplace', sub: 'Buy & sell crypto P2P',    screen: 'P2PMarketplace', color: '#10B981', badge: pending },
     { icon: 'bar-chart-2', label: 'My Orders', sub: 'View all your P2P orders',  screen: 'MyP2POrders',   color: '#F59E0B' },
     { icon: 'settings', label: 'Business Profile', sub: 'Edit business details', screen: 'BusinessKYCForm', color: T.primary },
@@ -77,8 +77,7 @@ export default function MerchantDashboardScreen({ navigation }: any) {
     );
   }
 
-  // Business KYC submitted but not approved yet
-  if (business.status === 'pending' || business.status === 'under_review') {
+  if (business && (business.status === 'pending' || business.status === 'under_review')) {
     return (
       <View style={[s.root, { backgroundColor: T.background }]}>
         <View style={[s.header, { borderBottomColor: T.border }]}>
@@ -89,24 +88,18 @@ export default function MerchantDashboardScreen({ navigation }: any) {
           <View style={{ width: 40 }} />
         </View>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
-          <View style={[s.emptyIcon, { backgroundColor: '#6366F115', borderColor: '#6366F130' }]}>
-            <Feather name="clock" size={40} color="#6366F1" />
+          <View style={[s.emptyIcon, { backgroundColor: T.primary + '15', borderColor: T.primary + '30' }]}>
+            <Feather name="clock" size={40} color={T.primary} />
           </View>
           <Text style={[s.emptyTitle, { color: T.text }]}>Under Review</Text>
           <Text style={[s.emptySub, { color: T.textDim }]}>
-            Your Business KYC is currently being reviewed by our team. This usually takes 1–24 hours. You'll be notified once approved.
+            Your Business KYC is being reviewed. This usually takes 1–3 business days. You'll be notified once approved.
           </Text>
-          <TouchableOpacity
-            style={[s.startBtn, { backgroundColor: '#6366F1' }]}
-            onPress={() => navigation.navigate('BusinessKYCForm')}
-          >
+          <TouchableOpacity style={[s.startBtn, { backgroundColor: T.primary }]} onPress={() => navigation.navigate('BusinessKYCResult')}>
             <Feather name="eye" size={18} color="#FFF" />
-            <Text style={s.startBtnText}>View Submission</Text>
+            <Text style={s.startBtnText}>View Submission Status</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[s.ghostBtn, { backgroundColor: T.surfaceLow, marginTop: 12 }]}
-            onPress={() => navigation.goBack()}
-          >
+          <TouchableOpacity style={[s.ghostBtn, { backgroundColor: T.surfaceLow, marginTop: 12 }]} onPress={() => navigation.goBack()}>
             <Text style={[s.ghostBtnText, { color: T.text }]}>Back</Text>
           </TouchableOpacity>
         </View>

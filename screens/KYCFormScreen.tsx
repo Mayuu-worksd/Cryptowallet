@@ -16,33 +16,33 @@ const { width } = Dimensions.get('window');
 const TOTAL_STEPS = 5;
 
 const COUNTRY_CODES = [
-  { code: '+1',   name: 'United States' },
-  { code: '+44',  name: 'United Kingdom' },
-  { code: '+91',  name: 'India' },
-  { code: '+61',  name: 'Australia' },
-  { code: '+1',   name: 'Canada' },
-  { code: '+49',  name: 'Germany' },
-  { code: '+33',  name: 'France' },
-  { code: '+65',  name: 'Singapore' },
+  { code: '+1', name: 'United States' },
+  { code: '+44', name: 'United Kingdom' },
+  { code: '+91', name: 'India' },
+  { code: '+61', name: 'Australia' },
+  { code: '+1', name: 'Canada' },
+  { code: '+49', name: 'Germany' },
+  { code: '+33', name: 'France' },
+  { code: '+65', name: 'Singapore' },
   { code: '+971', name: 'UAE' },
-  { code: '+55',  name: 'Brazil' },
-  { code: '+81',  name: 'Japan' },
-  { code: '+82',  name: 'South Korea' },
-  { code: '+86',  name: 'China' },
-  { code: '+60',  name: 'Malaysia' },
-  { code: '+63',  name: 'Philippines' },
-  { code: '+62',  name: 'Indonesia' },
+  { code: '+55', name: 'Brazil' },
+  { code: '+81', name: 'Japan' },
+  { code: '+82', name: 'South Korea' },
+  { code: '+86', name: 'China' },
+  { code: '+60', name: 'Malaysia' },
+  { code: '+63', name: 'Philippines' },
+  { code: '+62', name: 'Indonesia' },
   { code: '+234', name: 'Nigeria' },
-  { code: '+27',  name: 'South Africa' },
-  { code: '+52',  name: 'Mexico' },
-  { code: '+54',  name: 'Argentina' },
+  { code: '+27', name: 'South Africa' },
+  { code: '+52', name: 'Mexico' },
+  { code: '+54', name: 'Argentina' },
 ];
 
 const NATIONALITIES = [
-  'American','British','Canadian','Australian','German','French',
-  'Indian','Singaporean','Emirati','Brazilian','Japanese','Korean',
-  'Chinese','Malaysian','Filipino','Indonesian','Nigerian',
-  'South African','Mexican','Argentine','Other',
+  'American', 'British', 'Canadian', 'Australian', 'German', 'French',
+  'Indian', 'Singaporean', 'Emirati', 'Brazilian', 'Japanese', 'Korean',
+  'Chinese', 'Malaysian', 'Filipino', 'Indonesian', 'Nigerian',
+  'South African', 'Mexican', 'Argentine', 'Other',
 ];
 
 type TC = typeof Theme.colors;
@@ -59,9 +59,9 @@ const IDIllustration = ({ isDark, T }: { isDark: boolean; T: TC }) => (
         <Stop offset="100%" stopColor="#009624" />
       </SvgLinearGradient>
     </Defs>
-    
+
     <Circle cx="120" cy="100" r="80" fill={T.primary} opacity="0.05" />
-    
+
     <G transform="translate(40, 40) rotate(-4)">
       <Rect x="0" y="0" width="160" height="100" rx="12" fill={isDark ? "#2a2a2a" : "#fff"} stroke={isDark ? "#3a3a3a" : "#eee"} strokeWidth="2" />
       <Rect x="0" y="0" width="160" height="20" rx="0" fill="url(#cardGrad)" opacity="0.1" />
@@ -86,7 +86,7 @@ function ProgressBar({ step, total, T }: { step: number; total: number; T: TC })
   }, [step]);
   return (
     <View style={{ height: 6, backgroundColor: T.surfaceHigh, overflow: 'hidden' }}>
-      <Animated.View style={{ height: 6, backgroundColor: T.primary, width: anim.interpolate({ inputRange: [0,1], outputRange: ['0%','100%'] }), borderRadius: 3 }} />
+      <Animated.View style={{ height: 6, backgroundColor: T.primary, width: anim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }), borderRadius: 3 }} />
     </View>
   );
 }
@@ -106,39 +106,39 @@ function Field({
     Animated.timing(accentAnim, { toValue: focused ? 1 : 0, duration: 250, useNativeDriver: false }).start();
   }, [focused, value]);
 
-  const labelTop  = anim.interpolate({ inputRange: [0,1], outputRange: [18, 8] });
-  const labelSize = anim.interpolate({ inputRange: [0,1], outputRange: [15, 11] });
-  
+  const labelTop = anim.interpolate({ inputRange: [0, 1], outputRange: [18, 8] });
+  const labelSize = anim.interpolate({ inputRange: [0, 1], outputRange: [15, 11] });
+
   return (
     <View style={{ marginBottom: error ? 6 : 16 }}>
-      <View style={{ 
-        borderWidth: 1, 
-        borderRadius: 16, 
-        paddingHorizontal: 16, 
-        paddingBottom: 12, 
-        minHeight: 64, 
-        justifyContent: 'center', 
-        backgroundColor: T.surface, 
+      <View style={{
+        borderWidth: 1,
+        borderRadius: 16,
+        paddingHorizontal: 16,
+        paddingBottom: 12,
+        minHeight: 64,
+        justifyContent: 'center',
+        backgroundColor: T.surface,
         borderColor: error ? T.error : T.border,
         overflow: 'hidden'
       }}>
-        <Animated.View style={{ 
-          position: 'absolute', 
-          left: 0, 
-          top: 0, 
-          bottom: 0, 
-          width: 4, 
+        <Animated.View style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: 4,
           backgroundColor: T.primary,
-          opacity: accentAnim 
+          opacity: accentAnim
         }} />
-        
-        <Animated.Text style={{ 
-          position: 'absolute', 
-          left: 16, 
-          fontWeight: '700', 
-          top: labelTop, 
-          fontSize: labelSize, 
-          color: error ? T.error : focused ? T.primary : T.textDim 
+
+        <Animated.Text style={{
+          position: 'absolute',
+          left: 16,
+          fontWeight: '700',
+          top: labelTop,
+          fontSize: labelSize,
+          color: error ? T.error : focused ? T.primary : T.textDim
         }}>
           {label}
         </Animated.Text>
@@ -166,7 +166,7 @@ function SheetModal({ visible, title, onClose, children, T }: {
   visible: boolean; title: string; onClose: () => void; children: React.ReactNode; T: TC;
 }) {
   const [search, setSearch] = useState('');
-  
+
   return (
     <Modal visible={visible} animationType="slide" transparent>
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }}>
@@ -175,17 +175,17 @@ function SheetModal({ visible, title, onClose, children, T }: {
           <View style={{ width: 40, height: 5, borderRadius: 2.5, backgroundColor: T.surfaceHigh, alignSelf: 'center', marginBottom: 20 }} />
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
             <Text style={{ fontSize: 20, fontWeight: '900', color: T.text }}>{title}</Text>
-            <TouchableOpacity onPress={onClose} hitSlop={{ top:12,bottom:12,left:12,right:12 }}>
+            <TouchableOpacity onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
               <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: T.surfaceLow, alignItems: 'center', justifyContent: 'center' }}>
                 <Feather name="x" size={18} color={T.text} />
               </View>
             </TouchableOpacity>
           </View>
-          
+
           <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: T.surfaceLow, borderRadius: 16, paddingHorizontal: 16, height: 50, marginBottom: 16 }}>
             <Feather name="search" size={18} color={T.textDim} style={{ marginRight: 10 }} />
-            <TextInput 
-              placeholder="Search..." 
+            <TextInput
+              placeholder="Search..."
               placeholderTextColor={T.textDim}
               style={{ flex: 1, color: T.text, fontWeight: '600' }}
               value={search}
@@ -195,8 +195,9 @@ function SheetModal({ visible, title, onClose, children, T }: {
 
           {React.Children.map(children, child => {
             if (React.isValidElement(child) && child.type === FlatList) {
-              return React.cloneElement(child as any, {
-                data: (child.props.data as any[]).filter(item => 
+              const flatListElement = child as React.ReactElement<any>;
+              return React.cloneElement(flatListElement, {
+                data: (flatListElement.props.data as any[]).filter(item =>
                   (typeof item === 'string' ? item : (item.name || '')).toLowerCase().includes(search.toLowerCase())
                 )
               });
@@ -214,59 +215,55 @@ export default function KYCFormScreen({ navigation, route }: any) {
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const isEditMode = route?.params?.editMode === true;
 
-  const [step, setStep]         = useState<'intro' | 'details'>(isEditMode ? 'details' : 'intro');
-  const [checking, setChecking] = useState(!isEditMode);
-  const [loading, setLoading]   = useState(false);
-  const [success, setSuccess]   = useState(false);
-  const [toast, setToast]       = useState({ visible: false, message: '', type: 'error' as any });
+  const [checking, setChecking] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [toast, setToast] = useState({ visible: false, message: '', type: 'error' as any });
   const [nationalityModal, setNationalityModal] = useState(false);
   const [countryCodeModal, setCountryCodeModal] = useState(false);
   const [form, setForm] = useState({ name: '', dob: '', nationality: '', countryCode: '+1', phone: '', email: '', address: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Animations
-  const heroSlide = useRef(new Animated.Value(50)).current;
-  const heroFade = useRef(new Animated.Value(0)).current;
-  const checkItems = [useRef(new Animated.Value(0)).current, useRef(new Animated.Value(0)).current, useRef(new Animated.Value(0)).current];
+  const heroSlide = useRef(new Animated.Value(0)).current;
+  const heroFade = useRef(new Animated.Value(1)).current;
+  const checkItems = [useRef(new Animated.Value(1)).current, useRef(new Animated.Value(1)).current, useRef(new Animated.Value(1)).current];
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  useEffect(() => {
-    if (step === 'intro') {
-      Animated.parallel([
-        Animated.timing(heroFade, { toValue: 1, duration: 800, useNativeDriver: true }),
-        Animated.timing(heroSlide, { toValue: 0, duration: 800, useNativeDriver: true }),
-      ]).start();
-
-      checkItems.forEach((anim, i) => {
-        Animated.timing(anim, { toValue: 1, duration: 500, delay: 400 + (i * 150), useNativeDriver: true }).start();
-      });
-
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.03, duration: 1000, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
-        ])
-      ).start();
-    }
-  }, [step]);
+  useEffect(() => {}, []);
 
   useEffect(() => {
     kycService.getStatus(walletAddress)
       .then(r => {
-        if (!r) return;
+        if (!r) { setChecking(false); return; }
         if (isEditMode) {
-          const sorted  = [...COUNTRY_CODES].sort((a,b) => b.code.length - a.code.length);
+          const sorted = [...COUNTRY_CODES].sort((a, b) => b.code.length - a.code.length);
           const matched = sorted.find(c => (r.phone ?? '').startsWith(c.code));
-          const dial    = matched?.code ?? '+1';
+          const dial = matched?.code ?? '+1';
           setForm({ name: r.full_name ?? '', dob: r.dob ?? '', nationality: r.nationality ?? '', countryCode: dial, phone: matched ? (r.phone ?? '').slice(dial.length) : (r.phone ?? ''), email: r.email ?? '', address: r.address ?? '' });
+          setChecking(false);
           return;
         }
-        if (r.status === 'verified' || r.status === 'under_review' || (r.status === 'pending' && !!r.document_url)) {
+        // Hard guard — should not reach here for verified/under_review
+        // but protect anyway in case of direct navigation
+        if (
+          r.status === 'verified' ||
+          r.status === 'under_review' ||
+          (r.status === 'pending' && !!r.document_url)
+        ) {
           navigation.replace('KYCResult');
+          return;
         }
+        // Pending with no doc — pre-fill form so user continues smoothly
+        if (r.status === 'pending') {
+          const sorted = [...COUNTRY_CODES].sort((a, b) => b.code.length - a.code.length);
+          const matched = sorted.find(c => (r.phone ?? '').startsWith(c.code));
+          const dial = matched?.code ?? '+1';
+          setForm({ name: r.full_name ?? '', dob: r.dob ?? '', nationality: r.nationality ?? '', countryCode: dial, phone: matched ? (r.phone ?? '').slice(dial.length) : (r.phone ?? ''), email: r.email ?? '', address: r.address ?? '' });
+        }
+        setChecking(false);
       })
-      .catch(() => {})
-      .finally(() => setChecking(false));
+      .catch(() => setChecking(false));
   }, []);
 
   const set = (key: keyof typeof form) => (val: string) => {
@@ -284,7 +281,7 @@ export default function KYCFormScreen({ navigation, route }: any) {
       e.dob = 'Date of birth is required';
     } else {
       const [dd, mm, yyyy] = form.dob.split('/');
-      const age = (Date.now() - new Date(+yyyy, +mm - 1, +dd).getTime()) / (1000*60*60*24*365.25);
+      const age = (Date.now() - new Date(+yyyy, +mm - 1, +dd).getTime()) / (1000 * 60 * 60 * 24 * 365.25);
       if (isNaN(age) || age < 18) e.dob = 'Must be at least 18 years old';
     }
     if (!form.nationality) e.nationality = 'Select nationality';
@@ -307,6 +304,7 @@ export default function KYCFormScreen({ navigation, route }: any) {
         setSuccess(true);
         setTimeout(() => navigation.goBack(), 1500);
       } catch (e: any) {
+        console.error('[KYCFormScreen] updateDetails failed:', e?.message ?? e);
         setToast({ visible: true, message: e?.message ?? 'Failed to save.', type: 'error' });
       }
       setLoading(false);
@@ -315,7 +313,7 @@ export default function KYCFormScreen({ navigation, route }: any) {
     try {
       const existing = await kycService.getStatus(walletAddress);
       if (existing?.status === 'verified' || existing?.status === 'under_review' ||
-          (existing?.status === 'pending' && !!existing.document_url)) {
+        (existing?.status === 'pending' && !!existing.document_url)) {
         setLoading(false); navigation.replace('KYCResult'); return;
       }
       const kycData = {
@@ -325,15 +323,20 @@ export default function KYCFormScreen({ navigation, route }: any) {
       };
       await kycService.submitKYC(walletAddress, kycData);
       setSuccess(true);
-      setTimeout(() => {
-        setLoading(false);
-        navigation.navigate('KYCDocument', { kycData });
-      }, 1000);
+      setLoading(false);
+      navigation.navigate('KYCDocument', { kycData });
     } catch (e: any) {
+      console.error('[KYCFormScreen] submitKYC failed:', e?.message ?? e);
       setLoading(false);
       const msg = e?.message ?? '';
-      if (msg.startsWith('ALREADY_SUBMITTED:pending')) {
-        navigation.navigate('KYCDocument', { kycData: { name: form.name.trim(), full_name: form.name.trim(), email: form.email.trim(), phone: `${form.countryCode}${form.phone.trim()}`, nationality: form.nationality, dob: form.dob, address: form.address.trim(), document_type: '' } });
+      if (msg.startsWith('ALREADY_SUBMITTED:verified') || msg.startsWith('ALREADY_SUBMITTED:under_review')) {
+        // Already done — go to result
+        navigation.replace('KYCResult');
+        return;
+      }
+      if (msg.startsWith('ALREADY_SUBMITTED:')) {
+        // pending with docs — go to result
+        navigation.replace('KYCResult');
         return;
       }
       setToast({ visible: true, message: msg || 'Failed to save. Try again.', type: 'error' });
@@ -348,72 +351,10 @@ export default function KYCFormScreen({ navigation, route }: any) {
     );
   }
 
-  if (step === 'intro') {
-    return (
-      <View style={{ flex: 1, backgroundColor: T.background }}>
-        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-        <View style={s.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={[s.iconBtn, { backgroundColor: T.surfaceLow }]}>
-            <Feather name="arrow-left" size={22} color={T.text} />
-          </TouchableOpacity>
-          <View style={s.headerStepContainer}>
-             <Text style={[s.headerTitle, { color: T.text }]}>Identity Verification</Text>
-             <Text style={[s.stepPill, { color: T.textDim }]}>Step 1 of {TOTAL_STEPS}</Text>
-          </View>
-          <View style={{ width: 40 }} />
-        </View>
-
-        <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-          <Animated.View style={[s.heroWrap, { opacity: heroFade, transform: [{ translateY: heroSlide }] }]}>
-            <IDIllustration isDark={isDarkMode} T={T} />
-            <Text style={[s.heroTitle, { color: T.text }]}>Let's verify your identity</Text>
-            <Text style={[s.heroSub, { color: T.textMuted }]}>This keeps your account secure and helps us follow legal requirements.</Text>
-          </Animated.View>
-
-          {[
-            { icon: 'file-text', title: 'Personal Details', sub: 'Full name, DOB and address' },
-            { icon: 'credit-card', title: 'Government ID',  sub: "Passport or Driver's License" },
-            { icon: 'user-check',  title: 'Face Scan',      sub: 'Quick selfie to confirm identity' },
-          ].map((item, i) => (
-            <Animated.View key={i} style={[s.checkRow, { backgroundColor: T.surface, borderColor: T.border, opacity: checkItems[i] }]}>
-              <View style={s.accentLine} />
-              <View style={[s.checkIcon, { backgroundColor: `${T.primary}15` }]}>
-                <Feather name={item.icon as any} size={20} color={T.primary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[s.checkTitle, { color: T.text }]}>{item.title}</Text>
-                <Text style={[s.checkSub, { color: T.textDim }]}>{item.sub}</Text>
-              </View>
-              <Feather name="chevron-right" size={16} color={T.textDim} />
-            </Animated.View>
-          ))}
-
-          <View style={s.trustBadge}>
-            <Feather name="lock" size={14} color={T.success} />
-            <Text style={[s.trustText, { color: T.textDim }]}>Bank-grade 256-bit encryption security</Text>
-          </View>
-
-          <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-            <TouchableOpacity 
-              style={[s.btn, { backgroundColor: T.primary, shadowColor: T.primary }]} 
-              onPress={() => setStep('details')} 
-              activeOpacity={0.9}
-            >
-              <Text style={s.btnText}>Continue to Verification</Text>
-              <View style={s.btnIconCircle}>
-                <Feather name="arrow-right" size={18} color={T.primary} />
-              </View>
-            </TouchableOpacity>
-          </Animated.View>
-        </ScrollView>
-      </View>
-    );
-  }
-
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: T.background }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <Toast visible={toast.visible} message={toast.message} type={toast.type} onHide={() => setToast(p => ({ ...p, visible: false }))} />
+      <Toast visible={toast.visible} message={toast.message} type={toast.type} isDarkMode={isDarkMode} onHide={() => setToast(p => ({ ...p, visible: false }))} />
 
       <SheetModal visible={nationalityModal} title="Select Nationality" onClose={() => setNationalityModal(false)} T={T}>
         <FlatList
@@ -428,7 +369,7 @@ export default function KYCFormScreen({ navigation, route }: any) {
               <Text style={[s.sheetRowText, { color: T.text }]}>{item}</Text>
               {form.nationality === item && (
                 <View style={[s.checkBadge, { backgroundColor: T.primary }]}>
-                   <Feather name="check" size={12} color="#FFF" />
+                  <Feather name="check" size={12} color="#FFF" />
                 </View>
               )}
             </TouchableOpacity>
@@ -451,9 +392,9 @@ export default function KYCFormScreen({ navigation, route }: any) {
                 <Text style={{ color: T.textDim, fontSize: 13, fontWeight: '700' }}>{item.code}</Text>
               </View>
               {form.countryCode === item.code && (
-                 <View style={[s.checkBadge, { backgroundColor: T.primary }]}>
-                    <Feather name="check" size={12} color="#FFF" />
-                 </View>
+                <View style={[s.checkBadge, { backgroundColor: T.primary }]}>
+                  <Feather name="check" size={12} color="#FFF" />
+                </View>
               )}
             </TouchableOpacity>
           )}
@@ -461,7 +402,7 @@ export default function KYCFormScreen({ navigation, route }: any) {
       </SheetModal>
 
       <View style={s.header}>
-        <TouchableOpacity onPress={() => isEditMode ? navigation.goBack() : setStep('intro')} style={[s.iconBtn, { backgroundColor: T.surfaceLow }]}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={[s.iconBtn, { backgroundColor: T.surfaceLow }]}>
           <Feather name="arrow-left" size={22} color={T.text} />
         </TouchableOpacity>
         <View style={s.headerStepContainer}>
@@ -470,18 +411,18 @@ export default function KYCFormScreen({ navigation, route }: any) {
         </View>
         <View style={{ width: 40 }} />
       </View>
-      
+
       <ProgressBar step={2} total={TOTAL_STEPS} T={T} />
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <View style={s.sectionHeader}>
-           <View style={[s.stepCircle, { backgroundColor: T.primary }]}>
-              <Text style={s.stepNumber}>01</Text>
-           </View>
-           <View>
-             <Text style={[s.sectionTitle, { color: T.text }]}>Identity</Text>
-             <Text style={[s.sectionSub, { color: T.textDim }]}>Enter details as they appear on your ID.</Text>
-           </View>
+          <View style={[s.stepCircle, { backgroundColor: T.primary }]}>
+            <Text style={s.stepNumber}>01</Text>
+          </View>
+          <View>
+            <Text style={[s.sectionTitle, { color: T.text }]}>Identity</Text>
+            <Text style={[s.sectionSub, { color: T.textDim }]}>Enter details as they appear on your ID.</Text>
+          </View>
         </View>
 
         <Field label="Full Legal Name" value={form.name} onChangeText={set('name')} error={errors.name} T={T} />
@@ -491,8 +432,8 @@ export default function KYCFormScreen({ navigation, route }: any) {
           onChangeText={val => {
             const d = val.replace(/\D/g, '').slice(0, 8);
             let out = d;
-            if (d.length > 4) out = d.slice(0,2) + '/' + d.slice(2,4) + '/' + d.slice(4);
-            else if (d.length > 2) out = d.slice(0,2) + '/' + d.slice(2);
+            if (d.length > 4) out = d.slice(0, 2) + '/' + d.slice(2, 4) + '/' + d.slice(4);
+            else if (d.length > 2) out = d.slice(0, 2) + '/' + d.slice(2);
             set('dob')(out);
           }}
           keyboardType="numeric"
@@ -501,12 +442,12 @@ export default function KYCFormScreen({ navigation, route }: any) {
         />
 
         <View style={s.sectionHeader}>
-           <View style={[s.stepCircle, { backgroundColor: T.primary }]}>
-              <Text style={s.stepNumber}>02</Text>
-           </View>
-           <View>
-             <Text style={[s.sectionTitle, { color: T.text }]}>Contact</Text>
-           </View>
+          <View style={[s.stepCircle, { backgroundColor: T.primary }]}>
+            <Text style={s.stepNumber}>02</Text>
+          </View>
+          <View>
+            <Text style={[s.sectionTitle, { color: T.text }]}>Contact</Text>
+          </View>
         </View>
 
         <Field label="Email Address" value={form.email} onChangeText={set('email')} keyboardType="email-address" error={errors.email} T={T} />
@@ -534,12 +475,12 @@ export default function KYCFormScreen({ navigation, route }: any) {
         </View>
 
         <View style={s.sectionHeader}>
-           <View style={[s.stepCircle, { backgroundColor: T.primary }]}>
-              <Text style={s.stepNumber}>03</Text>
-           </View>
-           <View>
-             <Text style={[s.sectionTitle, { color: T.text }]}>Location</Text>
-           </View>
+          <View style={[s.stepCircle, { backgroundColor: T.primary }]}>
+            <Text style={s.stepNumber}>03</Text>
+          </View>
+          <View>
+            <Text style={[s.sectionTitle, { color: T.text }]}>Location</Text>
+          </View>
         </View>
 
         <TouchableOpacity
@@ -559,18 +500,18 @@ export default function KYCFormScreen({ navigation, route }: any) {
 
         <Field label="Residential Address" value={form.address} onChangeText={set('address')} error={errors.address} T={T} />
 
-        <TouchableOpacity 
-          style={[s.btn, { backgroundColor: T.primary, shadowColor: T.primary }, (loading || success) && { opacity: 0.8 }]} 
-          onPress={handleNext} 
-          disabled={loading || success} 
+        <TouchableOpacity
+          style={[s.btn, { backgroundColor: T.primary, shadowColor: T.primary }, (loading || success) && { opacity: 0.8 }]}
+          onPress={handleNext}
+          disabled={loading || success}
           activeOpacity={0.9}
         >
           {loading ? (
             <ActivityIndicator color="#FFF" />
           ) : success ? (
             <Animated.View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-               <Text style={s.btnText}>Success</Text>
-               <Feather name="check-circle" size={20} color="#FFF" />
+              <Text style={s.btnText}>Success</Text>
+              <Feather name="check-circle" size={20} color="#FFF" />
             </Animated.View>
           ) : (
             <>
@@ -587,12 +528,12 @@ export default function KYCFormScreen({ navigation, route }: any) {
 }
 
 const s = StyleSheet.create({
-  header: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between', 
-    paddingHorizontal: 20, 
-    paddingTop: Platform.OS === 'ios' ? 60 : 48, 
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 60 : 48,
     paddingBottom: 16,
   },
   headerStepContainer: {
@@ -607,13 +548,13 @@ const s = StyleSheet.create({
   heroTitle: { fontSize: 28, fontWeight: '900', textAlign: 'center', letterSpacing: -0.8, marginTop: 20, marginBottom: 10 },
   heroSub: { fontSize: 16, textAlign: 'center', lineHeight: 24, paddingHorizontal: 20 },
 
-  checkRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    gap: 16, 
-    borderRadius: 20, 
-    padding: 20, 
-    marginBottom: 12, 
+  checkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 12,
     borderWidth: 1,
     overflow: 'hidden'
   },
@@ -628,8 +569,8 @@ const s = StyleSheet.create({
     borderBottomRightRadius: 4,
   },
   checkIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
-  checkTitle:{ fontSize: 17, fontWeight: '800', marginBottom: 2 },
-  checkSub:  { fontSize: 14, fontWeight: '500' },
+  checkTitle: { fontSize: 17, fontWeight: '800', marginBottom: 2 },
+  checkSub: { fontSize: 14, fontWeight: '500' },
 
   trustBadge: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginVertical: 32 },
   trustText: { fontSize: 13, fontWeight: '600' },
@@ -640,12 +581,12 @@ const s = StyleSheet.create({
   sectionTitle: { fontSize: 20, fontWeight: '900', letterSpacing: -0.4 },
   sectionSub: { fontSize: 14, fontWeight: '500', marginTop: 2 },
 
-  premiumSelector: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    borderWidth: 1, 
-    borderRadius: 16, 
-    paddingHorizontal: 16, 
+  premiumSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 16,
     paddingVertical: 14,
     minHeight: 64
   },
@@ -654,7 +595,7 @@ const s = StyleSheet.create({
 
   dialBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, height: 40, borderRadius: 12 },
   dialText: { fontSize: 16, fontWeight: '800' },
-  phoneDivider:{ width: 1, height: 30, marginLeft: 8 },
+  phoneDivider: { width: 1, height: 30, marginLeft: 8 },
   phoneLabel: { fontSize: 11, fontWeight: '800', marginBottom: 2, letterSpacing: 0.5, textTransform: 'uppercase' },
   phoneInput: { fontSize: 16, fontWeight: '700', padding: 0 },
 
@@ -662,18 +603,18 @@ const s = StyleSheet.create({
   sheetRowText: { fontSize: 16, fontWeight: '700' },
   checkBadge: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
 
-  btn: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    gap: 12, 
-    height: 64, 
-    borderRadius: 20, 
-    marginTop: 20, 
-    shadowOffset: { width: 0, height: 8 }, 
-    shadowOpacity: 0.3, 
-    shadowRadius: 12, 
-    elevation: 8 
+  btn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    height: 64,
+    borderRadius: 20,
+    marginTop: 20,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8
   },
   btnText: { color: '#FFF', fontSize: 18, fontWeight: '900', letterSpacing: 0.5 },
   btnIconCircle: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center' }

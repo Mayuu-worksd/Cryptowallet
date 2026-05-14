@@ -8,6 +8,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Rect, Circle, Defs, LinearGradient as SvgLinearGradient, Stop, G, Polygon } from 'react-native-svg';
 import { useWallet } from '../store/WalletContext';
 import { Theme } from '../constants';
+import { kycService } from '../services/supabaseService';
 
 const IDVerificationIllustration = ({ isDark }: { isDark: boolean }) => (
   <Svg width={280} height={240} viewBox="0 0 280 240" fill="none">
@@ -95,24 +96,25 @@ const STEPS = [
 ];
 
 export default function KYCIntroScreen({ navigation }: any) {
-  const { isDarkMode } = useWallet();
+  const { isDarkMode, walletAddress } = useWallet() as any;
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
   useEffect(() => {
+    // Guard: if already submitted redirect immediately
+    kycService.getStatus(walletAddress).then((r: any) => {
+      if (!r) return;
+      if (r.status === 'verified' || r.status === 'under_review' ||
+          (r.status === 'pending' && !!r.document_url)) {
+        navigation.replace('KYCResult');
+      }
+    }).catch(() => {});
+
     Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 800,
-        useNativeDriver: true,
-      }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 800, useNativeDriver: true }),
     ]).start();
   }, []);
 
