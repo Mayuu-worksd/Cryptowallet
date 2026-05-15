@@ -639,7 +639,7 @@ const styles = StyleSheet.create({
   editPillText: { fontSize: 13, fontWeight: '800' },
 
   scroll: { paddingBottom: 120 },
-  carousel: { height: (SCREEN_WIDTH - 48) / 1.586 + 48 },
+  carousel: { height: (SCREEN_WIDTH - 48) / 1.586 + 64 },
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 12 },
   dot: { width: 6, height: 6, borderRadius: 3 },
   dotActive: { width: 22, borderRadius: 3 },

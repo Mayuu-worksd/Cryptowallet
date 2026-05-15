@@ -125,12 +125,12 @@ const styles = StyleSheet.create({
   card: {
     aspectRatio: 1.586,
     borderRadius: 24,
-    padding: 28,
+    padding: 20,
     justifyContent: 'space-between',
     overflow: 'hidden',
   },
   cardCompact: {
-    padding: 18,
+    padding: 14,
     borderRadius: 16,
   },
   frozenCard: { opacity: 0.75 },
@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
   cardType: { fontSize: 8, fontWeight: '800', letterSpacing: 1.5, marginTop: 2 },
   mcWrap: { flexDirection: 'row', alignItems: 'center' },
   mcCircle: { width: 20, height: 20, borderRadius: 10 },
-  numberWrap: { marginVertical: 24 },
+  numberWrap: { marginVertical: 8 },
   number: {
     fontSize: 22,
     fontWeight: '700',
@@ -155,10 +155,10 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   numberCompact: { fontSize: 16, letterSpacing: 1.5 },
-  footer: { flexDirection: 'row', alignItems: 'flex-end' },
-  footerItem: { marginRight: 24 },
-  label: { fontSize: 7, fontWeight: '800', letterSpacing: 0.8, marginBottom: 4, opacity: 0.8 },
-  value: { fontSize: 13, fontWeight: '700', letterSpacing: 0.3 },
+  footer: { flexDirection: 'row', alignItems: 'flex-end', flexWrap: 'nowrap' },
+  footerItem: { marginRight: 16 },
+  label: { fontSize: 7, fontWeight: '800', letterSpacing: 0.8, marginBottom: 3, opacity: 0.8 },
+  value: { fontSize: 12, fontWeight: '700', letterSpacing: 0.3 },
   eyeBtn: { 
     marginLeft: 'auto', 
     width: 36, 
