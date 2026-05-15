@@ -20,8 +20,12 @@ export default function CardPreview({ cardNumber, holderName, expiry, cvv = '•
   const design = getDesign(designKey);
 
   const formattedNumber = useMemo(() => {
-    if (showDetails) return cardNumber;
-    const last4 = cardNumber.replace(/\s/g, '').slice(-4);
+    const clean = cardNumber.replace(/\s/g, '');
+    if (showDetails) {
+      // Always format as groups of 4
+      return clean.replace(/(\d{4})(?=\d)/g, '$1  ');
+    }
+    const last4 = clean.slice(-4);
     return `••••  ••••  ••••  ${last4}`;
   }, [cardNumber, showDetails]);
 
@@ -31,13 +35,13 @@ export default function CardPreview({ cardNumber, holderName, expiry, cvv = '•
   }, [expiry, showDetails]);
 
   const handleToggleDetails = () => {
+    if (authenticating) return; // prevent double tap during auth
     if (!showDetails) {
       setAuthenticating(true);
-      // Simulate biometric/secure check
       setTimeout(() => {
         setAuthenticating(false);
         setShowDetails(true);
-      }, 1000);
+      }, 800);
     } else {
       setShowDetails(false);
     }
@@ -149,10 +153,9 @@ const styles = StyleSheet.create({
   mcCircle: { width: 20, height: 20, borderRadius: 10 },
   numberWrap: { marginVertical: 8 },
   number: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
-    letterSpacing: 2.5,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    letterSpacing: 3,
   },
   numberCompact: { fontSize: 16, letterSpacing: 1.5 },
   footer: { flexDirection: 'row', alignItems: 'flex-end', flexWrap: 'nowrap' },
