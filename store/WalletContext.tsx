@@ -106,6 +106,7 @@ type WalletContextType = {
   toggleFreezeCard: () => void;
   cardTransactions: CardTransaction[];
   cardDetails: { number: string; expiry: string; cvv: string; brand: 'VISA' | 'MASTERCARD'; holderName: string; design: string };
+  setCardDetails: (details: any) => void;
   cardCreated: boolean;
   createCard: (holderName: string, design: string) => void;
   updateCardDetails: (patch: { holderName?: string; design?: string }) => void;
@@ -154,11 +155,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [cardFrozen,       setCardFrozen]       = useState(false);
   const [cardTransactions, setCardTransactions] = useState<CardTransaction[]>([]);
   const [cardCreated,      setCardCreated]      = useState(false);
-  const [cardDetails,      setCardDetails]      = useState({
+  const [cardDetails,      setCardDetails]      = useState<{ number: string; expiry: string; cvv: string; brand: 'VISA' | 'MASTERCARD'; holderName: string; design: string }>({
     number: '\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022',
     expiry: '\u2022\u2022/\u2022\u2022',
     cvv: '\u2022\u2022\u2022',
-    brand: 'VISA' as const,
+    brand: 'VISA',
     holderName: 'CARD HOLDER',
     design: 'dark',
   });
@@ -237,6 +238,38 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   // Testnet: no real on-chain transfer — update local state directly.
   // Mainnet with contract deployed: real ETH moved on-chain — poll RPC until balance updates.
   // Mainnet without contract: same as testnet (simulated).
+  const fetchBalance = useCallback(async (address: string, net: string) => {
+    setIsLoadingBalance(true);
+    try {
+      const isTronNet = net === 'TRON' || net === 'TRON Nile';
+      let fetchAddr = address;
+      if (isTronNet) {
+        const stored = await storageService.getTronAddress();
+        if (stored) {
+          fetchAddr = stored;
+        } else {
+          const mnemonic = await storageService.getMnemonic();
+          if (mnemonic) {
+            const { deriveTronAddress } = await import('../services/tronService');
+            const tron = await deriveTronAddress(mnemonic);
+            fetchAddr = tron.address;
+            setTronAddress(tron.address);
+            storageService.saveTronAddress(tron.address).catch(() => {});
+          }
+        }
+      }
+      const onChain = await getWalletBalances(fetchAddr, net, balancesRef.current);
+      setEthBalance(onChain.ETH.toFixed(6));
+      ethBalanceRef.current = onChain.ETH.toFixed(6);
+      setBalances(onChain);
+      balancesRef.current = onChain;
+      await AsyncStorage.setItem('cw_token_balances', JSON.stringify(onChain));
+    } catch (e) {
+    } finally {
+      setIsLoadingBalance(false);
+    }
+  }, []);
+
   const creditP2PBalance = useCallback((token: string, amount: number) => {
     const isTestnet = NETWORK_INFO[network]?.type === 'Testnet';
     const contractDeployed = !!(ESCROW_CONTRACTS && ESCROW_CONTRACTS[network]);
@@ -482,10 +515,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             if (vcc || dbCard) supabaseCardRestoredRef.current = true;
             if (vcc) {
               const variant = variants.find(v => v.id === vcc.card_variant);
+              // Preserve full card number from AsyncStorage if it exists
+              const existingDetails = savedDetails ? JSON.parse(savedDetails) : null;
+              const existingNumber = existingDetails?.number ?? '';
+              const hasFullNumber = /^\d{4}\s\d{4}\s\d{4}\s\d{4}$/.test(existingNumber);
               const restoredDetails = {
-                number:     savedDetails ? JSON.parse(savedDetails).number : '•••• •••• •••• ••••',
+                number:     hasFullNumber ? existingNumber : ('•••• •••• •••• ' + vcc.card_last4),
                 expiry:     vcc.expiry_mm_yy,
-                cvv:        '•••',
+                cvv:        existingDetails?.cvv && existingDetails.cvv !== '•••' ? existingDetails.cvv : '•••',
                 brand:      (vcc.card_network === 'Mastercard' ? 'MASTERCARD' : 'VISA') as 'VISA' | 'MASTERCARD',
                 holderName: vcc.card_holder_name,
                 design:     variant?.color_hex ?? 'dark',
@@ -500,9 +537,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
                 ['cw_card_details', JSON.stringify(restoredDetails)],
               ]);
             } else if (dbCard) {
-              const restoredDetails = savedDetails
-                ? JSON.parse(savedDetails)
-                : { number: '•••• •••• •••• ••••', expiry: dbCard.expiry_month + '/' + dbCard.expiry_year, cvv: '•••', brand: 'VISA' as const, holderName: dbCard.holder_name, design: dbCard.design };
+              const existingDetails = savedDetails ? JSON.parse(savedDetails) : null;
+              const existingNumber = existingDetails?.number ?? '';
+              const hasFullNumber = /^\d{4}\s\d{4}\s\d{4}\s\d{4}$/.test(existingNumber);
+              const restoredDetails = {
+                number:     hasFullNumber ? existingNumber : ('•••• •••• •••• ' + dbCard.card_last4),
+                expiry:     existingDetails?.expiry ?? (dbCard.expiry_month + '/' + dbCard.expiry_year),
+                cvv:        existingDetails?.cvv && existingDetails.cvv !== '•••' ? existingDetails.cvv : '•••',
+                brand:      'VISA' as const,
+                holderName: dbCard.holder_name,
+                design:     dbCard.design,
+              };
               setCardCreated(true);
               setCardBalance(dbCard.balance);
               setCardFrozen(dbCard.status === 'frozen');
@@ -578,39 +623,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     startup();
   }, []);
 
-  const fetchBalance = useCallback(async (address: string, net: string) => {
-    setIsLoadingBalance(true);
-    try {
-      // TRON networks need the T... address, not the EVM 0x... address
-      const isTronNet = net === 'TRON' || net === 'TRON Nile';
-      let fetchAddr = address;
-      if (isTronNet) {
-        const stored = await storageService.getTronAddress();
-        if (stored) {
-          fetchAddr = stored;
-        } else {
-          // derive on the fly if not stored yet
-          const mnemonic = await storageService.getMnemonic();
-          if (mnemonic) {
-            const { deriveTronAddress } = await import('../services/tronService');
-            const tron = await deriveTronAddress(mnemonic);
-            fetchAddr = tron.address;
-            setTronAddress(tron.address);
-            storageService.saveTronAddress(tron.address).catch(() => {});
-          }
-        }
-      }
-      const onChain = await getWalletBalances(fetchAddr, net, balancesRef.current);
-      setEthBalance(onChain.ETH.toFixed(6));
-      ethBalanceRef.current = onChain.ETH.toFixed(6);
-      setBalances(onChain);
-      balancesRef.current = onChain;
-      await AsyncStorage.setItem('cw_token_balances', JSON.stringify(onChain));
-    } catch (e) {
-    } finally {
-      setIsLoadingBalance(false);
-    }
-  }, []);
+
 
   const refreshBalance = useCallback(async () => {
     if (!walletAddress) return;
@@ -764,10 +777,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     AsyncStorage.setItem('cw_card_balance', String(cardBalance)).catch(() => {});
   }, [cardBalance, dataLoaded, hasWallet]);
 
-  useEffect(() => {
-    if (!dataLoaded || !hasWallet) return;
-    AsyncStorage.setItem('cw_card_transactions', JSON.stringify(cardTransactions)).catch(() => {});
-  }, [cardTransactions, dataLoaded, hasWallet]);
+  // cardTransactions are persisted inline in topupCard/spendCard for immediate consistency
 
   const fetchPrices = useCallback(async () => {
     try {
@@ -1220,10 +1230,21 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const topupCard = useCallback((coin: string, amount: number): boolean => {
     const coinPrice = prices[coin]?.usd ?? 1;
     const usd       = +(amount * coinPrice).toFixed(2);
-    setCardBalance(prev => +(prev + usd).toFixed(2));
+    let newBalance = 0;
+    setCardBalance(prev => {
+      newBalance = +(prev + usd).toFixed(2);
+      return newBalance;
+    });
+    // Use setTimeout to ensure newBalance is set after state update
+    const cardTx: Omit<CardTransaction, 'id' | 'timestamp'> = { type: 'topup', amount: usd, label: `Top-up via ${coin}`, coin, coinAmount: amount, status: 'success' };
+    const newCardTx: CardTransaction = { ...cardTx, id: Date.now().toString(), timestamp: new Date().toISOString() };
+    setCardTransactions(prev => {
+      const updated = [newCardTx, ...prev];
+      AsyncStorage.setItem('cw_card_transactions', JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
     addTx({ type: 'card_topup', coin, amount: amount.toString(), usdValue: usd.toFixed(2), address: 'Virtual Card', status: 'success' });
-    addCardTx({ type: 'topup', amount: usd, label: `Top-up via ${coin}`, coin, coinAmount: amount, status: 'success' });
-    // Log to Supabase + update card balance
+    // Log to Supabase + update card balance (use functional read to get latest)
     txService.log({
       wallet_address: walletAddress,
       type:      'card_topup',
@@ -1233,17 +1254,29 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       status:    'success',
       label:     `Top-up via ${coin}`,
     }).catch(() => {});
-    dbCardService.updateBalance(walletAddress, +(cardBalance + usd).toFixed(2)).catch(() => {});
-    vccService.updateBalance(walletAddress, +(cardBalance + usd).toFixed(2)).catch(() => {});
+    // Persist new balance to AsyncStorage immediately
+    setCardBalance(prev => {
+      const finalBal = +(prev).toFixed(2);
+      AsyncStorage.setItem('cw_card_balance', String(finalBal)).catch(() => {});
+      dbCardService.updateBalance(walletAddress, finalBal).catch(() => {});
+      vccService.updateBalance(walletAddress, finalBal).catch(() => {});
+      return prev;
+    });
     return true;
-  }, [prices, walletAddress, cardBalance, addTx, addCardTx]);
+  }, [prices, walletAddress, addTx]);
 
   const spendCard = useCallback((coin: string, amountUSD: number, label: string): boolean => {
     if (cardFrozen) return false;
     if (amountUSD > cardBalance) return false;
+    const cardTx: Omit<CardTransaction, 'id' | 'timestamp'> = { type: 'spend', amount: amountUSD, label, coin, status: 'success' };
+    const newCardTx: CardTransaction = { ...cardTx, id: Date.now().toString(), timestamp: new Date().toISOString() };
+    setCardTransactions(prev => {
+      const updated = [newCardTx, ...prev];
+      AsyncStorage.setItem('cw_card_transactions', JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
     setCardBalance(prev => +(prev - amountUSD).toFixed(2));
     addTx({ type: 'card_spend', coin, amount: amountUSD.toFixed(2), usdValue: amountUSD.toFixed(2), address: label, status: 'success' });
-    addCardTx({ type: 'spend', amount: amountUSD, label, coin, status: 'success' });
     // Log to Supabase + update card balance
     txService.log({
       wallet_address: walletAddress,
@@ -1254,10 +1287,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       status:    'success',
       label,
     }).catch(() => {});
-    dbCardService.updateBalance(walletAddress, +(cardBalance - amountUSD).toFixed(2)).catch(() => {});
-    vccService.updateBalance(walletAddress, +(cardBalance - amountUSD).toFixed(2)).catch(() => {});
+    setCardBalance(prev => {
+      const finalBal = +(prev).toFixed(2);
+      AsyncStorage.setItem('cw_card_balance', String(finalBal)).catch(() => {});
+      dbCardService.updateBalance(walletAddress, finalBal).catch(() => {});
+      vccService.updateBalance(walletAddress, finalBal).catch(() => {});
+      return prev;
+    });
     return true;
-  }, [cardFrozen, cardBalance, walletAddress, addTx, addCardTx]);
+  }, [cardFrozen, cardBalance, walletAddress, addTx]);
 
   const generateCardDetails = useCallback(() => {
     // no-op: card details are set at creation time and restored from Supabase
@@ -1276,10 +1314,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       ]);
       if (vcc) {
         const variant = variants.find(v => v.id === vcc.card_variant);
+        const existing = await AsyncStorage.getItem('cw_card_details').catch(() => null);
+        const existingParsed = existing ? JSON.parse(existing) : null;
+        const existingNum = existingParsed?.number ?? '';
+        const hasFullNum = /^\d{4}\s\d{4}\s\d{4}\s\d{4}$/.test(existingNum);
         const details = {
-          number:     '•••• •••• •••• ' + vcc.card_last4,
+          number:     hasFullNum ? existingNum : ('•••• •••• •••• ' + vcc.card_last4),
           expiry:     vcc.expiry_mm_yy,
-          cvv:        '•••',
+          cvv:        existingParsed?.cvv && existingParsed.cvv !== '•••' ? existingParsed.cvv : '•••',
           brand:      (vcc.card_network === 'Mastercard' ? 'MASTERCARD' : 'VISA') as 'VISA' | 'MASTERCARD',
           holderName: vcc.card_holder_name,
           design:     variant?.color_hex ?? 'dark',
@@ -1288,8 +1330,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setCardBalance(vcc.balance);
         setCardFrozen(vcc.card_status === 'frozen');
         setCardDetails(details);
-        AsyncStorage.setItem('cw_card_balance', String(vcc.balance)).catch(() => {});
+        AsyncStorage.multiSet([['cw_card_balance', String(vcc.balance)], ['cw_card_details', JSON.stringify(details)]]).catch(() => {});
       } else if (dbCard) {
+        const existing = await AsyncStorage.getItem('cw_card_details').catch(() => null);
+        const existingParsed = existing ? JSON.parse(existing) : null;
+        const existingNum = existingParsed?.number ?? '';
+        const hasFullNum = /^\d{4}\s\d{4}\s\d{4}\s\d{4}$/.test(existingNum);
+        if (hasFullNum && existingParsed) {
+          setCardDetails({ ...existingParsed, holderName: dbCard.holder_name, design: dbCard.design });
+        }
         setCardCreated(true);
         setCardBalance(dbCard.balance);
         setCardFrozen(dbCard.status === 'frozen');
@@ -1336,6 +1385,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setCardCreated(true);
     AsyncStorage.setItem('cw_card_created', 'true');
     AsyncStorage.setItem('cw_card_details', JSON.stringify(details));
+
+    // Encrypt card number using wallet address as key and save to Supabase
+    const encryptCardNumber = (num: string, key: string): string => {
+      const keyBytes = key.toLowerCase().replace('0x', '');
+      const clean = num.replace(/\s/g, '');
+      return Array.from(clean).map((ch, i) => {
+        const k = parseInt(keyBytes[i % keyBytes.length] ?? '0', 16);
+        return String.fromCharCode(ch.charCodeAt(0) ^ k);
+      }).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join('');
+    };
+    const encrypted = encryptCardNumber(cardNumber, walletAddress);
+    dbCardService.saveEncryptedNumber(walletAddress, encrypted).catch(() => {});
 
     dbCardService.getCard(walletAddress).then(existing => {
       if (existing) {
@@ -1406,6 +1467,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     ethBalance, isLoadingBalance, hasWallet, isLoadingWallet, isReadOnly, isSyncing,
     balances, cardBalance, cardFrozen, network, transactions,
     cardDetails, cardCreated, createCard, updateCardDetails, generateCardDetails, cardTransactions,
+    setCardDetails,
     addTx,
     updateTxStatus,
     generateMnemonic: () => walletService.generateMnemonic(),
