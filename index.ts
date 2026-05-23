@@ -1,8 +1,6 @@
 import './utils/getRandomValuesShim';
 // Buffer polyfill for crypto libraries
 global.Buffer = global.Buffer || require('buffer').Buffer;
-// @ethersproject/shims must come after the crypto polyfill
-import '@ethersproject/shims';
 import { registerRootComponent } from 'expo';
 import App from './App';
 import { setupLogger } from './utils/logger';
