@@ -753,14 +753,17 @@ export default function App() {
     if (Platform.OS !== 'web') {
       import('expo-updates').then(async (Updates) => {
         try {
+          // isEmbeddedLaunch is false in Expo Go — skip entirely
           if (!Updates.isEmbeddedLaunch) return;
+          // Extra guard: Updates.checkForUpdateAsync throws in Expo Go
+          if (typeof Updates.checkForUpdateAsync !== 'function') return;
           const update = await Updates.checkForUpdateAsync();
           if (update.isAvailable) {
             await Updates.fetchUpdateAsync();
             await Updates.reloadAsync();
           }
         } catch (_e) {}
-      });
+      }).catch(() => {});
     }
   }, []);
 
