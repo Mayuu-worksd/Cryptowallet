@@ -746,6 +746,15 @@ export default function App() {
     Inter_800ExtraBold,
   });
 
+  // Fallback: if fonts don't load in 3s, proceed anyway
+  const [fontTimeout, setFontTimeout] = React.useState(false);
+  React.useEffect(() => {
+    const t = setTimeout(() => setFontTimeout(true), 3000);
+    return () => clearTimeout(t);
+  }, []);
+
+  const fontsReady = fontsLoaded || fontTimeout;
+
   React.useEffect(() => {
     shouldShowOnboarding().then(show => setShowOnboarding(show));
     notificationService.requestPermissions();
@@ -767,11 +776,10 @@ export default function App() {
     }
   }, []);
 
-  if (showOnboarding === null || !fontsLoaded) {
-    // Wait for onboarding check and fonts before rendering anything
+  if (showOnboarding === null) {
     return (
       <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#101114' }}>
-        <View style={{ flex: 1, backgroundColor: T.background }} />
+        <View style={{ flex: 1, backgroundColor: '#101114' }} />
       </GestureHandlerRootView>
     );
   }
