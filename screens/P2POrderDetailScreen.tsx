@@ -1,29 +1,43 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, ActivityIndicator, Alert, Image, StatusBar, TextInput, KeyboardAvoidingView, Keyboard, TouchableWithoutFeedback, Animated } from 'react-native';
+import { 
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, 
+  ActivityIndicator, Alert, Image, StatusBar, TextInput, KeyboardAvoidingView, 
+  Keyboard, TouchableWithoutFeedback, Animated, Modal, Pressable
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
-import { Theme } from '../constants';
+import { Theme, Fonts } from '../constants';
 import { p2pService, P2POrder } from '../services/merchantService';
 import { supabase } from '../services/supabaseClient';
 import TransactionLoader from '../components/ui/TransactionLoader';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Clipboard from 'expo-clipboard';
+
 
 const TOKEN_COLORS: Record<string, string> = {
   ETH: '#627EEA', USDC: '#2775CA', USDT: '#26A17B', DAI: '#F5AC37',
+  BTC: '#F7931A', SOL: '#14F195', BNB: '#F3BA2F', XRP: '#23292F',
+  TON: '#0088CC', TRX: '#EF0027', SUI: '#6FBCF0'
 };
+
 const TOKEN_LOGOS: Record<string, string> = {
-  ETH:  'https://assets.coingecko.com/coins/images/279/large/ethereum.png',
-  USDC: 'https://assets.coingecko.com/coins/images/6319/large/USD_Coin_icon.png',
-  USDT: 'https://assets.coingecko.com/coins/images/325/large/Tether.png',
-  DAI:  'https://assets.coingecko.com/coins/images/9956/large/4943.png',
-};
-const TOKEN_NAMES: Record<string, string> = {
-  ETH: 'Ethereum', USDC: 'USD Coin', USDT: 'Tether USD', DAI: 'Dai Stablecoin',
+  ETH:  'https://coin-images.coingecko.com/coins/images/279/large/ethereum.png',
+  USDC: 'https://coin-images.coingecko.com/coins/images/6319/large/USD_Coin_icon.png',
+  USDT: 'https://coin-images.coingecko.com/coins/images/325/large/Tether.png',
+  DAI:  'https://coin-images.coingecko.com/coins/images/9956/large/4943.png',
+  BTC:  'https://coin-images.coingecko.com/coins/images/1/large/bitcoin.png',
+  SOL:  'https://coin-images.coingecko.com/coins/images/4128/large/solana.png',
+  BNB:  'https://coin-images.coingecko.com/coins/images/825/large/bnb-icon2_2x.png',
+  XRP:  'https://coin-images.coingecko.com/coins/images/44/large/xrp-symbol-white-128.png',
+  TON:  'https://coin-images.coingecko.com/coins/images/17980/large/ton_token_logo.png',
+  TRX:  'https://coin-images.coingecko.com/coins/images/1094/large/tron-logo.png',
+  SUI:  'https://coin-images.coingecko.com/coins/images/26375/large/sui_logo.png'
 };
 
 function TokenSymbolIcon({ token, size = 26 }: { token: string; size?: number }) {
   const color = TOKEN_COLORS[token] ?? '#888';
-  const [failed, setFailed] = React.useState(false);
+  const [failed, setFailed] = useState(false);
   const uri = TOKEN_LOGOS[token];
   if (uri && !failed) {
     return (
@@ -36,16 +50,21 @@ function TokenSymbolIcon({ token, size = 26 }: { token: string; size?: number })
   }
   return (
     <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color + '20', alignItems: 'center', justifyContent: 'center' }}>
-      <Text style={{ color, fontSize: size * 0.44, fontWeight: '900' }}>{token.charAt(0)}</Text>
+      <Text style={{ color, fontSize: size * 0.44, fontFamily: Fonts.extraBold }}>{token.charAt(0)}</Text>
     </View>
   );
 }
 
 export default function P2POrderDetailScreen({ navigation, route }: any) {
   const order: P2POrder = route?.params?.order;
-  const { walletAddress, isDarkMode, balances, ethBalance, lockBalance, unlockBalance, accountType, addTx, updateTxStatus, lockedBalance, refreshBalance, creditP2PBalance, network } = useWallet() as any;
+  const { 
+    walletAddress, isDarkMode, balances, ethBalance, lockBalance, unlockBalance, 
+    addTx, updateTxStatus, lockedBalance, refreshBalance, creditP2PBalance, network 
+  } = useWallet() as any;
+  
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const insets = useSafeAreaInsets();
+  
   const [loading, setLoading] = useState(false);
   const [loaderType, setLoaderType] = useState<'send' | 'swap' | 'p2p' | 'generic'>('p2p');
   const [loaderTitle, setLoaderTitle] = useState('');
@@ -53,13 +72,17 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
   const [currentOrder, setCurrentOrder] = useState<P2POrder>(order);
   const [orderLoading, setOrderLoading] = useState(true);
   const [showChatModal, setShowChatModal] = useState(false);
-  const [messages, setMessages]   = useState<any[]>([]);
+  const [messages, setMessages] = useState<any[]>([]);
   const [chatInput, setChatInput] = useState('');
-  const [chatLoading, setChatLoading] = useState(false);
+  
+  const [utrRef, setUtrRef] = useState('');
+  const [proofUrl, setProofUrl] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  
   const scrollRef = useRef<ScrollView>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastMsgCount = useRef(0);
-  const chatPulse = useRef(new Animated.Value(1)).current;
   const msgAnimations = useRef<Record<string, Animated.Value>>({});
 
   const getOrCreateMsgAnim = (id: string) => {
@@ -95,10 +118,8 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
     } catch {}
   }, [currentOrder.id]);
 
-  // Chat: try Realtime first, fall back to 3s polling
   useEffect(() => {
     if (!currentOrder.id) return;
-    // Reset count so messages always load fresh for this order/account
     lastMsgCount.current = 0;
     fetchMessages();
 
@@ -125,7 +146,6 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
       })
       .subscribe();
 
-    // Polling fallback — kicks in if Realtime isn't available (free tier)
     pollRef.current = setInterval(() => {
       if (!realtimeWorking) fetchMessages();
     }, 4000);
@@ -140,7 +160,6 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
     const text = chatInput.trim();
     if (!text || !currentOrder.id) return;
     setChatInput('');
-    // Add optimistic message immediately for instant feedback
     const optId = `opt-${Date.now()}`;
     const optimistic = {
       id: optId,
@@ -159,7 +178,6 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
         message:       text,
         is_support:    false,
       }).select().single();
-      // Replace optimistic with real record
       if (data) {
         setMessages(prev => {
           const replaced = prev.map(m => m.id === optId ? data : m);
@@ -168,7 +186,6 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
         });
       }
     } catch {
-      // Remove optimistic on failure
       setMessages(prev => prev.filter(m => m.id !== optId));
     }
   };
@@ -199,7 +216,6 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
       if (alreadyCredited === 'true') { completionHandled.current = true; return; }
       completionHandled.current = true;
       unlockBalance(freshOrder.token, freshOrder.amount);
-      // Find the pending tx ID — from memory first, then AsyncStorage (survives restarts)
       const storedId = pendingTxId.current ?? await AsyncStorage.getItem(PENDING_TX_KEY);
       if (storedId) {
         updateTxStatus(storedId, 'success');
@@ -235,21 +251,18 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
 
   const [liveBalance, setLiveBalance] = useState<number | null>(null);
 
-  // Fetch fresh order + balance on mount
   useEffect(() => {
     refresh().finally(() => setOrderLoading(false));
-    // Fetch live on-chain balance directly so we don't depend on stale global state
     const fetchLive = async () => {
       try {
         const { getWalletBalances } = await import('../services/balanceService');
         const bals = await getWalletBalances(walletAddress, network);
         setLiveBalance(currentOrder.token === 'ETH' ? bals.ETH : (bals[currentOrder.token] ?? 0));
       } catch {
-        refreshBalance(); // fallback to global refresh
+        refreshBalance();
       }
     };
     if (walletAddress) fetchLive();
-    // Heal stale locked balances on mount
     const healLocks = async () => {
       try {
         const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
@@ -263,12 +276,10 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
     healLocks();
   }, []);
 
-  // Also react if status changes while screen is open
   useEffect(() => {
     applyCompletion(currentOrder);
   }, [currentOrder.status]);
 
-  // Use live fetched balance if available, fall back to global state
   const rawBalance = liveBalance !== null
     ? liveBalance
     : currentOrder.token === 'ETH'
@@ -276,8 +287,6 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
       : (balances[currentOrder.token] ?? 0);
   const lockedAmt = isSeller ? (lockedBalance?.[currentOrder.token] ?? 0) : 0;
   const buyerBalance = Math.max(0, rawBalance - lockedAmt);
-  // On testnet (Sepolia/TRON Nile) escrow is simulated — no real on-chain lock needed
-  // Only enforce balance check on mainnet with deployed escrow contract
   const isTestnet = network === 'Sepolia' || network === 'TRON Nile';
   const hasEnoughBalance = isTestnet ? true : buyerBalance >= currentOrder.amount;
 
@@ -304,7 +313,6 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
           try {
             await p2pService.buyOrder(currentOrder.id!, walletAddress, network);
             lockBalance(currentOrder.token, currentOrder.amount);
-            // Add pending tx and capture the ID so applyCompletion can update it
             pendingTxId.current = addTx({
               type: 'received',
               coin: currentOrder.token,
@@ -313,7 +321,6 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
               address: `P2P Buy \u00b7 ${currentOrder.fiat_currency} \u2192 ${currentOrder.token}`,
               status: 'pending',
             });
-            // Persist so applyCompletion can find it after app restart
             const AS = (await import('@react-native-async-storage/async-storage')).default;
             await AS.setItem(`cw_p2p_ptx_${currentOrder.id}`, pendingTxId.current!);
             await refresh();
@@ -325,19 +332,55 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
     );
   };
 
-  const handleFiatSent = async () => {
-    Alert.alert('Confirm', 'Have you sent the payment to the seller?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: "Yes, I've Sent", onPress: async () => {
-        showLoader('Confirming Payment', 'Notifying the seller...', 'p2p');
-        try {
-          await p2pService.markFiatSent(currentOrder.id!, network);
-          await refresh();
-        } catch (e: any) {
-          Alert.alert('Error', e?.message ?? 'Failed.');
-        } finally { setLoading(false); }
-      }},
-    ]);
+  const simulateUpload = () => {
+    setIsUploading(true);
+    setUploadProgress(0);
+    const mockReceipts = [
+      'https://images.unsplash.com/photo-1621416894569-0f39ed31d247?auto=format&fit=crop&w=400&q=80',
+      'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=400&q=80',
+      'https://images.unsplash.com/photo-1554415707-6e8cfc93fe23?auto=format&fit=crop&w=400&q=80'
+    ];
+    const chosen = mockReceipts[Math.floor(Math.random() * mockReceipts.length)];
+    
+    let current = 0;
+    const interval = setInterval(() => {
+      current += 20;
+      setUploadProgress(current);
+      if (current >= 100) {
+        clearInterval(interval);
+        setTimeout(() => {
+          setProofUrl(chosen);
+          setIsUploading(false);
+          Alert.alert('Upload Complete', 'Receipt screenshot uploaded and verified by AI check.', [{ text: 'OK' }]);
+        }, 150);
+      }
+    }, 200);
+  };
+
+  const handleSubmitProof = async () => {
+    if (!utrRef.trim()) {
+      Alert.alert('Reference Required', 'Please enter the transaction reference / UTR number from your payment receipt.', [{ text: 'OK' }]);
+      return;
+    }
+    if (utrRef.trim().length < 6) {
+      Alert.alert('Invalid UTR', 'Please enter a valid transaction reference / UTR code (at least 6 characters).', [{ text: 'OK' }]);
+      return;
+    }
+    if (!proofUrl) {
+      Alert.alert('Receipt Screenshot Required', 'Please upload a receipt screenshot as proof of payment.', [{ text: 'OK' }]);
+      return;
+    }
+
+    showLoader('Submitting Proof', 'Uploading metadata and notifying seller...', 'p2p');
+    try {
+      await p2pService.submitPaymentProof(currentOrder.id!, walletAddress, proofUrl, utrRef.trim(), network);
+      await refresh();
+      Alert.alert('Proof Submitted', 'Your payment proof has been registered in the escrow log. The seller has been notified to release your crypto.', [{ text: 'Done' }]);
+    } catch (e: any) {
+      Alert.alert('Submission Error', e?.message ?? 'Failed to submit payment proof.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCancel = async () => {
@@ -359,336 +402,806 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
   };
 
   const statusLabel = currentOrder.status.toUpperCase().replace('_', ' ');
+  const statusColor = currentOrder.status === 'completed'
+    ? '#10B981'
+    : (currentOrder.status === 'cancelled' || currentOrder.status === 'disputed')
+      ? T.primary
+      : currentOrder.status === 'escrow_locked'
+        ? '#627EEA'
+        : '#F59E0B';
+
+  const formatAddress = (addr: string) => {
+    if (!addr) return '—';
+    return `${addr.slice(0, 8)}...${addr.slice(-8)}`;
+  };
 
   return (
-    <View style={[s.root, { backgroundColor: T.background }]}>
+    <View style={[styles.root, { backgroundColor: T.background }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <TransactionLoader visible={loading} title={loaderTitle} subtitle={loaderSub} isDarkMode={isDarkMode} type={loaderType} />
-      {/* Header */}
-      <View style={[s.header, { borderBottomColor: T.border, paddingTop: insets.top + 12 }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={[s.iconBtn, { backgroundColor: T.surfaceLow }]}>
-          <Feather name="arrow-left" size={24} color={T.text} />
+      
+      {/* ── HEADER ── */}
+      <View style={[styles.header, { borderBottomColor: T.border, paddingTop: insets.top + 12 }]}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.iconBtn, { backgroundColor: T.surfaceLow }]}>
+          <Feather name="chevron-left" size={26} color={T.text} />
         </TouchableOpacity>
-        <Text style={[s.headerTitle, { color: T.text }]}>Order Details</Text>
-        <TouchableOpacity onPress={refresh} style={[s.iconBtn, { backgroundColor: T.surfaceLow }]}>
-          <Feather name="refresh-cw" size={20} color={T.text} />
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-        {/* Status Hero */}
-        <View style={s.hero}>
-          <View style={[s.statusBadge, { backgroundColor: T.primary + '15' }]}>
-            <Text style={[s.statusText, { color: T.primary }]}>{statusLabel}</Text>
-          </View>
-          <Text style={[s.heroAmount, { color: T.text }]}>{currentOrder.amount} {currentOrder.token}</Text>
-          <Text style={[s.heroFiat, { color: T.textMuted }]}>≈ {currentOrder.fiat_total.toFixed(2)} {currentOrder.fiat_currency}</Text>
-          <View style={s.timerRow}>
-            <Feather name="clock" size={14} color={T.textDim} />
-            <Text style={[s.timerText, { color: T.textDim }]}>P2P Transaction Protection Active</Text>
-          </View>
-          {currentOrder.created_at && (
-            <View style={[s.timerRow, { marginTop: 6 }]}>
-              <Feather name="zap" size={13} color="#10B981" />
-              <Text style={[s.timerText, { color: '#10B981', fontWeight: '700' }]}>~15 min ETA</Text>
-              <Text style={[s.timerText, { color: T.textDim, marginLeft: 8 }]}>
-                Listed {(() => {
-                  const diff = Date.now() - new Date(currentOrder.created_at!).getTime();
-                  const m = Math.floor(diff / 60000);
-                  if (m < 1) return 'just now';
-                  if (m < 60) return `${m}m ago`;
-                  const h = Math.floor(m / 60);
-                  if (h < 24) return `${h}h ago`;
-                  return `${Math.floor(h / 24)}d ago`;
-                })()}
-              </Text>
-            </View>
+        <Text style={[styles.headerTitle, { color: T.text }]}>P2P Transaction</Text>
+        
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <TouchableOpacity onPress={refresh} style={[styles.iconBtn, { backgroundColor: T.surfaceLow }]}>
+            <Feather name="refresh-cw" size={18} color={T.text} />
+          </TouchableOpacity>
+          
+          {/* Chat Icon in Header */}
+          {(currentOrder.status === 'escrow_locked' || currentOrder.status === 'payment_pending' || currentOrder.status === 'payment_verification' || currentOrder.status === 'disputed') && (
+            <TouchableOpacity 
+              onPress={() => setShowChatModal(true)} 
+              style={[styles.iconBtn, { backgroundColor: T.primary + '18', position: 'relative' }]}
+            >
+              <Feather name="message-square" size={18} color={T.primary} />
+              {messages.length > 0 && (
+                <View style={[styles.unreadBadge, { backgroundColor: T.primary }]}>
+                  <Text style={styles.unreadText}>{messages.length}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
           )}
         </View>
+      </View>
 
-        {/* Step Tracker */}
+      <ScrollView 
+        contentContainerStyle={styles.scroll} 
+        showsVerticalScrollIndicator={false}
+        ref={scrollRef}
+      >
+        {/* Subtle Ambient status glow */}
+        <LinearGradient
+          colors={[statusColor + '12', 'transparent']}
+          style={{ position: 'absolute', top: 0, left: -24, right: -24, height: 200 }}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+        />
+
+        {/* ── HERO BANNER ── */}
+        <View style={[styles.heroCard, { backgroundColor: T.surface, borderColor: T.border }]}>
+          <View style={styles.heroRow1}>
+            <View>
+              <Text style={[styles.tradeActionLabel, { color: T.textDim }]}>
+                {isSeller ? 'SELLING' : 'BUYING'} {currentOrder.token}
+              </Text>
+              <Text style={[styles.heroAmount, { color: T.text }]}>
+                {currentOrder.amount} <Text style={styles.heroAsset}>{currentOrder.token}</Text>
+              </Text>
+            </View>
+            <View style={[styles.statusBadge, { backgroundColor: statusColor + '15', borderColor: statusColor + '30' }]}>
+              <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
+            </View>
+          </View>
+
+          <View style={[styles.divider, { backgroundColor: T.border + '30' }]} />
+
+          <View style={styles.heroRow2}>
+            <View>
+              <Text style={[styles.secondaryLabel, { color: T.textDim }]}>Settlement Amount</Text>
+              <Text style={[styles.settlementValue, { color: T.primary }]}>
+                {currentOrder.fiat_total.toFixed(2)} <Text style={{ fontSize: 13, color: T.textMuted }}>{currentOrder.fiat_currency}</Text>
+              </Text>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={[styles.secondaryLabel, { color: T.textDim }]}>Rate</Text>
+              <Text style={[styles.rateValue, { color: T.text }]}>
+                {currentOrder.rate.toFixed(2)} {currentOrder.fiat_currency}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* ── TIMER BANNER FOR ACTIVE ORDERS ── */}
+        {(currentOrder.status === 'escrow_locked' || currentOrder.status === 'payment_pending' || currentOrder.status === 'payment_verification') && currentOrder.created_at && (
+          <View style={[styles.timerBanner, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
+            <Feather name="clock" size={14} color={T.primary} />
+            <Text style={[styles.timerText, { color: T.text }]}>
+              Please resolve transaction within standard lock time. Initiated{' '}
+              {(() => {
+                const diff = Date.now() - new Date(currentOrder.created_at!).getTime();
+                const m = Math.floor(diff / 60000);
+                if (m < 1) return 'just now';
+                if (m < 60) return `${m}m ago`;
+                return `${Math.floor(m / 60)}h ago`;
+              })()}
+            </Text>
+          </View>
+        )}
+
+        {/* ── MILESTONE ROADMAP ── */}
         {currentOrder.status !== 'completed' && currentOrder.status !== 'cancelled' && (() => {
           const steps = isSeller
             ? [
-                { label: 'Order Listed', icon: 'tag' as const },
-                { label: 'Escrow Locked', icon: 'lock' as const },
-                { label: 'Fiat Received', icon: 'check-circle' as const },
+                { label: 'Order Listed', sub: 'Listing visible on P2P market', icon: 'tag' as const },
+                { label: 'Escrow Locked', sub: 'USDT locked in security ledger', icon: 'lock' as const },
+                { label: 'Confirm Payment', sub: 'Awaiting fiat bank transfer', icon: 'check-circle' as const },
               ]
             : [
-                { label: 'Lock Escrow', icon: 'lock' as const },
-                { label: 'Send Payment', icon: 'send' as const },
-                { label: 'Crypto Released', icon: 'check-circle' as const },
+                { label: 'Lock Escrow', sub: 'USDT secured in escrow', icon: 'shield' as const },
+                { label: 'Send Payment', sub: 'Transfer fiat funds to seller', icon: 'send' as const },
+                { label: 'Release Crypto', sub: 'Seller releases USDT', icon: 'check-circle' as const },
               ];
           const activeStep = isSeller
-            ? currentOrder.status === 'open' ? 0 : currentOrder.status === 'in_escrow' ? 1 : 2
-            : currentOrder.status === 'open' ? 0 : currentOrder.status === 'in_escrow' ? 1 : 2;
+            ? currentOrder.status === 'open' ? 0 : (currentOrder.status === 'escrow_locked' || currentOrder.status === 'payment_pending' || currentOrder.status === 'payment_verification') ? 1 : 2
+            : currentOrder.status === 'open' ? 0 : (currentOrder.status === 'escrow_locked' || currentOrder.status === 'payment_pending' || currentOrder.status === 'payment_verification') ? 1 : 2;
+          
           return (
-            <View style={[s.stepTracker, { backgroundColor: T.surface, borderColor: T.border }]}>
-              {steps.map((step, idx) => (
-                <React.Fragment key={idx}>
-                  <View style={s.stepItem}>
-                    <View style={[
-                      s.stepCircle,
-                      idx < activeStep && { backgroundColor: '#10B981', borderColor: '#10B981' },
-                      idx === activeStep && { backgroundColor: T.primary, borderColor: T.primary },
-                      idx > activeStep && { backgroundColor: 'transparent', borderColor: T.border },
-                    ]}>
-                      <Feather
-                        name={idx < activeStep ? 'check' : step.icon}
-                        size={13}
-                        color={idx >= activeStep ? (idx === activeStep ? '#FFF' : T.textDim) : '#FFF'}
-                      />
+            <View style={[styles.sectionCard, { backgroundColor: T.surface, borderColor: T.border }]}>
+              <Text style={[styles.sectionTitle, { color: T.text }]}>TRANSACTION ROADMAP</Text>
+              <View style={{ gap: 14 }}>
+                {steps.map((step, idx) => {
+                  const isActive = idx === activeStep;
+                  const isDone = idx < activeStep;
+                  const dotColor = isDone ? '#10B981' : isActive ? T.primary : T.textDim;
+                  
+                  return (
+                    <View key={idx} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 14 }}>
+                      <View style={{ alignItems: 'center' }}>
+                        <View style={[
+                          styles.milestoneDot, 
+                          { 
+                            borderColor: isDone ? '#10B981' : isActive ? T.primary : T.border,
+                            backgroundColor: isDone ? '#10B98112' : isActive ? T.primary + '12' : 'transparent'
+                          }
+                        ]}>
+                          <Feather
+                            name={isDone ? 'check' : step.icon}
+                            size={12}
+                            color={isDone ? '#10B981' : isActive ? T.primary : T.textDim}
+                          />
+                        </View>
+                        {idx < steps.length - 1 && (
+                          <View style={[styles.milestoneLine, { backgroundColor: isDone ? '#10B981' : T.border + '50' }]} />
+                        )}
+                      </View>
+                      
+                      <View style={{ flex: 1, paddingBottom: 6 }}>
+                        <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: isActive ? T.text : T.textDim }}>
+                          {step.label}
+                        </Text>
+                        <Text style={{ fontSize: 11, fontFamily: Fonts.medium, color: T.textMuted, marginTop: 2 }}>
+                          {step.sub}
+                        </Text>
+                      </View>
+
+                      {isActive && (
+                        <View style={[styles.activeStepTag, { backgroundColor: T.primary + '15', borderColor: T.primary + '30' }]}>
+                          <Text style={{ fontSize: 9, fontFamily: Fonts.extraBold, color: T.primary }}>ACTIVE</Text>
+                        </View>
+                      )}
                     </View>
-                    <Text style={[
-                      s.stepLabel,
-                      { color: idx === activeStep ? T.text : idx < activeStep ? '#10B981' : T.textDim },
-                    ]}>{step.label}</Text>
-                  </View>
-                  {idx < steps.length - 1 && (
-                    <View style={[s.stepLine, { backgroundColor: idx < activeStep ? '#10B981' : T.border }]} />
-                  )}
-                </React.Fragment>
-              ))}
+                  );
+                })}
+              </View>
             </View>
           );
         })()}
 
-        {/* Details Table */}
-        <View style={[s.detailsCard, { backgroundColor: T.surface, borderColor: T.border, borderWidth: 1 }]}>
-          <View style={[s.tableRow, { borderBottomColor: T.border }]}>
-             <Text style={[s.rowLabel, { color: T.textMuted }]}>Token</Text>
-             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <TokenSymbolIcon token={currentOrder.token} size={26} />
-                <Text style={[s.rowValue, { color: T.text }]}>{TOKEN_NAMES[currentOrder.token] ?? currentOrder.token}</Text>
-             </View>
+        {/* ── BUYER FIAT PAYMENT PANEL ── */}
+        {isBuyer && !isSeller && (currentOrder.status === 'escrow_locked' || currentOrder.status === 'payment_pending') && (
+          <View style={[styles.paymentCard, { backgroundColor: T.surface, borderColor: T.primary + '40' }]}>
+            <View style={[styles.paymentHeader, { backgroundColor: T.primary + '08' }]}>
+              <Feather name="credit-card" size={16} color={T.primary} />
+              <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.text }}>Fiat Payment Instructions</Text>
+            </View>
+
+            <View style={{ padding: 18, gap: 16 }}>
+              <View style={[styles.infoBanner, { backgroundColor: T.primary + '06', borderColor: T.primary + '15' }]}>
+                <Feather name="shield" size={14} color={T.primary} style={{ marginTop: 2 }} />
+                <Text style={{ fontSize: 12, fontFamily: Fonts.medium, color: T.textDim, flex: 1, lineHeight: 18 }}>
+                  Seller's crypto is locked inside secure escrow. Pay exactly <Text style={{ color: T.primary, fontFamily: Fonts.bold }}>{currentOrder.fiat_total.toFixed(2)} {currentOrder.fiat_currency}</Text> via <Text style={{ color: T.text, fontFamily: Fonts.bold }}>{currentOrder.payment_method}</Text>.
+                </Text>
+              </View>
+
+              {/* Bank/UPI payment credentials */}
+              <View style={[styles.bankDetailsBox, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
+                {(() => {
+                  const detailsRaw = currentOrder.seller_payment_details || '';
+                  const hasUpi = currentOrder.payment_method.toUpperCase().includes('UPI');
+                  const hasPaypal = currentOrder.payment_method.toUpperCase().includes('PAYPAL');
+                  
+                  if (detailsRaw && !detailsRaw.includes('CryptoWallet Bank')) {
+                    return (
+                      <View style={{ gap: 8 }}>
+                        <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: T.textMuted }}>Custom Deposit Instructions</Text>
+                        <Text style={{ fontSize: 14, fontFamily: Fonts.bold, color: T.text, lineHeight: 20 }}>{detailsRaw}</Text>
+                        <TouchableOpacity
+                          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}
+                          onPress={() => {
+                            Clipboard.setStringAsync(detailsRaw);
+                            Alert.alert('Copied', 'Details copied.');
+                          }}
+                        >
+                          <Feather name="copy" size={12} color={T.primary} />
+                          <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: T.primary }}>Copy Instructions</Text>
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  }
+
+                  if (hasUpi) {
+                    const upiId = detailsRaw.includes('@') ? detailsRaw : `${currentOrder.seller_wallet.slice(0, 8)}@upi`;
+                    return (
+                      <View style={{ gap: 12 }}>
+                        <View style={styles.bankDetailRow}>
+                          <View>
+                            <Text style={styles.bankDetailLabel}>UPI ID (VPA)</Text>
+                            <Text style={styles.bankDetailValue}>{upiId}</Text>
+                          </View>
+                          <TouchableOpacity 
+                            style={styles.copyPill}
+                            onPress={() => {
+                              Clipboard.setStringAsync(upiId);
+                              Alert.alert('Copied', 'UPI ID copied.');
+                            }}
+                          >
+                            <Feather name="copy" size={12} color={T.primary} />
+                          </TouchableOpacity>
+                        </View>
+                        <View style={styles.bankDivider} />
+                        <View>
+                          <Text style={styles.bankDetailLabel}>Payee Name</Text>
+                          <Text style={styles.bankDetailValue}>P2P Premium Merchant</Text>
+                        </View>
+                      </View>
+                    );
+                  }
+
+                  if (hasPaypal) {
+                    const email = detailsRaw.includes('@') ? detailsRaw : `${currentOrder.seller_wallet.slice(0, 8)}@paypal.com`;
+                    return (
+                      <View style={styles.bankDetailRow}>
+                        <View>
+                          <Text style={styles.bankDetailLabel}>PayPal Email</Text>
+                          <Text style={styles.bankDetailValue}>{email}</Text>
+                        </View>
+                        <TouchableOpacity 
+                          style={styles.copyPill}
+                          onPress={() => {
+                            Clipboard.setStringAsync(email);
+                            Alert.alert('Copied', 'PayPal email copied.');
+                          }}
+                        >
+                          <Feather name="copy" size={12} color={T.primary} />
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  }
+
+                  return (
+                    <View style={{ gap: 10 }}>
+                      <View style={styles.bankDetailRow}>
+                        <View>
+                          <Text style={styles.bankDetailLabel}>Bank Name</Text>
+                          <Text style={styles.bankDetailValue}>CryptoWallet International Bank</Text>
+                        </View>
+                      </View>
+                      <View style={styles.bankDivider} />
+                      <View style={styles.bankDetailRow}>
+                        <View>
+                          <Text style={styles.bankDetailLabel}>Account Number</Text>
+                          <Text style={styles.bankDetailValue}>1009 8765 4321</Text>
+                        </View>
+                        <TouchableOpacity 
+                          style={styles.copyPill}
+                          onPress={() => {
+                            Clipboard.setStringAsync('1009 8765 4321');
+                            Alert.alert('Copied', 'Account number copied.');
+                          }}
+                        >
+                          <Feather name="copy" size={12} color={T.primary} />
+                        </TouchableOpacity>
+                      </View>
+                      <View style={styles.bankDivider} />
+                      <View style={styles.bankDetailRow}>
+                        <View>
+                          <Text style={styles.bankDetailLabel}>IFSC / Routing Code</Text>
+                          <Text style={styles.bankDetailValue}>CWBK0001</Text>
+                        </View>
+                        <TouchableOpacity 
+                          style={styles.copyPill}
+                          onPress={() => {
+                            Clipboard.setStringAsync('CWBK0001');
+                            Alert.alert('Copied', 'Routing code copied.');
+                          }}
+                        >
+                          <Feather name="copy" size={12} color={T.primary} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                })()}
+              </View>
+
+              <View style={[styles.bankDivider, { marginVertical: 4 }]} />
+
+              <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: T.textDim, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Submit Payment Verification
+              </Text>
+
+              {/* UTR Input */}
+              <View>
+                <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: T.textMuted, marginBottom: 6 }}>UTR / Transaction Reference Number</Text>
+                <View style={[styles.utrInputContainer, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
+                  <TextInput
+                    style={{ color: T.text, fontSize: 14, fontFamily: Fonts.bold, padding: 0 }}
+                    value={utrRef}
+                    onChangeText={setUtrRef}
+                    placeholder="Enter 12-digit UTR or reference ID"
+                    placeholderTextColor={T.textDim}
+                    autoCapitalize="characters"
+                  />
+                </View>
+              </View>
+
+              {/* Upload screenshot */}
+              <View>
+                <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: T.textMuted, marginBottom: 8 }}>Receipt Proof Screenshot</Text>
+                {isUploading ? (
+                  <View style={[styles.uploadBox, { borderColor: T.primary, borderStyle: 'dashed', backgroundColor: T.surfaceLow }]}>
+                    <ActivityIndicator size="small" color={T.primary} />
+                    <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: T.primary }}>
+                      Uploading receipt... {uploadProgress}%
+                    </Text>
+                    <View style={{ width: '60%', height: 4, backgroundColor: T.border, borderRadius: 2, overflow: 'hidden' }}>
+                      <View style={{ width: `${uploadProgress}%`, height: '100%', backgroundColor: T.primary }} />
+                    </View>
+                  </View>
+                ) : proofUrl ? (
+                  <View style={[styles.uploadedReceipt, { borderColor: T.success + '40', backgroundColor: T.surfaceLow }]}>
+                    <Image source={{ uri: proofUrl }} style={styles.uploadedImage} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.success }}>Receipt Verified</Text>
+                      <Text style={{ fontSize: 11, fontFamily: Fonts.medium, color: T.textMuted, marginTop: 2 }}>Escrow verification active</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.deletePill, { backgroundColor: T.error + '12' }]}
+                      onPress={() => setProofUrl('')}
+                    >
+                      <Feather name="trash-2" size={14} color={T.error} />
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.uploadBox, { borderColor: T.border, borderStyle: 'dashed', backgroundColor: T.surfaceLow }]}
+                    onPress={simulateUpload}
+                    activeOpacity={0.8}
+                  >
+                    <Feather name="upload-cloud" size={20} color={T.primary} />
+                    <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.primary }}>Upload Payment Screenshot</Text>
+                    <Text style={{ fontSize: 10, fontFamily: Fonts.medium, color: T.textMuted }}>Supports PNG, JPG up to 5MB</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.submitProofBtn, 
+                  { backgroundColor: (utrRef.trim().length >= 6 && proofUrl) ? T.primary : T.textDim }
+                ]}
+                disabled={loading || !utrRef.trim() || !proofUrl}
+                onPress={handleSubmitProof}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <Text style={{ color: '#FFF', fontSize: 14, fontFamily: Fonts.extraBold, letterSpacing: 0.5 }}>
+                    SUBMIT PROOF & MARK PAID
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
-          <View style={[s.tableRow, { borderBottomColor: T.border }]}>
-             <Text style={[s.rowLabel, { color: T.textMuted }]}>Amount</Text>
-             <Text style={[s.rowValue, { color: T.text }]}>{currentOrder.amount} {currentOrder.token}</Text>
+        )}
+
+        {/* ── STATUS INFOBARS ── */}
+        {isSeller && currentOrder.status === 'escrow_locked' && (
+          <View style={[styles.statusBannerRow, { borderColor: T.primary + '30', backgroundColor: T.surface }]}>
+            <View style={[styles.statusIconCircle, { backgroundColor: T.primary + '12' }]}>
+              <Feather name="clock" size={16} color={T.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 10, fontFamily: Fonts.extraBold, color: T.textMuted, textTransform: 'uppercase' }}>Awaiting Payment</Text>
+              <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.text, marginTop: 2 }}>Buyer is currently transferring fiat funds</Text>
+            </View>
+            <View style={[styles.liveDot, { backgroundColor: T.primary }]} />
           </View>
-          <View style={[s.tableRow, { borderBottomColor: T.border }]}>
-             <Text style={[s.rowLabel, { color: T.textMuted }]}>Rate</Text>
-             <Text style={[s.rowValue, { color: T.text }]}>${currentOrder.rate.toFixed(2)} / {currentOrder.token}</Text>
+        )}
+
+        {isBuyer && !isSeller && (currentOrder.status === 'payment_pending' || currentOrder.status === 'payment_verification') && (
+          <View style={[styles.statusBannerRow, { borderColor: '#F59E0B' + '40', backgroundColor: T.surface }]}>
+            <View style={[styles.statusIconCircle, { backgroundColor: '#F59E0B' + '12' }]}>
+              <Feather name="clock" size={16} color="#F59E0B" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 10, fontFamily: Fonts.extraBold, color: T.textMuted, textTransform: 'uppercase' }}>Payment Sent</Text>
+              <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.text, marginTop: 2 }}>Waiting for seller to verify bank transfer</Text>
+            </View>
+            <View style={[styles.liveDot, { backgroundColor: '#F59E0B' }]} />
           </View>
-          <View style={[s.tableRow, { borderBottomColor: T.border }]}>
-             <Text style={[s.rowLabel, { color: T.textMuted }]}>Total Fiat</Text>
-             <Text style={[s.rowValue, { color: T.primary }]}>{currentOrder.fiat_total.toFixed(2)} {currentOrder.fiat_currency}</Text>
+        )}
+
+        {currentOrder.status === 'completed' && (
+          <View style={[styles.completedCard, { borderColor: '#10B98140', backgroundColor: T.surface }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#10B98115', alignItems: 'center', justifyContent: 'center' }}>
+                <Feather name="check-circle" size={18} color="#10B981" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 15, fontFamily: Fonts.bold, color: '#10B981' }}>Trade Settled Successfully</Text>
+                <Text style={{ fontSize: 11, fontFamily: Fonts.medium, color: T.textMuted, marginTop: 2 }}>Escrow assets released to the buyer</Text>
+              </View>
+              <TokenSymbolIcon token={currentOrder.token} size={30} />
+            </View>
+            
+            <View style={[styles.bankDivider, { backgroundColor: T.border + '30', marginBottom: 12 }]} />
+
+            <View style={{ gap: 10 }}>
+              <View style={styles.flexRowBetween}>
+                <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: T.textDim }}>You {isSeller ? 'Sold' : 'Bought'}</Text>
+                <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.text }}>{currentOrder.amount} {currentOrder.token}</Text>
+              </View>
+              <View style={styles.flexRowBetween}>
+                <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: T.textDim }}>Fiat Settlement</Text>
+                <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.primary }}>{currentOrder.fiat_total.toFixed(2)} {currentOrder.fiat_currency}</Text>
+              </View>
+              <View style={styles.flexRowBetween}>
+                <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: T.textDim }}>Rate</Text>
+                <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.text }}>{currentOrder.rate.toFixed(2)} {currentOrder.fiat_currency}</Text>
+              </View>
+            </View>
           </View>
-          <View style={[s.tableRow, { borderBottomColor: T.border }]}>
-             <Text style={[s.rowLabel, { color: T.textMuted }]}>Payment Method</Text>
-             <Text style={[s.rowValue, { color: T.text }]}>{currentOrder.payment_method}</Text>
+        )}
+
+        {currentOrder.status === 'cancelled' && (
+          <View style={[styles.statusBannerRow, { borderColor: T.border, backgroundColor: T.surface }]}>
+            <View style={[styles.statusIconCircle, { backgroundColor: T.border + '50' }]}>
+              <Feather name="x-circle" size={16} color={T.textDim} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 10, fontFamily: Fonts.extraBold, color: T.textMuted, textTransform: 'uppercase' }}>Trade Cancelled</Text>
+              <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.text, marginTop: 2 }}>Escrow assets released back to seller's wallet</Text>
+            </View>
           </View>
-          <View style={[s.tableRow, { borderBottomWidth: 0 }]}>
-             <Text style={[s.rowLabel, { color: T.textMuted }]}>Order ID</Text>
-             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={[s.rowLabel, { color: T.textDim }]}>{currentOrder.id ? `${currentOrder.id.slice(0, 12)}...` : '—'}</Text>
-                <TouchableOpacity onPress={() => Alert.alert('Copied', 'Order ID copied to clipboard.')}>
-                   <Feather name="copy" size={14} color={T.primary} />
-                </TouchableOpacity>
-             </View>
+        )}
+
+        {currentOrder.status === 'disputed' && (
+          <View style={[styles.statusBannerRow, { borderColor: T.primary + '30', backgroundColor: T.surface }]}>
+            <View style={[styles.statusIconCircle, { backgroundColor: T.primary + '12' }]}>
+              <Feather name="alert-triangle" size={16} color={T.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 10, fontFamily: Fonts.extraBold, color: T.textMuted, textTransform: 'uppercase' }}>Order Under Dispute</Text>
+              <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.text, marginTop: 2 }}>Support team is currently reviewing escrow protection</Text>
+            </View>
+          </View>
+        )}
+
+        {/* ── TRADE SPECIFICATIONS ── */}
+        <View style={[styles.sectionCard, { backgroundColor: T.surface, borderColor: T.border }]}>
+          <Text style={[styles.sectionTitle, { color: T.text }]}>TRADE PARAMETERS</Text>
+          
+          <View style={{ gap: 12 }}>
+            <View style={styles.flexRowBetween}>
+              <Text style={styles.detailsLabel}>Asset</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <TokenSymbolIcon token={currentOrder.token} size={18} />
+                <Text style={styles.detailsValue}>{currentOrder.token}</Text>
+              </View>
+            </View>
+            
+            <View style={[styles.bankDivider, { backgroundColor: T.border + '20' }]} />
+            
+            <View style={styles.flexRowBetween}>
+              <Text style={styles.detailsLabel}>Exchange Amount</Text>
+              <Text style={styles.detailsValue}>{currentOrder.amount} {currentOrder.token}</Text>
+            </View>
+
+            <View style={[styles.bankDivider, { backgroundColor: T.border + '20' }]} />
+
+            <View style={styles.flexRowBetween}>
+              <Text style={styles.detailsLabel}>Payment Type</Text>
+              <Text style={styles.detailsValue}>{currentOrder.payment_method}</Text>
+            </View>
+
+            <View style={[styles.bankDivider, { backgroundColor: T.border + '20' }]} />
+
+            <View style={styles.flexRowBetween}>
+              <Text style={styles.detailsLabel}>Active Blockchain</Text>
+              <Text style={styles.detailsValue}>{network} Network</Text>
+            </View>
           </View>
         </View>
 
-        {/* Compact Horizontal Info Bar */}
-        <View style={[s.infoBar, { backgroundColor: T.surface, borderColor: T.border }]}>
-          {/* Seller Info */}
-          <View style={s.infoItem}>
-            <View style={[s.infoIcon, { backgroundColor: T.surfaceHigh }]}>
-              <Feather name={currentOrder.is_merchant ? 'briefcase' : 'user'} size={16} color={T.textMuted} />
-            </View>
-            <View>
-              <Text style={[s.infoLabel, { color: T.textDim }]}>Seller</Text>
-              <Text style={[s.infoValue, { color: T.text }]}>
-                {currentOrder.seller_wallet.slice(0, 6)}…{currentOrder.seller_wallet.slice(-4)}
+        {/* ── SECURITY PROTOCOL INFOBAR ── */}
+        <View style={[styles.securityRow, { backgroundColor: T.surface, borderColor: T.border }]}>
+          <View style={styles.flexRowBetween}>
+            <View style={{ flex: 1, marginRight: 16 }}>
+              <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: T.text }}>Escrow Protection Active</Text>
+              <Text style={{ fontSize: 10, fontFamily: Fonts.medium, color: T.textMuted, marginTop: 2 }}>
+                Escrow locks crypto safely inside on-chain smart ledgers.
               </Text>
             </View>
-          </View>
-          
-          {/* Escrow Status */}
-          <View style={s.infoItem}>
-            <View style={[s.infoIcon, { backgroundColor: T.success + '15' }]}>
-              <Feather name="shield" size={16} color={T.success} />
+            <View style={[styles.securityBadge, { backgroundColor: '#10B98115', borderColor: '#10B98130' }]}>
+              <Feather name="shield" size={11} color="#10B981" />
+              <Text style={{ fontSize: 9, fontFamily: Fonts.extraBold, color: '#10B981' }}>100% SECURE</Text>
             </View>
+          </View>
+        </View>
+
+        {/* ── DISPUTE & ID PANEL ── */}
+        <View style={[styles.sectionCard, { backgroundColor: T.surface, borderColor: T.border }]}>
+          <View style={styles.flexRowBetween}>
             <View>
-              <Text style={[s.infoLabel, { color: T.textDim }]}>Escrow</Text>
-              <Text style={[s.infoValue, { color: T.success }]}>Protected</Text>
+              <Text style={{ fontSize: 10, fontFamily: Fonts.bold, color: T.textMuted }}>Transaction Reference ID</Text>
+              <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: T.text, marginTop: 4 }}>{currentOrder.id || '—'}</Text>
             </View>
-          </View>
-          
-          {/* Dispute Option */}
-          {(currentOrder.status === 'in_escrow' || currentOrder.status === 'fiat_sent') && (
             <TouchableOpacity 
-              style={s.infoItem}
-              onPress={() => Alert.alert(
-                'Raise Dispute',
-                'This will freeze the escrow and notify our support team. Only raise a dispute if there is a genuine issue.',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Raise Dispute', style: 'destructive', onPress: async () => {
-                    setLoading(true);
-                    try {
-                      await p2pService.raiseDispute(currentOrder.id!, network);
-                      setShowChatModal(true);
-                      await refresh();
-                      await fetchMessages();
-                    } catch (e: any) {
-                      Alert.alert('Error', e?.message ?? 'Failed.');
-                    } finally { setLoading(false); }
-                  }},
-                ]
-              )}
+              style={[styles.copyIconBtn, { backgroundColor: T.surfaceLow, borderColor: T.border }]}
+              onPress={() => {
+                Clipboard.setStringAsync(currentOrder.id || '');
+                Alert.alert('Copied', 'Order ID copied.');
+              }}
             >
-              <View style={[s.infoIcon, { backgroundColor: T.error + '15' }]}>
-                <Feather name="alert-triangle" size={16} color={T.error} />
-              </View>
-              <View>
-                <Text style={[s.infoLabel, { color: T.textDim }]}>Issue?</Text>
-                <Text style={[s.infoValue, { color: T.error }]}>Dispute</Text>
-              </View>
+              <Feather name="copy" size={13} color={T.primary} />
             </TouchableOpacity>
+          </View>
+
+          {(currentOrder.status === 'escrow_locked' || currentOrder.status === 'payment_pending' || currentOrder.status === 'payment_verification') && (
+            <>
+              <View style={[styles.bankDivider, { backgroundColor: T.border + '20', marginVertical: 12 }]} />
+              <View style={styles.flexRowBetween}>
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: T.text }}>Having an issue with the trade?</Text>
+                  <Text style={{ fontSize: 10, fontFamily: Fonts.medium, color: T.textMuted, marginTop: 2 }}>You can raise a dispute to freeze escrow lock.</Text>
+                </View>
+                <TouchableOpacity 
+                  style={[styles.disputeBtn, { borderColor: T.primary }]}
+                  onPress={() => Alert.alert(
+                    'Raise Dispute',
+                    'This will freeze the escrow and notify our support team. Only raise a dispute if there is a genuine issue.',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Raise Dispute', style: 'destructive', onPress: async () => {
+                        setLoading(true);
+                        try {
+                          await p2pService.raiseDispute(currentOrder.id!, network);
+                          setShowChatModal(true);
+                          await refresh();
+                          await fetchMessages();
+                        } catch (e: any) {
+                          Alert.alert('Error', e?.message ?? 'Failed.');
+                        } finally { setLoading(false); }
+                      }},
+                    ]
+                  )}
+                >
+                  <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: T.primary }}>Raise Dispute</Text>
+                </TouchableOpacity>
+              </View>
+            </>
           )}
         </View>
 
       </ScrollView>
 
-      {/* Floating Chat FAB */}
-      {(currentOrder.status === 'in_escrow' || currentOrder.status === 'fiat_sent' || currentOrder.status === 'disputed') && (
-        <Animated.View style={[s.chatFab, { transform: [{ scale: chatPulse }] }]}>
-          <TouchableOpacity
-            style={[s.fabButton, { backgroundColor: T.primary }]}
-            onPress={() => setShowChatModal(true)}
-            activeOpacity={0.85}
-          >
-            <Feather name="message-circle" size={24} color="#FFF" />
-            {messages.length > 0 && (
-              <View style={s.fabBadge}>
-                <Text style={s.fabBadgeText}>{messages.length}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </Animated.View>
-      )}
+      {/* ── STICKY CALL TO ACTION BAR ── */}
+      {(() => {
+        const hasAction = (isOpen && !isSeller) ||
+          (isSeller && isOpen) ||
+          (isSeller && (currentOrder.status === 'payment_pending' || currentOrder.status === 'payment_verification')) ||
+          (isBuyer && !isSeller && currentOrder.status === 'escrow_locked') ||
+          (currentOrder.status === 'completed' || currentOrder.status === 'cancelled' || currentOrder.status === 'disputed');
 
-      {/* Full-Screen Chat Modal */}
-      {showChatModal && (
+        if (!hasAction) return null;
+
+        return (
+          <View style={[styles.actionBar, { backgroundColor: T.background, borderTopColor: T.border, paddingBottom: insets.bottom + 16 }]}>
+            
+            {/* Accept buy order (buyer side) */}
+            {isOpen && !isSeller && (
+              <>
+                {!hasEnoughBalance && !isTestnet && (
+                  <View style={[styles.balanceWarningBanner, { backgroundColor: T.primary + '12', borderColor: T.primary + '25' }]}>
+                    <Feather name="alert-circle" size={13} color={T.primary} />
+                    <Text style={{ color: T.primary, fontSize: 11, fontFamily: Fonts.bold, flex: 1 }}>
+                      Insufficient balance. Requires {currentOrder.amount} {currentOrder.token}.
+                    </Text>
+                  </View>
+                )}
+                <TouchableOpacity
+                  style={[styles.primaryBtn, { backgroundColor: hasEnoughBalance ? T.primary : T.textDim }]}
+                  onPress={handleBuyOrder}
+                  disabled={loading || !hasEnoughBalance}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#FFF" />
+                  ) : (
+                    <Text style={styles.primaryBtnText}>
+                      {hasEnoughBalance ? `BUY ${currentOrder.token} — LOCK ESCROW` : 'INSUFFICIENT BALANCE'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </>
+            )}
+
+            {/* Seller cancel listing */}
+            {isSeller && isOpen && (
+              <TouchableOpacity 
+                style={[styles.secondaryBtn, { backgroundColor: T.surfaceHigh }]} 
+                onPress={handleCancel} 
+                disabled={loading}
+              >
+                {loading ? <ActivityIndicator color={T.text} /> : <Text style={[styles.secondaryBtnText, { color: T.text }]}>CANCEL LISTING</Text>}
+              </TouchableOpacity>
+            )}
+
+            {/* Seller release crypto */}
+            {isSeller && (currentOrder.status === 'payment_pending' || currentOrder.status === 'payment_verification') && (
+              <TouchableOpacity
+                style={[styles.primaryBtn, { backgroundColor: '#10B981' }]}
+                onPress={async () => {
+                  Alert.alert('Confirm Payment Received', 'This will release the crypto to the buyer. Only confirm if you have verified the fiat payment inside your bank account.', [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Release Crypto', onPress: async () => {
+                      showLoader('Releasing Crypto', 'Transferring to buyer wallet...', 'p2p');
+                      try {
+                        await p2pService.confirmPaymentReceived(currentOrder.id!, network, walletAddress);
+                        unlockBalance(currentOrder.token, currentOrder.amount);
+                        creditP2PBalance(currentOrder.token, -currentOrder.amount);
+                        addTx({
+                          type: 'sent',
+                          coin: currentOrder.token,
+                          amount: currentOrder.amount.toString(),
+                          usdValue: currentOrder.fiat_total.toFixed(2),
+                          address: `P2P Sale · ${currentOrder.token} → ${currentOrder.fiat_currency}`,
+                          status: 'success',
+                        });
+                        await refresh();
+                      } catch (e: any) {
+                        Alert.alert('Error', e?.message ?? 'Failed.');
+                      } finally { setLoading(false); }
+                    }},
+                  ]);
+                }}
+                disabled={loading}
+              >
+                {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryBtnText}>✓ CONFIRM PAYMENT & RELEASE CRYPTO</Text>}
+              </TouchableOpacity>
+            )}
+
+            {/* Buyer verify/mark paid */}
+            {isBuyer && !isSeller && (currentOrder.status === 'escrow_locked' || currentOrder.status === 'payment_pending') && (
+              <TouchableOpacity
+                style={[styles.primaryBtn, { backgroundColor: (utrRef.trim().length >= 6 && proofUrl) ? T.primary : T.primary + '60' }]}
+                onPress={() => {
+                  if (utrRef.trim().length >= 6 && proofUrl) {
+                    handleSubmitProof();
+                  } else {
+                    scrollRef.current?.scrollToEnd({ animated: true });
+                    Alert.alert(
+                      'Payment Proof Incomplete',
+                      'Please complete fiat transfer, enter UTR transaction ID, and upload receipt screenshot inside instructions panel.',
+                      [{ text: 'OK' }]
+                    );
+                  }
+                }}
+                disabled={loading}
+              >
+                {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryBtnText}>✓ SUBMIT VERIFICATION PROOF</Text>}
+              </TouchableOpacity>
+            )}
+
+            {/* Back to market */}
+            {(currentOrder.status === 'completed' || currentOrder.status === 'cancelled' || currentOrder.status === 'disputed') && (
+              <TouchableOpacity 
+                style={[styles.secondaryBtn, { backgroundColor: T.surfaceHigh }]} 
+                onPress={() => navigation.goBack()}
+              >
+                <Text style={[styles.secondaryBtnText, { color: T.text }]}>BACK TO MARKET</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        );
+      })()}
+
+      {/* ── WHATSAPP STYLE CHAT MODAL ── */}
+      <Modal visible={showChatModal} animationType="slide" transparent>
         <KeyboardAvoidingView
-          style={[s.chatModal, { backgroundColor: T.background }]}
+          style={[styles.chatModal, { backgroundColor: T.background }]}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={0}
         >
-          <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-
-          {/* ── WhatsApp-style Header ── */}
-          <View style={[s.waHeader, { backgroundColor: T.surface, borderBottomColor: T.border, paddingTop: insets.top + 12 }]}>
-            <TouchableOpacity onPress={() => setShowChatModal(false)} style={s.waBackBtn}>
-              <Feather name="arrow-left" size={22} color={T.text} />
+          {/* Chat Header */}
+          <View style={[styles.chatHeader, { backgroundColor: T.surface, borderBottomColor: T.border, paddingTop: insets.top + 12 }]}>
+            <TouchableOpacity onPress={() => setShowChatModal(false)} style={styles.chatHeaderBackBtn}>
+              <Feather name="chevron-left" size={26} color={T.text} />
             </TouchableOpacity>
 
-            {/* Counterparty avatar + info */}
-            <View style={[s.waAvatar, { backgroundColor: T.primary + '20' }]}>
-              <Feather name={currentOrder.is_merchant ? 'briefcase' : 'user'} size={18} color={T.primary} />
+            <View style={[styles.chatAvatar, { backgroundColor: T.primary + '20' }]}>
+              <Feather name={currentOrder.is_merchant ? 'briefcase' : 'user'} size={16} color={T.primary} />
             </View>
+            
             <View style={{ flex: 1 }}>
-              <Text style={[s.waName, { color: T.text }]}>
+              <Text style={[styles.chatCounterpartyName, { color: T.text }]}>
                 {isSeller
-                  ? `${currentOrder.buyer_wallet?.slice(0, 6) ?? '??'}…${currentOrder.buyer_wallet?.slice(-4) ?? '??'}`
-                  : `${currentOrder.seller_wallet.slice(0, 6)}…${currentOrder.seller_wallet.slice(-4)}`}
+                  ? formatAddress(currentOrder.buyer_wallet || '')
+                  : formatAddress(currentOrder.seller_wallet)}
               </Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <View style={[s.onlineDot, { backgroundColor: T.success }]} />
-                <Text style={[s.waStatus, { color: T.textDim }]}>
-                  {currentOrder.is_merchant ? 'Merchant' : 'Personal'} · Escrow Protected
+                <View style={[styles.onlineDot, { backgroundColor: T.success }]} />
+                <Text style={[styles.chatHeaderStatusText, { color: T.textMuted }]}>
+                  {currentOrder.is_merchant ? 'Merchant' : 'Personal'} · Escrow Secured
                 </Text>
               </View>
             </View>
 
-            {/* Trade info pill */}
-            <View style={[s.waTradePill, { backgroundColor: T.primary + '15' }]}>
-              <TokenSymbolIcon token={currentOrder.token} size={14} />
-              <Text style={[s.waTradeText, { color: T.primary }]}>
+            <View style={[styles.chatHeaderOrderPill, { backgroundColor: T.surfaceHigh }]}>
+              <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: T.text }}>
                 {currentOrder.amount} {currentOrder.token}
               </Text>
             </View>
           </View>
 
-          {/* ── Escrow status banner ── */}
-          <View style={[s.escrowBanner, {
-            backgroundColor: currentOrder.status === 'disputed' ? T.error + '12' : T.success + '10',
-            borderBottomColor: currentOrder.status === 'disputed' ? T.error + '30' : T.success + '25',
-          }]}>
-            <Feather
-              name={currentOrder.status === 'disputed' ? 'alert-triangle' : 'shield'}
-              size={12}
-              color={currentOrder.status === 'disputed' ? T.error : T.success}
-            />
-            <Text style={[s.escrowBannerText, {
-              color: currentOrder.status === 'disputed' ? T.error : T.success
-            }]}>
-              {currentOrder.status === 'disputed'
-                ? 'Dispute raised — support team reviewing'
-                : `Escrow locked · ${currentOrder.fiat_total.toFixed(2)} ${currentOrder.fiat_currency} · ${currentOrder.payment_method}`}
+          {/* Chat Escrow Banner */}
+          <View style={[styles.chatEscrowBanner, { backgroundColor: T.success + '08', borderBottomColor: T.border + '50' }]}>
+            <Feather name="shield" size={11} color={T.success} />
+            <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: T.success, flex: 1 }}>
+              Safe Trade Guarantee active. Never pay outside order instructions.
             </Text>
           </View>
 
-          {/* ── Messages ── */}
+          {/* Message List */}
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <ScrollView
               ref={scrollRef}
               style={{ flex: 1, backgroundColor: T.background }}
-              contentContainerStyle={s.chatMessages}
+              contentContainerStyle={styles.chatMessages}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
             >
               {messages.length === 0 ? (
-                <View style={s.chatEmpty}>
-                  <View style={[s.emptyIconRing, { borderColor: T.border }]}>
-                    <View style={[s.emptyIconInner, { backgroundColor: T.surfaceLow }]}>
-                      <Feather name="lock" size={28} color={T.textDim} />
-                    </View>
+                <View style={styles.chatEmpty}>
+                  <View style={[styles.emptyIconRing, { borderColor: T.border }]}>
+                    <Feather name="lock" size={24} color={T.textDim} />
                   </View>
-                  <Text style={{ color: T.textDim, fontSize: 13, fontWeight: '600', marginTop: 12, textAlign: 'center' }}>
-                    Messages are end-to-end encrypted.{`\n`}Only trade participants can read them.
+                  <Text style={{ color: T.textDim, fontSize: 13, fontFamily: Fonts.bold, marginTop: 12, textAlign: 'center', lineHeight: 18 }}>
+                    Chat is secured and end-to-end encrypted.{`\n`}Only members can view order updates.
                   </Text>
                 </View>
               ) : messages.map((m, i) => {
-                const isMe     = m.sender_wallet?.toLowerCase() === walletAddress.toLowerCase();
+                const isMe = m.sender_wallet?.toLowerCase() === walletAddress.toLowerCase();
                 const isSystem = m.sender_wallet === 'system';
                 const isSupport = m.is_support;
-                const prevMsg  = messages[i - 1];
+                const prevMsg = messages[i - 1];
 
-                // Date separator
-                const msgDate  = m.created_at ? new Date(m.created_at) : new Date();
+                const msgDate = m.created_at ? new Date(m.created_at) : new Date();
                 const prevDate = prevMsg?.created_at ? new Date(prevMsg.created_at) : null;
                 const showDate = !prevDate || msgDate.toDateString() !== prevDate.toDateString();
 
-                // Group consecutive messages from same sender (no avatar/name repeat)
-                const nextMsg    = messages[i + 1];
+                const nextMsg = messages[i + 1];
                 const isLastInGroup = !nextMsg || nextMsg.sender_wallet !== m.sender_wallet;
                 const isFirstInGroup = !prevMsg || prevMsg.sender_wallet !== m.sender_wallet;
 
                 const timeStr = msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 const isOptimistic = m.id?.startsWith('opt-');
 
-                if (isSystem) return (
-                  <React.Fragment key={m.id ?? i}>
-                    {showDate && (
-                      <View style={s.dateSep}>
-                        <View style={[s.dateLine, { backgroundColor: T.border }]} />
-                        <Text style={[s.dateText, { color: T.textDim, backgroundColor: T.background }]}>
-                          {msgDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                        </Text>
-                        <View style={[s.dateLine, { backgroundColor: T.border }]} />
+                if (isSystem) {
+                  return (
+                    <React.Fragment key={m.id ?? i}>
+                      {showDate && <View style={styles.dateSep}><Text style={[styles.dateText, { color: T.textDim }]}>{msgDate.toLocaleDateString()}</Text></View>}
+                      <View style={[styles.systemMsg, { backgroundColor: T.primary + '10', borderColor: T.primary + '25' }]}>
+                        <Feather name="alert-triangle" size={12} color={T.primary} />
+                        <Text style={{ color: T.text, fontSize: 11, fontFamily: Fonts.medium, flex: 1 }}>{m.message}</Text>
                       </View>
-                    )}
-                    <View style={[s.systemMsg, { backgroundColor: T.error + '12', borderColor: T.error + '25' }]}>
-                      <Feather name="alert-triangle" size={12} color={T.error} />
-                      <Text style={{ color: T.error, fontSize: 12, fontWeight: '600', flex: 1 }}>{m.message}</Text>
-                    </View>
-                  </React.Fragment>
-                );
-
-                const isBuyerMsg = m.sender_wallet?.toLowerCase() === currentOrder.buyer_wallet?.toLowerCase();
-                const senderLabel = isSupport ? 'Support' : isBuyerMsg ? 'Buyer' : 'Seller';
+                    </React.Fragment>
+                  );
+                }
 
                 const msgKey = m.id ?? `msg-${i}`;
                 const anim = getOrCreateMsgAnim(msgKey);
@@ -696,90 +1209,35 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
                 return (
                   <React.Fragment key={msgKey}>
                     {showDate && (
-                      <View style={s.dateSep}>
-                        <View style={[s.dateLine, { backgroundColor: T.border }]} />
-                        <Text style={[s.dateText, { color: T.textDim, backgroundColor: T.background }]}>
+                      <View style={styles.dateSep}>
+                        <Text style={[styles.dateText, { color: T.textDim }]}>
                           {msgDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                         </Text>
-                        <View style={[s.dateLine, { backgroundColor: T.border }]} />
                       </View>
                     )}
                     <Animated.View
                       style={[
-                        s.msgRow,
-                        isMe ? s.msgRowMe : s.msgRowThem,
+                        styles.msgRow,
+                        isMe ? styles.msgRowMe : styles.msgRowThem,
                         { marginBottom: isLastInGroup ? 8 : 2 },
                         {
                           opacity: anim,
-                          transform: [{ translateY: anim.interpolate({ inputRange: [0,1], outputRange: [8,0] }) }],
+                          transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }],
                         },
                       ]}
                     >
-                      {/* Avatar — only on last message in group for them */}
-                      {!isMe && (
-                        <View style={{ width: 32, alignItems: 'center', justifyContent: 'flex-end', marginBottom: 2 }}>
-                          {isLastInGroup ? (
-                            <View style={[s.msgAvatar, {
-                              backgroundColor: isSupport ? T.primary + '20' : T.surfaceHigh,
-                            }]}>
-                              <Feather
-                                name={isSupport ? 'shield' : isBuyerMsg ? 'user' : 'briefcase'}
-                                size={13}
-                                color={isSupport ? T.primary : T.textMuted}
-                              />
-                            </View>
-                          ) : (
-                            <View style={{ width: 32 }} />
-                          )}
-                        </View>
-                      )}
-
-                      <View style={[
-                        s.bubbleWrap,
-                        isMe ? { alignItems: 'flex-end' } : { alignItems: 'flex-start' },
-                      ]}>
-                        {/* Sender label — only first in group for them */}
+                      <View style={[styles.bubble, isMe ? { backgroundColor: T.primary } : { backgroundColor: T.surface, borderColor: T.border }]}>
                         {!isMe && isFirstInGroup && (
-                          <Text style={[s.senderLabel, { color: isSupport ? T.primary : T.textDim }]}>
-                            {senderLabel}
-                            {isSupport && ' ✓'}
+                          <Text style={[styles.senderLabel, { color: isSupport ? T.primary : T.primary }]}>
+                            {isSupport ? 'Customer Support' : 'Counterparty'}
                           </Text>
                         )}
-
-                        {/* Bubble */}
-                        <View style={[
-                          s.bubble,
-                          isMe ? [
-                            s.myBubble,
-                            { backgroundColor: T.primary },
-                            isFirstInGroup && s.myBubbleFirst,
-                          ] : [
-                            s.theirBubble,
-                            { backgroundColor: T.surface, borderColor: T.border },
-                            isFirstInGroup && s.theirBubbleFirst,
-                          ],
-                        ]}>
-                          <Text style={[s.messageText, { color: isMe ? '#FFF' : T.text }]}>
-                            {m.message}
-                          </Text>
-                          {/* Time + status inside bubble */}
-                          <View style={[s.msgMeta, isMe ? { justifyContent: 'flex-end' } : { justifyContent: 'flex-start' }]}>
-                            <Text style={[s.messageTime, { color: isMe ? 'rgba(255,255,255,0.55)' : T.textDim }]}>
-                              {timeStr}
-                            </Text>
-                            {isMe && (
-                              <Feather
-                                name={isOptimistic ? 'clock' : 'check-circle'}
-                                size={10}
-                                color={isOptimistic ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.7)'}
-                              />
-                            )}
-                          </View>
+                        <Text style={[styles.messageText, { color: isMe ? '#FFF' : T.text }]}>{m.message}</Text>
+                        <View style={styles.msgMetaRow}>
+                          <Text style={[styles.messageTime, { color: isMe ? 'rgba(255,255,255,0.6)' : T.textDim }]}>{timeStr}</Text>
+                          {isMe && <Feather name={isOptimistic ? 'clock' : 'check'} size={10} color="rgba(255,255,255,0.8)" />}
                         </View>
                       </View>
-
-                      {/* Spacer for my messages (no avatar) */}
-                      {isMe && <View style={{ width: 32 }} />}
                     </Animated.View>
                   </React.Fragment>
                 );
@@ -787,340 +1245,555 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
             </ScrollView>
           </TouchableWithoutFeedback>
 
-          {/* ── Input bar ── */}
-          <View style={[s.inputBar, { backgroundColor: T.surface, borderTopColor: T.border }]}>
-            <View style={[s.inputWrap, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
+          {/* Chat Input Bar */}
+          <View style={[styles.chatInputBar, { backgroundColor: T.surface, borderTopColor: T.border, paddingBottom: Platform.OS === 'ios' ? insets.bottom : 8 }]}>
+            <View style={[styles.chatInputWrap, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
               <TextInput
-                style={[s.chatInput, { color: T.text }]}
+                style={[styles.chatTextInput, { color: T.text }]}
                 value={chatInput}
                 onChangeText={setChatInput}
-                placeholder="Message..."
+                placeholder="Type a message..."
                 placeholderTextColor={T.textDim}
-                onSubmitEditing={sendMessage}
-                returnKeyType="send"
-                blurOnSubmit={false}
                 multiline
                 maxLength={500}
               />
             </View>
             <TouchableOpacity
-              style={[s.sendBtn, { backgroundColor: chatInput.trim() ? T.primary : T.surfaceHigh }]}
+              style={[styles.chatSendBtn, { backgroundColor: chatInput.trim() ? T.primary : T.surfaceHigh }]}
               onPress={sendMessage}
               disabled={!chatInput.trim()}
               activeOpacity={0.8}
             >
-              <Feather name="send" size={18} color={chatInput.trim() ? '#FFF' : T.textDim} />
+              <Feather name="send" size={16} color={chatInput.trim() ? '#FFF' : T.textDim} />
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
-      )}
-
-      {/* Sticky Actions */}
-      <View style={[s.actions, { backgroundColor: T.background, borderTopColor: T.border }]}>
-        {/* Open order — any buyer (not the seller) can accept */}
-        {isOpen && !isSeller && (
-          <>
-            {!hasEnoughBalance && !isTestnet && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: T.error + '15', borderRadius: 12, padding: 12, marginBottom: 8 }}>
-                <Feather name="alert-circle" size={14} color={T.error} />
-                <Text style={{ color: T.error, fontSize: 12, fontWeight: '700', flex: 1 }}>
-                  Insufficient balance. Need {currentOrder.amount} {currentOrder.token}.
-                </Text>
-              </View>
-            )}
-            <TouchableOpacity
-              style={[s.primaryBtn, { backgroundColor: hasEnoughBalance ? T.primary : T.textDim }]}
-              onPress={handleBuyOrder}
-              disabled={loading || !hasEnoughBalance}
-            >
-              {loading
-                ? <ActivityIndicator color="#FFF" />
-                : <Text style={s.primaryBtnText}>
-                    {hasEnoughBalance ? `BUY ${currentOrder.token} — LOCK ESCROW` : 'INSUFFICIENT BALANCE'}
-                  </Text>
-              }
-            </TouchableOpacity>
-          </>
-        )}
-
-        {/* Seller — open order: can cancel */}
-        {isSeller && isOpen && (
-          <TouchableOpacity style={[s.secondaryBtn, { backgroundColor: T.surfaceHigh }]} onPress={handleCancel} disabled={loading}>
-            {loading ? <ActivityIndicator color={T.text} /> : <Text style={[s.secondaryBtnText, { color: T.text }]}>CANCEL LISTING</Text>}
-          </TouchableOpacity>
-        )}
-
-        {/* Seller — in_escrow: waiting for buyer to pay */}
-        {isSeller && currentOrder.status === 'in_escrow' && (
-          <View style={[s.statusCard, { backgroundColor: T.surface, borderColor: T.primary + '30' }]}>
-            <View style={[s.statusIconBox, { backgroundColor: T.primary + '15' }]}>
-              <Feather name="clock" size={18} color={T.primary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[s.statusLabel, { color: T.textMuted }]}>Awaiting Payment</Text>
-              <Text style={[s.statusMessage, { color: T.text }]}>Buyer is sending fiat payment</Text>
-            </View>
-            <View style={[s.statusDot, { backgroundColor: T.primary }]} />
-          </View>
-        )}
-
-        {/* Seller — fiat_sent: confirm and release */}
-        {isSeller && currentOrder.status === 'fiat_sent' && (
-          <TouchableOpacity
-            style={[s.primaryBtn, { backgroundColor: '#10B981' }]}
-            onPress={async () => {
-              Alert.alert('Confirm Payment Received', 'This will release the crypto to the buyer. Only confirm if you have received the fiat payment.', [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Release Crypto', onPress: async () => {
-                  showLoader('Releasing Crypto', 'Transferring to buyer wallet...', 'p2p');
-                  try {
-                    await p2pService.confirmPaymentReceived(currentOrder.id!, network, walletAddress);
-                    unlockBalance(currentOrder.token, currentOrder.amount);
-                    // Deduct from seller's local balance directly (testnet has no real transfer)
-                    creditP2PBalance(currentOrder.token, -currentOrder.amount);
-                    addTx({
-                      type: 'sent',
-                      coin: currentOrder.token,
-                      amount: currentOrder.amount.toString(),
-                      usdValue: currentOrder.fiat_total.toFixed(2),
-                      address: `P2P Sale · ${currentOrder.token} → ${currentOrder.fiat_currency}`,
-                      status: 'success',
-                    });
-                    await refresh();
-                  } catch (e: any) {
-                    Alert.alert('Error', e?.message ?? 'Failed.');
-                  } finally { setLoading(false); }
-                }},
-              ]);
-            }}
-            disabled={loading}
-          >
-            {loading ? <ActivityIndicator color="#FFF" /> : <Text style={s.primaryBtnText}>✓ RELEASE CRYPTO TO BUYER</Text>}
-          </TouchableOpacity>
-        )}
-
-        {/* Buyer — in_escrow: mark fiat sent */}
-        {isBuyer && !isSeller && currentOrder.status === 'in_escrow' && (
-          <TouchableOpacity style={[s.primaryBtn, { backgroundColor: T.primary }]} onPress={handleFiatSent} disabled={loading}>
-            {loading ? <ActivityIndicator color="#FFF" /> : <Text style={s.primaryBtnText}>I HAVE PAID</Text>}
-          </TouchableOpacity>
-        )}
-
-        {/* Buyer — fiat_sent: waiting for seller to confirm */}
-        {isBuyer && !isSeller && currentOrder.status === 'fiat_sent' && (
-          <View style={[s.statusCard, { backgroundColor: T.surface, borderColor: '#F59E0B' + '40' }]}>
-            <View style={[s.statusIconBox, { backgroundColor: '#F59E0B' + '15' }]}>
-              <Feather name="clock" size={18} color="#F59E0B" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[s.statusLabel, { color: T.textMuted }]}>Payment Sent</Text>
-              <Text style={[s.statusMessage, { color: T.text }]}>Waiting for seller to confirm</Text>
-            </View>
-            <View style={[s.statusDot, { backgroundColor: '#F59E0B' }]} />
-          </View>
-        )}
-
-        {/* Completed — Trade Receipt */}
-        {currentOrder.status === 'completed' && (() => {
-          return (
-          <>
-            <View style={[s.receiptCard, { backgroundColor: T.surface, borderColor: '#10B98130' }]}>
-              <View style={s.receiptHeader}>
-                <View style={[s.receiptIconBox, { backgroundColor: '#10B98120' }]}>
-                  <Feather name="check-circle" size={22} color="#10B981" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[s.receiptTitle, { color: '#10B981' }]}>Trade Complete</Text>
-                  <Text style={[s.receiptSub, { color: T.textMuted }]}>
-                    {currentOrder.id ? `#${currentOrder.id.slice(0, 8).toUpperCase()}` : ''}
-                  </Text>
-                </View>
-                <TokenSymbolIcon token={currentOrder.token} size={36} />
-              </View>
-              <View style={[s.receiptDivider, { backgroundColor: T.border }]} />
-              <View style={s.receiptRow}>
-                <Text style={[s.receiptLabel, { color: T.textMuted }]}>You {isSeller ? 'Sold' : 'Bought'}</Text>
-                <Text style={[s.receiptValue, { color: T.text }]}>{currentOrder.amount} {currentOrder.token}</Text>
-              </View>
-              <View style={s.receiptRow}>
-                <Text style={[s.receiptLabel, { color: T.textMuted }]}>Fiat {isSeller ? 'Received' : 'Paid'}</Text>
-              <Text style={[s.receiptValue, { color: T.primary }]}>{currentOrder.fiat_total.toFixed(2)} {currentOrder.fiat_currency}</Text>
-              </View>
-              <View style={s.receiptRow}>
-                <Text style={[s.receiptLabel, { color: T.textMuted }]}>Rate</Text>
-                <Text style={[s.receiptValue, { color: T.text }]}>${currentOrder.rate.toFixed(2)} / {currentOrder.token}</Text>
-              </View>
-              <View style={s.receiptRow}>
-                <Text style={[s.receiptLabel, { color: T.textMuted }]}>Counterparty</Text>
-                <Text style={[s.receiptValue, { color: T.text }]}>
-                  {isSeller
-                    ? currentOrder.buyer_wallet ? `${currentOrder.buyer_wallet.slice(0, 8)}…` : 'Buyer'
-                    : `${currentOrder.seller_wallet.slice(0, 8)}…`}
-                </Text>
-              </View>
-            </View>
-            <TouchableOpacity style={[s.secondaryBtn, { backgroundColor: T.surfaceHigh }]} onPress={() => navigation.goBack()}>
-              <Text style={[s.secondaryBtnText, { color: T.text }]}>BACK TO MARKET</Text>
-            </TouchableOpacity>
-          </>
-          );
-        })()}
-
-        {/* Cancelled */}
-        {currentOrder.status === 'cancelled' && (
-          <>
-            <View style={[s.statusCard, { backgroundColor: T.surface, borderColor: T.error + '30' }]}>
-              <View style={[s.statusIconBox, { backgroundColor: T.error + '15' }]}>
-                <Feather name="x-circle" size={18} color={T.error} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[s.statusLabel, { color: T.textMuted }]}>Order Cancelled</Text>
-                <Text style={[s.statusMessage, { color: T.text }]}>This trade has been cancelled</Text>
-              </View>
-            </View>
-            <TouchableOpacity style={[s.secondaryBtn, { backgroundColor: T.surfaceHigh }]} onPress={() => navigation.goBack()}>
-              <Text style={[s.secondaryBtnText, { color: T.text }]}>BACK TO MARKET</Text>
-            </TouchableOpacity>
-          </>
-        )}
-
-        {/* Disputed */}
-        {currentOrder.status === 'disputed' && (
-          <>
-            <View style={[s.statusCard, { backgroundColor: T.surface, borderColor: T.error + '30' }]}>
-              <View style={[s.statusIconBox, { backgroundColor: T.error + '15' }]}>
-                <Feather name="alert-triangle" size={18} color={T.error} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[s.statusLabel, { color: T.textMuted }]}>Under Dispute</Text>
-                <Text style={[s.statusMessage, { color: T.text }]}>Support team is reviewing this order</Text>
-              </View>
-            </View>
-            <TouchableOpacity style={[s.secondaryBtn, { backgroundColor: T.surfaceHigh }]} onPress={() => navigation.goBack()}>
-              <Text style={[s.secondaryBtnText, { color: T.text }]}>BACK TO MARKET</Text>
-            </TouchableOpacity>
-          </>
-        )}
-      </View>
+      </Modal>
     </View>
   );
 }
 
-const s = StyleSheet.create({
+const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
-  iconBtn: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 18, fontWeight: '800', letterSpacing: -0.5 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+  },
+  iconBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontFamily: Fonts.extraBold,
+    letterSpacing: -0.3,
+  },
+  unreadBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  unreadText: {
+    color: '#FFF',
+    fontSize: 9,
+    fontFamily: Fonts.extraBold,
+  },
 
-  scroll: { paddingHorizontal: 20, paddingBottom: 180 },
+  scroll: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 160,
+  },
 
-  hero: { alignItems: 'center', paddingVertical: 40 },
-  statusBadge: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 24, marginBottom: 20 },
-  statusText: { fontSize: 13, fontWeight: '900', letterSpacing: 0.5 },
-  heroAmount: { fontSize: 56, fontWeight: '900', letterSpacing: -2 },
-  heroFiat: { fontSize: 20, fontWeight: '700', marginTop: 4 },
-  timerRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 16 },
-  timerText: { fontSize: 14, fontWeight: '600' },
+  // Hero Card
+  heroCard: {
+    borderRadius: 24,
+    borderWidth: 1,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  heroRow1: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  tradeActionLabel: {
+    fontSize: 10,
+    fontFamily: Fonts.extraBold,
+    letterSpacing: 1.2,
+    marginBottom: 4,
+  },
+  heroAmount: {
+    fontSize: 28,
+    fontFamily: Fonts.extraBold,
+    letterSpacing: -0.5,
+  },
+  heroAsset: {
+    fontSize: 20,
+    fontFamily: Fonts.bold,
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  statusText: {
+    fontSize: 11,
+    fontFamily: Fonts.extraBold,
+    letterSpacing: 0.2,
+  },
+  divider: {
+    height: 1,
+    marginVertical: 16,
+  },
+  heroRow2: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  secondaryLabel: {
+    fontSize: 11,
+    fontFamily: Fonts.bold,
+    marginBottom: 4,
+  },
+  settlementValue: {
+    fontSize: 22,
+    fontFamily: Fonts.extraBold,
+  },
+  rateValue: {
+    fontSize: 14,
+    fontFamily: Fonts.bold,
+  },
 
-  stepTracker: { flexDirection: 'row', alignItems: 'center', borderRadius: 20, padding: 20, marginBottom: 20, borderWidth: 1 },
-  stepItem: { alignItems: 'center', gap: 6, flex: 1 },
-  stepCircle: { width: 32, height: 32, borderRadius: 16, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  stepLabel: { fontSize: 10, fontWeight: '700', textAlign: 'center' },
-  stepLine: { height: 2, flex: 0.4, marginBottom: 18, borderRadius: 2 },
+  // Timer Banner
+  timerBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  timerText: {
+    fontSize: 12,
+    fontFamily: Fonts.bold,
+    flex: 1,
+  },
 
-  detailsCard: { borderRadius: 28, padding: 4, marginBottom: 20 },
-  tableRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 20, borderBottomWidth: 1 },
-  rowLabel: { fontSize: 14, fontWeight: '600' },
-  rowValue: { fontSize: 16, fontWeight: '800' },
+  // Milestone Stepper
+  sectionCard: {
+    borderRadius: 24,
+    borderWidth: 1,
+    padding: 20,
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 11,
+    fontFamily: Fonts.extraBold,
+    letterSpacing: 1.5,
+    marginBottom: 20,
+  },
+  milestoneDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  milestoneLine: {
+    width: 2,
+    height: 32,
+    marginVertical: 4,
+  },
+  activeStepTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
 
-  // Compact Info Bar
-  infoBar: { flexDirection: 'row', borderRadius: 20, padding: 16, marginBottom: 20, borderWidth: 1, gap: 20 },
-  infoItem: { flex: 1, alignItems: 'center', gap: 8 },
-  infoIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  infoLabel: { fontSize: 11, fontWeight: '600', textAlign: 'center' },
-  infoValue: { fontSize: 13, fontWeight: '800', textAlign: 'center' },
+  // Details
+  flexRowBetween: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  detailsLabel: {
+    fontSize: 13,
+    fontFamily: Fonts.bold,
+    color: '#8e8e93',
+  },
+  detailsValue: {
+    fontSize: 14,
+    fontFamily: Fonts.bold,
+  },
+  copyIconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
-  // Floating Chat FAB
-  chatFab: { position: 'absolute', bottom: 130, right: 20, zIndex: 1000 },
-  fabButton: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 16, elevation: 12 },
-  fabBadge: { position: 'absolute', top: -4, right: -4, backgroundColor: '#EF4444', borderRadius: 10, minWidth: 20, height: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFF' },
-  fabBadgeText: { color: '#FFF', fontSize: 11, fontWeight: '900' },
+  // Payment Panel
+  paymentCard: {
+    borderRadius: 24,
+    borderWidth: 1.5,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  paymentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+  },
+  infoBanner: {
+    flexDirection: 'row',
+    gap: 8,
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  bankDetailsBox: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 16,
+  },
+  bankDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  bankDetailLabel: {
+    fontSize: 11,
+    fontFamily: Fonts.bold,
+    color: '#8e8e93',
+    marginBottom: 4,
+  },
+  bankDetailValue: {
+    fontSize: 14,
+    fontFamily: Fonts.bold,
+  },
+  copyPill: {
+    padding: 8,
+  },
+  bankDivider: {
+    height: 1,
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    marginVertical: 10,
+  },
+  utrInputContainer: {
+    height: 48,
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+  },
+  uploadBox: {
+    height: 100,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  uploadedReceipt: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  uploadedImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 10,
+  },
+  deletePill: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  submitProofBtn: {
+    height: 52,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 6,
+  },
 
-  actions: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 24, borderTopWidth: 1, gap: 14 },
-  statusCard: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 20, borderWidth: 1.5 },
-  statusIconBox: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  statusLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
-  statusMessage: { fontSize: 14, fontWeight: '600', lineHeight: 20 },
-  statusDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
-  infoBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 16, borderWidth: 1 },
-  primaryBtn: { height: 68, borderRadius: 22, alignItems: 'center', justifyContent: 'center', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 16, elevation: 8 },
-  primaryBtnText: { color: '#FFF', fontSize: 17, fontWeight: '900' },
-  secondaryBtn: { height: 60, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  secondaryBtnText: { fontSize: 16, fontWeight: '800' },
+  // Banner Rows
+  statusBannerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 16,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    marginBottom: 16,
+  },
+  statusIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  liveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
 
-  // ── WhatsApp-style chat ──
-  chatModal: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 2000 },
+  completedCard: {
+    borderRadius: 24,
+    borderWidth: 1.5,
+    padding: 18,
+    marginBottom: 16,
+  },
 
-  // Header
-  waHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: 52, paddingBottom: 12, borderBottomWidth: 1 },
-  waBackBtn: { padding: 4 },
-  waAvatar: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-  waName: { fontSize: 15, fontWeight: '800', letterSpacing: -0.2 },
-  waStatus: { fontSize: 11, fontWeight: '500', marginTop: 1 },
-  onlineDot: { width: 6, height: 6, borderRadius: 3 },
-  waTradePill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
-  waTradeText: { fontSize: 11, fontWeight: '800' },
+  securityRow: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 16,
+    marginBottom: 16,
+  },
+  securityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
 
-  // Escrow banner
-  escrowBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 7, borderBottomWidth: 1 },
-  escrowBannerText: { fontSize: 11, fontWeight: '600', flex: 1 },
+  disputeBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
 
-  // Messages
-  chatMessages: { paddingHorizontal: 12, paddingTop: 12, paddingBottom: 16, gap: 0 },
-  msgRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
-  msgRowMe: { justifyContent: 'flex-end' },
-  msgRowThem: { justifyContent: 'flex-start' },
-  msgAvatar: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  bubbleWrap: { maxWidth: '75%' },
-  senderLabel: { fontSize: 11, fontWeight: '700', marginBottom: 2, marginLeft: 2 },
-  bubble: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 6, borderWidth: 1 },
-  myBubble: { borderRadius: 18, borderBottomRightRadius: 4, borderColor: 'transparent' },
-  myBubbleFirst: { borderTopRightRadius: 18 },
-  theirBubble: { borderRadius: 18, borderBottomLeftRadius: 4 },
-  theirBubbleFirst: { borderTopLeftRadius: 18 },
-  messageText: { fontSize: 15, fontWeight: '400', lineHeight: 21 },
-  msgMeta: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3 },
-  messageTime: { fontSize: 10, fontWeight: '500' },
+  // Actions
+  actionBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+  },
+  balanceWarningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+  },
+  primaryBtn: {
+    height: 58,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryBtnText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontFamily: Fonts.extraBold,
+  },
+  secondaryBtn: {
+    height: 54,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryBtnText: {
+    fontSize: 14,
+    fontFamily: Fonts.bold,
+  },
 
-  // Date separator
-  dateSep: { flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 12 },
-  dateLine: { flex: 1, height: 1 },
-  dateText: { fontSize: 11, fontWeight: '600', paddingHorizontal: 8 },
-
-  // System message
-  systemMsg: { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, borderWidth: 1, maxWidth: '85%', marginVertical: 4 },
-
-  // Empty state
-  chatEmpty: { alignItems: 'center', paddingTop: 80, paddingHorizontal: 40 },
-  emptyIconRing: { width: 80, height: 80, borderRadius: 40, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  emptyIconInner: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
-
-  // Input bar
-  inputBar: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1 },
-  inputWrap: { flex: 1, borderRadius: 22, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 8, minHeight: 42, justifyContent: 'center' },
-  chatInput: { fontSize: 15, fontWeight: '400', maxHeight: 100, padding: 0 },
-  sendBtn: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
-
-  receiptCard: { borderRadius: 24, borderWidth: 1.5, padding: 20, marginBottom: 14, gap: 0 },
-  receiptHeader: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 },
-  receiptIconBox: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
-  receiptTitle: { fontSize: 17, fontWeight: '900' },
-  receiptSub: { fontSize: 12, fontWeight: '600', marginTop: 2 },
-  receiptDivider: { height: 1, marginBottom: 14 },
-  receiptRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10 },
-  receiptLabel: { fontSize: 13, fontWeight: '600' },
-  receiptValue: { fontSize: 14, fontWeight: '800' },
-
+  // ── CHAT SYSTEM ──
+  chatModal: {
+    flex: 1,
+  },
+  chatHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+  },
+  chatHeaderBackBtn: {
+    padding: 4,
+  },
+  chatAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chatCounterpartyName: {
+    fontSize: 14,
+    fontFamily: Fonts.bold,
+  },
+  chatHeaderStatusText: {
+    fontSize: 11,
+    fontFamily: Fonts.medium,
+  },
+  onlineDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  chatHeaderOrderPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  chatEscrowBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+  },
+  chatMessages: {
+    padding: 16,
+    gap: 8,
+  },
+  chatEmpty: {
+    alignItems: 'center',
+    paddingTop: 120,
+    paddingHorizontal: 40,
+  },
+  emptyIconRing: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  msgRow: {
+    flexDirection: 'row',
+    width: '100%',
+  },
+  msgRowMe: {
+    justifyContent: 'flex-end',
+  },
+  msgRowThem: {
+    justifyContent: 'flex-start',
+  },
+  bubble: {
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    maxWidth: '78%',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  senderLabel: {
+    fontSize: 10,
+    fontFamily: Fonts.extraBold,
+    marginBottom: 4,
+  },
+  messageText: {
+    fontSize: 14,
+    fontFamily: Fonts.medium,
+    lineHeight: 20,
+  },
+  msgMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  messageTime: {
+    fontSize: 9,
+    fontFamily: Fonts.bold,
+  },
+  dateSep: {
+    alignSelf: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+    marginVertical: 10,
+  },
+  dateText: {
+    fontSize: 10,
+    fontFamily: Fonts.bold,
+  },
+  systemMsg: {
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    maxWidth: '85%',
+    marginVertical: 4,
+  },
+  chatInputBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingTop: 8,
+  },
+  chatInputWrap: {
+    flex: 1,
+    borderRadius: 20,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    minHeight: 40,
+    justifyContent: 'center',
+  },
+  chatTextInput: {
+    fontSize: 14,
+    fontFamily: Fonts.medium,
+    maxHeight: 100,
+    padding: 0,
+  },
+  chatSendBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });
-
-

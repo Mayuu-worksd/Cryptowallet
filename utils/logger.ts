@@ -52,11 +52,10 @@ export function setupLogger() {
   const tracking = global as any;
   if (!tracking.__loggerPromiseHooked) {
     tracking.__loggerPromiseHooked = true;
-    const origPromise = global.Promise;
     // React Native's Hermes surfaces these via the global handler above,
     // but we also patch the native unhandledrejection event for web/Node.
-    if (typeof global.addEventListener === 'function') {
-      global.addEventListener('unhandledrejection', (event: any) => {
+    if (typeof (global as any).addEventListener === 'function') {
+      (global as any).addEventListener('unhandledrejection', (event: any) => {
         fmt(TAG.promise, event?.reason?.message ?? event?.reason, event?.reason?.stack);
       });
     }

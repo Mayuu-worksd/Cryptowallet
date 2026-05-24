@@ -33,6 +33,7 @@ export default function AdminScreen({ navigation }: any) {
   const [kycFilter, setKycFilter]         = useState('all');
   const [merchantFilter, setMerchantFilter] = useState('all');
   const [cardFilter, setCardFilter]       = useState('all');
+  const [p2pFilter, setP2PFilter]         = useState('all');
 
   // Merchant KYC action modal
   const [merchantModal, setMerchantModal]     = useState(false);
@@ -43,6 +44,12 @@ export default function AdminScreen({ navigation }: any) {
   const [kycModal, setKycModal]   = useState(false);
   const [selectedKYC, setSelectedKYC] = useState<AdminKYCRow | null>(null);
   const [kycNotes, setKycNotes]   = useState('');
+
+  // P2P action modal
+  const [p2pModal, setP2PModal]           = useState(false);
+  const [selectedP2P, setSelectedP2P]     = useState<any>(null);
+  const [p2pNotes, setP2PNotes]           = useState('');
+
   const [actionLoading, setActionLoading] = useState(false);
 
   const load = useCallback(async () => {
@@ -52,7 +59,7 @@ export default function AdminScreen({ navigation }: any) {
         adminService.getAllKYC(kycFilter),
         adminService.getAllBusinessKYC(merchantFilter),
         adminService.getAllCardRequests(cardFilter),
-        p2pService.getOpenOrders(),
+        adminService.getAllP2POrders(p2pFilter === 'all' ? undefined : p2pFilter),
       ]);
       setStats(s);
       setKycList(k);
@@ -65,7 +72,7 @@ export default function AdminScreen({ navigation }: any) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [kycFilter, merchantFilter, cardFilter]);
+  }, [kycFilter, merchantFilter, cardFilter, p2pFilter]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -108,11 +115,33 @@ export default function AdminScreen({ navigation }: any) {
     } finally { setActionLoading(false); }
   };
 
+  const handleP2PAction = async (action: 'release' | 'refund' | 'verify') => {
+    if (!selectedP2P) return;
+    setActionLoading(true);
+    try {
+      if (action === 'release') {
+        await adminService.resolveDisputeRelease(selectedP2P.id);
+        Alert.alert('Success', 'Dispute resolved in buyer\'s favour. Escrow funds released.');
+      } else if (action === 'refund') {
+        await adminService.resolveDisputeRefund(selectedP2P.id);
+        Alert.alert('Success', 'Dispute resolved in seller\'s favour. Escrow funds refunded.');
+      } else if (action === 'verify') {
+        await adminService.verifyPaymentAndRelease(selectedP2P.id, p2pNotes);
+        Alert.alert('Success', 'Payment verified and escrow funds released.');
+      }
+      setP2PModal(false);
+      setP2PNotes('');
+      load();
+    } catch (e: any) {
+      Alert.alert('Error', sanitizeError(e?.message ?? 'Failed to perform P2P operation.'));
+    } finally { setActionLoading(false); }
+  };
+
   const statusColor = (s: string) => {
-    if (s === 'verified' || s === 'approved' || s === 'shipped') return '#10B981';
-    if (s === 'rejected' || s === 'cancelled') return '#EF4444';
-    if (s === 'under_review' || s === 'in_escrow') return '#6366F1';
-    if (s === 'fiat_sent') return '#F59E0B';
+    if (s === 'verified' || s === 'approved' || s === 'shipped' || s === 'completed' || s === 'crypto_released') return '#10B981';
+    if (s === 'rejected' || s === 'cancelled' || s === 'disputed') return '#EF4444';
+    if (s === 'under_review' || s === 'in_escrow' || s === 'escrow_locked') return '#6366F1';
+    if (s === 'fiat_sent' || s === 'payment_pending' || s === 'payment_verification') return '#F59E0B';
     return '#6B7280';
   };
 
@@ -359,6 +388,126 @@ export default function AdminScreen({ navigation }: any) {
                     {actionLoading ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={s.actionBtnText}>APPROVE USER</Text>}
                   </TouchableOpacity>
                 </View>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* P2P Action Modal */}
+      <Modal visible={p2pModal} transparent animationType="fade">
+        <View style={s.modalOverlay}>
+          <TouchableOpacity style={{ flex: 1 }} onPress={() => setP2PModal(false)} />
+          <View style={[s.modalSheet, { backgroundColor: T.surface }]}>
+            <View style={[s.modalHandle, { backgroundColor: T.border }]} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+              <Text style={[s.modalTitle, { color: T.text }]}>P2P Order Audit</Text>
+              <TouchableOpacity onPress={() => setP2PModal(false)} style={{ padding: 4 }}>
+                <Feather name="x" size={20} color={T.textDim} />
+              </TouchableOpacity>
+            </View>
+            {selectedP2P && (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <View style={[s.modalInfoBox, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
+                  <View style={s.infoRowItem}>
+                    <Text style={[s.infoLabel, { color: T.textDim }]}>ORDER ID</Text>
+                    <Text style={[s.infoVal, { color: T.text }]}>{selectedP2P.id}</Text>
+                  </View>
+                  <View style={[s.infoDivider, { backgroundColor: T.border }]} />
+                  <View style={s.infoRowItem}>
+                    <Text style={[s.infoLabel, { color: T.textDim }]}>TRADE SPECIFICATION</Text>
+                    <Text style={[s.infoVal, { color: T.text }]}>{selectedP2P.amount} {selectedP2P.token} for {selectedP2P.fiat_total} {selectedP2P.fiat_currency} ({selectedP2P.payment_method})</Text>
+                  </View>
+                  <View style={[s.infoDivider, { backgroundColor: T.border }]} />
+                  <View style={s.infoRowItem}>
+                    <Text style={[s.infoLabel, { color: T.textDim }]}>SELLER WALLET</Text>
+                    <Text style={[s.infoVal, { color: T.text }]}>{selectedP2P.seller_wallet}</Text>
+                  </View>
+                  {selectedP2P.buyer_wallet ? (
+                    <>
+                      <View style={[s.infoDivider, { backgroundColor: T.border }]} />
+                      <View style={s.infoRowItem}>
+                        <Text style={[s.infoLabel, { color: T.textDim }]}>BUYER WALLET</Text>
+                        <Text style={[s.infoVal, { color: T.text }]}>{selectedP2P.buyer_wallet}</Text>
+                      </View>
+                    </>
+                  ) : null}
+                  <View style={[s.infoDivider, { backgroundColor: T.border }]} />
+                  <View style={s.infoRowItem}>
+                    <Text style={[s.infoLabel, { color: T.textDim }]}>STATUS</Text>
+                    <View style={[s.badgeSmall, { backgroundColor: statusColor(selectedP2P.status) + '20', alignSelf: 'flex-start', marginTop: 4 }]}>
+                      <Text style={[s.badgeTextSmall, { color: statusColor(selectedP2P.status) }]}>{selectedP2P.status.toUpperCase()}</Text>
+                    </View>
+                  </View>
+                  {selectedP2P.payment_reference ? (
+                    <>
+                      <View style={[s.infoDivider, { backgroundColor: T.border }]} />
+                      <View style={s.infoRowItem}>
+                        <Text style={[s.infoLabel, { color: T.textDim }]}>PAYMENT UTR / REFERENCE</Text>
+                        <Text style={[s.infoVal, { color: T.text }]}>{selectedP2P.payment_reference}</Text>
+                      </View>
+                    </>
+                  ) : null}
+                </View>
+
+                {selectedP2P.payment_proof_url && (
+                  <TouchableOpacity
+                    style={[s.docPreviewBtn, { backgroundColor: T.primary + '10', borderColor: T.primary + '30' }]}
+                    onPress={async () => {
+                      try {
+                        const { Linking } = await import('react-native');
+                        await Linking.openURL(selectedP2P.payment_proof_url!);
+                      } catch (e: any) {
+                        Alert.alert('Error', 'Could not open payment proof link. ' + (e?.message ?? ''));
+                      }
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Feather name="file-text" size={16} color={T.primary} />
+                    <Text style={{ color: T.primary, fontWeight: '800', fontSize: 13 }}>View Buyer Payment Proof</Text>
+                  </TouchableOpacity>
+                )}
+
+                <Text style={[s.fieldLabel, { color: T.textDim }]}>AUDIT NOTES / REASONING</Text>
+                <TextInput
+                  style={[s.notesInput, { backgroundColor: T.surfaceLow, color: T.text, borderColor: T.border }]}
+                  placeholder="Notes for release/refund/verification audits..."
+                  placeholderTextColor={T.textDim}
+                  value={p2pNotes}
+                  onChangeText={setP2PNotes}
+                  multiline
+                />
+
+                {selectedP2P.status === 'payment_verification' && (
+                  <View style={{ marginTop: 24, marginBottom: 12 }}>
+                    <TouchableOpacity
+                      style={[s.actionBtn, { backgroundColor: T.primary, width: '100%' }]}
+                      onPress={() => handleP2PAction('verify')}
+                      disabled={actionLoading}
+                    >
+                      {actionLoading ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={s.actionBtnText}>APPROVE PAYMENT & RELEASE ESCROW</Text>}
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {selectedP2P.status === 'disputed' && (
+                  <View style={{ flexDirection: 'row', gap: 12, marginTop: 24, marginBottom: 12 }}>
+                    <TouchableOpacity
+                      style={[s.actionBtn, { backgroundColor: T.surfaceHigh, flex: 1, borderWidth: 1, borderColor: T.border }]}
+                      onPress={() => handleP2PAction('refund')}
+                      disabled={actionLoading}
+                    >
+                      <Text style={[s.actionBtnText, { color: '#EF4444' }]}>REFUND SELLER</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[s.actionBtn, { backgroundColor: T.primary, flex: 1.5 }]}
+                      onPress={() => handleP2PAction('release')}
+                      disabled={actionLoading}
+                    >
+                      {actionLoading ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={s.actionBtnText}>RELEASE TO BUYER</Text>}
+                    </TouchableOpacity>
+                  </View>
+                )}
               </ScrollView>
             )}
           </View>
@@ -667,9 +816,23 @@ export default function AdminScreen({ navigation }: any) {
         {/* ── P2P ── */}
         {tab === 'p2p' && (
           <>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {['all', 'open', 'escrow_locked', 'payment_pending', 'payment_verification', 'crypto_released', 'completed', 'cancelled', 'disputed'].map(f => (
+                  <TouchableOpacity
+                    key={f}
+                    style={[s.chip, { backgroundColor: p2pFilter === f ? T.primary : T.surfaceLow, borderColor: p2pFilter === f ? T.primary : T.border }]}
+                    onPress={() => setP2PFilter(f)}
+                  >
+                    <Text style={[s.chipText, { color: p2pFilter === f ? '#FFF' : T.text }]}>{f.replace('_', ' ').toUpperCase()}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+
             <View style={s.sectionHeader}>
                <Text style={[s.sectionTitle, { color: T.textDim }]}>MARKETPLACE MONITOR</Text>
-               <Text style={{ fontSize: 10, color: T.primary, fontWeight: '800' }}>{String(p2pOrders.length)} ACTIVE</Text>
+               <Text style={{ fontSize: 10, color: T.primary, fontWeight: '800' }}>{String(p2pOrders.length)} ORDERS</Text>
             </View>
 
             {p2pOrders.length === 0 ? (
@@ -677,10 +840,15 @@ export default function AdminScreen({ navigation }: any) {
                 <View style={[s.emptyCircle, { backgroundColor: T.surfaceLow }]}>
                   <Feather name="refresh-cw" size={32} color={T.textDim} />
                 </View>
-                <Text style={[s.emptyText, { color: T.textDim }]}>No active P2P orders</Text>
+                <Text style={[s.emptyText, { color: T.textDim }]}>No matching P2P orders</Text>
               </View>
             ) : p2pOrders.map(o => (
-              <View key={o.id} style={[s.premiumCard, { backgroundColor: T.surface, borderColor: T.border }]}>
+              <TouchableOpacity
+                key={o.id}
+                style={[s.premiumCard, { backgroundColor: T.surface, borderColor: T.border }]}
+                onPress={() => { setSelectedP2P(o); setP2PNotes(''); setP2PModal(true); }}
+                activeOpacity={0.8}
+              >
                  <View style={s.cardTopRow}>
                     <View style={[s.avatarSmall, { backgroundColor: T.primary + '10' }]}>
                        <Feather name="shopping-bag" size={16} color={T.primary} />
@@ -702,7 +870,13 @@ export default function AdminScreen({ navigation }: any) {
                     <Text style={[s.detailLabel, { color: T.textDim }]}>Method:</Text>
                     <Text style={[s.detailVal, { color: T.text }]}>{o.payment_method}</Text>
                  </View>
-              </View>
+                 {o.buyer_wallet && (
+                   <View style={s.detailRow}>
+                      <Text style={[s.detailLabel, { color: T.textDim }]}>Buyer:</Text>
+                      <Text style={[s.detailVal, { color: T.text }]}>{o.buyer_wallet.slice(0, 12)}...</Text>
+                   </View>
+                 )}
+              </TouchableOpacity>
             ))}
           </>
         )}

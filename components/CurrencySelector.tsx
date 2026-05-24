@@ -1,19 +1,14 @@
 import React, { memo } from 'react';
-import { View, Text, TouchableOpacity, Modal, Pressable, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Fonts } from '../constants';
 import { haptics } from '../utils/haptics';
 
-const CURRENCIES = [
-  { code: 'USD', symbol: '$',    name: 'US Dollar',      rate: 1 },
-  { code: 'EUR', symbol: '€',    name: 'Euro',           rate: 0.92 },
-  { code: 'GBP', symbol: '£',    name: 'British Pound',  rate: 0.79 },
-  { code: 'INR', symbol: '₹',    name: 'Indian Rupee',   rate: 83.5 },
-  { code: 'JPY', symbol: '¥',    name: 'Japanese Yen',   rate: 149.5 },
-  { code: 'AED', symbol: 'د.إ',  name: 'UAE Dirham',     rate: 3.67 },
-];
+import { SUPPORTED_FIAT_CURRENCIES } from '../constants/currencyConfig';
 
-export type CurrencyCode = 'USD' | 'EUR' | 'GBP' | 'INR' | 'JPY' | 'AED';
+const CURRENCIES = Object.values(SUPPORTED_FIAT_CURRENCIES);
+
+export type CurrencyCode = string;
 
 interface CurrencySelectorProps {
   visible: boolean;
@@ -40,29 +35,31 @@ export const CurrencySelector = memo(({ visible, onClose, currentCurrency, onSel
           <View style={styles.handle} />
           <Text style={[styles.title, { color: T.text }]}>Select Currency</Text>
 
-          {CURRENCIES.map(currency => {
-            const active = currency.code === currentCurrency;
-            return (
-              <TouchableOpacity
-                key={currency.code}
-                style={[styles.row, { backgroundColor: active ? T.primary + '15' : 'transparent' }]}
-                onPress={() => handleSelect(currency.code as CurrencyCode)}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.symbolBox, { backgroundColor: active ? T.primary : T.surfaceLow, borderColor: active ? T.primary : T.border }]}>
-                  <Text style={[styles.symbol, { color: active ? '#FFF' : T.text }]}>{currency.symbol}</Text>
-                </View>
-                <View style={styles.rowInfo}>
-                  <Text style={[styles.code, { color: T.text }]}>{currency.code}</Text>
-                  <Text style={[styles.name, { color: T.textMuted }]}>{currency.name}</Text>
-                </View>
-                {active
-                  ? <Feather name="check-circle" size={18} color={T.primary} />
-                  : <View style={[styles.radioOuter, { borderColor: T.border }]} />
-                }
-              </TouchableOpacity>
-            );
-          })}
+          <ScrollView style={{ maxHeight: 400 }} showsVerticalScrollIndicator={false}>
+            {CURRENCIES.map(currency => {
+              const active = currency.code === currentCurrency;
+              return (
+                <TouchableOpacity
+                  key={currency.code}
+                  style={[styles.row, { backgroundColor: active ? T.primary + '15' : 'transparent' }]}
+                  onPress={() => handleSelect(currency.code as CurrencyCode)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.symbolBox, { backgroundColor: active ? T.primary : T.surfaceLow, borderColor: active ? T.primary : T.border }]}>
+                    <Text style={[styles.symbol, { color: active ? '#FFF' : T.text }]}>{currency.symbol}</Text>
+                  </View>
+                  <View style={styles.rowInfo}>
+                    <Text style={[styles.code, { color: T.text }]}>{currency.code}</Text>
+                    <Text style={[styles.name, { color: T.textMuted }]}>{currency.name}</Text>
+                  </View>
+                  {active
+                    ? <Feather name="check-circle" size={18} color={T.primary} />
+                    : <View style={[styles.radioOuter, { borderColor: T.border }]} />
+                  }
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
         </Pressable>
       </Pressable>
     </Modal>
@@ -75,9 +72,8 @@ export const getCurrencyMeta = (code: CurrencyCode) =>
 export const formatCurrency = (amount: number, currency: CurrencyCode) => {
   const meta = getCurrencyMeta(currency);
   const converted = amount * meta.rate;
-  if (currency === 'JPY') return `${meta.symbol}${Math.round(converted).toLocaleString()}`;
-  if (currency === 'INR') return `${meta.symbol}${converted.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  return `${meta.symbol}${converted.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (currency === 'JPY' || currency === 'VND') return `${meta.symbol}${Math.round(converted).toLocaleString()}`;
+  return `${meta.symbol}${converted.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
 const styles = StyleSheet.create({

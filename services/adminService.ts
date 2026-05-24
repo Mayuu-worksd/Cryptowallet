@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient';
 import type { KYCRecord, CardRequest } from './supabaseService';
+import { p2pService, P2POrder } from './merchantService';
 
 export type AdminKYCRow = KYCRecord & {
   created_at: string; updated_at: string;
@@ -114,6 +115,24 @@ export const adminService = {
     if (notes) patch.admin_notes = notes;
     const { error } = await supabase.from('card_requests').update(patch).eq('id', id);
     if (error) throw error;
+  },
+
+  // ── P2P Orders ─────────────────────────────────────────────────────────────
+
+  async getAllP2POrders(status?: string): Promise<P2POrder[]> {
+    return p2pService.getAllOrders(status);
+  },
+
+  async verifyPaymentAndRelease(orderId: string, note?: string): Promise<void> {
+    return p2pService.adminVerifyAndRelease(orderId, note);
+  },
+
+  async resolveDisputeRelease(orderId: string): Promise<void> {
+    return p2pService.adminVerifyAndRelease(orderId, 'Dispute resolved in buyer\'s favour');
+  },
+
+  async resolveDisputeRefund(orderId: string): Promise<void> {
+    return p2pService.adminRefundSeller(orderId);
   },
 
   // ── Stats ──────────────────────────────────────────────────────────────────

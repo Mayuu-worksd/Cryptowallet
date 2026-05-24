@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS p2p_orders (
   fiat_total       NUMERIC NOT NULL,
   payment_method   TEXT NOT NULL,
   country          TEXT NOT NULL,
-  status           TEXT DEFAULT 'open' CHECK (status IN ('open','in_escrow','fiat_sent','completed','cancelled','disputed')),
+  status           TEXT DEFAULT 'open' CHECK (status IN ('open','escrow_locked','payment_pending','payment_verification','crypto_released','completed','cancelled','disputed')),
   is_merchant      BOOLEAN DEFAULT FALSE,
   network          TEXT DEFAULT 'Sepolia',
   deposit_tx_hash  TEXT,

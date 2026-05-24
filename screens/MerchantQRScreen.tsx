@@ -7,7 +7,7 @@ import { useWallet } from '../store/WalletContext';
 import { Theme } from '../constants';
 import { merchantQRService } from '../services/merchantService';
 
-const TOKENS = ['ETH', 'USDC', 'USDT', 'DAI'];
+const TOKENS = ['ETH', 'USDC', 'USDT', 'BTC', 'SOL', 'BNB', 'XRP', 'TON', 'TRX', 'SUI'];
 
 export default function MerchantQRScreen({ navigation }: any) {
   const { walletAddress, isDarkMode } = useWallet();

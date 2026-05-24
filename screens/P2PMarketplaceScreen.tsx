@@ -9,7 +9,7 @@ import { Theme } from '../constants';
 import { p2pService, P2POrder, FIAT_CURRENCIES, PAYMENT_METHODS, getLiveRate, calcPlatformFee } from '../services/merchantService';
 import TransactionLoader from '../components/ui/TransactionLoader';
 
-const TOKENS   = ['ETH', 'USDC', 'USDT', 'DAI'];
+const TOKENS   = ['ETH', 'USDC', 'USDT', 'BTC', 'SOL', 'BNB', 'XRP', 'TON', 'TRX', 'SUI'];
 const COUNTRIES = ['United States','United Kingdom','India','UAE','Singapore','Germany','France','Australia','Canada','Brazil','Other'];
 
 const TOKEN_COLORS: Record<string, string> = {
@@ -88,12 +88,14 @@ function OrderCard({ order, onPress, T, walletAddress }: { order: P2POrder; onPr
   const isBuying = order.buyer_wallet?.toLowerCase() === walletAddress.toLowerCase();
 
   const statusMeta: Record<string, { label: string; color: string }> = {
-    open:      { label: 'OPEN',       color: T.success },
-    in_escrow: { label: 'IN ESCROW',  color: T.primary },
-    fiat_sent: { label: 'FIAT SENT',  color: '#F59E0B' },
-    completed: { label: 'COMPLETED',  color: T.success },
-    cancelled: { label: 'CANCELLED',  color: T.textDim },
-    disputed:  { label: 'DISPUTED',   color: T.error },
+    open:                 { label: 'OPEN',                 color: T.success },
+    escrow_locked:        { label: 'IN ESCROW',            color: T.primary },
+    payment_pending:      { label: 'PAYMENT PENDING',      color: '#F59E0B' },
+    payment_verification: { label: 'PAYMENT VERIFICATION', color: '#F59E0B' },
+    crypto_released:      { label: 'CRYPTO RELEASED',      color: T.success },
+    completed:            { label: 'COMPLETED',            color: T.success },
+    cancelled:            { label: 'CANCELLED',            color: T.textDim },
+    disputed:             { label: 'DISPUTED',             color: T.error },
   };
   const { label: statusLabel, color: statusColor } = statusMeta[order.status] ?? { label: order.status.toUpperCase(), color: T.textDim };
 
@@ -624,6 +626,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
   const [sellRate,    setSellRate]    = useState('');
   const [sellMethod,  setSellMethod]  = useState('Bank Transfer');
   const [sellCountry, setSellCountry] = useState(p2pCountry || 'United States');
+  const [sellPaymentDetails, setSellPaymentDetails] = useState('');
   const [sellLoading, setSellLoading] = useState(false);
   const [liveRate,    setLiveRate]    = useState<number | null>(null);
   const [liveRateLoading, setLiveRateLoading] = useState(false);
@@ -638,7 +641,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
     if (!walletAddress) return;
     try {
       const myOrders = await p2pService.getMyOrders(walletAddress);
-      const activeStatuses = ['open', 'in_escrow', 'fiat_sent'];
+      const activeStatuses = ['open', 'escrow_locked', 'payment_pending', 'payment_verification', 'crypto_released'];
 
       // Compute what should be locked based on live DB orders
       const realLocks: Record<string, number> = {};
@@ -651,7 +654,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
           }
           // Lock for buyer (they locked funds in escrow)
           if (o.buyer_wallet?.toLowerCase() === walletAddress.toLowerCase() &&
-              (o.status === 'in_escrow' || o.status === 'fiat_sent')) {
+              (o.status === 'escrow_locked' || o.status === 'payment_pending' || o.status === 'payment_verification' || o.status === 'crypto_released')) {
             realLocks[o.token] = (realLocks[o.token] || 0) + o.amount;
           }
         });
@@ -791,7 +794,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
   }, [sellToken, sellFiat]);
 
   // Get real available balance for any token (ETH lives in ethBalance, not balances)
-  // Only subtract tokens locked in ACTIVE sell orders (open/in_escrow/fiat_sent)
+  // Only subtract tokens locked in ACTIVE sell orders (open/escrow_locked/payment_pending/payment_verification/crypto_released)
   const getAvailableBalance = (token: string) => {
     const raw = token === 'ETH' ? (parseFloat(ethBalance) || 0) : (balances[token] ?? 0);
     const locked = lockedBalance[token] ?? 0;
@@ -818,6 +821,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
         payment_method: sellMethod,
         country:        sellCountry,
         is_merchant:    isBusiness,
+        seller_payment_details: sellPaymentDetails.trim() || (sellMethod === 'UPI' ? `${walletAddress.slice(0, 8)}@upi` : `Bank: CryptoWallet Bank\nAccount: 100987654321\nIFSC: CWBK0001\nName: Seller Account`),
       }, network);
       lockBalance(sellToken, amt);
       setShowSellModal(false);
@@ -838,6 +842,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
     setSellMethod('Bank Transfer');
     setSellCountry(p2pCountry || 'United States');
     setSellFiat(p2pCurrency || 'USD');
+    setSellPaymentDetails('');
   };
 
   const STEPS = ['Token', 'Amount', 'Details', 'Review'];
@@ -1047,6 +1052,40 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
                     <Feather name="chevron-right" size={16} color={T.textDim} />
                   </TouchableOpacity>
 
+                  {/* Payment Details Input */}
+                  <View style={{ marginTop: 6 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: T.textMuted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      Receiving Account / Payment Details
+                    </Text>
+                    <View style={{
+                      backgroundColor: T.surfaceLow,
+                      borderRadius: 18,
+                      borderWidth: 1,
+                      borderColor: T.border,
+                      paddingHorizontal: 16,
+                      paddingVertical: 12,
+                    }}>
+                      <TextInput
+                        style={{ color: T.text, fontSize: 14, fontWeight: '600', minHeight: 60, textAlignVertical: 'top', padding: 0 }}
+                        value={sellPaymentDetails}
+                        onChangeText={setSellPaymentDetails}
+                        placeholder={
+                          sellMethod === 'UPI'
+                            ? "Enter UPI ID (e.g. yourname@upi)"
+                            : sellMethod === 'PayPal'
+                            ? "Enter PayPal Email (e.g. name@paypal.com)"
+                            : "Enter Bank Account Number, Bank Name, IFSC code & Beneficiary Name"
+                        }
+                        placeholderTextColor={T.textDim}
+                        multiline
+                        numberOfLines={3}
+                      />
+                    </View>
+                    <Text style={{ color: T.textDim, fontSize: 10, fontWeight: '600', marginTop: 6, lineHeight: 14 }}>
+                      Provide clear payment instructions. The buyer will see this to transfer fiat funds when they accept your listing.
+                    </Text>
+                  </View>
+
                   <View style={[s.infoBox, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
                     <Feather name="shield" size={14} color={T.success} />
                     <Text style={{ color: T.textDim, fontSize: 12, flex: 1, lineHeight: 18 }}>
@@ -1080,6 +1119,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
                     { icon: 'credit-card', label: 'Payment', value: sellMethod, color: T.primary },
                     { icon: 'map-pin',    label: 'Country',  value: sellCountry, color: '#6366F1' },
                     { icon: 'dollar-sign', label: 'Currency', value: sellFiat, color: T.success },
+                    { icon: 'edit-3',      label: 'Details',  value: sellPaymentDetails.trim() ? (sellPaymentDetails.trim().length > 20 ? `${sellPaymentDetails.trim().slice(0, 20)}…` : sellPaymentDetails.trim()) : 'Simulated Defaults', color: '#F59E0B' },
                   ].map(row => (
                     <View key={row.label} style={[s.reviewRow, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
                       <View style={[s.reviewRowIcon, { backgroundColor: row.color + '15' }]}>
@@ -1176,7 +1216,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
             {(() => {
               const activeBuyCount = orders.filter(o =>
                 o.buyer_wallet?.toLowerCase() === walletAddress.toLowerCase() &&
-                ['in_escrow', 'fiat_sent'].includes(o.status)
+                ['escrow_locked', 'payment_pending', 'payment_verification'].includes(o.status)
               ).length;
               return activeBuyCount > 0 ? (
                 <View style={{ backgroundColor: T.primary, borderRadius: 10, minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 }}>

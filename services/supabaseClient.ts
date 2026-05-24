@@ -50,7 +50,7 @@ export async function setWallet(walletAddress: string): Promise<void> {
 export function clearWalletSession(): void {
   _currentWallet = '';
   // Fire-and-forget to clear the Postgres session variable
-  supabase.rpc('set_wallet', { wallet: '' }).catch(() => {});
+  void supabase.rpc('set_wallet', { wallet: '' });
 }
 
 export function getCurrentWallet(): string {

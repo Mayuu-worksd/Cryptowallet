@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
 import { Platform } from 'react-native';
 import AsyncStorageNative from '@react-native-async-storage/async-storage';
+import { SUPPORTED_TOKENS as CONFIG_SUPPORTED_TOKENS } from '../constants/currencyConfig';
 
 const AsyncStorage = Platform.OS === 'web'
   ? {
@@ -54,20 +55,20 @@ const ZRX_APIS: Record<string, string> = {
 
 const ALLOWED_ZRX_HOSTS = ['api.0x.org', 'polygon.api.0x.org', 'arbitrum.api.0x.org'];
 
-const COINGECKO_IDS: Record<string, string> = {
-  ETH: 'ethereum', USDC: 'usd-coin', USDT: 'tether', DAI: 'dai', TRX: 'tron',
-};
+const COINGECKO_IDS: Record<string, string> = Object.fromEntries(
+  Object.entries(CONFIG_SUPPORTED_TOKENS).map(([k, v]) => [k, v.coingeckoId])
+);
 
 // Hardcoded fallback prices so the app NEVER fails to show a quote
 const FALLBACK_PRICES: Record<string, number> = {
-  ETH: 3500, USDC: 1, USDT: 1, DAI: 1, CUSTOM: 0.1, TRX: 0.12,
+  ETH: 3500, USDC: 1, USDT: 1, BTC: 65000, SOL: 150, BNB: 600, XRP: 0.50, TON: 7.5, TRX: 0.12, SUI: 1.80
 };
 
-export const SUPPORTED_TOKENS = ['ETH', 'USDC', 'USDT', 'DAI', 'TRX', 'CUSTOM'];
+export const SUPPORTED_TOKENS = Object.keys(CONFIG_SUPPORTED_TOKENS);
 
-export const TOKEN_DECIMALS: Record<string, number> = {
-  ETH: 18, WETH: 18, DAI: 18, USDC: 6, USDT: 6, CUSTOM: 18, TRX: 6,
-};
+export const TOKEN_DECIMALS: Record<string, number> = Object.fromEntries(
+  Object.entries(CONFIG_SUPPORTED_TOKENS).map(([k, v]) => [k, v.decimals])
+);
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type SwapQuote = {
