@@ -9,16 +9,12 @@ import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useWallet, useMarket } from '../store/WalletContext';
 import { COIN_META, COIN_COLORS } from '../constants';
-import { SYMBOL_TO_COINGECKO_ID } from '../services/marketService';
 import Toast from '../components/Toast';
 import { haptics } from '../utils/haptics';
 import { supabase } from '../services/supabaseClient';
 import { P2POrder } from '../services/merchantService';
 
-// Coins that have a CoinGecko price feed but no on-chain balance tracking yet
-const DISPLAY_ONLY_COINS = Object.keys(SYMBOL_TO_COINGECKO_ID).filter(
-  sym => !['ETH', 'USDT', 'USDC', 'DAI', 'TRX', 'MATIC', 'BNB'].includes(sym)
-);
+
 
 const CoinIcon = memo(({ symbol, size = 44 }: { symbol: string; size?: number }) => {
   const meta  = COIN_META[symbol];
@@ -40,11 +36,22 @@ const CoinIcon = memo(({ symbol, size = 44 }: { symbol: string; size?: number })
   );
 });
 
-const STABLE_FALLBACK: Record<string, number> = { USDC: 1, USDT: 1, DAI: 1 };
+const STABLE_FALLBACK: Record<string, number> = { 
+  ETH: 3500, 
+  BTC: 65000, 
+  USDT: 1, 
+  USDC: 1, 
+  SOL: 150, 
+  BNB: 600, 
+  XRP: 0.50, 
+  TON: 7.5, 
+  TRX: 0.12, 
+  SUI: 1.80, 
+};
 
 export default function PortfolioScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
-  const { ethBalance, balances, isDarkMode, walletAddress, lockedBalance } = useWallet();
+  const { ethBalance, balances, isDarkMode, walletAddress, lockedBalance, formatFiat, convertFiat, fiatSymbol } = useWallet();
   const { prices } = useMarket();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' as 'success' | 'error' | 'info' });
@@ -59,7 +66,7 @@ export default function PortfolioScreen({ navigation }: any) {
           .from('p2p_orders')
           .select('*')
           .or(`buyer_wallet.eq.${walletAddress.toLowerCase()},seller_wallet.eq.${walletAddress.toLowerCase()}`)
-          .in('status', ['open', 'in_escrow', 'fiat_sent', 'disputed'])
+          .in('status', ['open', 'escrow_locked', 'payment_pending', 'payment_verification', 'crypto_released', 'disputed'])
           .order('created_at', { ascending: false });
         if (data) setActiveOrders(data);
       } catch {}
@@ -69,11 +76,6 @@ export default function PortfolioScreen({ navigation }: any) {
     return () => clearInterval(interval);
   }, [walletAddress]);
 
-  const showComingSoon = () => {
-    haptics.selection();
-    setToast({ visible: true, message: 'BTC & SOL support coming soon!', type: 'info' });
-  };
-
   const realBalances: Record<string, number> = useMemo(() => ({
     ETH:  parseFloat(ethBalance) || 0,
     ...Object.fromEntries(
@@ -81,17 +83,23 @@ export default function PortfolioScreen({ navigation }: any) {
     ),
   }), [ethBalance, balances]);
 
-  const assetsList = useMemo(() =>
-    (Object.keys(realBalances) as string[])
-      .map(symbol => {
-        const price     = prices[symbol]?.usd ?? STABLE_FALLBACK[symbol] ?? 0;
-        const change24h = prices[symbol]?.change24h ?? 0;
-        const available = realBalances[symbol] - (lockedBalance[symbol] ?? 0);
-        return { symbol, amount: realBalances[symbol], available: Math.max(0, available), locked: lockedBalance[symbol] ?? 0, usd: realBalances[symbol] * price, change24h };
-      })
-      .sort((a, b) => b.usd - a.usd),
-    [realBalances, prices, lockedBalance]
-  );
+  const assetsList = useMemo(() => {
+    const priority = ['USDT', 'USDC', 'ETH', 'BTC', 'SOL', 'BNB', 'XRP', 'TON', 'TRX', 'SUI'];
+    return priority.map(symbol => {
+      const balanceVal = realBalances[symbol] ?? 0;
+      const price      = prices[symbol]?.usd ?? STABLE_FALLBACK[symbol] ?? 0;
+      const change24h  = prices[symbol]?.change24h ?? 0;
+      const available  = balanceVal - (lockedBalance[symbol] ?? 0);
+      return {
+        symbol,
+        amount: balanceVal,
+        available: Math.max(0, available),
+        locked: lockedBalance[symbol] ?? 0,
+        usd: balanceVal * price,
+        change24h
+      };
+    });
+  }, [realBalances, prices, lockedBalance]);
 
   const totalUsd = useMemo(() => assetsList.reduce((acc, a) => acc + a.usd, 0), [assetsList]);
   const totalLockedUsd = useMemo(() => {
@@ -127,15 +135,15 @@ export default function PortfolioScreen({ navigation }: any) {
             end={{ x: 1, y: 1 }}
             style={styles.editorialGradient}
           >
-            <Text style={styles.totalSubtitle}>Total Balance Equivalent</Text>
+             <Text style={styles.totalSubtitle}>Total Balance Equivalent</Text>
             <Text style={styles.totalValue}>
-              ${totalUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {formatFiat(totalUsd)}
             </Text>
             {totalLockedUsd > 0 && (
               <View style={styles.lockedBadge}>
                 <Feather name="lock" size={12} color="#FFA500" />
                 <Text style={styles.lockedText}>
-                  ${totalLockedUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} locked in P2P
+                  {formatFiat(totalLockedUsd)} locked in P2P
                 </Text>
               </View>
             )}
@@ -169,7 +177,7 @@ export default function PortfolioScreen({ navigation }: any) {
             </View>
             {activeOrders.map(order => {
               const isBuyer = order.buyer_wallet?.toLowerCase() === walletAddress.toLowerCase();
-              const statusColor = order.status === 'disputed' ? T.error : order.status === 'fiat_sent' ? '#F59E0B' : T.primary;
+              const statusColor = order.status === 'disputed' ? T.error : (order.status === 'payment_pending' || order.status === 'payment_verification') ? '#F59E0B' : T.primary;
               return (
                 <TouchableOpacity
                   key={order.id}
@@ -192,10 +200,10 @@ export default function PortfolioScreen({ navigation }: any) {
                   </View>
                   <View style={styles.orderRight}>
                     <Text style={[styles.orderFiat, { color: T.text }]}>
-                      ${order.fiat_total.toFixed(2)}
+                      {formatFiat(order.fiat_total)}
                     </Text>
                     <Text style={[styles.orderRate, { color: T.textMuted }]}>
-                      @ ${order.rate.toFixed(2)}
+                      @ {formatFiat(order.rate)}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -207,7 +215,6 @@ export default function PortfolioScreen({ navigation }: any) {
         {/* Assets list — live coins */}
         <View style={styles.assetList}>
           {assetsList.map(a => {
-            if (a.amount <= 0) return null;
             const isUp = a.change24h >= 0;
             return (
               <TouchableOpacity
@@ -237,7 +244,7 @@ export default function PortfolioScreen({ navigation }: any) {
                       {a.available.toFixed(4)} {a.symbol}
                     </Text>
                     <Text style={[styles.assetUsd, { color: T.textMuted }]}>
-                      ${(a.available * (prices[a.symbol]?.usd ?? STABLE_FALLBACK[a.symbol] ?? 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {formatFiat(a.available * (prices[a.symbol]?.usd ?? STABLE_FALLBACK[a.symbol] ?? 0))}
                     </Text>
                     <Text style={[styles.assetChange, { color: isUp ? T.success : T.error }]}>
                       {isUp ? '▲' : '▼'} {Math.abs(a.change24h).toFixed(2)}%
@@ -248,39 +255,6 @@ export default function PortfolioScreen({ navigation }: any) {
               </TouchableOpacity>
             );
           })}
-
-          {/* Coming Soon rows — derived dynamically */}
-          {DISPLAY_ONLY_COINS.map(sym => (
-            <TouchableOpacity
-              key={sym}
-              style={[styles.assetCard, { backgroundColor: T.surfaceLow, opacity: 0.6, borderColor: T.border }]}
-              activeOpacity={0.8}
-              onPress={showComingSoon}
-            >
-              <View style={styles.assetLeft}>
-                <View style={[styles.coinWrapper, { backgroundColor: T.surface, borderColor: T.border }]}>
-                  <CoinIcon symbol={sym} size={40} />
-                </View>
-                <View style={styles.assetInfo}>
-                  <Text style={[styles.assetName, { color: T.text }]}>{COIN_META[sym]?.name ?? sym}</Text>
-                  <Text style={[styles.assetSymbol, { color: T.textMuted }]}>{sym}</Text>
-                </View>
-              </View>
-              <View style={[styles.comingSoonChip, { backgroundColor: T.primary + '20', borderColor: T.primary + '40' }]}>
-                <Text style={[styles.comingSoonText, { color: T.primary }]}>Coming Soon</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-
-          {assetsList.every(a => a.amount <= 0) && (
-            <View style={styles.emptyBox}>
-              <Feather name="inbox" size={32} color={T.border} style={{ marginBottom: 16 }} />
-              <Text style={{ color: T.text, fontWeight: '800', fontSize: 16, marginBottom: 8 }}>Empty Portfolio</Text>
-              <Text style={{ color: T.textMuted, fontSize: 13, textAlign: 'center' }}>
-                Your assets will appear here once you have a balance.
-              </Text>
-            </View>
-          )}
         </View>
 
       </ScrollView>

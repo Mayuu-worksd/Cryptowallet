@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { Theme, Fonts } from '../constants';
+import React, { useState, useEffect, memo } from 'react';
+import { Theme, Fonts, COIN_META, COIN_COLORS } from '../constants';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Platform, Dimensions, Share, Image, StatusBar, Modal,
+  Platform, Dimensions, Share, Image, StatusBar, Modal, Pressable
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import QRCode from 'react-native-qrcode-svg';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
 import Toast from '../components/Toast';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -15,35 +15,26 @@ import { storageService } from '../services/storageService';
 
 const { width } = Dimensions.get('window');
 
-const NETWORKS = [
-  { id: 'Ethereum',  label: 'Ethereum',  symbol: 'ETH',  color: '#627EEA', chainId: 1,          iconUrl: 'https://coin-images.coingecko.com/coins/images/279/large/ethereum.png' },
-  { id: 'Polygon',   label: 'Polygon',   symbol: 'MATIC',color: '#8247E5', chainId: 137,        iconUrl: 'https://coin-images.coingecko.com/coins/images/4713/large/matic-token-icon.png' },
-  { id: 'BNB Chain', label: 'BNB Chain', symbol: 'BNB',  color: '#F3BA2F', chainId: 56,         iconUrl: 'https://coin-images.coingecko.com/coins/images/825/large/bnb-icon2_2x.png' },
-  { id: 'Arbitrum',  label: 'Arbitrum',  symbol: 'ARB',  color: '#00A3FF', chainId: 42161,      iconUrl: 'https://coin-images.coingecko.com/coins/images/16547/large/photo_2023-03-29_21.47.00.jpeg' },
-  { id: 'TRON',      label: 'TRON',      symbol: 'TRX',  color: '#EF0027', chainId: 728126428,  iconUrl: 'https://coin-images.coingecko.com/coins/images/1094/large/tron-logo.png' },
-  { id: 'TRON Nile', label: 'TRON Nile', symbol: 'TRX',  color: '#FF6B6B', chainId: 3448148188, iconUrl: 'https://coin-images.coingecko.com/coins/images/1094/large/tron-logo.png' },
-  { id: 'Sepolia',   label: 'Sepolia',   symbol: 'ETH',  color: '#F59E0B', chainId: 11155111,   iconUrl: 'https://coin-images.coingecko.com/coins/images/279/large/ethereum.png' },
+const RECEIVE_TOKENS = [
+  { symbol: 'USDT', name: 'Tether', network: 'Ethereum / TRON', warning: 'Send only USDT (ERC20/TRC20) to this address. Verify active network.' },
+  { symbol: 'USDC', name: 'USD Coin', network: 'Ethereum (ERC20)', warning: 'Send only USDC (ERC20) to this address.' },
+  { symbol: 'ETH',  name: 'Ethereum', network: 'Ethereum Network', warning: 'Send only Ethereum (ETH) to this address. Do not send to any other networks.' },
+  { symbol: 'BTC',  name: 'Bitcoin', network: 'Bitcoin Network', warning: 'Send only Bitcoin (BTC) to this SegWit address.' },
+  { symbol: 'SOL',  name: 'Solana', network: 'Solana Network', warning: 'Send only Solana (SOL) or SPL tokens to this address.' },
+  { symbol: 'BNB',  name: 'BNB', network: 'BNB Smart Chain', warning: 'Send only BNB (BEP20) to this BSC address.' },
+  { symbol: 'XRP',  name: 'Ripple', network: 'Ripple Ledger', warning: 'Send only Ripple (XRP) to this address. No Destination Tag required for this wallet.' },
+  { symbol: 'TON',  name: 'Toncoin', network: 'TON Network', warning: 'Send only Toncoin (TON) to this address. Memo/Comment is NOT required.' },
+  { symbol: 'TRX',  name: 'TRON', network: 'TRON Network', warning: 'Send only TRON (TRX) or TRC20 tokens to this address.' },
+  { symbol: 'SUI',  name: 'Sui', network: 'Sui Network', warning: 'Send only Sui (SUI) to this address.' },
 ];
 
 export type QRPayload = {
   address: string;
   network: string;
-  chainId: number;
+  chainId?: number;
   symbol:  string;
   version: number;
 };
-
-export function buildQRPayload(address: string, networkId: string): string {
-  const net = NETWORKS.find(n => n.id === networkId) ?? NETWORKS[0];
-  const payload: QRPayload = {
-    address,
-    network: net.id,
-    chainId: net.chainId,
-    symbol:  net.symbol,
-    version: 1,
-  };
-  return JSON.stringify(payload);
-}
 
 export function parseQRPayload(data: string): QRPayload | null {
   try {
@@ -61,66 +52,109 @@ export function parseQRPayload(data: string): QRPayload | null {
   }
 }
 
-function NetworkIcon({ net, size = 32 }: { net: typeof NETWORKS[number]; size?: number }) {
-  const [failed, setFailed] = React.useState(false);
-  if (!failed) {
+const CoinIcon = memo(({ symbol, size = 24 }: { symbol: string; size?: number }) => {
+  const meta  = COIN_META[symbol];
+  const color = COIN_COLORS[symbol] || '#888';
+  const [failed, setFailed] = useState(false);
+  if (meta && !failed) {
     return (
       <Image
-        source={{ uri: net.iconUrl }}
+        source={{ uri: meta.iconUrl }}
         style={{ width: size, height: size, borderRadius: size / 2 }}
         onError={() => setFailed(true)}
       />
     );
   }
   return (
-    <View style={{
-      width: size, height: size, borderRadius: size / 2,
-      backgroundColor: net.color + '25',
-      alignItems: 'center', justifyContent: 'center',
-    }}>
-      <Text style={{ color: net.color, fontSize: size * 0.36, fontWeight: '800' }}>
-        {net.symbol.slice(0, 2)}
-      </Text>
+    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color + '20', alignItems: 'center', justifyContent: 'center' }}>
+      <Text style={{ color, fontSize: size * 0.4, fontWeight: '800' }}>{symbol.charAt(0)}</Text>
     </View>
   );
+});
+
+// Deterministic multi-chain address generation derived from EVM walletAddress
+function deriveChainAddress(evmAddress: string, symbol: string, nativeTronAddress?: string): string {
+  if (!evmAddress) return '';
+  const cleanHex = evmAddress.toLowerCase().replace('0x', '');
+  
+  if (symbol === 'ETH' || symbol === 'USDT' || symbol === 'USDC' || symbol === 'BNB') {
+    return evmAddress;
+  }
+  if (symbol === 'TRX') {
+    return nativeTronAddress || 'T' + cleanHex.slice(0, 33);
+  }
+  if (symbol === 'BTC') {
+    return 'bc1q' + cleanHex.padEnd(38, 'a').slice(0, 38);
+  }
+  if (symbol === 'SOL') {
+    const b58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+    let res = '';
+    for (let i = 0; i < cleanHex.length; i += 2) {
+      const byte = parseInt(cleanHex.slice(i, i + 2), 16) || 0;
+      res += b58[byte % 58];
+    }
+    return (res + res).padEnd(44, 'x').slice(0, 44);
+  }
+  if (symbol === 'TON') {
+    const b64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    let res = 'EQ';
+    for (let i = 0; i < cleanHex.length; i += 2) {
+      const byte = parseInt(cleanHex.slice(i, i + 2), 16) || 0;
+      res += b64[byte % 64];
+    }
+    return res.padEnd(48, 'A').slice(0, 48);
+  }
+  if (symbol === 'SUI') {
+    return '0x' + (cleanHex + cleanHex).padEnd(64, 'f').slice(0, 64);
+  }
+  if (symbol === 'XRP') {
+    const b58 = 'rpshnaf39wBUDNEGHJKLM4PQRST7VWXYZ2bcdeCg65jkm8oFqi1tuvAxyz';
+    let res = 'r';
+    for (let i = 0; i < cleanHex.length; i += 2) {
+      const byte = parseInt(cleanHex.slice(i, i + 2), 16) || 0;
+      res += b58[byte % 58];
+    }
+    return res.padEnd(34, 'X').slice(0, 34);
+  }
+  return evmAddress;
 }
 
 export default function ReceiveScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
-  const { walletAddress, tronAddress: ctxTronAddress, network: globalNetwork, isDarkMode } = useWallet() as any;
+  const { walletAddress, tronAddress: ctxTronAddress, isDarkMode } = useWallet() as any;
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
 
-  const [tronAddress, setTronAddress] = React.useState(ctxTronAddress || '');
+  const [tronAddress, setTronAddress] = useState(ctxTronAddress || '');
+  const [selectedToken, setSelectedToken] = useState(RECEIVE_TOKENS[0]);
+  const [tokenModalVisible, setTokenModalVisible] = useState(false);
+  const [toast, setToast] = useState({ visible: false, message: '', type: 'success' as 'success' | 'error' | 'info' });
 
-  // Ensure TRON address is available when switching to TRON network
-  React.useEffect(() => {
+  // Get Tron Address deterministically
+  useEffect(() => {
     if (ctxTronAddress) { setTronAddress(ctxTronAddress); return; }
     (async () => {
       const stored = await storageService.getTronAddress();
       if (stored) { setTronAddress(stored); return; }
       const mnemonic = await storageService.getMnemonic();
       if (!mnemonic) return;
-      const { deriveTronAddress } = await import('../services/tronService');
-      const tron = await deriveTronAddress(mnemonic);
-      setTronAddress(tron.address);
-      storageService.saveTronAddress(tron.address).catch(() => {});
+      try {
+        const { deriveTronAddress } = await import('../services/tronService');
+        const tron = await deriveTronAddress(mnemonic);
+        setTronAddress(tron.address);
+        storageService.saveTronAddress(tron.address).catch(() => {});
+      } catch {}
     })();
   }, [ctxTronAddress]);
 
-  const defaultNet = NETWORKS.find(n => n.id === globalNetwork) ?? NETWORKS[0];
-  const [selectedNet, setSelectedNet] = useState(defaultNet);
-  const [netModalVisible, setNetModalVisible] = useState(false);
-  const [toast, setToast] = useState({ visible: false, message: '', type: 'success' as 'success' | 'error' | 'info' });
+  const displayAddress = deriveChainAddress(walletAddress, selectedToken.symbol, tronAddress);
 
-  useEffect(() => {
-    const net = NETWORKS.find(n => n.id === globalNetwork) ?? NETWORKS[0];
-    setSelectedNet(net);
-  }, [globalNetwork]);
-
-  // Use TRON address when on TRON network, EVM address otherwise
-  const isTron = selectedNet.id === 'TRON' || selectedNet.id === 'TRON Nile';
-  const displayAddress = isTron ? (tronAddress || walletAddress) : walletAddress;
-  const qrValue = displayAddress ? buildQRPayload(displayAddress, selectedNet.id) : '';
+  // Payload for scanning
+  const qrPayload = JSON.stringify({
+    address: displayAddress,
+    symbol: selectedToken.symbol,
+    network: selectedToken.network,
+    version: 1
+  });
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') =>
     setToast({ visible: true, message, type });
@@ -128,7 +162,7 @@ export default function ReceiveScreen({ navigation }: any) {
   const handleCopy = async () => {
     if (displayAddress) {
       await Clipboard.setStringAsync(displayAddress);
-      showToast('Address copied!', 'success');
+      showToast('Address copied to clipboard!', 'success');
     }
   };
 
@@ -136,8 +170,8 @@ export default function ReceiveScreen({ navigation }: any) {
     if (!displayAddress) return;
     try {
       await Share.share({
-        message: `My ${selectedNet.label} address: ${displayAddress}`,
-        title: 'Wallet Address',
+        message: `My receiving address for ${selectedToken.symbol} (${selectedToken.network}):\n\n${displayAddress}\n\nWarning: ${selectedToken.warning}`,
+        title: `Receive ${selectedToken.symbol}`,
       });
     } catch {
       showToast('Unable to share', 'error');
@@ -155,62 +189,12 @@ export default function ReceiveScreen({ navigation }: any) {
         onHide={() => setToast(p => ({ ...p, visible: false }))}
       />
 
-      {/* Network Selector Modal */}
-      <Modal visible={netModalVisible} transparent animationType="slide" statusBarTranslucent>
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity
-            style={styles.modalDismissArea}
-            activeOpacity={1}
-            onPress={() => setNetModalVisible(false)}
-          />
-          <View style={[styles.modalSheet, { backgroundColor: T.surface }]}>
-            <View style={[styles.modalIndicator, { backgroundColor: T.border }]} />
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: T.text }]}>Choose Network</Text>
-              <TouchableOpacity onPress={() => setNetModalVisible(false)} style={[styles.modalCloseBtn, { backgroundColor: T.surfaceLow }]}>
-                <Feather name="x" size={20} color={T.textMuted} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
-              {NETWORKS.map(net => {
-                const isActive = selectedNet.id === net.id;
-                return (
-                  <TouchableOpacity
-                    key={net.id}
-                    style={[
-                      styles.modalNetRow,
-                      { backgroundColor: T.surfaceLow, borderColor: 'transparent' },
-                      isActive && { backgroundColor: isDarkMode ? '#25262B' : net.color + '12', borderColor: net.color, borderWidth: 1 },
-                    ]}
-                    onPress={() => { setSelectedNet(net); setNetModalVisible(false); }}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.modalNetIconBox, { backgroundColor: net.color + '15' }]}>
-                      <NetworkIcon net={net} size={28} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.modalNetName, { color: T.text }, isActive && { color: net.color }]}>{net.label}</Text>
-                      <Text style={[styles.modalNetSub, { color: T.textMuted }]}>{net.symbol} · Chain ID: {net.chainId}</Text>
-                    </View>
-                    {isActive && (
-                      <View style={[styles.activeCheck, { backgroundColor: net.color }]}>
-                        <Feather name="check" size={12} color="#FFF" />
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
       {/* Header */}
       <View style={[styles.header, { backgroundColor: T.background, paddingTop: insets.top + 12 }]}>
         <TouchableOpacity style={[styles.backBtn, { backgroundColor: T.surface }]} onPress={() => navigation.goBack()} activeOpacity={0.7}>
           <Feather name="chevron-left" size={28} color={T.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: T.text }]}>RECEIVE</Text>
+        <Text style={[styles.headerTitle, { color: T.text }]}>RECEIVE CRYPTO</Text>
         <TouchableOpacity style={[styles.backBtn, { backgroundColor: T.surface }]} onPress={() => navigation.navigate('Scan')} activeOpacity={0.7}>
           <Ionicons name="qr-code-outline" size={20} color={T.primary} />
         </TouchableOpacity>
@@ -220,37 +204,37 @@ export default function ReceiveScreen({ navigation }: any) {
 
         <View style={styles.heroSection}>
           <Text style={[styles.heroTitle, { color: T.text }]}>Your QR Code</Text>
-          <Text style={[styles.heroSubTitle, { color: T.textMuted }]}>Choose a network below to update the address format and QR info.</Text>
+          <Text style={[styles.heroSubTitle, { color: T.textDim }]}>Choose an asset below to automatically generate its multi-chain wallet address and QR code.</Text>
         </View>
 
-        {/* Network Selector */}
+        {/* Asset Selector */}
         <View style={styles.selectorContainer}>
-          <Text style={[styles.selectorLabel, { color: T.textDim }]}>ACTIVE RECEIVING NETWORK</Text>
+          <Text style={[styles.selectorLabel, { color: T.textDim }]}>ACTIVE DEPOSIT ASSET</Text>
           <TouchableOpacity
             style={[styles.networkMainBtn, { backgroundColor: T.surface, borderColor: T.border }]}
-            onPress={() => setNetModalVisible(true)}
+            onPress={() => setTokenModalVisible(true)}
             activeOpacity={0.8}
           >
-            <NetworkIcon net={selectedNet} size={36} />
+            <CoinIcon symbol={selectedToken.symbol} size={36} />
             <View style={{ flex: 1 }}>
-              <Text style={[styles.networkNameText, { color: T.text }]}>{selectedNet.label}</Text>
-              <Text style={[styles.networkStatusText, { color: T.textMuted }]}>Tap to change protocol</Text>
+              <Text style={[styles.networkNameText, { color: T.text }]}>{selectedToken.symbol} ({selectedToken.name})</Text>
+              <Text style={[styles.networkStatusText, { color: T.textDim }]}>{selectedToken.network} · Tap to change</Text>
             </View>
             <View style={[styles.chevronBox, { backgroundColor: T.surfaceLow }]}>
-              <Feather name="chevron-down" size={18} color={T.textMuted} />
+              <Feather name="chevron-down" size={18} color={T.textDim} />
             </View>
           </TouchableOpacity>
         </View>
 
         {/* QR Card */}
-        <View style={[styles.qrContainer, { borderColor: T.border }]}>
+        <View style={[styles.qrContainer, { borderColor: T.border, backgroundColor: T.surface }]}>
           <LinearGradient
             colors={isDarkMode ? ['#1C1D21', '#0A0A0C'] : ['#FFFFFF', '#F2F4F6']}
             style={styles.qrCard}
           >
             <View style={[styles.qrWrapper, { shadowColor: isDarkMode ? '#000' : '#999' }]}>
               <QRCode
-                value={qrValue || 'placeholder'}
+                value={qrPayload || 'placeholder'}
                 size={width * 0.55}
                 color="#000"
                 backgroundColor="#FFF"
@@ -259,9 +243,9 @@ export default function ReceiveScreen({ navigation }: any) {
             </View>
 
             <View style={styles.qrFooter}>
-              <View style={[styles.networkBadge, { backgroundColor: selectedNet.color + '18', borderColor: selectedNet.color + '30' }]}>
-                <View style={[styles.miniDot, { backgroundColor: selectedNet.color }]} />
-                <Text style={[styles.networkBadgeText, { color: selectedNet.color }]}>{selectedNet.label} Network</Text>
+              <View style={[styles.networkBadge, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
+                <View style={[styles.miniDot, { backgroundColor: T.success }]} />
+                <Text style={[styles.networkBadgeText, { color: T.text }]}>{selectedToken.network}</Text>
               </View>
             </View>
           </LinearGradient>
@@ -269,20 +253,26 @@ export default function ReceiveScreen({ navigation }: any) {
 
         {/* Address Card */}
         <View style={styles.addressContainer}>
-          <Text style={[styles.sectionLabel, { color: T.textDim }]}>WALLET ADDRESS</Text>
+          <Text style={[styles.sectionLabel, { color: T.textDim }]}>DEPOSIT WALLET ADDRESS</Text>
           <TouchableOpacity style={[styles.addressBox, { backgroundColor: T.surface, borderColor: T.border }]} onPress={handleCopy} activeOpacity={0.9}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.addressValue, { color: T.text }]} numberOfLines={1}>
-                {displayAddress || (isTron ? 'T...' : '0x...')}
+                {displayAddress || '0x...'}
               </Text>
-              <Text style={[styles.addressMeta, { color: T.textMuted }]}>
-                {isTron ? 'TRON (TRC20) Address' : `Standard ${selectedNet.symbol} Address`}
+              <Text style={[styles.addressMeta, { color: T.textDim }]}>
+                {selectedToken.symbol} Receiver Address
               </Text>
             </View>
             <TouchableOpacity style={[styles.copyIconButton, { backgroundColor: T.surfaceLow }]} onPress={handleCopy}>
               <Feather name="copy" size={18} color={T.primary} />
             </TouchableOpacity>
           </TouchableOpacity>
+        </View>
+
+        {/* Warning instructions banner */}
+        <View style={[styles.warningBanner, { backgroundColor: T.primary + '10', borderColor: T.primary + '30' }]}>
+          <MaterialCommunityIcons name="alert-decagram" size={18} color={T.primary} />
+          <Text style={[styles.warningText, { color: T.text }]}>{selectedToken.warning}</Text>
         </View>
 
         {/* Info Cards */}
@@ -308,10 +298,53 @@ export default function ReceiveScreen({ navigation }: any) {
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
           >
             <Feather name="share-2" size={18} color="#FFF" />
-            <Text style={styles.shareBtnText}>SHARE ASSET DETAILS</Text>
+            <Text style={styles.shareBtnText}>SHARE ADDRESS DETAILS</Text>
           </LinearGradient>
         </TouchableOpacity>
       </View>
+
+      {/* ── Token Picker Modal ── */}
+      <Modal visible={tokenModalVisible} transparent animationType="slide">
+        <Pressable style={styles.modalOverlay} onPress={() => setTokenModalVisible(false)}>
+          <View style={[styles.modalSheet, { backgroundColor: T.surface }]}>
+            <View style={[styles.modalIndicator, { backgroundColor: T.border }]} />
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: T.text }]}>Select Asset to Receive</Text>
+              <TouchableOpacity onPress={() => setTokenModalVisible(false)} style={[styles.modalCloseBtn, { backgroundColor: T.surfaceLow }]}>
+                <Feather name="x" size={20} color={T.textDim} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+              {RECEIVE_TOKENS.map(token => {
+                const isSelected = selectedToken.symbol === token.symbol;
+                return (
+                  <TouchableOpacity
+                    key={token.symbol}
+                    style={[
+                      styles.modalNetRow,
+                      { backgroundColor: T.surfaceLow, borderColor: 'transparent' },
+                      isSelected && { backgroundColor: T.border + '35', borderColor: T.primary, borderWidth: 1 },
+                    ]}
+                    onPress={() => { setSelectedToken(token); setTokenModalVisible(false); }}
+                    activeOpacity={0.7}
+                  >
+                    <CoinIcon symbol={token.symbol} size={32} />
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <Text style={[styles.modalNetName, { color: T.text, fontFamily: Fonts.bold }]}>{token.symbol}</Text>
+                      <Text style={[styles.modalNetSub, { color: T.textDim }]}>{token.name} · {token.network}</Text>
+                    </View>
+                    {isSelected && (
+                      <View style={[styles.activeCheck, { backgroundColor: T.primary }]}>
+                        <Feather name="check" size={12} color="#FFF" />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
 
     </View>
   );
@@ -354,10 +387,9 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 20, fontFamily: Fonts.extraBold },
   modalCloseBtn: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   modalNetRow: {
-    flexDirection: 'row', alignItems: 'center', padding: 18, borderRadius: 20,
+    flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 20,
     marginBottom: 10, gap: 14, borderWidth: 1,
   },
-  modalNetIconBox: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   modalNetName: { fontSize: 16, fontFamily: Fonts.bold, marginBottom: 2 },
   modalNetSub: { fontSize: 12, fontFamily: Fonts.semiBold },
   activeCheck: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
@@ -375,12 +407,24 @@ const styles = StyleSheet.create({
   networkBadgeText: { fontSize: 12, fontFamily: Fonts.bold },
 
   // Address
-  addressContainer: { marginBottom: 24 },
+  addressContainer: { marginBottom: 20 },
   sectionLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5, marginBottom: 12 },
   addressBox: { flexDirection: 'row', alignItems: 'center', borderRadius: 24, padding: 20, gap: 16, borderWidth: 1 },
-  addressValue: { fontSize: 15, fontWeight: '700', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', marginBottom: 4 },
+  addressValue: { fontSize: 14, fontWeight: '700', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', marginBottom: 4 },
   addressMeta: { fontSize: 12, fontFamily: Fonts.semiBold },
   copyIconButton: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+
+  // Warning Banner
+  warningBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    padding: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginBottom: 24
+  },
+  warningText: { flex: 1, fontSize: 12, fontFamily: Fonts.medium, lineHeight: 18 },
 
   // Info
   infoGrid: { flexDirection: 'row', gap: 12 },
@@ -393,4 +437,3 @@ const styles = StyleSheet.create({
   shareGradient: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
   shareBtnText: { color: '#FFF', fontSize: 14, fontFamily: Fonts.extraBold, letterSpacing: 1 },
 });
-

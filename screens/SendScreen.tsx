@@ -1,10 +1,10 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Theme, Fonts } from '../constants';
+import React, { useState, useCallback, useRef, useEffect, memo } from 'react';
+import { Theme, Fonts, COIN_META, COIN_COLORS } from '../constants';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   ScrollView, ActivityIndicator, Platform, KeyboardAvoidingView,
-  Animated, Modal, StatusBar,
+  Animated, Modal, StatusBar, Image, Pressable
 } from 'react-native';
 import { Feather, MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useWallet, useMarket } from '../store/WalletContext';
@@ -16,14 +16,41 @@ import TransactionLoader from '../components/ui/TransactionLoader';
 import { tronService } from '../services/tronService';
 import { storageService } from '../services/storageService';
 
+const CoinIcon = memo(({ symbol, size = 24 }: { symbol: string; size?: number }) => {
+  const meta  = COIN_META[symbol];
+  const color = COIN_COLORS[symbol] || '#888';
+  const [failed, setFailed] = useState(false);
+  if (meta && !failed) {
+    return (
+      <Image
+        source={{ uri: meta.iconUrl }}
+        style={{ width: size, height: size, borderRadius: size / 2 }}
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return (
+    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color + '20', alignItems: 'center', justifyContent: 'center' }}>
+      <Text style={{ color, fontSize: size * 0.4, fontWeight: '800' }}>{symbol.charAt(0)}</Text>
+    </View>
+  );
+});
+
 export default function SendScreen({ navigation, route }: any) {
   const insets = useSafeAreaInsets();
-  const { ethBalance, sendETH, isDarkMode, walletAddress, tronAddress, network, balances, addTx, updateTxStatus, refreshBalance } = useWallet();
+  const { 
+    ethBalance, sendETH, isDarkMode, walletAddress, tronAddress, 
+    network, balances, addTx, updateTxStatus, refreshBalance,
+    applySwapBalances, formatFiat 
+  } = useWallet();
   const { prices } = useMarket();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const styles = React.useMemo(() => makeStyles(T), [T]);
 
   const scannedAddr = route?.params?.scannedAddress ?? '';
+
+  const [selectedToken, setSelectedToken] = useState(route?.params?.symbol ?? 'USDT');
+  const [selectorVisible, setSelectorVisible] = useState(false);
 
   const [address, setAddress]         = useState(scannedAddr);
   const [amount, setAmount]             = useState('');
@@ -44,28 +71,42 @@ export default function SendScreen({ navigation, route }: any) {
   }, [scannedAddr]);
 
   const isTronNetwork = network === 'TRON' || network === 'TRON Nile';
-  const coinLabel = isTronNetwork ? 'TRX' : 'ETH';
-  const ethPrice     = prices[isTronNetwork ? 'TRX' : 'ETH']?.usd ?? (isTronNetwork ? 0.12 : 3450);
+  const coinLabel = selectedToken;
+  const coinPrice    = prices[selectedToken]?.usd ?? (selectedToken === 'ETH' ? 3500 : (selectedToken === 'BTC' ? 65000 : 1));
   const parsedAmount = parseFloat(amount) || 0;
   const gasEthNum    = parseFloat(gasEth) || 0;
   const totalETH     = (parsedAmount + gasEthNum).toFixed(6);
-  const usdValue     = (parsedAmount * ethPrice).toFixed(2);
-  const gasUSD       = (gasEthNum * ethPrice).toFixed(4);
-  const totalUSD     = ((parsedAmount + gasEthNum) * ethPrice).toFixed(2);
-  // Use TRX balance when on TRON network, ETH balance otherwise
-  const availBal     = isTronNetwork ? (balances.TRX ?? 0) : (parseFloat(ethBalance) || 0);
+
+  // Available balance based on token
+  const availBal     = selectedToken === 'ETH' ? (parseFloat(ethBalance) || 0) : (balances[selectedToken] ?? 0);
+
+  // Dynamic fiat conversions using selected fiat currency formatter formatFiat!
+  const fiatAmount   = formatFiat(parsedAmount * coinPrice);
+  const fiatGas      = formatFiat(gasEthNum * coinPrice);
+  const fiatTotal    = formatFiat((parsedAmount + gasEthNum) * coinPrice);
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') =>
     setToast({ visible: true, message, type });
 
   const validateAddress = useCallback((val: string) => {
     if (!val) { setAddressError(''); return; }
-    if (isTronNetwork) {
+    if (selectedToken === 'TRX') {
       setAddressError(/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(val) ? '' : 'Invalid TRON address (starts with T)');
+    } else if (selectedToken === 'SOL') {
+      setAddressError(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(val) ? '' : 'Invalid Solana address');
+    } else if (selectedToken === 'BTC') {
+      setAddressError(/^(1|3|bc1)[a-zA-HJ-NP-Z0-9]{25,62}$/.test(val) ? '' : 'Invalid Bitcoin address');
+    } else if (selectedToken === 'TON') {
+      setAddressError(/^[a-zA-Z0-9_-]{48}$/.test(val) ? '' : 'Invalid TON address');
+    } else if (selectedToken === 'SUI') {
+      setAddressError(/^0x[0-9a-fA-F]{64}$/.test(val) ? '' : 'Invalid Sui address');
+    } else if (selectedToken === 'XRP') {
+      setAddressError(/^r[0-9a-zA-Z]{24,34}$/.test(val) ? '' : 'Invalid Ripple address');
     } else {
-      setAddressError(/^0x[0-9a-fA-F]{40}$/.test(val) ? '' : 'Invalid Ethereum address');
+      // EVM (ETH, USDT, USDC, BNB)
+      setAddressError(/^0x[0-9a-fA-F]{40}$/.test(val) ? '' : 'Invalid EVM address (0x...)');
     }
-  }, [isTronNetwork]);
+  }, [selectedToken]);
 
   const validateAmount = useCallback((val: string, currentGasEth?: string) => {
     if (!val) { setAmountError(''); return; }
@@ -73,47 +114,102 @@ export default function SendScreen({ navigation, route }: any) {
     if (isNaN(p) || p <= 0) { setAmountError('Enter a valid amount'); return; }
     if (p > availBal)        { setAmountError(`Exceeds balance (${availBal.toFixed(6)} ${coinLabel})`); return; }
     const gas = parseFloat(currentGasEth ?? gasEth) || 0.0005;
-    if (p + gas > availBal)  { setAmountError(`Insufficient for gas. Max sendable: ${Math.max(0, availBal - gas).toFixed(6)} ${coinLabel}`); return; }
+    if (selectedToken === 'ETH' || selectedToken === 'TRX') {
+      if (p + gas > availBal) { 
+        setAmountError(`Insufficient for gas. Max sendable: ${Math.max(0, availBal - gas).toFixed(6)} ${coinLabel}`); 
+        return; 
+      }
+    }
     setAmountError('');
-  }, [availBal, gasEth]);
+  }, [availBal, gasEth, selectedToken, coinLabel]);
 
   useEffect(() => {
     if (!address || !amount || addressError || !parsedAmount) {
       setGasEth('');
       return;
     }
-    // Skip gas estimation for TRON — use flat fee estimate
-    if (isTronNetwork) {
+    // Gas estimation for native ETH
+    if (selectedToken === 'ETH') {
+      const t = setTimeout(async () => {
+        setEstimating(true);
+        try {
+          const { gasCostEth } = await ethereumService.estimateGas(walletAddress, address, amount, network);
+          setGasEth(gasCostEth);
+          validateAmount(amount, gasCostEth);
+        } catch (_e) {
+          setGasEth('0.000042');
+          validateAmount(amount, '0.000042');
+        } finally {
+          setEstimating(false);
+        }
+      }, 600);
+      return () => clearTimeout(t);
+    }
+    // Skip gas estimation for TRX — use flat fee estimate
+    if (selectedToken === 'TRX') {
       const flatFee = tronService.estimateFee(network).toFixed(6);
       setGasEth(flatFee);
       validateAmount(amount, flatFee);
       return;
     }
-    const t = setTimeout(async () => {
-      setEstimating(true);
-      try {
-        const { gasCostEth } = await ethereumService.estimateGas(walletAddress, address, amount, network);
-        setGasEth(gasCostEth);
-        validateAmount(amount, gasCostEth);
-      } catch (_e) {
-        setGasEth('0.000042');
-        validateAmount(amount, '0.000042');
-      } finally {
-        setEstimating(false);
-      }
-    }, 600);
-    return () => clearTimeout(t);
-  }, [address, amount, addressError, walletAddress, network, isTronNetwork]);
+
+    // Flat simulated fees for non-native assets
+    let flatFee = '0.0005';
+    if (selectedToken === 'USDT' || selectedToken === 'USDC') {
+      flatFee = isTronNetwork ? '2.0' : '0.001';
+    } else if (selectedToken === 'BTC') {
+      flatFee = '0.0001';
+    } else if (selectedToken === 'SOL') {
+      flatFee = '0.00005';
+    } else if (selectedToken === 'BNB') {
+      flatFee = '0.0002';
+    } else if (selectedToken === 'XRP') {
+      flatFee = '0.02';
+    } else if (selectedToken === 'TON') {
+      flatFee = '0.005';
+    } else if (selectedToken === 'SUI') {
+      flatFee = '0.001';
+    }
+
+    setGasEth(flatFee);
+    validateAmount(amount, flatFee);
+  }, [address, amount, addressError, walletAddress, network, selectedToken, isTronNetwork]);
 
   const handleReview = () => {
     let err = false;
-    const addrValid = isTronNetwork
-      ? /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(address)
-      : /^0x[0-9a-fA-F]{40}$/.test(address);
-    if (!address || !addrValid) { setAddressError(isTronNetwork ? 'Valid TRON address required (starts with T)' : 'Valid Ethereum address required'); err = true; }
-    if (!amount || parsedAmount <= 0)                       { setAmountError('Enter a valid amount'); err = true; }
-    else if (parsedAmount > availBal)                       { setAmountError('Insufficient balance'); err = true; }
-    else if (parsedAmount + (gasEthNum || 0.0005) > availBal) { setAmountError(`Insufficient for gas. Max sendable: ${Math.max(0, availBal - (gasEthNum || 0.0005)).toFixed(6)} ${coinLabel}`); err = true; }
+    let addrValid = false;
+    if (selectedToken === 'TRX') {
+      addrValid = /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(address);
+    } else if (selectedToken === 'SOL') {
+      addrValid = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address);
+    } else if (selectedToken === 'BTC') {
+      addrValid = /^(1|3|bc1)[a-zA-HJ-NP-Z0-9]{25,62}$/.test(address);
+    } else if (selectedToken === 'TON') {
+      addrValid = /^[a-zA-Z0-9_-]{48}$/.test(address);
+    } else if (selectedToken === 'SUI') {
+      addrValid = /^0x[0-9a-fA-F]{64}$/.test(address);
+    } else if (selectedToken === 'XRP') {
+      addrValid = /^r[0-9a-zA-Z]{24,34}$/.test(address);
+    } else {
+      addrValid = /^0x[0-9a-fA-F]{40}$/.test(address);
+    }
+
+    if (!address || !addrValid) { 
+      setAddressError(`Valid ${selectedToken} address required`); 
+      err = true; 
+    }
+    
+    if (!amount || parsedAmount <= 0) { 
+      setAmountError('Enter a valid amount'); 
+      err = true; 
+    } else if (parsedAmount > availBal) { 
+      setAmountError('Insufficient balance'); 
+      err = true; 
+    } else if ((selectedToken === 'ETH' || selectedToken === 'TRX') && parsedAmount + (gasEthNum || 0.0005) > availBal) { 
+      setAmountError(`Insufficient for gas. Max sendable: ${Math.max(0, availBal - (gasEthNum || 0.0005)).toFixed(6)} ${coinLabel}`); 
+      err = true; 
+    }
+
     if (err) { haptics.error(); return; }
     haptics.selection();
 
@@ -122,11 +218,11 @@ export default function SendScreen({ navigation, route }: any) {
       Animated.spring(btnScale, { toValue: 1,    useNativeDriver: true, speed: 20, bounciness: 8 }),
     ]).start();
 
-    if (network !== 'Sepolia' && network !== 'TRON Nile') {
+    if (network !== 'Sepolia' && network !== 'TRON Nile' && (selectedToken === 'ETH' || selectedToken === 'TRX')) {
       const { Alert } = require('react-native');
       Alert.alert(
         '⚠️ Real Funds Warning',
-        `You are on ${network} Mainnet. This transaction uses REAL ${coinLabel}.\n\nAmount: ${parsedAmount.toFixed(6)} ${coinLabel} ($${usdValue})`,
+        `You are on ${network} Mainnet. This transaction uses REAL ${coinLabel}.\n\nAmount: ${parsedAmount.toFixed(6)} ${coinLabel} (${fiatAmount})`,
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'I Understand, Continue', style: 'destructive', onPress: () => setShowConfirm(true) },
@@ -145,13 +241,12 @@ export default function SendScreen({ navigation, route }: any) {
     setSendStatus('Signing transaction...');
     setShowConfirm(false);
 
-    setTimeout(() => setSendStatus('Broadcasting to network...'), 1500);
-    setTimeout(() => setSendStatus('Waiting for confirmation...'), 4000);
+    setTimeout(() => setSendStatus('Broadcasting to network...'), 1200);
+    setTimeout(() => setSendStatus('Waiting for confirmation...'), 3000);
 
     let result: { success: boolean; error?: string; hash?: string };
 
-    if (isTronNetwork) {
-      // TRON send — use TRON private key derived from mnemonic
+    if (selectedToken === 'TRX') {
       const mnemonic = await storageService.getMnemonic();
       if (!mnemonic) {
         result = { success: false, error: 'Wallet not found' };
@@ -166,13 +261,11 @@ export default function SendScreen({ navigation, route }: any) {
         });
         result = { success: tronResult.success, error: tronResult.error, hash: tronResult.txHash };
         if (tronResult.success) {
-          // Log to local transaction history
-          const trxPrice = prices.TRX?.usd ?? 0;
           addTx({
             type:     'sent',
             coin:     'TRX',
             amount:   parsedAmount.toFixed(6),
-            usdValue: (parsedAmount * trxPrice).toFixed(2),
+            usdValue: (parsedAmount * coinPrice).toFixed(2),
             address,
             status:   'success',
             txHash:   tronResult.txHash,
@@ -180,8 +273,27 @@ export default function SendScreen({ navigation, route }: any) {
           refreshBalance();
         }
       }
-    } else {
+    } else if (selectedToken === 'ETH') {
       result = await sendETH(address, amount);
+    } else {
+      // Simulated token transfer for other non-native assets (USDT, USDC, BTC, SOL, BNB, XRP, TON, SUI)
+      await new Promise(resolve => setTimeout(resolve, 3500));
+      const simulatedHash = '0x' + Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join('');
+      
+      // Deduct balance locally
+      await applySwapBalances(selectedToken, parsedAmount, selectedToken, 0);
+      
+      addTx({
+        type:     'sent',
+        coin:     selectedToken,
+        amount:   parsedAmount.toFixed(6),
+        usdValue: (parsedAmount * coinPrice).toFixed(2),
+        address,
+        status:   'success',
+        txHash:   simulatedHash,
+      });
+
+      result = { success: true, hash: simulatedHash };
     }
 
     setSending(false);
@@ -194,12 +306,11 @@ export default function SendScreen({ navigation, route }: any) {
       setTimeout(() => navigation.goBack(), 2200);
     } else {
       haptics.error();
-      // Plain English error messages
       let msg = result.error ?? 'Transfer failed. Please try again.';
-      if (msg.includes('insufficient funds')) msg = 'Not enough ETH to cover gas fees. Add more ETH to your wallet.';
+      if (msg.includes('insufficient funds')) msg = 'Not enough funds to cover gas fees.';
       else if (msg.includes('nonce')) msg = 'Transaction conflict. Please try again in a moment.';
-      else if (msg.includes('gas')) msg = 'Gas estimation failed. Network may be busy. Try again.';
-      else if (msg.includes('network') || msg.includes('timeout')) msg = 'No internet connection. Check your connection and try again.';
+      else if (msg.includes('gas')) msg = 'Gas estimation failed. Network may be busy.';
+      else if (msg.includes('network') || msg.includes('timeout')) msg = 'No internet connection.';
       showToast(msg, 'error');
     }
   };
@@ -228,8 +339,8 @@ export default function SendScreen({ navigation, route }: any) {
             <View style={styles.modalDetails}>
               {[
                 { label: 'Recipient',   value: `${address.slice(0, 10)}...${address.slice(-10)}` },
-                { label: 'Amount',      value: `${parsedAmount.toFixed(6)} ${coinLabel}`, sub: `$${usdValue}` },
-                { label: 'Network Fee', value: gasEth ? `${parseFloat(gasEth).toFixed(6)} ${coinLabel}` : 'Estimating...', sub: gasEth ? `$${gasUSD}` : '' },
+                { label: 'Amount',      value: `${parsedAmount.toFixed(6)} ${coinLabel}`, sub: `${fiatAmount}` },
+                { label: 'Network Fee', value: gasEth ? `${parseFloat(gasEth).toFixed(6)} ${coinLabel}` : 'Estimating...', sub: gasEth ? `${fiatGas}` : '' },
               ].map((row, i) => (
                 <View key={row.label} style={styles.detailRow}>
                   <Text style={styles.detailLabel}>{row.label}</Text>
@@ -244,7 +355,7 @@ export default function SendScreen({ navigation, route }: any) {
                 <Text style={styles.totalLabel}>Total Deducted from Wallet</Text>
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={styles.totalValue}>{totalETH} {coinLabel}</Text>
-                  <Text style={styles.totalSub}>${totalUSD}</Text>
+                  <Text style={styles.totalSub}>{fiatTotal}</Text>
                 </View>
               </View>
             </View>
@@ -271,9 +382,9 @@ export default function SendScreen({ navigation, route }: any) {
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
-          <Feather name="chevron-left" size={28} color="#FFF" />
+          <Feather name="chevron-left" size={28} color={T.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{isTronNetwork ? 'SEND TRX' : 'SEND CRYPTO'}</Text>
+        <Text style={styles.headerTitle}>SEND CRYPTO</Text>
         <TouchableOpacity style={styles.qrBtn} onPress={() => navigation.navigate('Scan')} activeOpacity={0.7}>
           <Ionicons name="qr-code-outline" size={22} color={T.primary} />
         </TouchableOpacity>
@@ -281,14 +392,26 @@ export default function SendScreen({ navigation, route }: any) {
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         
-        {/* Balance Badge */}
+        {/* Balance Badge & Token Picker */}
         <View style={styles.balanceContainer}>
-          <View style={styles.balanceBadge}>
-            <View style={styles.balanceDot} />
-            <Text style={styles.balanceTitle}>Available to Send</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 12 }}>
+            <View style={styles.balanceBadge}>
+              <View style={styles.balanceDot} />
+              <Text style={styles.balanceTitle}>Available to Send</Text>
+            </View>
+
+            <TouchableOpacity 
+              style={[styles.tokenSelectorPill, { backgroundColor: T.surfaceHigh, borderColor: T.border }]} 
+              onPress={() => setSelectorVisible(true)}
+              activeOpacity={0.7}
+            >
+              <CoinIcon symbol={selectedToken} size={18} />
+              <Text style={[styles.tokenSelectorText, { color: T.text }]}>{selectedToken}</Text>
+              <Feather name="chevron-down" size={14} color={T.textDim} />
+            </TouchableOpacity>
           </View>
           <Text style={styles.balanceAmount}>{availBal.toFixed(6)} {coinLabel}</Text>
-          <Text style={styles.balanceUsd}>Total Balance: ${(availBal * ethPrice).toFixed(2)}</Text>
+          <Text style={styles.balanceUsd}>Total Value: {formatFiat(availBal * coinPrice)}</Text>
         </View>
 
         {/* Input: Recipient */}
@@ -297,7 +420,15 @@ export default function SendScreen({ navigation, route }: any) {
           <View style={[styles.addressInputBox, addressError ? styles.inputError : null]}>
             <TextInput
               style={styles.addressInput}
-              placeholder={isTronNetwork ? 'T... TRON address' : '0x... or ENS domain'}
+              placeholder={
+                selectedToken === 'TRX' 
+                  ? 'T... TRON address' 
+                  : (selectedToken === 'BTC' 
+                      ? 'bc1q... or 1... Bitcoin address' 
+                      : (selectedToken === 'SOL' 
+                          ? 'Base58 Solana address'
+                          : '0x... or EVM address'))
+              }
               placeholderTextColor={T.textDim}
               value={address}
               onChangeText={val => { setAddress(val); validateAddress(val); }}
@@ -321,7 +452,7 @@ export default function SendScreen({ navigation, route }: any) {
             <TouchableOpacity
               onPress={() => {
                 const gasBuf = gasEth ? parseFloat(gasEth) : 0.0005;
-                const maxAmt = Math.max(0, availBal - gasBuf);
+                const maxAmt = selectedToken === 'ETH' || selectedToken === 'TRX' ? Math.max(0, availBal - gasBuf) : availBal;
                 if (maxAmt > 0) {
                   const s = maxAmt.toFixed(6);
                   setAmount(s);
@@ -346,7 +477,7 @@ export default function SendScreen({ navigation, route }: any) {
               <Text style={styles.ethBrand}>{coinLabel}</Text>
             </View>
             <View style={styles.usdPreviewContainer}>
-               <Text style={styles.usdPreviewText}>≈ ${usdValue}</Text>
+               <Text style={styles.usdPreviewText}>≈ {fiatAmount}</Text>
             </View>
           </View>
           {!!amountError && <Text style={styles.errorLabel}>{amountError}</Text>}
@@ -361,7 +492,7 @@ export default function SendScreen({ navigation, route }: any) {
               <View style={{ flex: 1 }}>
                 <Text style={styles.gasTitle}>Network Fee</Text>
                 <Text style={{ color: T.textDim, fontSize: 11, fontWeight: '500', marginTop: 1 }}>
-                  A small fee paid to process your transaction on the blockchain
+                  Paid to process your transaction safely on the blockchain
                 </Text>
               </View>
            </View>
@@ -372,7 +503,7 @@ export default function SendScreen({ navigation, route }: any) {
                 <ActivityIndicator size="small" color={T.primary} />
               ) : (
                 <Text style={styles.gasValue}>
-                  {gasEth ? `${parseFloat(gasEth).toFixed(6)} ${coinLabel} ($${gasUSD})` : '—'}
+                  {gasEth ? `${parseFloat(gasEth).toFixed(6)} ${coinLabel} (${fiatGas})` : '—'}
                 </Text>
               )}
            </View>
@@ -412,6 +543,52 @@ export default function SendScreen({ navigation, route }: any) {
           </TouchableOpacity>
         </Animated.View>
       </View>
+
+      {/* ── Token Picker Modal ── */}
+      <Modal visible={selectorVisible} transparent animationType="slide">
+        <Pressable style={styles.modalOverlay} onPress={() => setSelectorVisible(false)}>
+          <View style={[styles.modalCard, { backgroundColor: T.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, maxHeight: '80%' }]}>
+            <View style={styles.modalIndicator} />
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <Text style={{ color: T.text, fontSize: 18, fontFamily: Fonts.bold }}>Select Asset</Text>
+              <TouchableOpacity onPress={() => setSelectorVisible(false)}>
+                <Feather name="x" size={20} color={T.text} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+              {['USDT', 'USDC', 'ETH', 'BTC', 'SOL', 'BNB', 'XRP', 'TON', 'TRX', 'SUI'].map(sym => {
+                const isSelected = selectedToken === sym;
+                const tokenBal = sym === 'ETH' ? (parseFloat(ethBalance) || 0) : (balances[sym] ?? 0);
+                const priceVal = prices[sym]?.usd ?? (sym === 'ETH' ? 3500 : (sym === 'BTC' ? 65000 : 1));
+                return (
+                  <TouchableOpacity
+                    key={sym}
+                    style={[styles.tokenItemRow, isSelected && { backgroundColor: T.border + '35' }]}
+                    onPress={() => {
+                      setSelectedToken(sym);
+                      setSelectorVisible(false);
+                      setAmount('');
+                      setAmountError('');
+                      setAddressError('');
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <CoinIcon symbol={sym} size={32} />
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <Text style={[styles.tokenItemSym, { color: T.text, fontFamily: Fonts.bold }]}>{sym}</Text>
+                      <Text style={{ color: T.textDim, fontSize: 12, fontFamily: Fonts.medium }}>{COIN_META[sym]?.name ?? sym}</Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={{ color: T.text, fontFamily: Fonts.bold, fontSize: 14 }}>{tokenBal.toFixed(4)}</Text>
+                      <Text style={{ color: T.textDim, fontSize: 11, fontFamily: Fonts.medium }}>{formatFiat(tokenBal * priceVal)}</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -431,11 +608,31 @@ const makeStyles = (T: any) => StyleSheet.create({
   scroll: { paddingHorizontal: 24, paddingBottom: 160 },
 
   balanceContainer: { marginTop: 24, marginBottom: 32 },
-  balanceBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  balanceBadge: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   balanceDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Theme.colors.success },
   balanceTitle: { color: T.textMuted, fontSize: 13, fontFamily: Fonts.bold, letterSpacing: 0.5 },
   balanceAmount: { color: T.text, fontSize: 34, fontFamily: Fonts.extraBold, letterSpacing: -1 },
   balanceUsd: { color: T.textDim, fontSize: 14, fontFamily: Fonts.semiBold, marginTop: 4 },
+
+  tokenSelectorPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    gap: 6
+  },
+  tokenSelectorText: { fontSize: 13, fontFamily: Fonts.bold },
+
+  tokenItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 16,
+    marginBottom: 8
+  },
+  tokenItemSym: { fontSize: 15 },
 
   section: { marginBottom: 28 },
   labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
@@ -509,4 +706,3 @@ const makeStyles = (T: any) => StyleSheet.create({
   confirmGradient: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   modalConfirmText: { color: '#FFF', fontSize: 14, fontFamily: Fonts.extraBold, letterSpacing: 1 },
 });
-
