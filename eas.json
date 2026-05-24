@@ -11,13 +11,6 @@
     "preview": {
       "channel": "preview",
       "distribution": "internal",
-      "env": {
-        "EAS_BUILD_NO_EXPO_GO_WARNING": "true",
-        "EXPO_PUBLIC_ALCHEMY_KEY": "iQqCAQD5unRl6zqWiXNOf",
-        "EXPO_PUBLIC_WEB_SALT": "cw_w3b_s4lt_2024",
-        "EXPO_PUBLIC_ETHERSCAN_KEY": "2TJN7KQXJDKDNR9YP9WXNNHSJU3GTP2QRB",
-        "EXPO_PUBLIC_ZRX_API_KEY": "9a7cb6fc-ce95-4687-93d3-9bf6a4892cc8"
-      },
       "android": {
         "buildType": "apk"
       },
@@ -28,13 +21,6 @@
     "preview-device": {
       "channel": "preview",
       "distribution": "internal",
-      "env": {
-        "EAS_BUILD_NO_EXPO_GO_WARNING": "true",
-        "EXPO_PUBLIC_ALCHEMY_KEY": "iQqCAQD5unRl6zqWiXNOf",
-        "EXPO_PUBLIC_WEB_SALT": "cw_w3b_s4lt_2024",
-        "EXPO_PUBLIC_ETHERSCAN_KEY": "2TJN7KQXJDKDNR9YP9WXNNHSJU3GTP2QRB",
-        "EXPO_PUBLIC_ZRX_API_KEY": "9a7cb6fc-ce95-4687-93d3-9bf6a4892cc8"
-      },
       "android": {
         "buildType": "apk"
       },
@@ -44,13 +30,6 @@
     },
     "production": {
       "channel": "production",
-      "env": {
-        "EAS_BUILD_NO_EXPO_GO_WARNING": "true",
-        "EXPO_PUBLIC_ALCHEMY_KEY": "iQqCAQD5unRl6zqWiXNOf",
-        "EXPO_PUBLIC_WEB_SALT": "cw_w3b_s4lt_2024",
-        "EXPO_PUBLIC_ETHERSCAN_KEY": "2TJN7KQXJDKDNR9YP9WXNNHSJU3GTP2QRB",
-        "EXPO_PUBLIC_ZRX_API_KEY": "9a7cb6fc-ce95-4687-93d3-9bf6a4892cc8"
-      },
       "android": {
         "buildType": "apk"
       },

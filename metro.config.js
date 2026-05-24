@@ -21,6 +21,11 @@ config.watchFolders = [
   path.resolve(__dirname),
 ];
 
+// Exclude transient tool directories that may disappear mid-watch
+config.resolver.blockList = [
+  /\.kilocode[\/\\].*/,
+];
+
 const NOOP = path.resolve(__dirname, 'utils/noopModule.js');
 
 // Intercept 'ws' — it's a Node-only WebSocket lib bundled inside @supabase/realtime-js.
