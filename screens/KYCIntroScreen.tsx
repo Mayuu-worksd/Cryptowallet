@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity,
   ScrollView, Animated, Platform, StatusBar
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Rect, Circle, Defs, LinearGradient as SvgLinearGradient, Stop, G, Polygon } from 'react-native-svg';
@@ -98,6 +99,7 @@ const STEPS = [
 export default function KYCIntroScreen({ navigation }: any) {
   const { isDarkMode, walletAddress } = useWallet() as any;
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
+  const insets = useSafeAreaInsets();
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -123,7 +125,7 @@ export default function KYCIntroScreen({ navigation }: any) {
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity 
           onPress={() => navigation.goBack()} 
           style={[styles.iconBtn, { backgroundColor: isDarkMode ? '#2A2A2A' : '#F3F4F6' }]}
@@ -184,6 +186,7 @@ export default function KYCIntroScreen({ navigation }: any) {
         styles.bottomContainer, 
         { 
           backgroundColor: T.background,
+          paddingBottom: insets.bottom + 24,
           opacity: fadeAnim,
           transform: [{ translateY: slideAnim }]
         }
@@ -221,7 +224,6 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
     paddingBottom: 10,
     zIndex: 10,
   },
@@ -292,9 +294,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingHorizontal: 24,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
     paddingTop: 16,
-    borderTopWidth: 0, // removed to make it blend better
+    borderTopWidth: 0,
   },
   trustBar: {
     flexDirection: 'row',

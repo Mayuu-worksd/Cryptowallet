@@ -15,6 +15,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Platform, StatusBar, ActivityIndicator, Alert,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -37,6 +38,7 @@ type CardData = {
 export default function VCCCardDetailScreen({ navigation }: any) {
   const { walletAddress, isDarkMode, cardDetails, cardBalance, cardCreated } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
+  const insets = useSafeAreaInsets();
 
   const [cardData, setCardData]         = useState<CardData | null>(null);
   const [loading, setLoading]           = useState(true);
@@ -335,7 +337,7 @@ const s = StyleSheet.create({
   root: { flex: 1 },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 60 : 48, paddingBottom: 16,
+    paddingHorizontal: 20, paddingBottom: 16,
   },
   iconBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 18, fontWeight: '900' },

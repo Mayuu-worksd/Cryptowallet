@@ -5,6 +5,7 @@ import {
   TextInput, Platform, ActivityIndicator, KeyboardAvoidingView,
   Animated, Modal, FlatList, Dimensions, StatusBar
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Rect, Circle, Defs, LinearGradient as SvgLinearGradient, Stop, G } from 'react-native-svg';
@@ -214,6 +215,7 @@ export default function KYCFormScreen({ navigation, route }: any) {
   const { walletAddress, isDarkMode } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const isEditMode = route?.params?.editMode === true;
+  const insets = useSafeAreaInsets();
 
   const [checking, setChecking] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -401,7 +403,7 @@ export default function KYCFormScreen({ navigation, route }: any) {
         />
       </SheetModal>
 
-      <View style={s.header}>
+      <View style={[s.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={[s.iconBtn, { backgroundColor: T.surfaceLow }]}>
           <Feather name="arrow-left" size={22} color={T.text} />
         </TouchableOpacity>
@@ -533,7 +535,6 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 60 : 48,
     paddingBottom: 16,
   },
   headerStepContainer: {

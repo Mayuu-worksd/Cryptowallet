@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity,
   Platform, Animated, ActivityIndicator, StatusBar, Easing,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
@@ -74,6 +75,7 @@ function Step({ icon, label, sub, state, last, color, T }: {
 export default function KYCResultScreen({ navigation }: any) {
   const { walletAddress, refreshKYCStatus, isDarkMode } = useWallet() as any;
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
+  const insets = useSafeAreaInsets();
 
   const [status,  setStatus]  = useState<KYCStatus>(null);
   const [record,  setRecord]  = useState<any>(null);
@@ -178,7 +180,7 @@ export default function KYCResultScreen({ navigation }: any) {
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
       {/* Header */}
-      <View style={st.header}>
+      <View style={[st.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity
           onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Main')}
           style={[st.headerBtn, { backgroundColor: T.surfaceLow }]}
@@ -406,7 +408,6 @@ const st = StyleSheet.create({
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 60 : Platform.OS === 'web' ? 20 : 48,
     paddingBottom: 12,
   },
   headerBtn:   { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },

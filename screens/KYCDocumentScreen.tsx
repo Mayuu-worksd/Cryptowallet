@@ -185,7 +185,6 @@ const s = StyleSheet.create({
     alignItems: 'center', 
     justifyContent: 'space-between', 
     paddingHorizontal: 20, 
-    paddingTop: Platform.OS === 'ios' ? 60 : 48, 
     paddingBottom: 16 
   },
   headerText: { alignItems: 'center' },
@@ -226,7 +225,7 @@ const s = StyleSheet.create({
   radioCircle: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   radioInner: { width: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   
-  footer: { paddingHorizontal: 24, paddingBottom: Platform.OS === 'ios' ? 40 : 24, paddingTop: 12 },
+  footer: { paddingHorizontal: 24, paddingBottom: 24, paddingTop: 12 },
   btn: { 
     flexDirection: 'row', 
     alignItems: 'center', 

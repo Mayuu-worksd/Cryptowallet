@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Theme, Fonts } from '../constants';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Platform, Dimensions, Share, Image, StatusBar, Modal,
@@ -10,6 +11,7 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
 import Toast from '../components/Toast';
 import { LinearGradient } from 'expo-linear-gradient';
+import { storageService } from '../services/storageService';
 
 const { width } = Dimensions.get('window');
 
@@ -84,8 +86,26 @@ function NetworkIcon({ net, size = 32 }: { net: typeof NETWORKS[number]; size?: 
 }
 
 export default function ReceiveScreen({ navigation }: any) {
-  const { walletAddress, tronAddress, network: globalNetwork, isDarkMode } = useWallet() as any;
+  const insets = useSafeAreaInsets();
+  const { walletAddress, tronAddress: ctxTronAddress, network: globalNetwork, isDarkMode } = useWallet() as any;
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
+
+  const [tronAddress, setTronAddress] = React.useState(ctxTronAddress || '');
+
+  // Ensure TRON address is available when switching to TRON network
+  React.useEffect(() => {
+    if (ctxTronAddress) { setTronAddress(ctxTronAddress); return; }
+    (async () => {
+      const stored = await storageService.getTronAddress();
+      if (stored) { setTronAddress(stored); return; }
+      const mnemonic = await storageService.getMnemonic();
+      if (!mnemonic) return;
+      const { deriveTronAddress } = await import('../services/tronService');
+      const tron = await deriveTronAddress(mnemonic);
+      setTronAddress(tron.address);
+      storageService.saveTronAddress(tron.address).catch(() => {});
+    })();
+  }, [ctxTronAddress]);
 
   const defaultNet = NETWORKS.find(n => n.id === globalNetwork) ?? NETWORKS[0];
   const [selectedNet, setSelectedNet] = useState(defaultNet);
@@ -186,7 +206,7 @@ export default function ReceiveScreen({ navigation }: any) {
       </Modal>
 
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: T.background }]}>
+      <View style={[styles.header, { backgroundColor: T.background, paddingTop: insets.top + 12 }]}>
         <TouchableOpacity style={[styles.backBtn, { backgroundColor: T.surface }]} onPress={() => navigation.goBack()} activeOpacity={0.7}>
           <Feather name="chevron-left" size={28} color={T.text} />
         </TouchableOpacity>
@@ -280,7 +300,7 @@ export default function ReceiveScreen({ navigation }: any) {
       </ScrollView>
 
       {/* Bottom Actions */}
-      <View style={[styles.footerContainer, { backgroundColor: isDarkMode ? 'rgba(10,10,12,0.95)' : 'rgba(247,249,251,0.97)', borderTopColor: T.border }]}>
+      <View style={[styles.footerContainer, { backgroundColor: isDarkMode ? 'rgba(10,10,12,0.95)' : 'rgba(247,249,251,0.97)', borderTopColor: T.border, paddingBottom: insets.bottom + 16 }]}>
         <TouchableOpacity style={styles.primaryShareBtn} onPress={handleShare} activeOpacity={0.8}>
           <LinearGradient
             colors={[T.primary, '#D32F2F']}
@@ -301,7 +321,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 60 : 40, paddingBottom: 16,
+    paddingHorizontal: 20, paddingBottom: 16,
   },
   backBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 13, fontFamily: Fonts.extraBold, letterSpacing: 2 },
@@ -327,7 +347,7 @@ const styles = StyleSheet.create({
   modalDismissArea: { flex: 1 },
   modalSheet: {
     borderTopLeftRadius: 32, borderTopRightRadius: 32,
-    padding: 24, paddingBottom: Platform.OS === 'ios' ? 44 : 24, maxHeight: '80%',
+    padding: 24, paddingBottom: 44, maxHeight: '80%',
   },
   modalIndicator: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 24 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
@@ -368,7 +388,7 @@ const styles = StyleSheet.create({
   infoCardText: { fontSize: 13, fontFamily: Fonts.bold },
 
   // Footer
-  footerContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: Platform.OS === 'ios' ? 40 : 24, borderTopWidth: 1 },
+  footerContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, paddingTop: 16, borderTopWidth: 1 },
   primaryShareBtn: { height: 60, borderRadius: 30, overflow: 'hidden' },
   shareGradient: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
   shareBtnText: { color: '#FFF', fontSize: 14, fontFamily: Fonts.extraBold, letterSpacing: 1 },

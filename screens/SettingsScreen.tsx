@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Theme, Fonts } from '../constants';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Alert, Platform, Switch, TextInput, Modal, Image, ActivityIndicator,
@@ -70,6 +71,7 @@ const CoinIcon = ({ symbol, size = 36 }: { symbol: string; size?: number }) => {
 };
 
 export default function SettingsScreen({ navigation }: any) {
+  const insets = useSafeAreaInsets();
   const {
     network, switchNetwork, walletAddress, tronAddress,
     walletName, setWalletName,
@@ -208,7 +210,7 @@ export default function SettingsScreen({ navigation }: any) {
     );
   };
 
-  const styles = makeStyles(T);
+  const styles = makeStyles(T, insets);
 
   const SelectionModal = ({ visible, onClose, title, items, selected, onSelect, type }: any) => (
     <Modal visible={visible} transparent animationType="slide">
@@ -939,18 +941,18 @@ export default function SettingsScreen({ navigation }: any) {
   );
 }
 
-const makeStyles = (T: any) => StyleSheet.create({
+const makeStyles = (T: any, insets: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: T.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: isSmall ? 16 : 24,
-    paddingTop: Platform.OS === 'ios' ? 60 : 48,
+    paddingTop: insets.top + 12,
     paddingBottom: 16,
     backgroundColor: T.background,
   },
   backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center', borderRadius: 22, backgroundColor: T.surfaceLow },
   headerTitle: { fontSize: isSmall ? 16 : 18, fontFamily: Fonts.extraBold, color: T.text, letterSpacing: -0.5 },
-  scroll: { paddingHorizontal: isSmall ? 16 : 24, paddingBottom: 120, paddingTop: 12 },
+  scroll: { paddingHorizontal: isSmall ? 16 : 24, paddingBottom: insets.bottom + 120, paddingTop: 12 },
 
   profileCard: {
     flexDirection: 'row', alignItems: 'center', borderRadius: 20,

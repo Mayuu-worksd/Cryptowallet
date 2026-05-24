@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Theme, Fonts } from '../constants';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   ScrollView, ActivityIndicator, Platform, KeyboardAvoidingView,
@@ -16,7 +17,8 @@ import { tronService } from '../services/tronService';
 import { storageService } from '../services/storageService';
 
 export default function SendScreen({ navigation, route }: any) {
-  const { ethBalance, sendETH, isDarkMode, walletAddress, network } = useWallet();
+  const insets = useSafeAreaInsets();
+  const { ethBalance, sendETH, isDarkMode, walletAddress, tronAddress, network, balances, addTx, updateTxStatus, refreshBalance } = useWallet();
   const { prices } = useMarket();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const styles = React.useMemo(() => makeStyles(T), [T]);
@@ -50,7 +52,8 @@ export default function SendScreen({ navigation, route }: any) {
   const usdValue     = (parsedAmount * ethPrice).toFixed(2);
   const gasUSD       = (gasEthNum * ethPrice).toFixed(4);
   const totalUSD     = ((parsedAmount + gasEthNum) * ethPrice).toFixed(2);
-  const availBal     = parseFloat(ethBalance) || 0;
+  // Use TRX balance when on TRON network, ETH balance otherwise
+  const availBal     = isTronNetwork ? (balances.TRX ?? 0) : (parseFloat(ethBalance) || 0);
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') =>
     setToast({ visible: true, message, type });
@@ -79,12 +82,18 @@ export default function SendScreen({ navigation, route }: any) {
       setGasEth('');
       return;
     }
+    // Skip gas estimation for TRON — use flat fee estimate
+    if (isTronNetwork) {
+      const flatFee = tronService.estimateFee(network).toFixed(6);
+      setGasEth(flatFee);
+      validateAmount(amount, flatFee);
+      return;
+    }
     const t = setTimeout(async () => {
       setEstimating(true);
       try {
         const { gasCostEth } = await ethereumService.estimateGas(walletAddress, address, amount, network);
         setGasEth(gasCostEth);
-        // Re-validate amount now that we have a real gas estimate
         validateAmount(amount, gasCostEth);
       } catch (_e) {
         setGasEth('0.000042');
@@ -94,7 +103,7 @@ export default function SendScreen({ navigation, route }: any) {
       }
     }, 600);
     return () => clearTimeout(t);
-  }, [address, amount, addressError, walletAddress, network]);
+  }, [address, amount, addressError, walletAddress, network, isTronNetwork]);
 
   const handleReview = () => {
     let err = false;
@@ -142,18 +151,34 @@ export default function SendScreen({ navigation, route }: any) {
     let result: { success: boolean; error?: string; hash?: string };
 
     if (isTronNetwork) {
-      // TRON send
-      const privateKey = await storageService.getPrivateKey();
-      if (!privateKey) {
-        result = { success: false, error: 'Private key not found' };
+      // TRON send — use TRON private key derived from mnemonic
+      const mnemonic = await storageService.getMnemonic();
+      if (!mnemonic) {
+        result = { success: false, error: 'Wallet not found' };
       } else {
+        const { deriveTronAddress } = await import('../services/tronService');
+        const tron = await deriveTronAddress(mnemonic);
         const tronResult = await tronService.sendTRX({
-          privateKey,
-          toAddress: address,
-          amount: parsedAmount,
+          privateKey: tron.privateKey,
+          toAddress:  address,
+          amount:     parsedAmount,
           network,
         });
         result = { success: tronResult.success, error: tronResult.error, hash: tronResult.txHash };
+        if (tronResult.success) {
+          // Log to local transaction history
+          const trxPrice = prices.TRX?.usd ?? 0;
+          addTx({
+            type:     'sent',
+            coin:     'TRX',
+            amount:   parsedAmount.toFixed(6),
+            usdValue: (parsedAmount * trxPrice).toFixed(2),
+            address,
+            status:   'success',
+            txHash:   tronResult.txHash,
+          });
+          refreshBalance();
+        }
       }
     } else {
       result = await sendETH(address, amount);
@@ -244,7 +269,7 @@ export default function SendScreen({ navigation, route }: any) {
       </Modal>
 
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
           <Feather name="chevron-left" size={28} color="#FFF" />
         </TouchableOpacity>
@@ -360,7 +385,7 @@ export default function SendScreen({ navigation, route }: any) {
       </ScrollView>
 
       {/* Action Bar */}
-      <View style={styles.actionBar}>
+      <View style={[styles.actionBar, { paddingBottom: insets.bottom + 16 }]}>
         <Animated.View style={{ transform: [{ scale: btnScale }] }}>
           <TouchableOpacity
             style={[styles.mainBtn, !canReview && styles.btnDisabled]}
@@ -396,7 +421,7 @@ const makeStyles = (T: any) => StyleSheet.create({
   
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 60 : 48, paddingBottom: 20,
+    paddingHorizontal: 20, paddingBottom: 20,
     backgroundColor: T.background,
   },
   backBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: T.surfaceLow, alignItems: 'center', justifyContent: 'center' },
@@ -454,7 +479,7 @@ const makeStyles = (T: any) => StyleSheet.create({
   gasLabel: { color: T.textDim, fontSize: 13, fontFamily: Fonts.semiBold },
   gasValue: { color: T.text, fontSize: 13, fontFamily: Fonts.bold },
 
-  actionBar: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 24, paddingBottom: Platform.OS === 'ios' ? 40 : 24, paddingTop: 20, backgroundColor: T.background + 'F0' },
+  actionBar: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 24, paddingTop: 20, backgroundColor: T.background + 'F0' },
   mainBtn: { height: 64, borderRadius: 100, overflow: 'hidden' },
   btnGradient: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
   btnDisabled: { opacity: 0.5 },
@@ -462,7 +487,7 @@ const makeStyles = (T: any) => StyleSheet.create({
 
   // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
-  modalCard: { backgroundColor: T.surface, borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, paddingBottom: Platform.OS === 'ios' ? 50 : 32 },
+  modalCard: { backgroundColor: T.surface, borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, paddingBottom: 32 },
   modalIndicator: { width: 40, height: 4, backgroundColor: T.border, borderRadius: 2, alignSelf: 'center', marginBottom: 24 },
   modalHeader: { alignItems: 'center', marginBottom: 28 },
   modalIconBox: { width: 56, height: 56, borderRadius: 28, backgroundColor: T.primary + '18', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },

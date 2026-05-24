@@ -1,0 +1,126 @@
+import React, { memo } from 'react';
+import { View, Text, TouchableOpacity, Modal, Pressable, StyleSheet } from 'react-native';
+import { Feather } from '@expo/vector-icons';
+import { Fonts } from '../constants';
+import { haptics } from '../utils/haptics';
+
+const CURRENCIES = [
+  { code: 'USD', symbol: '$',    name: 'US Dollar',      rate: 1 },
+  { code: 'EUR', symbol: '€',    name: 'Euro',           rate: 0.92 },
+  { code: 'GBP', symbol: '£',    name: 'British Pound',  rate: 0.79 },
+  { code: 'INR', symbol: '₹',    name: 'Indian Rupee',   rate: 83.5 },
+  { code: 'JPY', symbol: '¥',    name: 'Japanese Yen',   rate: 149.5 },
+  { code: 'AED', symbol: 'د.إ',  name: 'UAE Dirham',     rate: 3.67 },
+];
+
+export type CurrencyCode = 'USD' | 'EUR' | 'GBP' | 'INR' | 'JPY' | 'AED';
+
+interface CurrencySelectorProps {
+  visible: boolean;
+  onClose: () => void;
+  currentCurrency: CurrencyCode;
+  onSelect: (currency: CurrencyCode) => void;
+  T: any;
+}
+
+export const CurrencySelector = memo(({ visible, onClose, currentCurrency, onSelect, T }: CurrencySelectorProps) => {
+  const handleSelect = (currency: CurrencyCode) => {
+    haptics.selection();
+    onSelect(currency);
+    onClose();
+  };
+
+  return (
+    <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.overlay} onPress={onClose}>
+        <Pressable
+          style={[styles.sheet, { backgroundColor: T.surface }]}
+          onPress={e => e.stopPropagation()}
+        >
+          <View style={styles.handle} />
+          <Text style={[styles.title, { color: T.text }]}>Select Currency</Text>
+
+          {CURRENCIES.map(currency => {
+            const active = currency.code === currentCurrency;
+            return (
+              <TouchableOpacity
+                key={currency.code}
+                style={[styles.row, { backgroundColor: active ? T.primary + '15' : 'transparent' }]}
+                onPress={() => handleSelect(currency.code as CurrencyCode)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.symbolBox, { backgroundColor: active ? T.primary : T.surfaceLow, borderColor: active ? T.primary : T.border }]}>
+                  <Text style={[styles.symbol, { color: active ? '#FFF' : T.text }]}>{currency.symbol}</Text>
+                </View>
+                <View style={styles.rowInfo}>
+                  <Text style={[styles.code, { color: T.text }]}>{currency.code}</Text>
+                  <Text style={[styles.name, { color: T.textMuted }]}>{currency.name}</Text>
+                </View>
+                {active
+                  ? <Feather name="check-circle" size={18} color={T.primary} />
+                  : <View style={[styles.radioOuter, { borderColor: T.border }]} />
+                }
+              </TouchableOpacity>
+            );
+          })}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+});
+
+export const getCurrencyMeta = (code: CurrencyCode) =>
+  CURRENCIES.find(c => c.code === code) ?? CURRENCIES[0];
+
+export const formatCurrency = (amount: number, currency: CurrencyCode) => {
+  const meta = getCurrencyMeta(currency);
+  const converted = amount * meta.rate;
+  if (currency === 'JPY') return `${meta.symbol}${Math.round(converted).toLocaleString()}`;
+  if (currency === 'INR') return `${meta.symbol}${converted.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `${meta.symbol}${converted.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+
+const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    marginBottom: 64,
+  },
+  handle: {
+    width: 40, height: 4, borderRadius: 2,
+    backgroundColor: '#444',
+    alignSelf: 'center',
+    marginBottom: 18,
+  },
+  title: {
+    fontSize: 17,
+    fontFamily: Fonts.extraBold,
+    marginBottom: 16,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    marginBottom: 6,
+  },
+  symbolBox: {
+    width: 44, height: 44, borderRadius: 12,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1,
+  },
+  symbol: { fontSize: 18, fontFamily: Fonts.extraBold },
+  rowInfo: { flex: 1 },
+  code: { fontSize: 15, fontFamily: Fonts.bold, marginBottom: 2 },
+  name: { fontSize: 12, fontFamily: Fonts.medium },
+  radioOuter: { width: 18, height: 18, borderRadius: 9, borderWidth: 2 },
+});

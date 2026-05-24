@@ -157,7 +157,7 @@ export default function KYCSelfieModeScreen({ navigation, route }: any) {
 const s = StyleSheet.create({
   root: { flex: 1 },
   topHalf: { height: height * 0.38, alignItems: 'center', justifyContent: 'center', borderBottomLeftRadius: 40, borderBottomRightRadius: 40, overflow: 'hidden' },
-  header: { position: 'absolute', top: Platform.OS === 'ios' ? 60 : 48, left: 20, zIndex: 10 },
+  header: { position: 'absolute', top: 48, left: 20, zIndex: 10 },
   backBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 },
   faceWrap: { marginTop: 0 },
   
@@ -171,7 +171,7 @@ const s = StyleSheet.create({
   optionDesc: { fontSize: 13, fontWeight: '500', lineHeight: 18 },
   goCircle: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginLeft: 12 },
   
-  footer: { marginTop: 'auto', paddingBottom: Platform.OS === 'ios' ? 40 : 24, alignItems: 'center' },
+  footer: { marginTop: 'auto', paddingBottom: 24, alignItems: 'center' },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12 },
   badgeText: { fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 }
 });

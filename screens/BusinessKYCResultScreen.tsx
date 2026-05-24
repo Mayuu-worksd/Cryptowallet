@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, Platform,
   Animated, ActivityIndicator, StatusBar, Easing,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
@@ -13,6 +14,7 @@ import { businessKYCService, BusinessKYCStatus } from '../services/merchantServi
 export default function BusinessKYCResultScreen({ navigation }: any) {
   const { walletAddress, isDarkMode } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
+  const insets = useSafeAreaInsets();
 
   const [status,  setStatus]  = useState<BusinessKYCStatus>(null);
   const [loading, setLoading] = useState(true);
@@ -82,7 +84,7 @@ export default function BusinessKYCResultScreen({ navigation }: any) {
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
       {/* Header */}
-      <View style={st.header}>
+      <View style={[st.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={() => navigation.navigate('Main')} style={[st.headerBtn, { backgroundColor: T.surfaceLow }]}>
           <Feather name="arrow-left" size={20} color={T.text} />
         </TouchableOpacity>
@@ -230,7 +232,6 @@ const st = StyleSheet.create({
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 56 : Platform.OS === 'web' ? 20 : 48,
     paddingBottom: 12,
   },
   headerBtn:   { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },

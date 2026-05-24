@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, ActivityIndicator } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useWallet } from '../store/WalletContext';
@@ -9,6 +10,7 @@ import { businessKYCService, p2pService } from '../services/merchantService';
 export default function MerchantDashboardScreen({ navigation }: any) {
   const { walletAddress, isDarkMode } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
+  const insets = useSafeAreaInsets();
   const [business, setBusiness] = useState<any>(null);
   const [stats, setStats]       = useState({ total: 0, completed: 0, rate: 100 });
   const [pending, setPending]   = useState(0);
@@ -44,7 +46,7 @@ export default function MerchantDashboardScreen({ navigation }: any) {
   if (!business) {
     return (
       <View style={[s.root, { backgroundColor: T.background }]}>
-        <View style={[s.header, { borderBottomColor: T.border }]}>
+        <View style={[s.header, { borderBottomColor: T.border, paddingTop: insets.top + 12 }]}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={[s.iconBtn, { backgroundColor: T.surfaceLow }]}>
             <Feather name="arrow-left" size={22} color={T.text} />
           </TouchableOpacity>
@@ -80,7 +82,7 @@ export default function MerchantDashboardScreen({ navigation }: any) {
   if (business && (business.status === 'pending' || business.status === 'under_review')) {
     return (
       <View style={[s.root, { backgroundColor: T.background }]}>
-        <View style={[s.header, { borderBottomColor: T.border }]}>
+        <View style={[s.header, { borderBottomColor: T.border, paddingTop: insets.top + 12 }]}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={[s.iconBtn, { backgroundColor: T.surfaceLow }]}>
             <Feather name="arrow-left" size={22} color={T.text} />
           </TouchableOpacity>
@@ -111,7 +113,7 @@ export default function MerchantDashboardScreen({ navigation }: any) {
   if (business.status === 'rejected') {
     return (
       <View style={[s.root, { backgroundColor: T.background }]}>
-        <View style={[s.header, { borderBottomColor: T.border }]}>
+        <View style={[s.header, { borderBottomColor: T.border, paddingTop: insets.top + 12 }]}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={[s.iconBtn, { backgroundColor: T.surfaceLow }]}>
             <Feather name="arrow-left" size={22} color={T.text} />
           </TouchableOpacity>
@@ -140,7 +142,7 @@ export default function MerchantDashboardScreen({ navigation }: any) {
 
   return (
     <View style={[s.root, { backgroundColor: T.background }]}>
-      <View style={[s.header, { borderBottomColor: T.border }]}>
+      <View style={[s.header, { borderBottomColor: T.border, paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={[s.iconBtn, { backgroundColor: T.surfaceLow }]}>
           <Feather name="arrow-left" size={22} color={T.text} />
         </TouchableOpacity>
@@ -212,7 +214,7 @@ export default function MerchantDashboardScreen({ navigation }: any) {
 
 const s = StyleSheet.create({
   root: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: Platform.OS === 'web' ? 20 : 56, paddingBottom: 16, borderBottomWidth: 1 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
   iconBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '800' },
   scroll: { paddingHorizontal: 20, paddingBottom: 80, paddingTop: 24 },

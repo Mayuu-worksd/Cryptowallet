@@ -78,19 +78,15 @@ export const marketService = {
   async fetchPrices(): Promise<Record<string, { usd: number; change24h: number }>> {
     // Return cache if still fresh
     if (priceCache && Date.now() - priceCache.ts < PRICE_CACHE_TTL) {
-      console.log('[MarketService] prices from cache');
       return priceCache.data;
     }
 
-    // Deduplicate concurrent calls — only one fetch in flight at a time
     if (priceInflight) {
-      console.log('[MarketService] prices deduped — waiting for inflight request');
       return priceInflight;
     }
 
     priceInflight = (async () => {
       try {
-        console.log('[MarketService] fetching live prices from CoinGecko...');
         const res = await fetchWithTimeout(COINGECKO_URL);
         if (!res.ok) throw new Error(`CoinGecko ${res.status}`);
         const data: LivePrices = await res.json();
@@ -101,7 +97,6 @@ export const marketService = {
         }
         if (Object.keys(result).length === 0) throw new Error('Empty price response');
         priceCache = { data: result, ts: Date.now() };
-        console.log(`[MarketService] prices updated — ${Object.keys(result).join(', ')}`);
         return result;
       } finally {
         priceInflight = null;
@@ -114,65 +109,55 @@ export const marketService = {
   async fetchNews(): Promise<NewsItem[]> {
     // Return cache if still fresh
     if (newsCache && Date.now() - newsCache.ts < NEWS_CACHE_TTL) {
-      console.log('[MarketService] news from cache');
       return newsCache.data;
     }
 
-    // 1. Try CoinGecko news
-    try {
-      const res = await fetchWithTimeout(COINGECKO_NEWS_URL, 8000);
-      if (res.ok) {
+    // Race all sources with a 5s timeout — first to succeed wins
+    const sources: Promise<NewsItem[]>[] = [
+      // CoinGecko news
+      fetchWithTimeout(COINGECKO_NEWS_URL, 5000).then(async res => {
+        if (!res.ok) throw new Error('CoinGecko news failed');
         const data = await res.json();
         const items = (data.data ?? data ?? []) as any[];
-        if (items.length > 0) {
-          const mapped: NewsItem[] = items.slice(0, 10).map((item: any, i: number) => ({
-            id: i,
-            title: (item.title ?? item.name ?? '').trim(),
-            url: item.url ?? item.news_url ?? '',
-            published_at: item.updated_at
-              ? new Date(item.updated_at * 1000).toISOString()
-              : (item.created_at ? new Date(item.created_at * 1000).toISOString() : new Date().toISOString()),
-            source: { title: item.author ?? item.source ?? 'CoinGecko' },
-            thumbnail: item.thumb_2x ?? item.image ?? '',
-          })).filter(n => n.title.length > 5 && n.url.length > 0);
-          if (mapped.length > 0) {
-            newsCache = { data: mapped, ts: Date.now() };
-            return mapped;
-          }
-        }
-      }
-    } catch { /* fall through */ }
-
-    // 2. Try RSS feeds
-    for (const feed of RSS_FEEDS) {
-      if (!isSafeUrl(feed.url)) continue;
-      try {
-        const res = await fetchWithTimeout(feed.url, 8000);
-        if (!res.ok) continue;
-        const data = await res.json();
-        const items = (data.items ?? []) as any[];
-        if (items.length === 0) continue;
         const mapped: NewsItem[] = items.slice(0, 10).map((item: any, i: number) => ({
           id: i,
-          title: (item.title ?? '').trim().replace(/&amp;/g, '&').replace(/&#8217;/g, "'").replace(/&#8216;/g, "'"),
-          url: (() => {
-            try {
-              const u = new URL(item.link ?? '');
-              return (u.protocol === 'https:' || u.protocol === 'http:') ? u.href : '';
-            } catch { return ''; }
-          })(),
-          published_at: item.pubDate ?? new Date().toISOString(),
-          source: { title: feed.source },
-          thumbnail: item.thumbnail || item.enclosure?.link || '',
+          title: (item.title ?? item.name ?? '').trim(),
+          url: item.url ?? item.news_url ?? '',
+          published_at: item.updated_at
+            ? new Date(item.updated_at * 1000).toISOString()
+            : new Date().toISOString(),
+          source: { title: item.author ?? item.source ?? 'CoinGecko' },
+          thumbnail: item.thumb_2x ?? item.image ?? '',
         })).filter(n => n.title.length > 5 && n.url.length > 0);
-        if (mapped.length > 0) {
-          newsCache = { data: mapped, ts: Date.now() };
+        if (mapped.length === 0) throw new Error('empty');
+        return mapped;
+      }),
+      // RSS feeds in parallel
+      ...RSS_FEEDS.filter(f => isSafeUrl(f.url)).map(feed =>
+        fetchWithTimeout(feed.url, 5000).then(async res => {
+          if (!res.ok) throw new Error('RSS failed');
+          const data = await res.json();
+          const items = (data.items ?? []) as any[];
+          const mapped: NewsItem[] = items.slice(0, 10).map((item: any, i: number) => ({
+            id: i,
+            title: (item.title ?? '').trim().replace(/&amp;/g, '&').replace(/&#8217;/g, "'"),
+            url: (() => { try { const u = new URL(item.link ?? ''); return u.href; } catch { return ''; } })(),
+            published_at: item.pubDate ?? new Date().toISOString(),
+            source: { title: feed.source },
+            thumbnail: item.thumbnail || item.enclosure?.link || '',
+          })).filter(n => n.title.length > 5 && n.url.length > 0);
+          if (mapped.length === 0) throw new Error('empty');
           return mapped;
-        }
-      } catch { continue; }
-    }
+        })
+      ),
+    ];
 
-    // 3. Static fallback
-    return STATIC_NEWS;
+    try {
+      const result = await Promise.any(sources);
+      newsCache = { data: result, ts: Date.now() };
+      return result;
+    } catch {
+      return STATIC_NEWS;
+    }
   },
 };

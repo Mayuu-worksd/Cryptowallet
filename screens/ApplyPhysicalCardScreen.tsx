@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Platform, ActivityIndicator, Modal,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
 import { Theme } from '../constants';
@@ -29,6 +30,7 @@ const VARIANT_GRADIENTS: Record<string, string> = {
 export default function ApplyPhysicalCardScreen({ navigation }: any) {
   const { isDarkMode, walletAddress, kycStatus } = useWallet() as any;
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
+  const insets = useSafeAreaInsets();
 
   const [variants,        setVariants]        = useState<CardVariant[]>([]);
   const [selectedVariant, setSelectedVariant] = useState<CardVariant | null>(null);
@@ -104,7 +106,7 @@ export default function ApplyPhysicalCardScreen({ navigation }: any) {
   if (liveKycStatus !== 'verified') {
     return (
       <View style={{ flex: 1, backgroundColor: T.background }}>
-        <View style={[styles.header, { borderBottomColor: T.border }]}>
+        <View style={[styles.header, { borderBottomColor: T.border, paddingTop: insets.top + 12 }]}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
             <Feather name="arrow-left" size={24} color={T.text} />
           </TouchableOpacity>
@@ -169,7 +171,7 @@ export default function ApplyPhysicalCardScreen({ navigation }: any) {
 
     return (
       <View style={{ flex: 1, backgroundColor: T.background }}>
-        <View style={[styles.header, { borderBottomColor: T.border }]}>
+        <View style={[styles.header, { borderBottomColor: T.border, paddingTop: insets.top + 12 }]}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
             <Feather name="arrow-left" size={24} color={T.text} />
           </TouchableOpacity>
@@ -328,7 +330,7 @@ export default function ApplyPhysicalCardScreen({ navigation }: any) {
       </Modal>
 
       {/* Header */}
-      <View style={[styles.header, { borderBottomColor: T.border }]}>
+      <View style={[styles.header, { borderBottomColor: T.border, paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Feather name="arrow-left" size={24} color={T.text} />
         </TouchableOpacity>
@@ -454,7 +456,7 @@ export default function ApplyPhysicalCardScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingTop: Platform.OS === 'web' ? 24 : 60, paddingBottom: 16,
+    paddingHorizontal: 20, paddingBottom: 16,
     borderBottomWidth: 1,
   },
   backBtn: { width: 40, height: 40, justifyContent: 'center' },

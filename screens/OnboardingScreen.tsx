@@ -4,6 +4,7 @@ import {
   ScrollView, Dimensions, Animated, Platform,
   StatusBar
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import Svg, { Path, Rect, Circle, Defs, LinearGradient as SvgLinearGradient, Stop, G, Polygon, Ellipse } from 'react-native-svg';
@@ -168,6 +169,7 @@ interface Props {
 export default function OnboardingScreen({ onFinish, navigation }: Props) {
   const { isDarkMode } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
+  const insets = useSafeAreaInsets();
 
   const [current, setCurrent] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
@@ -223,7 +225,7 @@ export default function OnboardingScreen({ onFinish, navigation }: Props) {
       </Animated.View>
 
       {/* Skip */}
-      <TouchableOpacity style={styles.skipBtn} onPress={handleFinish} activeOpacity={0.7}>
+      <TouchableOpacity style={[styles.skipBtn, { top: insets.top + 12 }]} onPress={handleFinish} activeOpacity={0.7}>
         <Text style={[styles.skipText, { color: isDarkMode ? '#FFFFFF80' : '#00000080' }]}>Skip</Text>
       </TouchableOpacity>
 
@@ -264,7 +266,7 @@ export default function OnboardingScreen({ onFinish, navigation }: Props) {
       </ScrollView>
 
       {/* Bottom Area */}
-      <View style={[styles.bottom, { backgroundColor: isDarkMode ? '#1c1b1b' : '#FFFFFF' }]}>
+      <View style={[styles.bottom, { backgroundColor: isDarkMode ? '#1c1b1b' : '#FFFFFF', paddingBottom: insets.bottom + 24 }]}>
         {/* Progress Bar & Indicators */}
         <View style={styles.progressContainer}>
           <View style={styles.dotsRow}>
@@ -302,7 +304,6 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   skipBtn: {
     position: 'absolute', 
-    top: Platform.OS === 'web' ? 24 : 60,
     right: 24, 
     zIndex: 10, 
     padding: 12,
@@ -347,7 +348,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: '100%',
     paddingHorizontal: 32, 
-    paddingBottom: Platform.OS === 'ios' ? 52 : 36,
     paddingTop: 32, 
     alignItems: 'center', 
     borderTopLeftRadius: 32,

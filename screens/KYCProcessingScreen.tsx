@@ -299,7 +299,7 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 const s = StyleSheet.create({
   root: { flex: 1 },
-  body: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28, paddingTop: Platform.OS === 'ios' ? 60 : 48, paddingBottom: 24 },
+  body: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28, paddingTop: 48, paddingBottom: 24 },
   shieldContainer: { width: 180, height: 180, alignItems: 'center', justifyContent: 'center', marginBottom: 32 },
   progressRing: { position: 'absolute' },
   shieldCircle: { width: 140, height: 140, borderRadius: 70, alignItems: 'center', justifyContent: 'center' },

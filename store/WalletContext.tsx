@@ -112,7 +112,7 @@ type WalletContextType = {
   updateCardDetails: (patch: { holderName?: string; design?: string }) => void;
   generateCardDetails: () => void;
   applySwapBalances: (sellToken: string, sellAmt: number, buyToken: string, buyAmt: number) => Promise<void>;
-  switchNetwork: (n: string) => void;
+  switchNetwork: (n: string) => void | Promise<void>;
   creditP2PBalance: (token: string, amount: number) => void;
   resetLockedBalances: () => void;
 };
@@ -190,9 +190,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setIsDarkMode(prev => {
       const newVal = !prev;
       AsyncStorage.setItem('cw_is_dark_mode', String(newVal)).catch(() => {});
+      // Persist to Supabase
+      if (walletAddress) {
+        profileService.upsert(walletAddress, { is_dark_mode: newVal }).catch(() => {});
+      }
       return newVal;
     });
-  }, []);
+  }, [walletAddress]);
 
   const setAccountType = useCallback(async (type: 'personal' | 'business') => {
     setAccountTypeState(type);
@@ -217,22 +221,25 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setLockedBalance(prev => {
       const updated = { ...prev, [token]: (prev[token] || 0) + amount };
       AsyncStorage.setItem('cw_locked_balance', JSON.stringify(updated)).catch(() => {});
+      if (walletAddress) profileService.upsert(walletAddress, { locked_balances: updated }).catch(() => {});
       return updated;
     });
-  }, []);
+  }, [walletAddress]);
 
   const unlockBalance = useCallback((token: string, amount: number) => {
     setLockedBalance(prev => {
       const updated = { ...prev, [token]: Math.max(0, (prev[token] || 0) - amount) };
       AsyncStorage.setItem('cw_locked_balance', JSON.stringify(updated)).catch(() => {});
+      if (walletAddress) profileService.upsert(walletAddress, { locked_balances: updated }).catch(() => {});
       return updated;
     });
-  }, []);
+  }, [walletAddress]);
 
   const resetLockedBalances = useCallback(() => {
     setLockedBalance({});
     AsyncStorage.removeItem('cw_locked_balance').catch(() => {});
-  }, []);
+    if (walletAddress) profileService.upsert(walletAddress, { locked_balances: {} }).catch(() => {});
+  }, [walletAddress]);
 
   // Directly credit a P2P received amount into local balance state.
   // Testnet: no real on-chain transfer — update local state directly.
@@ -244,9 +251,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const isTronNet = net === 'TRON' || net === 'TRON Nile';
       let fetchAddr = address;
       if (isTronNet) {
+        // Always use the TRON address for TRON networks
         const stored = await storageService.getTronAddress();
         if (stored) {
           fetchAddr = stored;
+          if (!tronAddress) setTronAddress(stored);
         } else {
           const mnemonic = await storageService.getMnemonic();
           if (mnemonic) {
@@ -255,6 +264,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             fetchAddr = tron.address;
             setTronAddress(tron.address);
             storageService.saveTronAddress(tron.address).catch(() => {});
+            // Persist TRON address to Supabase
+            if (address) profileService.upsert(address, { tron_address: tron.address }).catch(() => {});
+          } else {
+            setIsLoadingBalance(false);
+            return;
           }
         }
       }
@@ -264,11 +278,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setBalances(onChain);
       balancesRef.current = onChain;
       await AsyncStorage.setItem('cw_token_balances', JSON.stringify(onChain));
+      // Persist balances to Supabase
+      if (address) profileService.upsert(address, { token_balances: onChain }).catch(() => {});
     } catch (e) {
     } finally {
       setIsLoadingBalance(false);
     }
-  }, []);
+  }, [tronAddress]);
 
   const creditP2PBalance = useCallback((token: string, amount: number) => {
     const isTestnet = NETWORK_INFO[network]?.type === 'Testnet';
@@ -426,6 +442,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             const tron = await deriveTronAddress(mnemonic);
             setTronAddress(tron.address);
             storageService.saveTronAddress(tron.address).catch(() => {});
+            // Persist to Supabase
+            profileService.upsert(address, { tron_address: tron.address }).catch(() => {});
           }).catch(() => {});
 
           // ── Step 1: Load everything from AsyncStorage instantly (existing users) ──
@@ -511,8 +529,37 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             // KYC
             setKycStatus(kycRecord?.status ?? null);
 
-            // ── Card restore: Supabase wins over AsyncStorage ──
+            // ── Restore profile fields from Supabase (wins over AsyncStorage) ──
             if (vcc || dbCard) supabaseCardRestoredRef.current = true;
+
+            // Restore network preference
+            if (kycRecord) {} // placeholder to keep block structure
+            const profileForStartup = await profileService.get(address).catch(() => null);
+            if (profileForStartup) {
+              if (profileForStartup.network) {
+                setNetworkState(profileForStartup.network);
+              }
+              if (profileForStartup.is_dark_mode !== null && profileForStartup.is_dark_mode !== undefined) {
+                setIsDarkMode(profileForStartup.is_dark_mode);
+                AsyncStorage.setItem('cw_is_dark_mode', String(profileForStartup.is_dark_mode)).catch(() => {});
+              }
+              if (profileForStartup.tron_address) {
+                setTronAddress(profileForStartup.tron_address);
+                storageService.saveTronAddress(profileForStartup.tron_address).catch(() => {});
+              }
+              if (profileForStartup.token_balances && Object.keys(profileForStartup.token_balances).length > 0) {
+                const tb = profileForStartup.token_balances;
+                setBalances(tb);
+                balancesRef.current = tb;
+                setEthBalance((tb.ETH ?? 0).toFixed(6));
+                ethBalanceRef.current = (tb.ETH ?? 0).toFixed(6);
+                AsyncStorage.setItem('cw_token_balances', JSON.stringify(tb)).catch(() => {});
+              }
+              if (profileForStartup.locked_balances && Object.keys(profileForStartup.locked_balances).length > 0) {
+                setLockedBalance(profileForStartup.locked_balances);
+                AsyncStorage.setItem('cw_locked_balance', JSON.stringify(profileForStartup.locked_balances)).catch(() => {});
+              }
+            }
             if (vcc) {
               const variant = variants.find(v => v.id === vcc.card_variant);
               // Preserve full card number from AsyncStorage if it exists
@@ -627,7 +674,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const refreshBalance = useCallback(async () => {
     if (!walletAddress) return;
-    // If already syncing, force-reset the lock after 10s to prevent permanent block
     if (syncInProgressRef.current) {
       const lockAge = Date.now() - (syncInProgressRef as any).lockedAt;
       if (lockAge < 10000) return;
@@ -637,8 +683,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     syncInProgressRef.current = true;
     (syncInProgressRef as any).lockedAt = Date.now();
     try {
-      await fetchBalance(walletAddress, network);
-      const newTxs = await transactionService.syncIncoming(walletAddress, network, prices.ETH?.usd ?? 3500);
+      const isTronNet = network === 'TRON' || network === 'TRON Nile';
+      const syncAddr = isTronNet ? (tronAddress || walletAddress) : walletAddress;
+      await fetchBalance(syncAddr, network);
+      const newTxs = await transactionService.syncIncoming(syncAddr, network, prices.ETH?.usd ?? 3500);
       if (Array.isArray(newTxs) && newTxs.length > 0) {
         setTransactions(prev => {
           const existingHashes = new Set(prev.map(t => t.txHash).filter(Boolean));
@@ -651,7 +699,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setIsSyncing(false);
       syncInProgressRef.current = false;
     }
-  }, [walletAddress, network, prices, fetchBalance]);
+  }, [walletAddress, tronAddress, network, prices, fetchBalance]);
 
   useEffect(() => {
     if (dataLoaded && pendingAddressRef.current) {
@@ -796,10 +844,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     fetchPrices();
-    fetchNews();
+    // Delay news fetch by 3s — prices are critical, news is not
+    const newsDelay = setTimeout(() => fetchNews(), 3000);
     priceIntervalRef.current = setInterval(fetchPrices, 60_000);
     newsIntervalRef.current  = setInterval(fetchNews,   300_000);
     return () => {
+      clearTimeout(newsDelay);
       if (priceIntervalRef.current) clearInterval(priceIntervalRef.current);
       if (newsIntervalRef.current)  clearInterval(newsIntervalRef.current);
     };
@@ -814,8 +864,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       syncInProgressRef.current = true;
       setIsSyncing(true);
       try {
-        await fetchBalance(walletAddress, network);
-        const newTxs = await transactionService.syncIncoming(walletAddress, network, prices.ETH?.usd ?? 3500);
+        // Use TRON address for TRON networks
+        const isTronNet = network === 'TRON' || network === 'TRON Nile';
+        const syncAddr = isTronNet ? (tronAddress || walletAddress) : walletAddress;
+        await fetchBalance(syncAddr, network);
+        const newTxs = await transactionService.syncIncoming(syncAddr, network, prices.ETH?.usd ?? 3500);
         if (Array.isArray(newTxs) && newTxs.length > 0) {
           setTransactions(prev => {
             const existingHashes = new Set(prev.map(t => t.txHash).filter(Boolean));
@@ -832,7 +885,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [hasWallet, walletAddress, network, prices, fetchBalance]);
+  }, [hasWallet, walletAddress, tronAddress, network, prices, fetchBalance]);
 
   const handleSetWalletName = useCallback(async (name: string) => {
     setWalletNameState(name);
@@ -1445,9 +1498,34 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const switchNetwork = useCallback((n: string) => {
+  const switchNetwork = useCallback(async (n: string) => {
     setNetworkState(n);
-    if (walletAddress) fetchBalance(walletAddress, n);
+    // Persist network to Supabase
+    if (walletAddress) profileService.upsert(walletAddress, { network: n }).catch(() => {});
+    if (!walletAddress) return;
+    // Clear cached data when switching networks
+    setEthBalance('0.0');
+    setBalances({ ETH: 0, USDT: 0, USDC: 0, DAI: 0, BTC: 0, SOL: 0, TRX: 0 });
+    const isTronNet = n === 'TRON' || n === 'TRON Nile';
+    if (isTronNet) {
+      let tronAddr = await storageService.getTronAddress();
+      if (!tronAddr) {
+        const mnemonic = await storageService.getMnemonic();
+        if (mnemonic) {
+          const { deriveTronAddress } = await import('../services/tronService');
+          const tron = await deriveTronAddress(mnemonic);
+          tronAddr = tron.address;
+          setTronAddress(tron.address);
+          storageService.saveTronAddress(tron.address).catch(() => {});
+          profileService.upsert(walletAddress, { tron_address: tron.address }).catch(() => {});
+        }
+      } else {
+        setTronAddress(tronAddr);
+      }
+      if (tronAddr) fetchBalance(tronAddr, n);
+    } else {
+      fetchBalance(walletAddress, n);
+    }
   }, [walletAddress, fetchBalance]);
 
   const marketValue = useMemo(() => ({

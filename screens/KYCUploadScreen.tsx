@@ -322,7 +322,7 @@ export default function KYCUploadScreen({ navigation, route }: any) {
 const styles = StyleSheet.create({
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingTop: Platform.OS === 'web' ? 24 : 60, paddingBottom: 18,
+    paddingHorizontal: 20, paddingTop: 60, paddingBottom: 18,
     borderBottomWidth: 1,
     backgroundColor: Theme.colors.background,
   },

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  StatusBar, ScrollView, Modal, TextInput, FlatList, Platform, Dimensions, SafeAreaView
+  StatusBar, ScrollView, Modal, TextInput, FlatList, Platform, Dimensions
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
 import { Theme } from '../constants';
@@ -111,6 +112,7 @@ const CountryModal = ({ visible, onClose, onSelect, selectedCountry, T, isDarkMo
 export default function AccountTypeScreen({ onSelect }: any) {
   const { setP2PPreferences, isDarkMode } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
+  const insets = useSafeAreaInsets();
   
   const [selectedType, setSelectedType] = useState<'personal' | 'business'>('personal');
   const [country, setCountry] = useState(COUNTRIES[0]);
@@ -123,11 +125,11 @@ export default function AccountTypeScreen({ onSelect }: any) {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: T.background }]}>
+    <View style={[styles.container, { backgroundColor: T.background }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       
       {/* Custom Header */}
-      <View style={styles.customHeader}>
+      <View style={[styles.customHeader, { paddingTop: insets.top + 8 }]}>
         <TouchableOpacity style={[styles.headerIcon, { backgroundColor: T.surfaceLow }]}>
           <Feather name="arrow-left" size={20} color={T.text} />
         </TouchableOpacity>
@@ -268,7 +270,7 @@ export default function AccountTypeScreen({ onSelect }: any) {
         T={T}
         isDarkMode={isDarkMode}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -281,8 +283,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    height: 60,
-    marginTop: Platform.OS === 'android' ? 10 : 0,
+    paddingBottom: 12,
   },
   headerIcon: {
     width: 40,
@@ -448,7 +449,7 @@ const styles = StyleSheet.create({
     height: 84,
     alignItems: 'center',
     justifyContent: 'space-around',
-    paddingBottom: Platform.OS === 'ios' ? 24 : 12,
+    paddingBottom: 24,
     borderTopWidth: 1,
   },
   navItem: {
@@ -471,7 +472,7 @@ const styles = StyleSheet.create({
     paddingTop: 24,
     paddingHorizontal: 24,
     maxHeight: '85%',
-    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+    paddingBottom: 40,
   },
   modalHeader: {
     flexDirection: 'row',

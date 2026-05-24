@@ -1,11 +1,13 @@
 import React from 'react';
 import { Theme, Fonts } from '../constants';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScrollView, View, Text, StyleSheet, TouchableOpacity, Platform, Dimensions, Alert } from 'react-native';
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
 import { LinearGradient } from 'expo-linear-gradient';
 
 export default function LandingScreen({ navigation }: any) {
+  const insets = useSafeAreaInsets();
   const { isDarkMode } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const isWeb = Platform.OS === 'web';
@@ -145,7 +147,7 @@ export default function LandingScreen({ navigation }: any) {
       <View pointerEvents="none" style={[styles.glowLeft,  { backgroundColor: T.primaryDark + '15' }]} />
       <View pointerEvents="none" style={[styles.glowRight, { backgroundColor: T.primary + '15' }]} />
 
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={handleLogoTap} activeOpacity={1}>
           <Text style={[styles.headerTitle, { color: T.primary }]}>CryptoWallet</Text>
         </TouchableOpacity>
@@ -241,7 +243,7 @@ const styles = StyleSheet.create({
   webFooterLinks: { flexDirection: 'row', gap: 48 },
   webFooterLink: { fontSize: 15, fontFamily: Fonts.bold },
 
-  header: { position: 'absolute', top: 0, width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingTop: 60, zIndex: 10 },
+  header: { position: 'absolute', top: 0, width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, zIndex: 10 },
   headerTitle: { fontSize: 22, fontFamily: Fonts.extraBold, letterSpacing: -1 },
   langBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
   langText: { fontSize: 11, fontFamily: Fonts.bold, letterSpacing: 1 },

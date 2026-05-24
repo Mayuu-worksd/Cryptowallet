@@ -285,7 +285,7 @@ export default function KYCVideoLivenessScreen({ navigation, route }: any) {
 
 const s = StyleSheet.create({
   root: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 60 : 48, paddingBottom: 20 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 48, paddingBottom: 20 },
   backBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 18, fontWeight: '900' },
   stepPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
@@ -308,7 +308,7 @@ const s = StyleSheet.create({
   successTitle: { color: '#FFF', fontSize: 26, fontWeight: '900', marginBottom: 8 },
   successSub: { color: '#FFF', fontSize: 16, opacity: 0.9, textAlign: 'center', paddingHorizontal: 40 },
   
-  footer: { paddingBottom: Platform.OS === 'ios' ? 50 : 30, paddingTop: 20 },
+  footer: { paddingBottom: 30, paddingTop: 20 },
   instructionCard: { alignItems: 'center', paddingHorizontal: 40 },
   instructionText: { fontSize: 22, fontWeight: '900', textAlign: 'center', marginBottom: 40, height: 60 },
   

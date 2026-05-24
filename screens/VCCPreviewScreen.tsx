@@ -4,6 +4,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Platform, TextInput, StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
 import { vccService, VCCCardVariant } from '../services/supabaseService';
@@ -12,6 +13,7 @@ export default function VCCPreviewScreen({ navigation, route }: any) {
   const variant: VCCCardVariant = route?.params?.variant;
   const { isDarkMode, walletAddress } = useWallet() as any;
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
+  const insets = useSafeAreaInsets();
 
   const [holderName, setHolderName] = useState('');
   const [nameError,  setNameError]  = useState('');
@@ -35,7 +37,7 @@ export default function VCCPreviewScreen({ navigation, route }: any) {
   return (
     <View style={[s.root, { backgroundColor: T.background }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <View style={[s.header, { borderBottomColor: T.border }]}>
+      <View style={[s.header, { borderBottomColor: T.border, paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn}>
           <Feather name="arrow-left" size={24} color={T.text} />
         </TouchableOpacity>
@@ -146,7 +148,7 @@ const s = StyleSheet.create({
   root: { flex: 1 },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingTop: Platform.OS === 'web' ? 24 : 60, paddingBottom: 16,
+    paddingHorizontal: 20, paddingBottom: 16,
     borderBottomWidth: 1,
   },
   backBtn: { width: 40, height: 40, justifyContent: 'center' },

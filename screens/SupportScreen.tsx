@@ -4,6 +4,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity,
   ScrollView, Platform, Linking,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
 import Toast from '../components/Toast';
@@ -34,6 +35,7 @@ const FAQ_ITEMS = [
 export default function SupportScreen({ navigation }: any) {
   const { isDarkMode } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
+  const insets = useSafeAreaInsets();
   const [expanded, setExpanded] = useState<number | null>(null);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' as 'success' | 'error' | 'info' });
 
@@ -51,7 +53,7 @@ export default function SupportScreen({ navigation }: any) {
       />
 
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: isDarkMode ? 'rgba(19,19,19,0.95)' : 'rgba(247,249,251,0.95)' }]}>
+      <View style={[styles.header, { backgroundColor: isDarkMode ? 'rgba(19,19,19,0.95)' : 'rgba(247,249,251,0.95)', paddingTop: insets.top + 12 }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
             <MaterialIcons name="arrow-back" size={24} color={T.text} />
@@ -162,7 +164,7 @@ const styles = StyleSheet.create({
   header: {
     position: 'absolute', top: 0, width: '100%', zIndex: 50,
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 20, paddingTop: Platform.OS === 'web' ? 24 : 60, paddingBottom: 16,
+    paddingHorizontal: 20, paddingBottom: 16,
   },
   iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20 },
   headerTitle: { fontSize: 18, fontWeight: '800' },

@@ -28,8 +28,31 @@ function base58Encode(bytes: Uint8Array): string {
   return result;
 }
 
+function base58Decode(str: string): Uint8Array {
+  let num = 0n;
+  for (const char of str) {
+    const idx = BASE58_ALPHABET.indexOf(char);
+    if (idx === -1) throw new Error('Invalid base58 character: ' + char);
+    num = num * 58n + BigInt(idx);
+  }
+  // Convert to hex, pad to 50 hex chars (25 bytes)
+  let hex = num.toString(16);
+  // Count leading '1's → leading zero bytes
+  let leadingZeros = 0;
+  for (const c of str) {
+    if (c === '1') leadingZeros++;
+    else break;
+  }
+  // Pad to even length
+  if (hex.length % 2 !== 0) hex = '0' + hex;
+  const bytes = new Uint8Array(leadingZeros + hex.length / 2);
+  for (let i = 0; i < hex.length / 2; i++) {
+    bytes[leadingZeros + i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
+}
+
 // ─── Pure JS SHA-256 (no crypto.subtle — React Native compatible) ────────────
-// Based on the FIPS 180-4 specification
 const K = [
   0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
   0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
@@ -46,7 +69,6 @@ function sha256Sync(data: Uint8Array): Uint8Array {
   let h4=0x510e527f,h5=0x9b05688c,h6=0x1f83d9ab,h7=0x5be0cd19;
   const len = data.length;
   const bitLen = len * 8;
-  // Padding
   const padLen = ((len + 9 + 63) & ~63);
   const padded = new Uint8Array(padLen);
   padded.set(data);
@@ -81,45 +103,60 @@ function sha256Sync(data: Uint8Array): Uint8Array {
   return out;
 }
 
-async function tronAddressFromPublicKey(privateKey: string): Promise<string> {
-  // ethers v6: SigningKey.publicKey is compressed (0x02/0x03 prefix, 33 bytes)
-  // We need the uncompressed public key (0x04 prefix, 65 bytes) for TRON
+function hexToBytes(hex: string): Uint8Array {
+  const clean = hex.startsWith('0x') ? hex.slice(2) : hex;
+  const bytes = new Uint8Array(clean.length / 2);
+  for (let i = 0; i < clean.length; i += 2) {
+    bytes[i / 2] = parseInt(clean.slice(i, i + 2), 16);
+  }
+  return bytes;
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ─── TRON address from private key ───────────────────────────────────────────
+async function tronAddressFromPrivateKey(privateKey: string): Promise<string> {
   const signingKey = new ethers.SigningKey(privateKey);
-  // computePublicKey with false = uncompressed
+  // Get uncompressed public key (65 bytes, 0x04 prefix)
   const uncompressedHex = ethers.SigningKey.computePublicKey(signingKey.publicKey, false);
-  // Drop the 0x04 prefix (2 chars = 1 byte), leaving 64 bytes = 128 hex chars
-  const pubKeyHex = uncompressedHex.slice(4); // remove '0x04'
+  // Drop '0x04' prefix → 64 bytes of raw public key
+  const pubKeyHex = uncompressedHex.slice(4);
   // Keccak256 of the 64-byte public key
   const keccakHash = ethers.keccak256('0x' + pubKeyHex);
   // Take last 20 bytes (40 hex chars), prepend 0x41 (TRON mainnet prefix)
-  const addressHex  = '41' + keccakHash.slice(-40);
+  const addressHex = '41' + keccakHash.slice(-40);
   const addressBytes = hexToBytes(addressHex);
   // Double SHA256 checksum
-  const hash1    = sha256Sync(addressBytes);
-  const hash2    = sha256Sync(hash1);
+  const hash1 = sha256Sync(addressBytes);
+  const hash2 = sha256Sync(hash1);
   const checksum = hash2.slice(0, 4);
   // Base58Check encode
   const full = new Uint8Array([...addressBytes, ...checksum]);
   return base58Encode(full);
 }
 
-function hexToBytes(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < hex.length; i += 2) {
-    bytes[i / 2] = parseInt(hex.slice(i, i + 2), 16);
+// ─── Convert TRON Base58 address → 21-byte hex (with 0x41 prefix) ────────────
+export function tronAddressToHex(base58Address: string): string {
+  try {
+    const decoded = base58Decode(base58Address); // 25 bytes: 21 addr + 4 checksum
+    // Return first 21 bytes as hex (42 hex chars)
+    return bytesToHex(decoded.slice(0, 21));
+  } catch {
+    return '';
   }
-  return bytes;
 }
 
 // ─── TRON token contracts ─────────────────────────────────────────────────────
 export const TRON_TOKENS: Record<string, Record<string, string>> = {
   USDT: {
     TRON:        'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',  // mainnet TRC20 USDT
-    'TRON Nile': 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf',  // Nile testnet USDT (official)
+    'TRON Nile': 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf',  // Nile testnet USDT
   },
   USDC: {
     TRON:        'TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8',  // mainnet TRC20 USDC
-    'TRON Nile': '',  // no official USDC on Nile — skip
+    'TRON Nile': '',
   },
 };
 
@@ -128,10 +165,15 @@ export const TRON_EXPLORER: Record<string, string> = {
   'TRON Nile': 'https://nile.tronscan.org/#/transaction/',
 };
 
+export const TRON_ADDRESS_EXPLORER: Record<string, string> = {
+  TRON:        'https://tronscan.org/#/address/',
+  'TRON Nile': 'https://nile.tronscan.org/#/address/',
+};
+
 export const TRON_FAUCETS: Record<string, string[]> = {
   'TRON Nile': [
-    'https://nileex.io/join/getJoinPage',   // TRX faucet
-    'https://nile.trongrid.io',             // Nile testnet info
+    'https://nile.tronscan.org/#/faucet',
+    'https://nile.trongrid.io',
   ],
 };
 
@@ -146,41 +188,42 @@ export async function deriveTronAddress(mnemonic: string): Promise<{
     undefined,
     "m/44'/195'/0'/0/0"
   );
-  const tronAddr = await tronAddressFromPublicKey(hdNode.privateKey);
+  const tronAddr = await tronAddressFromPrivateKey(hdNode.privateKey);
   return {
     address:    tronAddr,
     privateKey: hdNode.privateKey,
   };
 }
 
-// ─── TRON balance fetching ────────────────────────────────────────────────────
+// ─── TRON transaction type ────────────────────────────────────────────────────
+export type TronTx = {
+  txID:        string;
+  timestamp:   number;
+  blockNumber: number;
+  from:        string;
+  to:          string;
+  amount:      number;   // in TRX
+  type:        'sent' | 'received';
+  status:      'success' | 'failed';
+  token:       string;   // 'TRX' or token symbol
+};
+
+// ─── TRON service ─────────────────────────────────────────────────────────────
 export const tronService = {
 
+  getBaseUrl(network: string): string {
+    return network === 'TRON' ? 'https://api.trongrid.io' : 'https://nile.trongrid.io';
+  },
+
   async getTRXBalance(tronAddress: string, network: string): Promise<number> {
-    const base = network === 'TRON' ? 'https://api.trongrid.io' : 'https://nile.trongrid.io';
+    const base = this.getBaseUrl(network);
     try {
       const res  = await fetch(`${base}/v1/accounts/${tronAddress}`, {
-        headers: { 'TRON-PRO-API-KEY': '' }, // add your TronGrid API key here if needed
+        headers: { 'Accept': 'application/json' },
       });
       const json = await res.json();
       const sun  = json?.data?.[0]?.balance ?? 0;
-      return sun / 1_000_000; // SUN → TRX
-    } catch {
-      return 0;
-    }
-  },
-
-  async getTRC20Balance(tronAddress: string, contractAddress: string, network: string): Promise<number> {
-    const base = network === 'TRON' ? 'https://api.trongrid.io' : 'https://nile.trongrid.io';
-    try {
-      const res  = await fetch(
-        `${base}/v1/accounts/${tronAddress}/tokens?token_id=${contractAddress}&limit=1`
-      );
-      const json = await res.json();
-      const token = json?.data?.[0];
-      if (!token) return 0;
-      // USDT TRC20 has 6 decimals
-      return (token.balance ?? 0) / 1_000_000;
+      return sun / 1_000_000;
     } catch {
       return 0;
     }
@@ -189,7 +232,7 @@ export const tronService = {
   async getAllBalances(tronAddress: string, network: string): Promise<{
     TRX: number; USDT: number; USDC: number;
   }> {
-    const base = network === 'TRON' ? 'https://api.trongrid.io' : 'https://nile.trongrid.io';
+    const base = this.getBaseUrl(network);
     try {
       const res  = await fetch(`${base}/v1/accounts/${tronAddress}`, {
         headers: { 'Accept': 'application/json' },
@@ -202,52 +245,131 @@ export const tronService = {
       const trx = (account.balance ?? 0) / 1_000_000;
 
       const usdtContract = TRON_TOKENS.USDT[network] ?? '';
+      const usdcContract = TRON_TOKENS.USDC[network] ?? '';
       let usdt = 0;
+      let usdc = 0;
 
-      // TRC20 array — { contractAddress: "balanceString" }
       const trc20: any[] = account.trc20 ?? [];
       for (const t of trc20) {
         for (const [addr, bal] of Object.entries(t)) {
           if (usdtContract && addr === usdtContract) {
             usdt = parseInt(String(bal), 10) / 1_000_000;
           }
+          if (usdcContract && addr === usdcContract) {
+            usdc = parseInt(String(bal), 10) / 1_000_000;
+          }
         }
       }
 
-      return { TRX: trx, USDT: usdt, USDC: 0 };
+      return { TRX: trx, USDT: usdt, USDC: usdc };
     } catch {
       return { TRX: 0, USDT: 0, USDC: 0 };
     }
   },
 
-  // Send TRX (native)
+  // ─── Fetch TRON transaction history ────────────────────────────────────────
+  async getTransactions(tronAddress: string, network: string, limit = 50): Promise<TronTx[]> {
+    const base = this.getBaseUrl(network);
+    try {
+      const res = await fetch(
+        `${base}/v1/accounts/${tronAddress}/transactions?limit=${limit}&only_confirmed=true`,
+        { headers: { 'Accept': 'application/json' } }
+      );
+      const json = await res.json();
+      const rawTxs: any[] = json?.data ?? [];
+
+      const result: TronTx[] = [];
+
+      for (const tx of rawTxs) {
+        try {
+          const contract = tx?.raw_data?.contract?.[0];
+          if (!contract) continue;
+
+          const type = contract.type;
+
+          // Only handle TRX transfers (TransferContract)
+          if (type === 'TransferContract') {
+            const value = contract.parameter?.value ?? {};
+            const fromHex = value.owner_address ?? '';
+            const toHex   = value.to_address ?? '';
+            const amount  = (value.amount ?? 0) / 1_000_000;
+
+            if (amount <= 0) continue;
+
+            const fromAddr = hexToTronAddress(fromHex);
+            const toAddr   = hexToTronAddress(toHex);
+            const isSent   = fromAddr.toLowerCase() === tronAddress.toLowerCase();
+
+            const ret = tx?.ret?.[0];
+            const status: 'success' | 'failed' = ret?.contractRet === 'SUCCESS' ? 'success' : 'failed';
+
+            result.push({
+              txID:        tx.txID,
+              timestamp:   tx.block_timestamp ?? 0,
+              blockNumber: tx.blockNumber ?? 0,
+              from:        fromAddr,
+              to:          toAddr,
+              amount,
+              type:        isSent ? 'sent' : 'received',
+              status,
+              token:       'TRX',
+            });
+          }
+        } catch {
+          // skip malformed tx
+        }
+      }
+
+      return result;
+    } catch {
+      return [];
+    }
+  },
+
+  // ─── Estimate TRON bandwidth/energy fee (flat estimate) ────────────────────
+  estimateFee(_network: string): number {
+    // Standard TRX transfer costs ~0.1 TRX in bandwidth
+    // If bandwidth is exhausted, ~1 TRX in energy
+    return 1.0; // conservative estimate in TRX
+  },
+
+  // ─── Send TRX (native) ─────────────────────────────────────────────────────
   async sendTRX(params: {
     privateKey: string;
-    toAddress: string;
-    amount: number; // in TRX
-    network: string;
+    toAddress:  string;
+    amount:     number; // in TRX
+    network:    string;
   }): Promise<{ txHash: string; success: boolean; error?: string }> {
-    const base = params.network === 'TRON' ? 'https://api.trongrid.io' : 'https://nile.trongrid.io';
+    const base = this.getBaseUrl(params.network);
     try {
-      // 1. Create transaction
+      // 1. Derive owner address from private key
+      const ownerTronAddr = await tronAddressFromPrivateKey(params.privateKey);
+      const ownerHex      = tronAddressToHex(ownerTronAddr);
+      const toHex         = tronAddressToHex(params.toAddress);
+
+      if (!ownerHex || !toHex) {
+        throw new Error('Invalid address encoding');
+      }
+
+      // 2. Create transaction
       const createRes = await fetch(`${base}/wallet/createtransaction`, {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          to_address:   tronAddressToHex(params.toAddress),
-          owner_address: await getOwnerAddress(params.privateKey),
-          amount:       Math.floor(params.amount * 1_000_000), // TRX → SUN
+          to_address:    toHex,
+          owner_address: ownerHex,
+          amount:        Math.floor(params.amount * 1_000_000), // TRX → SUN
         }),
       });
       const tx = await createRes.json();
-      if (!tx.txID) throw new Error(tx.Error ?? 'Failed to create transaction');
+      if (!tx.txID) throw new Error(tx.Error ?? tx.message ?? 'Failed to create transaction');
 
-      // 2. Sign
+      // 3. Sign
       const signed = signTronTx(tx, params.privateKey);
 
-      // 3. Broadcast
+      // 4. Broadcast
       const broadcastRes = await fetch(`${base}/wallet/broadcasttransaction`, {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(signed),
       });
@@ -264,6 +386,10 @@ export const tronService = {
     return `${TRON_EXPLORER[network] ?? TRON_EXPLORER.TRON}${txHash}`;
   },
 
+  getAddressExplorerUrl(address: string, network: string): string {
+    return `${TRON_ADDRESS_EXPLORER[network] ?? TRON_ADDRESS_EXPLORER.TRON}${address}`;
+  },
+
   getFaucetUrls(network: string): string[] {
     return TRON_FAUCETS[network] ?? [];
   },
@@ -275,25 +401,45 @@ export const tronService = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function tronAddressToHex(base58Address: string): string {
-  // Decode base58 → hex for API calls
-  let num = 0n;
-  for (const char of base58Address) {
-    num = num * 58n + BigInt(BASE58_ALPHABET.indexOf(char));
+/**
+ * Convert a hex address (with or without 0x41 prefix) to TRON Base58Check address.
+ * Used when parsing raw transaction data from TronGrid.
+ */
+function hexToTronAddress(hexAddr: string): string {
+  try {
+    // Normalize: remove 0x prefix if present, ensure it starts with 41
+    let clean = hexAddr.startsWith('0x') ? hexAddr.slice(2) : hexAddr;
+    if (clean.length === 40) clean = '41' + clean; // add TRON prefix if missing
+    if (clean.length !== 42) return hexAddr;        // unexpected length, return as-is
+
+    const addressBytes = hexToBytes(clean);
+    const hash1    = sha256Sync(addressBytes);
+    const hash2    = sha256Sync(hash1);
+    const checksum = hash2.slice(0, 4);
+    const full     = new Uint8Array([...addressBytes, ...checksum]);
+    return base58Encode(full);
+  } catch {
+    return hexAddr;
   }
-  const hex = num.toString(16).padStart(50, '0');
-  return hex.slice(0, 42); // 21 bytes = 42 hex chars
 }
 
-async function getOwnerAddress(privateKey: string): Promise<string> {
-  const addr = await tronAddressFromPublicKey(privateKey);
-  return tronAddressToHex(addr);
-}
-
+/**
+ * Sign a TRON transaction.
+ * TRON expects the signature as: r (32 bytes) + s (32 bytes) + v (1 byte, value 0 or 1).
+ * Note: TRON uses v = 0 or 1, NOT Ethereum's 27/28.
+ */
 function signTronTx(tx: any, privateKey: string): any {
-  const txID = tx.txID;
+  const txID      = tx.txID; // hex string without 0x
   const signingKey = new ethers.SigningKey(privateKey);
-  const sig = signingKey.sign(txID);
-  const signature = sig.r.slice(2) + sig.s.slice(2) + (sig.v === 27 ? '1b' : '1c');
+  const msgBytes  = hexToBytes(txID);
+  const sig       = signingKey.sign(msgBytes);
+
+  // r and s are 32-byte hex strings (with 0x prefix from ethers)
+  const r = sig.r.slice(2).padStart(64, '0');
+  const s = sig.s.slice(2).padStart(64, '0');
+  // TRON v: 0 or 1 (not 27/28)
+  const v = sig.v === 27 ? '00' : '01';
+
+  const signature = r + s + v;
   return { ...tx, signature: [signature] };
 }

@@ -8,6 +8,7 @@ import { Platform } from 'react-native';
 import { ethers } from 'ethers';
 import AsyncStorageNative from '@react-native-async-storage/async-storage';
 import { etherscanService, ChainTx, TokenTx } from './etherscanService';
+import { tronService, TronTx } from './tronService';
 
 const AsyncStorage = Platform.OS === 'web'
   ? {
@@ -172,7 +173,6 @@ export const transactionService = {
 
     const fromLocal = localTxs.map(fromLocalTx);
     const fromCard  = cardTxs.map(fromCardTx);
-    // Convert swap_transactions entries to UnifiedTx (deduplicate against cw_transactions by txHash)
     const fromSwapStore: UnifiedTx[] = swapTxs.map((s: any) => ({
       id:       s.id ?? s.txHash ?? Date.now().toString(),
       type:     'swap' as const,
@@ -186,6 +186,60 @@ export const transactionService = {
       hash:     s.txHash ?? null,
       label:    `${s.fromToken ?? '?'} → ${s.toToken ?? '?'}`,
     }));
+
+    // ── TRON networks: use TronGrid instead of Etherscan ──
+    const isTron = network === 'TRON' || network === 'TRON Nile';
+    if (isTron) {
+      let tronChainTxs: TronTx[] = [];
+      let tronFailed = false;
+      try {
+        tronChainTxs = await tronService.getTransactions(walletAddress, network, 50);
+      } catch {
+        tronFailed = true;
+      }
+
+      const fromTron: UnifiedTx[] = tronChainTxs.map(tx => ({
+        id:       tx.txID,
+        type:     tx.type === 'sent' ? 'send' as const : 'receive' as const,
+        amount:   tx.amount.toFixed(6),
+        token:    tx.token,
+        usdValue: '0.00',
+        date:     new Date(tx.timestamp).toISOString(),
+        status:   tx.status === 'success' ? 'completed' as const : 'failed' as const,
+        from:     tx.from,
+        to:       tx.to,
+        hash:     tx.txID,
+        label:    tx.type === 'sent' ? `Sent ${tx.token}` : `Received ${tx.token}`,
+      }));
+
+      const seen   = new Set<string>();
+      const merged: UnifiedTx[] = [];
+      for (const tx of fromTron) {
+        const key = tx.hash ?? tx.id;
+        if (!seen.has(key)) { seen.add(key); merged.push(tx); }
+      }
+      for (const tx of [...fromLocal, ...fromCard, ...fromSwapStore]) {
+        const key = tx.hash ? tx.hash : tx.id;
+        if (!seen.has(key)) { seen.add(key); merged.push(tx); }
+      }
+      if (tronFailed) {
+        try {
+          const raw = await AsyncStorage.getItem(CACHE_KEY);
+          if (raw) {
+            const cached: UnifiedTx[] = JSON.parse(String(raw));
+            for (const tx of (Array.isArray(cached) ? cached : [])) {
+              const key = tx.hash ?? tx.id;
+              if (!seen.has(key)) { seen.add(key); merged.push(tx); }
+            }
+          }
+        } catch (_e) {}
+      }
+      merged.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      if (!tronFailed && merged.length > 0) {
+        AsyncStorage.setItem(CACHE_KEY, JSON.stringify(merged)).catch(() => {});
+      }
+      return { txs: merged, fromCache: tronFailed && fromTron.length === 0 };
+    }
 
     // 2. Try Etherscan (ETH + Tokens)
     let chainTxs: ChainTx[] = [];
@@ -237,9 +291,7 @@ export const transactionService = {
       AsyncStorage.setItem(CACHE_KEY, JSON.stringify(merged)).catch(() => {});
     }
 
-    // fromCache = true only if Etherscan failed AND we had no chain txs from cache either
     const fromCache = etherscanFailed && fromChain.length === 0;
-
     return { txs: merged, fromCache };
   },
 
@@ -274,28 +326,57 @@ export const transactionService = {
     force: boolean = false,
   ): Promise<any[]> {
     if (!walletAddress) return [];
-    
-    const now = Date.now();
-    
-    // 1. Check for active lockout
-    if (this.isLockedOut && now < this.lockoutExpiry) {
-      return [];
-    }
 
-    // 2. Standard Cooldown (30s) — Bypass if force is true
-    if (!force && (now - this.lastSyncTime < 30000)) {
-      return [];
-    }
+    const now = Date.now();
+    if (this.isLockedOut && now < this.lockoutExpiry) return [];
+    if (!force && (now - this.lastSyncTime < 60000)) return [];
     this.lastSyncTime = now;
 
-    try {
+    // ── TRON: sync via TronGrid ──
+    const isTron = network === 'TRON' || network === 'TRON Nile';
+    if (isTron) {
+      try {
+        const tronTxs = await tronService.getTransactions(walletAddress, network, 50);
+        const raw = await AsyncStorage.getItem('cw_transactions').catch(() => null);
+        let localTxs: LocalTx[] = [];
+        try { const p = raw ? JSON.parse(String(raw)) : []; localTxs = Array.isArray(p) ? p : []; } catch (_e) {}
+        const knownHashes = new Set(localTxs.map(t => t.txHash).filter(Boolean));
+        const newTxs: LocalTx[] = [];
+        for (const tx of tronTxs) {
+          if (knownHashes.has(tx.txID)) continue;
+          newTxs.push({
+            id:      tx.txID,
+            type:    tx.type === 'sent' ? 'sent' : 'received',
+            coin:    tx.token,
+            amount:  tx.amount.toFixed(6),
+            usdValue:'0.00',
+            address: tx.type === 'sent' ? tx.to : tx.from,
+            status:  tx.status === 'success' ? 'success' : 'failed',
+            date:    new Date(tx.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            rawDate: tx.timestamp,
+            txHash:  tx.txID,
+          });
+          knownHashes.add(tx.txID);
+        }
+        if (newTxs.length > 0) {
+          const updated = [...newTxs, ...localTxs];
+          await AsyncStorage.setItem('cw_transactions', JSON.stringify(updated));
+          return newTxs;
+        }
+        return [];
+      } catch {
+        return [];
+      }
+    }
 
-      // 1. Fetch Txs sequentially to avoid rate limit
-      const chainTxs   = await etherscanService.fetchTransactions(walletAddress, network);
-      const tokenTxs   = await etherscanService.fetchTokenTransactions(walletAddress, network);
-      const internalTxs = await etherscanService.fetchInternalTransactions(walletAddress, network);
-      
-      // Success! Clear lockout
+    try {
+      // Fetch all 3 Etherscan endpoints in parallel instead of sequentially
+      const [chainTxs, tokenTxs, internalTxs] = await Promise.all([
+        etherscanService.fetchTransactions(walletAddress, network),
+        etherscanService.fetchTokenTransactions(walletAddress, network),
+        etherscanService.fetchInternalTransactions(walletAddress, network),
+      ]);
+
       this.isLockedOut = false;
       this.lockoutExpiry = 0;
 

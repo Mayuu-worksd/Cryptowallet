@@ -4,6 +4,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity,
   Platform, Image, Animated, Alert, Dimensions, StatusBar
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -27,6 +28,7 @@ const FRAME_H = FRAME_W * 0.63;
 export default function KYCScanScreen({ navigation, route }: any) {
   const { isDarkMode } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
+  const insets = useSafeAreaInsets();
   const docType: DocType = route?.params?.docType ?? 'passport';
   const kycData          = route?.params?.kycData ?? {};
   const needsBack        = NEEDS_BACK.includes(docType);
@@ -248,7 +250,6 @@ const s = StyleSheet.create({
     alignItems: 'center', 
     justifyContent: 'space-between', 
     paddingHorizontal: 20, 
-    paddingTop: Platform.OS === 'ios' ? 60 : 48, 
     paddingBottom: 20 
   },
   backBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
@@ -280,7 +281,7 @@ const s = StyleSheet.create({
   scanLine: { position: 'absolute', left: 0, right: 0, height: 40, zIndex: 5, overflow: 'hidden' },
   shutterFlash: { ...StyleSheet.absoluteFillObject, backgroundColor: '#FFF' },
   
-  footer: { paddingBottom: Platform.OS === 'ios' ? 50 : 30, paddingTop: 20, alignItems: 'center' },
+  footer: { paddingBottom: 30, paddingTop: 20, alignItems: 'center' },
   feedbackPill: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, marginBottom: 30 },
   feedbackText: { fontSize: 15, fontWeight: '800' },
   

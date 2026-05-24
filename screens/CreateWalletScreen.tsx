@@ -4,6 +4,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Platform, ActivityIndicator, Alert, Animated, Modal,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons, Feather } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { useWallet } from '../store/WalletContext';
@@ -87,6 +88,7 @@ export default function CreateWalletScreen({ navigation }: any) {
   const [toast, setToast] = useState<{ visible: boolean; message: string; type: 'success' | 'error' | 'info' }>({ visible: false, message: '', type: 'success' });
 
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
+  const insets = useSafeAreaInsets();
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') =>
     setToast({ visible: true, message, type });
@@ -186,7 +188,7 @@ export default function CreateWalletScreen({ navigation }: any) {
       />
 
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: isDarkMode ? 'rgba(19,19,19,0.95)' : 'rgba(247,249,251,0.95)' }]}>
+      <View style={[styles.header, { backgroundColor: isDarkMode ? 'rgba(19,19,19,0.95)' : 'rgba(247,249,251,0.95)', paddingTop: insets.top + 12 }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <TouchableOpacity style={styles.iconBtn} onPress={() => step === 'phrase' ? setStep('info') : navigation.goBack()} activeOpacity={0.7}>
             <MaterialIcons name="arrow-back" size={24} color={T.text} />
@@ -398,7 +400,7 @@ const styles = StyleSheet.create({
   header: {
     position: 'absolute', top: 0, width: '100%', zIndex: 50,
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 24, paddingTop: Platform.OS === 'web' ? 24 : 60, paddingBottom: 16,
+    paddingHorizontal: 24, paddingBottom: 16,
   },
   iconBtn:  { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20 },
   logoText: { fontSize: 20, fontWeight: '800', letterSpacing: -0.5 },

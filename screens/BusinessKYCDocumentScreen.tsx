@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Platform, ActivityIndicator, Image, Alert, StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
@@ -16,6 +17,7 @@ type DocStep = 0 | 1 | 2; // 0=business doc, 1=director ID, 2=review
 export default function BusinessKYCDocumentScreen({ navigation, route }: any) {
   const { walletAddress, isDarkMode } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
+  const insets = useSafeAreaInsets();
 
   const [step, setStep]           = useState<DocStep>(0);
   const [bizDocUri, setBizDocUri] = useState<string | null>(null);
@@ -333,7 +335,6 @@ const s = StyleSheet.create({
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 56 : Platform.OS === 'web' ? 20 : 48,
     paddingBottom: 14, borderBottomWidth: 1,
   },
   iconBtn:     { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
@@ -381,7 +382,7 @@ const s = StyleSheet.create({
   complianceBox:  { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 14, borderRadius: 14, borderWidth: 1 },
   complianceText: { flex: 1, fontSize: 12, lineHeight: 18 },
 
-  footer:  { paddingHorizontal: 24, paddingTop: 16, paddingBottom: Platform.OS === 'ios' ? 36 : 20, borderTopWidth: 1 },
+  footer:  { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 20, borderTopWidth: 1 },
   btn:     { borderRadius: 16, overflow: 'hidden' },
   btnGrad: { height: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   btnText: { color: '#FFF', fontSize: 15, fontWeight: '800' },

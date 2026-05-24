@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
 import { Theme, Fonts } from '../constants';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   ScrollView, ActivityIndicator, Image, Platform, Modal,
@@ -76,6 +77,7 @@ const TrendingSkeleton = ({ T, styles }: any) => {
 };
 
 export default function SwapScreen({ navigation }: any) {
+  const insets = useSafeAreaInsets();
   const { balances, ethBalance, isDarkMode, network, refreshBalance, walletAddress, applySwapBalances, addTx } = useWallet();
   const { prices } = useMarket();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
@@ -403,7 +405,7 @@ export default function SwapScreen({ navigation }: any) {
       <Toast visible={toast.visible} message={toast.message} type={toast.type} isDarkMode={isDarkMode} onHide={() => setToast(p => ({ ...p, visible: false }))} />
       <TransactionLoader visible={step === 'swapping'} title="Executing Swap" subtitle={swapStatus || 'Finding best route...'} isDarkMode={isDarkMode} type="swap" />
 
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity style={styles.headerIcon} onPress={() => setSlippageModalVisible(true)}>
           <Feather name="settings" size={24} color={T.text} />
         </TouchableOpacity>
@@ -723,7 +725,7 @@ export default function SwapScreen({ navigation }: any) {
 
 const makeStyles = (T: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: T.background },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 60 : 48, paddingBottom: 20 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 20 },
   headerTitle: { fontSize: 20, fontFamily: Fonts.extraBold, letterSpacing: -0.5 },
   headerIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   scroll: { paddingHorizontal: 20, paddingBottom: 60 },

@@ -44,6 +44,7 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {error:
 import { WalletProvider, useWallet } from './store/WalletContext';
 import { PinSetupContext } from './store/PinSetupContext';
 import { notificationService } from './services/notificationService';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import HomeScreen         from './screens/HomeScreen';
 import SendScreen         from './screens/SendScreen';
@@ -292,9 +293,9 @@ function Tabs() {
     backgroundColor: TC.surface,
     borderTopColor: TC.border,
     borderTopWidth: 1,
-    height: 96,
-    paddingBottom: 20,
-    paddingTop: 10,
+    // Let React Navigation + SafeAreaProvider handle bottom inset automatically
+    // Do NOT set height or paddingBottom manually — causes double-inset on gesture nav devices
+    paddingTop: 8,
   }), [TC.surface, TC.border]);
 
   const screenOptions = useCallback(() => ({
@@ -388,7 +389,7 @@ const tabStyles = StyleSheet.create({
     width: 80,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: -36,
+    marginTop: -28,
   },
   centerBtn: {
     width: 76,
@@ -457,7 +458,7 @@ const tabStyles = StyleSheet.create({
   miniBtnText: { fontSize: 14, fontWeight: '700' },
   metaMaskMenu: {
     position: 'absolute',
-    bottom: 120, // Sit above the tab bar & center button
+    bottom: '14%',
     left: 16,
     right: 16,
     borderRadius: 24,
@@ -756,30 +757,17 @@ export default function App() {
   const fontsReady = fontsLoaded || fontTimeout;
 
   React.useEffect(() => {
-    shouldShowOnboarding().then(show => setShowOnboarding(show));
+    const timeout = setTimeout(() => setShowOnboarding(false), 2000);
+    shouldShowOnboarding().then(show => { clearTimeout(timeout); setShowOnboarding(show); });
     notificationService.requestPermissions();
-    // OTA update check — only runs in real EAS builds, never in Expo Go
-    if (Platform.OS !== 'web') {
-      import('expo-updates').then(async (Updates) => {
-        try {
-          // isEmbeddedLaunch is false in Expo Go — skip entirely
-          if (!Updates.isEmbeddedLaunch) return;
-          // Extra guard: Updates.checkForUpdateAsync throws in Expo Go
-          if (typeof Updates.checkForUpdateAsync !== 'function') return;
-          const update = await Updates.checkForUpdateAsync();
-          if (update.isAvailable) {
-            await Updates.fetchUpdateAsync();
-            await Updates.reloadAsync();
-          }
-        } catch (_e) {}
-      }).catch(() => {});
-    }
   }, []);
 
-  if (showOnboarding === null) {
+  if (showOnboarding === null || !fontsReady) {
     return (
-      <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#101114' }}>
-        <View style={{ flex: 1, backgroundColor: '#101114' }} />
+      <GestureHandlerRootView style={{ flex: 1, backgroundColor: Theme.colors.primary }}>
+        <View style={{ flex: 1, backgroundColor: Theme.colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color="#FFF" />
+        </View>
       </GestureHandlerRootView>
     );
   }
@@ -804,6 +792,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
+    <SafeAreaProvider>
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#101114' }}>
       <WalletProvider>
         <NavigationContainer
@@ -820,6 +809,7 @@ export default function App() {
       </WalletProvider>
       {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
     </GestureHandlerRootView>
+    </SafeAreaProvider>
     </ErrorBoundary>
   );
 }

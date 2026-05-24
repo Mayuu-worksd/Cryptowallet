@@ -1,5 +1,6 @@
 import React, { useState, useMemo, memo, useEffect } from 'react';
 import { Theme } from '../constants';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Platform, Image,
@@ -42,6 +43,7 @@ const CoinIcon = memo(({ symbol, size = 44 }: { symbol: string; size?: number })
 const STABLE_FALLBACK: Record<string, number> = { USDC: 1, USDT: 1, DAI: 1 };
 
 export default function PortfolioScreen({ navigation }: any) {
+  const insets = useSafeAreaInsets();
   const { ethBalance, balances, isDarkMode, walletAddress, lockedBalance } = useWallet();
   const { prices } = useMarket();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
@@ -107,7 +109,7 @@ export default function PortfolioScreen({ navigation }: any) {
       />
 
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: T.background }]}>
+      <View style={[styles.header, { backgroundColor: T.background, paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Main')} style={styles.backBtn} activeOpacity={0.7}>
           <Feather name="arrow-left" size={22} color={T.text} />
         </TouchableOpacity>
@@ -115,7 +117,7 @@ export default function PortfolioScreen({ navigation }: any) {
         <View style={{ width: 38 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 100 }]} showsVerticalScrollIndicator={false}>
 
         {/* Balance gradient card */}
         <View style={styles.balanceContainer}>
@@ -290,12 +292,12 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 60 : 40, paddingBottom: 16,
+    paddingHorizontal: 20, paddingBottom: 16,
   },
   headerTitle: { fontSize: 20, fontWeight: '900', letterSpacing: -0.5, textAlign: 'center', flex: 1 },
   backBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
 
-  scroll: { paddingHorizontal: 24, paddingBottom: 100, paddingTop: 10 },
+  scroll: { paddingHorizontal: 24, paddingTop: 10 },
 
   balanceContainer: { marginBottom: 28, marginTop: 0 },
   editorialGradient: {

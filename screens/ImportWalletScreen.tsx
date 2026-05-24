@@ -4,6 +4,7 @@ import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   Platform, KeyboardAvoidingView, ScrollView, Animated, Modal,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { useWallet } from '../store/WalletContext';
@@ -112,6 +113,7 @@ export default function ImportWalletScreen({ navigation }: any) {
   const { importWallet, isDarkMode, hasWallet } = useWallet();
 
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
+  const insets = useSafeAreaInsets();
 
   // Real-time validation
   useEffect(() => {
@@ -198,7 +200,7 @@ export default function ImportWalletScreen({ navigation }: any) {
       />
 
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: isDarkMode ? 'rgba(19,19,19,0.95)' : 'rgba(247,249,251,0.95)' }]}>
+      <View style={[styles.header, { backgroundColor: isDarkMode ? 'rgba(19,19,19,0.95)' : 'rgba(247,249,251,0.95)', paddingTop: insets.top + 12 }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
             <MaterialIcons name="arrow-back" size={24} color={T.text} />
@@ -318,7 +320,7 @@ const styles = StyleSheet.create({
   header: {
     position: 'absolute', top: 0, width: '100%', zIndex: 50,
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 24, paddingTop: Platform.OS === 'web' ? 24 : 60, paddingBottom: 16,
+    paddingHorizontal: 24, paddingBottom: 16,
   },
   iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20 },
   logoText: { fontSize: 20, fontWeight: '800', letterSpacing: -0.5 },

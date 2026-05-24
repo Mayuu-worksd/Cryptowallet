@@ -9,6 +9,13 @@ config.server = {
   enhanceMiddleware: (middleware) => middleware,
 };
 
+config.transformer = {
+  ...config.transformer,
+  unstable_allowRequireContext: true,
+};
+
+config.resetCache = false;
+
 // Watch all source files for instant hot reload
 config.watchFolders = [
   path.resolve(__dirname),

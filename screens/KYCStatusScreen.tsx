@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Platform, ActivityIndicator, Animated, Dimensions, StatusBar
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -38,6 +39,7 @@ function stepState(status: KYCStatus, key: string): 'done' | 'active' | 'idle' {
 export default function KYCStatusScreen({ navigation }: any) {
   const { walletAddress, refreshKYCStatus, isDarkMode } = useWallet() as any;
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
+  const insets = useSafeAreaInsets();
   const [record,  setRecord]  = useState<KYCRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [cardReq, setCardReq] = useState<any>(null);
@@ -85,7 +87,7 @@ export default function KYCStatusScreen({ navigation }: any) {
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       
       {/* Custom Header */}
-      <View style={s.header}>
+      <View style={[s.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={[s.backBtn, { backgroundColor: T.surfaceLow }]}>
            <Feather name="arrow-left" size={24} color={T.text} />
         </TouchableOpacity>
@@ -243,7 +245,7 @@ export default function KYCStatusScreen({ navigation }: any) {
 const s = StyleSheet.create({
   root: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 60 : 48, paddingBottom: 20 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 20 },
   backBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 18, fontWeight: '900' },
   

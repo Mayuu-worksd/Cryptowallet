@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, ActivityIndicator, Alert, Image, StatusBar, TextInput, KeyboardAvoidingView, Keyboard, TouchableWithoutFeedback, Animated } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
 import { Theme } from '../constants';
@@ -44,6 +45,7 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
   const order: P2POrder = route?.params?.order;
   const { walletAddress, isDarkMode, balances, ethBalance, lockBalance, unlockBalance, accountType, addTx, updateTxStatus, lockedBalance, refreshBalance, creditP2PBalance, network } = useWallet() as any;
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
+  const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(false);
   const [loaderType, setLoaderType] = useState<'send' | 'swap' | 'p2p' | 'generic'>('p2p');
   const [loaderTitle, setLoaderTitle] = useState('');
@@ -363,7 +365,7 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <TransactionLoader visible={loading} title={loaderTitle} subtitle={loaderSub} isDarkMode={isDarkMode} type={loaderType} />
       {/* Header */}
-      <View style={[s.header, { borderBottomColor: T.border }]}>
+      <View style={[s.header, { borderBottomColor: T.border, paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={[s.iconBtn, { backgroundColor: T.surfaceLow }]}>
           <Feather name="arrow-left" size={24} color={T.text} />
         </TouchableOpacity>
@@ -577,7 +579,7 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
           <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
           {/* ── WhatsApp-style Header ── */}
-          <View style={[s.waHeader, { backgroundColor: T.surface, borderBottomColor: T.border }]}>
+          <View style={[s.waHeader, { backgroundColor: T.surface, borderBottomColor: T.border, paddingTop: insets.top + 12 }]}>
             <TouchableOpacity onPress={() => setShowChatModal(false)} style={s.waBackBtn}>
               <Feather name="arrow-left" size={22} color={T.text} />
             </TouchableOpacity>
@@ -1006,7 +1008,7 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
 
 const s = StyleSheet.create({
   root: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: Platform.OS === 'web' ? 20 : 56, paddingBottom: 16, borderBottomWidth: 1 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
   iconBtn: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 18, fontWeight: '800', letterSpacing: -0.5 },
 
@@ -1044,7 +1046,7 @@ const s = StyleSheet.create({
   fabBadge: { position: 'absolute', top: -4, right: -4, backgroundColor: '#EF4444', borderRadius: 10, minWidth: 20, height: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFF' },
   fabBadgeText: { color: '#FFF', fontSize: 11, fontWeight: '900' },
 
-  actions: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: Platform.OS === 'ios' ? 44 : 24, borderTopWidth: 1, gap: 14 },
+  actions: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 24, borderTopWidth: 1, gap: 14 },
   statusCard: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 20, borderWidth: 1.5 },
   statusIconBox: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   statusLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
@@ -1060,7 +1062,7 @@ const s = StyleSheet.create({
   chatModal: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 2000 },
 
   // Header
-  waHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: Platform.OS === 'web' ? 16 : 52, paddingBottom: 12, borderBottomWidth: 1 },
+  waHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: 52, paddingBottom: 12, borderBottomWidth: 1 },
   waBackBtn: { padding: 4 },
   waAvatar: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   waName: { fontSize: 15, fontWeight: '800', letterSpacing: -0.2 },

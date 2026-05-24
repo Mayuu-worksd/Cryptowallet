@@ -333,6 +333,15 @@ export const dbCardService = {
       .eq('wallet_address', walletAddress.toLowerCase());
     if (error) throw error;
   },
+
+  async saveEncryptedNumber(walletAddress: string, encryptedNumber: string): Promise<void> {
+    const { error } = await supabase
+      .from('cards')
+      .update({ encrypted_number: encryptedNumber })
+      .eq('wallet_address', walletAddress.toLowerCase());
+    // Ignore error — column may not exist yet, non-critical
+    if (error) console.warn('[dbCardService] saveEncryptedNumber:', error.message);
+  },
 };
 
 // ─── Card Variants (VCC) ──────────────────────────────────────────────────────
@@ -557,11 +566,16 @@ export const cardRequestService = {
 // ─── Wallet Profile Service ─────────────────────────────────────────────────
 
 export type WalletProfile = {
-  wallet_address: string;
-  wallet_name: string;
-  account_type: 'personal' | 'business';
-  p2p_country: string;
-  p2p_currency: string;
+  wallet_address:  string;
+  wallet_name:     string;
+  account_type:    'personal' | 'business';
+  p2p_country:     string;
+  p2p_currency:    string;
+  tron_address?:   string | null;
+  network?:        string | null;
+  is_dark_mode?:   boolean | null;
+  token_balances?: Record<string, number> | null;
+  locked_balances?: Record<string, number> | null;
 };
 
 export const profileService = {
@@ -574,13 +588,21 @@ export const profileService = {
     return data as WalletProfile | null;
   },
 
-  async upsert(walletAddress: string, patch: Partial<Omit<WalletProfile, 'wallet_address'>>): Promise<void> {
+  async upsert(
+    walletAddress: string,
+    patch: Partial<Omit<WalletProfile, 'wallet_address'>>
+  ): Promise<void> {
     const { error } = await supabase.rpc('upsert_wallet_profile', {
-      p_wallet:       walletAddress.toLowerCase(),
-      p_name:         patch.wallet_name    ?? null,
-      p_account_type: patch.account_type   ?? null,
-      p_p2p_country:  patch.p2p_country    ?? null,
-      p_p2p_currency: patch.p2p_currency   ?? null,
+      p_wallet:          walletAddress.toLowerCase(),
+      p_name:            patch.wallet_name     ?? null,
+      p_account_type:    patch.account_type    ?? null,
+      p_p2p_country:     patch.p2p_country     ?? null,
+      p_p2p_currency:    patch.p2p_currency    ?? null,
+      p_tron_address:    patch.tron_address    ?? null,
+      p_network:         patch.network         ?? null,
+      p_is_dark_mode:    patch.is_dark_mode    ?? null,
+      p_token_balances:  patch.token_balances  ? JSON.stringify(patch.token_balances)  : null,
+      p_locked_balances: patch.locked_balances ? JSON.stringify(patch.locked_balances) : null,
     });
     if (error) throw error;
   },

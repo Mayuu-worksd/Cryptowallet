@@ -213,7 +213,7 @@ const s = StyleSheet.create({
   center: { alignItems: 'center', justifyContent: 'center', gap: 20, paddingHorizontal: 32 },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingTop: Platform.OS === 'web' ? 20 : 56, paddingBottom: 18,
+    paddingHorizontal: 20, paddingTop: 56, paddingBottom: 18,
     borderBottomWidth: 1, borderBottomColor: Theme.colors.surfaceHigh,
   },
   backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center', borderRadius: 22, backgroundColor: Theme.colors.surfaceLow },

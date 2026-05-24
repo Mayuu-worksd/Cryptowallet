@@ -1,14 +1,23 @@
-import React, { useCallback, useRef, memo, useMemo, useEffect } from 'react';
-import { Theme, Fonts } from '../constants';
+import React, { useCallback, useRef, memo, useMemo, useEffect, useState } from 'react';
+import { Theme, Fonts, NETWORK_INFO } from '../constants';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Platform, Image, ActivityIndicator, Linking, RefreshControl, Animated, StatusBar, Dimensions,
+  Image, ActivityIndicator, Linking, RefreshControl, Animated, StatusBar, Dimensions,
+  Modal, Pressable, Share,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { useWallet, useMarket } from '../store/WalletContext';
 import { COIN_META, COIN_COLORS } from '../constants';
 import { NewsItem } from '../services/marketService';
+import { NetworkSelector } from '../components/NetworkSelector';
+import { CurrencySelector, CurrencyCode, getCurrencyMeta, formatCurrency } from '../components/CurrencySelector';
+import { haptics } from '../utils/haptics';
+import { ScalePress, QuickActionSheet, SuccessCheck } from '../components/GestureKit';
+
+
 
 const { width } = Dimensions.get('window');
 
@@ -64,22 +73,23 @@ const ActionBtn = memo(({ icon, label, onPress, T, isDark }: {
 
   return (
     <TouchableOpacity
-      style={{ flex: 1, alignItems: 'center', gap: 10 }}
+      style={{ flex: 1, alignItems: 'center', gap: 8 }}
       onPress={onPress}
       onPressIn={() => Animated.spring(scale, { toValue: 0.88, useNativeDriver: true, speed: 30, bounciness: 6 }).start()}
       onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 14 }).start()}
       activeOpacity={1}
     >
       <Animated.View style={[
-        { width: 64, height: 64, borderRadius: 32, backgroundColor: '#000000',
+        { width: 58, height: 58, borderRadius: 29, backgroundColor: isDark ? '#1c1b1b' : '#F1F3F4',
           alignItems: 'center', justifyContent: 'center',
-          shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 },
+          borderWidth: 1, borderColor: isDark ? '#2a2a2a' : '#E8EAED',
+          shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.15, shadowRadius: 6, elevation: 4 },
         { transform: [{ scale }] },
       ]}>
-        <MaterialIcons name={icon} size={26} color="#FFFFFF" />
+        <MaterialIcons name={icon} size={24} color={isDark ? '#FFFFFF' : '#131313'} />
       </Animated.View>
-      <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: labelColor, textTransform: 'uppercase', letterSpacing: 0.6 }}>{label}</Text>
+      <Text style={{ fontSize: 11, fontFamily: Fonts.semiBold, color: labelColor, textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</Text>
     </TouchableOpacity>
   );
 });
@@ -92,13 +102,15 @@ function safeFmt(n: unknown, decimals = 2): string {
 }
 
 // ─── Token row ─────────────────────────────────────────────────────────────────
-const TokenRow = memo(({ symbol, amount, usd, change24h, T, hideBalance, onPress }: {
+const TokenRow = memo(({ symbol, amount, usd, change24h, T, hideBalance, onPress, currencyMeta }: {
   symbol: string; amount: number; usd: number; change24h: number; T: any; hideBalance: boolean; onPress: () => void;
+  currencyMeta: { code: string; symbol: string; rate: number };
 }) => {
   const safeChange = typeof change24h === 'number' && isFinite(change24h) ? change24h : 0;
   const safeUsd    = typeof usd === 'number' && isFinite(usd) ? usd : 0;
   const safeAmt    = typeof amount === 'number' && isFinite(amount) ? amount : 0;
   const isUp = safeChange >= 0;
+  const fmtVal = formatCurrency(safeUsd, currencyMeta.code as CurrencyCode);
   return (
     <TouchableOpacity style={styles.tokenItem} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.tokenLeft}>
@@ -113,7 +125,7 @@ const TokenRow = memo(({ symbol, amount, usd, change24h, T, hideBalance, onPress
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={[styles.tokenUsd, { color: T.text }]}>
-            {hideBalance ? '••••' : `$${safeFmt(safeUsd)}`}
+            {hideBalance ? '••••' : fmtVal}
           </Text>
           <Text style={{ fontSize: 12, fontFamily: Fonts.semiBold, color: isUp ? T.success : T.error }}>
             {isUp ? '▲' : '▼'} {Math.abs(safeChange).toFixed(2)}%
@@ -417,14 +429,29 @@ const ChangePill = memo(({ assetsList, T }: { assetsList: any[]; T: any }) => {
 
 // ─── Main screen ───────────────────────────────────────────────────────────────
 export default function HomeScreen({ navigation }: any) {
+  const insets = useSafeAreaInsets();
   const {
     ethBalance, balances, isDarkMode, walletName, walletAddress, tronAddress,
     isLoadingBalance, refreshBalance, isSyncing,
-    balanceVisible, toggleBalanceVisible, network, transactions, accountType, lockedBalance,
+    balanceVisible, toggleBalanceVisible, network, transactions, accountType, lockedBalance, switchNetwork,
   } = useWallet() as any;
   const { prices, isPricesLoading, priceError, refreshPrices, news, isNewsLoading, refreshNews } = useMarket();
 
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
+
+  // ── UI state ──
+  const [currency, setCurrency] = useState<CurrencyCode>('USD');
+  const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
+  const [showNetworkPicker, setShowNetworkPicker] = useState(false);
+  const [showAddrSheet, setShowAddrSheet] = useState(false);
+  const [addrCopied, setAddrCopied] = useState<string | null>(null);
+  const currencyMeta = getCurrencyMeta(currency);
+
+  const copyAddress = useCallback((addr: string, label: string) => {
+    Clipboard.setStringAsync(addr);
+    setAddrCopied(label);
+    setTimeout(() => setAddrCopied(null), 2000);
+  }, []);
 
   const realBalances: Record<string, number> = useMemo(() => {
     const isTron = network === 'TRON' || network === 'TRON Nile';
@@ -468,6 +495,9 @@ export default function HomeScreen({ navigation }: any) {
     return isFinite(sum) ? sum : 0;
   }, [assetsList]);
 
+  const totalConverted = totalUsd * currencyMeta.rate;
+  const fmtBalance = (usdVal: number) => formatCurrency(usdVal, currency);
+
   const isTron = network === 'TRON' || network === 'TRON Nile';
   // Show skeleton only on very first load before we have ANY balance data
   const isInitialLoad = isPricesLoading && (
@@ -487,43 +517,130 @@ export default function HomeScreen({ navigation }: any) {
     }, [walletAddress, refreshBalance])
   );
 
-  const networkColor =
-    network === 'Sepolia'    ? '#F59E0B' :
-    network === 'Polygon'    ? '#8247E5' :
-    network === 'Arbitrum'   ? '#2D374B' :
-    network === 'TRON'       ? '#EF0027' :
-    network === 'TRON Nile'  ? '#FF6B6B' :
-    '#627EEA';
+  const networkInfo = NETWORK_INFO[network] || { color: '#627EEA', name: network, type: 'Unknown' };
+  const networkColor = networkInfo.color;
+
+  // Header height = status bar (insets.top) + content (avatar 36 + padding 12 top + 12 bottom)
+  const HEADER_CONTENT_HEIGHT = 60;
+  const headerHeight = insets.top + HEADER_CONTENT_HEIGHT;
 
   return (
     <View style={[styles.container, { backgroundColor: T.background }]}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
+
+      {/* ── Network Selector ── */}
+      <NetworkSelector
+        visible={showNetworkPicker}
+        onClose={() => setShowNetworkPicker(false)}
+        currentNetwork={network}
+        onSelect={(net) => {
+          haptics.selection();
+          switchNetwork(net);
+        }}
+        T={T}
+      />
+
+      {/* ── Currency Selector ── */}
+      <CurrencySelector
+        visible={showCurrencyPicker}
+        onClose={() => setShowCurrencyPicker(false)}
+        currentCurrency={currency}
+        onSelect={setCurrency}
+        T={T}
+      />
+
+      {/* ── Address Sheet Modal ── */}
+      <Modal transparent visible={showAddrSheet} animationType="slide" onRequestClose={() => setShowAddrSheet(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }} onPress={() => setShowAddrSheet(false)}>
+          <Pressable style={[styles.addrSheet, { backgroundColor: T.surface }]} onPress={e => e.stopPropagation()}>
+            <View style={styles.sheetHandle} />
+            <Text style={[styles.sheetTitle, { color: T.text }]}>My Addresses</Text>
+
+            {/* ETH address */}
+            <View style={[styles.addrRow, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
+              <View style={[styles.addrChainDot, { backgroundColor: '#627EEA' }]} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.addrChainLabel, { color: T.textMuted }]}>Ethereum / EVM</Text>
+                <Text style={[styles.addrFull, { color: T.text }]} numberOfLines={1}>{walletAddress}</Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.addrCopyBtn, { backgroundColor: addrCopied === 'ETH' ? T.success + '20' : T.primary + '15' }]}
+                onPress={() => copyAddress(walletAddress, 'ETH')}
+                activeOpacity={0.7}
+              >
+                <Feather name={addrCopied === 'ETH' ? 'check' : 'copy'} size={14} color={addrCopied === 'ETH' ? T.success : T.primary} />
+                <Text style={{ fontSize: 11, fontWeight: '700', color: addrCopied === 'ETH' ? T.success : T.primary }}>
+                  {addrCopied === 'ETH' ? 'Copied!' : 'Copy'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* TRON address */}
+            <View style={[styles.addrRow, { backgroundColor: T.surfaceLow, borderColor: T.border, marginTop: 10 }]}>
+              <View style={[styles.addrChainDot, { backgroundColor: '#EF0027' }]} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.addrChainLabel, { color: T.textMuted }]}>TRON (TRC20)</Text>
+                <Text style={[styles.addrFull, { color: T.text }]} numberOfLines={1}>
+                  {tronAddress || 'Deriving...'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.addrCopyBtn, { backgroundColor: addrCopied === 'TRON' ? T.success + '20' : T.primary + '15' }]}
+                onPress={() => tronAddress && copyAddress(tronAddress, 'TRON')}
+                activeOpacity={0.7}
+                disabled={!tronAddress}
+              >
+                <Feather name={addrCopied === 'TRON' ? 'check' : 'copy'} size={14} color={addrCopied === 'TRON' ? T.success : T.primary} />
+                <Text style={{ fontSize: 11, fontWeight: '700', color: addrCopied === 'TRON' ? T.success : T.primary }}>
+                  {addrCopied === 'TRON' ? 'Copied!' : 'Copy'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.addrReceiveBtn, { backgroundColor: T.primary }]}
+              onPress={() => { setShowAddrSheet(false); navigation.navigate('Receive'); }}
+              activeOpacity={0.85}
+            >
+              <MaterialIcons name="qr-code" size={16} color="#FFF" />
+              <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 14 }}>Show QR Code</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* ── Header ── */}
-      <View style={[styles.header, { backgroundColor: isDarkMode ? 'rgba(19,19,19,0.92)' : 'rgba(247,249,251,0.95)', top: Platform.OS === 'ios' ? 44 : 0 }]}>
-        <View style={styles.headerLeft}>
+      <View style={[styles.header, { backgroundColor: isDarkMode ? 'rgba(19,19,19,0.97)' : 'rgba(247,249,251,0.97)', paddingTop: insets.top + 8 }]}>
+        {/* Left: wallet + network selector */}
+        <TouchableOpacity
+          style={styles.headerLeft}
+          onPress={() => { haptics.selection(); setShowNetworkPicker(true); }}
+          activeOpacity={0.7}
+        >
           <View style={[styles.avatarWrap, { backgroundColor: T.primary + '18' }]}>
             <MaterialIcons name="account-balance-wallet" size={20} color={T.primary} />
           </View>
-          <View>
+          <View style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={[styles.walletLabel, { color: T.text }]}>{walletName}</Text>
-              <View style={{ backgroundColor: networkColor + '20', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6, borderWidth: 1, borderColor: networkColor + '40', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                {isSyncing ? <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: networkColor }} /> : null}
-                <Text style={{ color: networkColor, fontSize: 8, fontWeight: '800', textTransform: 'uppercase' }}>
-                  {isSyncing ? 'Syncing...' : network}
+              <Text style={[styles.walletLabel, { color: T.text }]} numberOfLines={1}>{walletName}</Text>
+              <View style={[styles.networkBadge, { backgroundColor: networkColor + '20', borderColor: networkColor + '40' }]}>
+                {isSyncing && <View style={[styles.syncDot, { backgroundColor: networkColor }]} />}
+                <Text style={[styles.networkText, { color: networkColor }]}>
+                  {isSyncing ? 'Syncing' : networkInfo.name}
                 </Text>
+                <Feather name="chevron-down" size={10} color={networkColor} />
               </View>
             </View>
-            <Text style={{ fontSize: 10, color: T.textMuted, fontWeight: '600', letterSpacing: 0.2 }}>
+            <Text style={[styles.addressText, { color: T.textMuted }]}>
               {isTron
-                ? (tronAddress ? `${tronAddress.slice(0, 6)}...${tronAddress.slice(-4)}` : '')
+                ? (tronAddress ? `${tronAddress.slice(0, 6)}...${tronAddress.slice(-4)}` : 'Deriving...')
                 : (walletAddress ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}` : '')}
             </Text>
           </View>
-        </View>
+        </TouchableOpacity>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+        {/* Right: action icons */}
+        <View style={styles.headerRight}>
           <TouchableOpacity style={styles.headerBtn} onPress={() => navigation.navigate('Receive')} activeOpacity={0.7}>
             <MaterialIcons name="qr-code" size={22} color={T.text} />
           </TouchableOpacity>
@@ -540,7 +657,7 @@ export default function HomeScreen({ navigation }: any) {
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[styles.scroll, { paddingTop: headerHeight + 8, paddingBottom: 24 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={isLoadingBalance} onRefresh={onRefresh} tintColor={T.primary} />}
       >
@@ -570,20 +687,22 @@ export default function HomeScreen({ navigation }: any) {
             <SkeletonBox width={200} height={52} borderRadius={12} T={T} style={{ marginBottom: 8 }} />
           ) : (
             <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
-              <Text 
-                style={[
-                  styles.balanceValue, 
-                  { 
-                    color: T.text,
-                    fontSize: totalUsd > 9999999 ? 32 : 44
-                  }
-                ]}
+              <Text
+                style={[styles.balanceValue, { color: T.text, fontSize: totalConverted > 9999999 ? 32 : 44 }]}
               >
-                {balanceVisible
-                  ? `$${totalUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                  : '$ ••••••'}
+                {balanceVisible ? fmtBalance(totalUsd) : `${currencyMeta.symbol} ••••••`}
               </Text>
-              <Text style={[styles.balanceCurrency, { color: T.textMuted }]}>USD</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  haptics.selection();
+                  setShowCurrencyPicker(true);
+                }}
+                activeOpacity={0.7}
+                style={[styles.currencyToggle, { backgroundColor: T.surfaceLow, borderColor: T.border }]}
+              >
+                <Text style={[styles.currencyToggleText, { color: T.textMuted }]}>{currency}</Text>
+                <Feather name="chevron-down" size={12} color={T.textMuted} />
+              </TouchableOpacity>
             </View>
           )}
           {!isInitialLoad && balanceVisible && assetsList.length > 0 && (
@@ -659,6 +778,7 @@ export default function HomeScreen({ navigation }: any) {
               <TokenRow
                 symbol={a.symbol} amount={a.amount} usd={a.usd}
                 change24h={a.change24h} T={T} hideBalance={!balanceVisible}
+                currencyMeta={currencyMeta}
                 onPress={() => navigation.navigate('CoinChart', { symbol: a.symbol })}
               />
               {idx < assetsList.length - 1 && (
@@ -708,7 +828,6 @@ export default function HomeScreen({ navigation }: any) {
           )}
         </View>
 
-        <View style={{ height: 48 }} />
       </ScrollView>
     </View>
   );
@@ -719,14 +838,19 @@ const styles = StyleSheet.create({
   header: {
     position: 'absolute', top: 0, width: '100%', zIndex: 50,
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 20, paddingTop: Platform.OS === 'web' ? 20 : 56, paddingBottom: 14,
+    paddingHorizontal: 16, paddingBottom: 12,
   },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  avatarWrap: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  walletLabel: { fontSize: 16, fontFamily: Fonts.extraBold, letterSpacing: -0.5 },
-  headerBtn: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 19 },
+  headerLeft: {
+    flex: 1,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    marginRight: 8,
+  },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  avatarWrap: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  walletLabel: { fontSize: 15, fontFamily: Fonts.extraBold, letterSpacing: -0.3, flexShrink: 1 },
+  headerBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 18 },
 
-  scroll: { paddingTop: Platform.OS === 'ios' ? 130 : 110, paddingHorizontal: 20, paddingBottom: 80 },
+  scroll: { paddingHorizontal: 20 },
 
   getStartedBanner: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 16, borderWidth: 1, marginBottom: 14 },
   errorBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 12, borderWidth: 1, marginBottom: 14 },
@@ -738,7 +862,12 @@ const styles = StyleSheet.create({
   balanceCurrency: { fontSize: 20, fontFamily: Fonts.bold },
   changePill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
 
-  actionsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 },
+  actionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 28,
+    paddingHorizontal: 4,
+  },
 
 
   cardBanner: {
@@ -775,5 +904,48 @@ const styles = StyleSheet.create({
   newsPlaceholder: { padding: 40, borderRadius: 16, borderWidth: 1, alignItems: 'center', gap: 8 },
   retryBtn: { marginTop: 8, paddingHorizontal: 24, paddingVertical: 10, borderRadius: 20 },
 
-});
+  // Currency picker
+  currencyToggle: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1,
+    marginBottom: 4,
+  },
+  currencyToggleText: { fontSize: 13, fontFamily: Fonts.bold },
 
+  // Network selector
+  networkBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1,
+    flexShrink: 0,
+  },
+  networkText: { fontSize: 9, fontFamily: Fonts.extraBold, textTransform: 'uppercase' },
+  syncDot: { width: 4, height: 4, borderRadius: 2 },
+  addressText: { fontSize: 11, fontFamily: Fonts.semiBold, letterSpacing: 0.2, marginTop: 1 },
+
+  // Address sheet
+  addrSheet: {
+    borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    padding: 24, paddingBottom: 0,
+    marginBottom: 64,
+  },
+  sheetHandle: {
+    width: 36, height: 4, borderRadius: 2, backgroundColor: '#555',
+    alignSelf: 'center', marginBottom: 20,
+  },
+  sheetTitle: { fontSize: 17, fontFamily: Fonts.extraBold, marginBottom: 20 },
+  addrRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    padding: 14, borderRadius: 16, borderWidth: 1,
+  },
+  addrChainDot: { width: 10, height: 10, borderRadius: 5 },
+  addrChainLabel: { fontSize: 10, fontFamily: Fonts.bold, letterSpacing: 0.5, marginBottom: 3 },
+  addrFull: { fontSize: 13, fontFamily: Fonts.bold },
+  addrCopyBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 7, borderRadius: 10,
+  },
+  addrReceiveBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    marginTop: 20, paddingVertical: 14, borderRadius: 18,
+  },
+});

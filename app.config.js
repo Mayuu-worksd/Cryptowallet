@@ -8,14 +8,12 @@ module.exports = {
     userInterfaceStyle: "dark",
     sdkVersion: "54.0.0",
     jsEngine: "hermes",
+    fastRefresh: true,
     updates: {
       url: "https://u.expo.dev/141850e9-e38b-44a9-9af9-4f6ecc270bc2",
-      enabled: true,
+      enabled: false,
       fallbackToCacheTimeout: 0,
-      checkAutomatically: "ON_LOAD",
-    },
-    runtimeVersion: {
-      policy: "sdkVersion",
+      checkAutomatically: "NEVER",
     },
     splash: {
       image: "./assets/splash-icon.png",

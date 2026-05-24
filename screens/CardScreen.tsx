@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Theme } from '../constants';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  TextInput, Platform, ActivityIndicator, StatusBar, Dimensions, SafeAreaView, RefreshControl,
+  TextInput, Platform, ActivityIndicator, StatusBar, Dimensions, RefreshControl,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
@@ -52,6 +53,7 @@ function CarouselCard({
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function CardScreen({ navigation, route }: any) {
+  const insets = useSafeAreaInsets();
   const {
     cardFrozen, toggleFreezeCard,
     cardDetails, cardTransactions, cardCreated,
@@ -159,11 +161,11 @@ export default function CardScreen({ navigation, route }: any) {
 
   if (!cardCreated) {
     return (
-      <SafeAreaView style={[styles.root, { backgroundColor: T.background }]}>
-        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+      <View style={[styles.root, { backgroundColor: T.background }]}>
+        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
         <Toast visible={toast.visible} message={toast.message} type={toast.type} isDarkMode={isDarkMode}
           onHide={() => setToast(p => ({ ...p, visible: false }))} />
-        <View style={styles.pageHeader}>
+        <View style={[styles.pageHeader, { paddingTop: insets.top + 12 }]}>
           <TouchableOpacity
             style={[styles.backBtn, { backgroundColor: T.surface }]}
             onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Main')}
@@ -173,7 +175,7 @@ export default function CardScreen({ navigation, route }: any) {
           </TouchableOpacity>
         </View>
         <NoCardState onCreatePress={() => setShowCreate(true)} isDarkMode={isDarkMode} />
-      </SafeAreaView>
+      </View>
     );
   }
 
@@ -182,8 +184,8 @@ export default function CardScreen({ navigation, route }: any) {
   const designChanged = carouselDesign !== currentDesignKey;
 
   return (
-    <SafeAreaView style={[styles.root, { backgroundColor: T.background }]}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+    <View style={[styles.root, { backgroundColor: T.background }]}>
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
       <Toast visible={toast.visible} message={toast.message} type={toast.type} isDarkMode={isDarkMode}
         onHide={() => setToast(p => ({ ...p, visible: false }))} />
 
@@ -198,7 +200,7 @@ export default function CardScreen({ navigation, route }: any) {
       />
 
       {/* Header */}
-      <View style={styles.pageHeader}>
+      <View style={[styles.pageHeader, { paddingTop: insets.top + 12 }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <TouchableOpacity
             style={[styles.backBtn, { backgroundColor: T.surface }]}
@@ -231,7 +233,7 @@ export default function CardScreen({ navigation, route }: any) {
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -613,7 +615,7 @@ export default function CardScreen({ navigation, route }: any) {
 
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -624,7 +626,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 60 : (StatusBar.currentHeight ?? 0) + 16,
     paddingBottom: 16,
   },
   pageTitle: { fontSize: 32, fontWeight: '900', letterSpacing: -1 },

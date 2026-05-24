@@ -164,7 +164,7 @@ const s = StyleSheet.create({
   body: {
     flex: 1, alignItems: 'center', justifyContent: 'center',
     paddingHorizontal: 28, gap: 20,
-    paddingTop: Platform.OS === 'web' ? 0 : 40,
+    paddingTop: 40,
   },
   iconRing: {
     width: 108, height: 108, borderRadius: 54,

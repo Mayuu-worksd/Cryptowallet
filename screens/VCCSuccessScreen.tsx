@@ -171,7 +171,7 @@ export default function VCCSuccessScreen({ navigation, route }: any) {
 
 const s = StyleSheet.create({
   root:   { flex: 1 },
-  scroll: { paddingHorizontal: 24, paddingBottom: 60, paddingTop: Platform.OS === 'ios' ? 72 : 52, alignItems: 'center' },
+  scroll: { paddingHorizontal: 24, paddingBottom: 60, paddingTop: 52, alignItems: 'center' },
 
   topSection: { alignItems: 'center', marginBottom: 36, gap: 14 },
   checkRing:  { width: 94, height: 94, borderRadius: 47, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },

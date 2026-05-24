@@ -4,6 +4,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity,
   Animated, Platform, Vibration, StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
 import { savePin, verifyPin, getLockoutState } from '../services/pinService';
@@ -21,6 +22,7 @@ interface Props {
 export default function PinScreen({ mode, onSuccess, onCancel }: Props) {
   const { isDarkMode, walletName } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
+  const insets = useSafeAreaInsets();
 
   const [pin, setPin]             = useState('');
   const [step, setStep]           = useState<'enter' | 'confirm'>('enter');
@@ -186,7 +188,7 @@ export default function PinScreen({ mode, onSuccess, onCancel }: Props) {
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={[styles.logoCircle, { backgroundColor: T.primary + '18' }]}>
           <Feather name="shield" size={20} color={T.primary} />
         </View>
@@ -335,7 +337,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 24,
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
     paddingBottom: 16,
   },
   logoCircle: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
@@ -347,7 +348,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    paddingBottom: 24,
   },
 
   title:    { fontSize: 26, fontWeight: '800', letterSpacing: -0.5, marginBottom: 8 },

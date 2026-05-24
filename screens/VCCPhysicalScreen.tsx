@@ -4,6 +4,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Platform, ActivityIndicator, Modal, StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
 import { shippingFeeService, ShippingFee, VCCCardVariant } from '../services/supabaseService';
@@ -13,6 +14,7 @@ const PHYSICAL_BASE_FEE = 50;
 export default function VCCPhysicalScreen({ navigation, route }: any) {
   const { isDarkMode } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
+  const insets = useSafeAreaInsets();
   const { variant, holderName, previewNumber, previewExpiry, previewCVV }: { variant: VCCCardVariant; holderName: string; previewNumber?: string; previewExpiry?: string; previewCVV?: string } = route?.params ?? {};
 
   const [shippingFees,    setShippingFees]    = useState<ShippingFee[]>([]);
@@ -194,7 +196,7 @@ const s = StyleSheet.create({
   root: { flex: 1 },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingTop: Platform.OS === 'web' ? 24 : 60, paddingBottom: 16,
+    paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16,
     borderBottomWidth: 1,
   },
   backBtn: { width: 40, height: 40, justifyContent: 'center' },

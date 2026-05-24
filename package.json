@@ -20,9 +20,10 @@
   },
   "scripts": {
     "start": "expo start --clear",
+    "start:tunnel": "expo start --clear --tunnel",
     "android": "expo start --android --clear",
     "ios": "expo start --ios --clear",
-    "web": "expo start --web --clear",
+    "web": "expo start --web",
     "build": "expo export -p web && node -e \"require('fs').copyFileSync('index.html', 'dist/index.html')\""
   },
   "dependencies": {

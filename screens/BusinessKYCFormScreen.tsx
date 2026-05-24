@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput,
   Platform, ActivityIndicator, Modal, FlatList, KeyboardAvoidingView, StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
 import { Theme } from '../constants';
@@ -70,6 +71,7 @@ function PickerModal({ visible, title, data, selected, onSelect, onClose, T }: a
 export default function BusinessKYCFormScreen({ navigation }: any) {
   const { walletAddress, isDarkMode } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
+  const insets = useSafeAreaInsets();
 
   const [step,         setStep]         = useState(0); // 0=business, 1=director
   const [loading,      setLoading]      = useState(false);
@@ -204,7 +206,7 @@ export default function BusinessKYCFormScreen({ navigation }: any) {
       <PickerModal visible={dirIdModal}   title="ID Document Type" data={DIRECTOR_ID_TYPES} selected={form.director_id_type} onSelect={(v: string) => { set('director_id_type')(v); setDirIdModal(false);   }} onClose={() => setDirIdModal(false)}   T={T} />
 
       {/* Header */}
-      <View style={[s.header, { borderBottomColor: T.border }]}>
+      <View style={[s.header, { borderBottomColor: T.border, paddingTop: insets.top + 12 }]}>
         <TouchableOpacity
           onPress={() => step === 0 ? navigation.goBack() : setStep(0)}
           style={[s.iconBtn, { backgroundColor: T.surfaceLow }]}
@@ -407,7 +409,6 @@ const s = StyleSheet.create({
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 56 : Platform.OS === 'web' ? 20 : 48,
     paddingBottom: 14, borderBottomWidth: 1,
   },
   iconBtn:        { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },

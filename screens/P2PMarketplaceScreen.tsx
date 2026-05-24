@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, Platform, ActivityIndicator, Modal, Alert, ScrollView, Image, Animated, Dimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import Svg, { Polyline, Line, Circle, Defs, LinearGradient as SvgGradient, Stop, Path, G, Rect, Text as SvgText } from 'react-native-svg';
 import { useFocusEffect } from '@react-navigation/native';
@@ -595,6 +596,7 @@ function ProfessionalRateChart({ sellAmount, sellRate, sellFiat, sellToken, live
 }
 
 export default function P2PMarketplaceScreen({ navigation, route }: any) {
+  const insets = useSafeAreaInsets();
   const { walletAddress, isDarkMode, balances, ethBalance, lockedBalance, lockBalance, resetLockedBalances, p2pCountry, p2pCurrency, accountType, network } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const isBusiness = accountType === 'business';
@@ -1147,7 +1149,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
       </Modal>
 
       {/* Header */}
-      <View style={[s.header, { borderBottomColor: T.border }]}>
+      <View style={[s.header, { borderBottomColor: T.border, paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={[s.iconBtn, { backgroundColor: T.surfaceLow }]}>
           <Feather name="arrow-left" size={24} color={T.text} />
         </TouchableOpacity>
@@ -1286,7 +1288,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
 const s = StyleSheet.create({
   root: { flex: 1 },
 
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: Platform.OS === 'web' ? 20 : 56, paddingBottom: 16, borderBottomWidth: 1 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
   iconBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '800' },
 
@@ -1395,7 +1397,7 @@ const s = StyleSheet.create({
   feeSummaryDivider:{ height: 1, marginVertical: 2 },
 
   // Wizard footer
-  wizardFooter:   { paddingHorizontal: 20, paddingTop: 16, paddingBottom: Platform.OS === 'ios' ? 36 : 20, borderTopWidth: 1 },
+  wizardFooter:   { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20, borderTopWidth: 1 },
   wizardNextBtn:  { height: 60, borderRadius: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.25, shadowRadius: 12, elevation: 8 },
   wizardNextText: { color: '#FFF', fontSize: 16, fontWeight: '900' },
 

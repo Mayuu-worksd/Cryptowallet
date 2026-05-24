@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { Theme } from '../constants';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   ActivityIndicator, Image, Platform, Animated, Dimensions, PanResponder,
@@ -201,6 +202,7 @@ const TradingChart = React.memo(({ prices, color, isDark }: TradingChartProps) =
 
 // ── Main Screen ────────────────────────────────────────────────────────────
 export default function CoinChartScreen({ route, navigation }: any) {
+  const insets = useSafeAreaInsets();
   const { symbol } = route.params as { symbol: string };
   const { isDarkMode, balances, ethBalance } = useWallet();
   const { prices } = useMarket();
@@ -311,7 +313,7 @@ export default function CoinChartScreen({ route, navigation }: any) {
     <View style={[styles.container, { backgroundColor: T.background }]}>
 
       {/* Header */}
-      <View style={[styles.header, { borderBottomColor: T.border }]}>
+      <View style={[styles.header, { borderBottomColor: T.border, paddingTop: insets.top + 12 }]}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
           <Feather name="arrow-left" size={24} color={T.text} />
         </TouchableOpacity>
@@ -427,7 +429,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 56 : 48, paddingBottom: 14,
+    paddingHorizontal: 20, paddingBottom: 14,
     borderBottomWidth: 1,
   },
   backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center', borderRadius: 22 },

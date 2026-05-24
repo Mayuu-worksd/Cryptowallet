@@ -2,6 +2,7 @@ import React, {
   useState, useEffect, useCallback, useRef, memo, useMemo,
 } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   RefreshControl, Platform, Linking, Modal, ActivityIndicator,
@@ -26,6 +27,18 @@ const EXPLORER: Record<string, string> = {
   TRON:        'https://tronscan.org/#/transaction/',
   'TRON Nile': 'https://nile.tronscan.org/#/transaction/',
 };
+
+function getExplorerUrl(hash: string, network: string): string {
+  // TRON tx hashes are 64-char hex without 0x prefix
+  // ETH tx hashes start with 0x
+  const isTronHash = hash && !hash.startsWith('0x') && hash.length === 64;
+  if (isTronHash) {
+    return (EXPLORER['TRON Nile'].includes('nile') && network === 'TRON Nile')
+      ? EXPLORER['TRON Nile'] + hash
+      : EXPLORER['TRON'] + hash;
+  }
+  return (EXPLORER[network] ?? EXPLORER.Sepolia) + hash;
+}
 
 // ─── Type → visual config ─────────────────────────────────────────────────────
 type TxConfig = { label: string; color: string; bg: string; icon: React.ReactNode };
@@ -181,6 +194,8 @@ const DetailModal = memo(({ tx, T, cfg, network, onClose }: {
     ...(tx.hash ? [{ label: 'Tx Hash', value: `${tx.hash.slice(0, 14)}…${tx.hash.slice(-8)}` }] : []),
   ];
 
+  const explorerUrl = tx.hash ? getExplorerUrl(tx.hash, network) : null;
+
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
       <View style={modal.overlay}>
@@ -225,13 +240,12 @@ const DetailModal = memo(({ tx, T, cfg, network, onClose }: {
           </View>
 
           {/* Explorer link */}
-          {tx.hash && (
+          {tx.hash && explorerUrl && (
             <TouchableOpacity
               style={[modal.explorerBtn, { backgroundColor: T.primary + '18' }]}
               onPress={() => {
-                const url = `${explorerBase}${tx.hash}`;
                 try {
-                  const u = new URL(url);
+                  const u = new URL(explorerUrl);
                   if (u.protocol === 'https:') Linking.openURL(u.href);
                 } catch (_e) {}
               }}
@@ -249,7 +263,7 @@ const DetailModal = memo(({ tx, T, cfg, network, onClose }: {
 
 const modal = StyleSheet.create({
   overlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  sheet:       { borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, paddingBottom: Platform.OS === 'ios' ? 48 : 32 },
+  sheet:       { borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, paddingBottom: 32 },
   handle:      { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
   header:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
   title:       { fontSize: 18, fontFamily: Fonts.extraBold },
@@ -282,6 +296,7 @@ const EmptyState = memo(({ filter, T }: { filter: Filter; T: any }) => (
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 export default function HistoryScreen({ navigation }: any) {
+  const insets = useSafeAreaInsets();
   const { isDarkMode, network, walletAddress } = useWallet();
   const { prices } = useMarket();
   const T       = isDarkMode ? Theme.colors : Theme.lightColors;
@@ -381,7 +396,7 @@ export default function HistoryScreen({ navigation }: any) {
       />
 
       {/* ── Header ── */}
-      <View style={[styles.header, { borderBottomColor: T.border }]}>
+      <View style={[styles.header, { borderBottomColor: T.border, paddingTop: insets.top + 12 }]}>
         <TouchableOpacity style={styles.headerBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
           <Feather name="arrow-left" size={24} color={T.text} />
         </TouchableOpacity>
@@ -497,7 +512,6 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 56 : Platform.OS === 'web' ? 20 : 48,
     paddingBottom: 12,
     borderBottomWidth: 1,
   },

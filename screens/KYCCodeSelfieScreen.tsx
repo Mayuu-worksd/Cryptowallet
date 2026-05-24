@@ -247,7 +247,7 @@ export default function KYCCodeSelfieScreen({ navigation, route }: any) {
 const s = StyleSheet.create({
   root: { flex: 1 },
   cameraRoot: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 60 : 48, paddingBottom: 20 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 48, paddingBottom: 20 },
   iconBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 18, fontWeight: '900' },
   
@@ -276,7 +276,7 @@ const s = StyleSheet.create({
   readyBtn: { width: '100%', height: 64, borderRadius: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
   readyBtnText: { color: '#FFF', fontSize: 18, fontWeight: '900' },
   
-  cameraHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 60 : 48, paddingBottom: 20 },
+  cameraHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 48, paddingBottom: 20 },
   backBtnDark: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   codeBanner: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12 },
   bannerLabel: { color: '#FFF', fontSize: 12, fontWeight: '800', opacity: 0.8 },
@@ -290,7 +290,7 @@ const s = StyleSheet.create({
   guideText: { fontSize: 14, fontWeight: '900', letterSpacing: 1 },
   shutterFlash: { ...StyleSheet.absoluteFillObject, backgroundColor: '#FFF' },
   
-  cameraFooter: { paddingBottom: Platform.OS === 'ios' ? 50 : 30, paddingTop: 20, alignItems: 'center' },
+  cameraFooter: { paddingBottom: 30, paddingTop: 20, alignItems: 'center' },
   cameraHint: { fontSize: 14, fontWeight: '700', marginBottom: 20, opacity: 0.7 },
   captureCircle: { width: 80, height: 80, borderRadius: 40, borderWidth: 4, alignItems: 'center', justifyContent: 'center' },
   captureInnerCircle: { width: 64, height: 64, borderRadius: 32 },

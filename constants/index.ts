@@ -15,13 +15,17 @@ export const ETH_CHAIN_COINS = ['ETH', 'USDT'] as const;
 
 export const DEFAULT_NETWORK = 'Sepolia';
 
-export const NETWORK_INFO: Record<string, { name: string; type: string }> = {
-  Sepolia:     { name: 'Sepolia',     type: 'Testnet' },
-  Ethereum:    { name: 'Ethereum',    type: 'Mainnet' },
-  Polygon:     { name: 'Polygon',     type: 'Mainnet' },
-  Arbitrum:    { name: 'Arbitrum',    type: 'Mainnet' },
-  TRON:        { name: 'TRON',        type: 'Mainnet' },
-  'TRON Nile': { name: 'TRON Nile',  type: 'Testnet' },
+export const NETWORK_INFO: Record<string, { name: string; type: string; color: string; symbol: string }> = {
+  Sepolia:            { name: 'Ethereum Sepolia',  type: 'Testnet', color: '#F59E0B', symbol: 'ETH' },
+  Ethereum:           { name: 'Ethereum',          type: 'Mainnet', color: '#627EEA', symbol: 'ETH' },
+  Polygon:            { name: 'Polygon',           type: 'Mainnet', color: '#8247E5', symbol: 'MATIC' },
+  Arbitrum:           { name: 'Arbitrum',          type: 'Mainnet', color: '#2D9CDB', symbol: 'ETH' },
+  'Polygon Amoy':     { name: 'Polygon Amoy',      type: 'Testnet', color: '#A855F7', symbol: 'MATIC' },
+  'Arbitrum Sepolia': { name: 'Arbitrum Sepolia',  type: 'Testnet', color: '#60A5FA', symbol: 'ETH' },
+  'Base Sepolia':     { name: 'Base Sepolia',      type: 'Testnet', color: '#0052FF', symbol: 'ETH' },
+  'Optimism Sepolia': { name: 'Optimism Sepolia',  type: 'Testnet', color: '#FF0420', symbol: 'ETH' },
+  TRON:               { name: 'TRON',              type: 'Mainnet', color: '#EF0027', symbol: 'TRX' },
+  'TRON Nile':        { name: 'TRON Nile',         type: 'Testnet', color: '#FF6B6B', symbol: 'TRX' },
 };
 
 // Zero fallback — real prices come from CoinGecko at runtime.
