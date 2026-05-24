@@ -13,9 +13,8 @@ import { useWallet, useMarket } from '../store/WalletContext';
 import { COIN_META, COIN_COLORS } from '../constants';
 import { NewsItem } from '../services/marketService';
 import { NetworkSelector } from '../components/NetworkSelector';
-import { CurrencySelector, CurrencyCode, getCurrencyMeta, formatCurrency } from '../components/CurrencySelector';
+import { CurrencySelector } from '../components/CurrencySelector';
 import { haptics } from '../utils/haptics';
-import { ScalePress, QuickActionSheet, SuccessCheck } from '../components/GestureKit';
 
 
 
@@ -102,15 +101,14 @@ function safeFmt(n: unknown, decimals = 2): string {
 }
 
 // ─── Token row ─────────────────────────────────────────────────────────────────
-const TokenRow = memo(({ symbol, amount, usd, change24h, T, hideBalance, onPress, currencyMeta }: {
+const TokenRow = memo(({ symbol, amount, usd, change24h, T, hideBalance, onPress, formatFiat }: {
   symbol: string; amount: number; usd: number; change24h: number; T: any; hideBalance: boolean; onPress: () => void;
-  currencyMeta: { code: string; symbol: string; rate: number };
+  formatFiat: (usd: number) => string;
 }) => {
   const safeChange = typeof change24h === 'number' && isFinite(change24h) ? change24h : 0;
   const safeUsd    = typeof usd === 'number' && isFinite(usd) ? usd : 0;
   const safeAmt    = typeof amount === 'number' && isFinite(amount) ? amount : 0;
   const isUp = safeChange >= 0;
-  const fmtVal = formatCurrency(safeUsd, currencyMeta.code as CurrencyCode);
   return (
     <TouchableOpacity style={styles.tokenItem} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.tokenLeft}>
@@ -125,7 +123,7 @@ const TokenRow = memo(({ symbol, amount, usd, change24h, T, hideBalance, onPress
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={[styles.tokenUsd, { color: T.text }]}>
-            {hideBalance ? '••••' : fmtVal}
+            {hideBalance ? '••••' : formatFiat(safeUsd)}
           </Text>
           <Text style={{ fontSize: 12, fontFamily: Fonts.semiBold, color: isUp ? T.success : T.error }}>
             {isUp ? '▲' : '▼'} {Math.abs(safeChange).toFixed(2)}%
@@ -256,7 +254,7 @@ const MarketTicker = memo(({ prices, T, isPricesLoading, isInitialLoad, onCoinPr
                           {usdVal !== null
                             ? usdVal >= 1
                               ? `$${usdVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                              : `$${usdVal.toFixed(6)}`
+                              : `$${usdVal.toFixed(4)}`
                             : '—'}
                         </Text>
                       </View>
@@ -400,10 +398,15 @@ const NewsCard = memo(({ item, T }: { item: NewsItem; T: any }) => {
 
 const STABLE_FALLBACK: Record<string, number> = { 
   ETH: 3500, 
-  USDC: 1, 
+  BTC: 65000, 
   USDT: 1, 
-  DAI: 1,
-  TRX: 0.12,
+  USDC: 1, 
+  SOL: 150, 
+  BNB: 600, 
+  XRP: 0.50, 
+  TON: 7.5, 
+  TRX: 0.12, 
+  SUI: 1.80, 
 };
 const ChangePill = memo(({ assetsList, T }: { assetsList: any[]; T: any }) => {
   const avgChange = useMemo(() => {
@@ -427,25 +430,23 @@ const ChangePill = memo(({ assetsList, T }: { assetsList: any[]; T: any }) => {
   );
 });
 
-// ─── Main screen ───────────────────────────────────────────────────────────────
 export default function HomeScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const {
     ethBalance, balances, isDarkMode, walletName, walletAddress, tronAddress,
     isLoadingBalance, refreshBalance, isSyncing,
     balanceVisible, toggleBalanceVisible, network, transactions, accountType, lockedBalance, switchNetwork,
+    fiatCurrency, setFiatCurrency, formatFiat, convertFiat, fiatSymbol,
   } = useWallet() as any;
   const { prices, isPricesLoading, priceError, refreshPrices, news, isNewsLoading, refreshNews } = useMarket();
 
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
 
   // ── UI state ──
-  const [currency, setCurrency] = useState<CurrencyCode>('USD');
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
   const [showNetworkPicker, setShowNetworkPicker] = useState(false);
   const [showAddrSheet, setShowAddrSheet] = useState(false);
   const [addrCopied, setAddrCopied] = useState<string | null>(null);
-  const currencyMeta = getCurrencyMeta(currency);
 
   const copyAddress = useCallback((addr: string, label: string) => {
     Clipboard.setStringAsync(addr);
@@ -456,14 +457,16 @@ export default function HomeScreen({ navigation }: any) {
   const realBalances: Record<string, number> = useMemo(() => {
     const isTron = network === 'TRON' || network === 'TRON Nile';
     return {
-      // On TRON networks, native balance is TRX (stored in balances.TRX)
-      // On EVM networks, native balance is ETH (stored in ethBalance string)
       ETH:  isTron ? 0 : (parseFloat(ethBalance) || 0),
       TRX:  isTron ? (balances.TRX ?? 0) : 0,
       USDC: balances.USDC ?? 0,
       USDT: balances.USDT ?? 0,
-      DAI:  balances.DAI  ?? 0,
-      ...(balances.CUSTOM > 0 ? { CUSTOM: balances.CUSTOM } : {}),
+      BTC: balances.BTC ?? 0,
+      SOL: balances.SOL ?? 0,
+      BNB: balances.BNB ?? 0,
+      XRP: balances.XRP ?? 0,
+      TON: balances.TON ?? 0,
+      SUI: balances.SUI ?? 0,
     };
   }, [ethBalance, balances, network]);
 
@@ -479,11 +482,14 @@ export default function HomeScreen({ navigation }: any) {
         return { symbol, amount: realBalances[symbol], usd: realBalances[symbol] * price, change24h };
       })
       .filter(a => {
-        if (a.symbol === nativeSymbol) return true;          // always show native token
-        if (a.symbol === 'CUSTOM') return a.amount > 0;      // CUSTOM only if held
-        if (a.symbol === 'ETH' && isTron) return false;      // hide ETH on TRON
-        if (a.symbol === 'TRX' && !isTron) return false;     // hide TRX on EVM
-        return a.amount > 0;                                  // others only if held
+        // Always show native token (ETH/TRX) even if balance is 0
+        if (a.symbol === nativeSymbol) return true;
+        // Hide ETH on TRON networks
+        if (a.symbol === 'ETH' && isTron) return false;
+        // Hide TRX on EVM networks  
+        if (a.symbol === 'TRX' && !isTron) return false;
+        // Only show other coins if user actually has a balance > 0
+        return a.amount > 0;
       })
       .sort((a, b) => b.usd - a.usd);
 
@@ -495,8 +501,8 @@ export default function HomeScreen({ navigation }: any) {
     return isFinite(sum) ? sum : 0;
   }, [assetsList]);
 
-  const totalConverted = totalUsd * currencyMeta.rate;
-  const fmtBalance = (usdVal: number) => formatCurrency(usdVal, currency);
+  const totalConverted = convertFiat(totalUsd);
+  const fmtBalance = (usdVal: number) => formatFiat(usdVal);
 
   const isTron = network === 'TRON' || network === 'TRON Nile';
   // Show skeleton only on very first load before we have ANY balance data
@@ -544,8 +550,8 @@ export default function HomeScreen({ navigation }: any) {
       <CurrencySelector
         visible={showCurrencyPicker}
         onClose={() => setShowCurrencyPicker(false)}
-        currentCurrency={currency}
-        onSelect={setCurrency}
+        currentCurrency={fiatCurrency}
+        onSelect={setFiatCurrency}
         T={T}
       />
 
@@ -690,7 +696,7 @@ export default function HomeScreen({ navigation }: any) {
               <Text
                 style={[styles.balanceValue, { color: T.text, fontSize: totalConverted > 9999999 ? 32 : 44 }]}
               >
-                {balanceVisible ? fmtBalance(totalUsd) : `${currencyMeta.symbol} ••••••`}
+                {balanceVisible ? fmtBalance(totalUsd) : `${fiatSymbol} ••••••`}
               </Text>
               <TouchableOpacity
                 onPress={() => {
@@ -700,7 +706,7 @@ export default function HomeScreen({ navigation }: any) {
                 activeOpacity={0.7}
                 style={[styles.currencyToggle, { backgroundColor: T.surfaceLow, borderColor: T.border }]}
               >
-                <Text style={[styles.currencyToggleText, { color: T.textMuted }]}>{currency}</Text>
+                <Text style={[styles.currencyToggleText, { color: T.textMuted }]}>{fiatCurrency}</Text>
                 <Feather name="chevron-down" size={12} color={T.textMuted} />
               </TouchableOpacity>
             </View>
@@ -709,12 +715,12 @@ export default function HomeScreen({ navigation }: any) {
             <ChangePill assetsList={assetsList} T={T} />
           )}
           {/* Locked balance badge */}
-          {Object.entries(lockedBalance ?? {}).some(([, v]) => v > 0) && (
+          {Object.entries(lockedBalance ?? {}).some(([, v]) => (v as number) > 0) && (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 }}>
               <View style={[styles.changePill, { backgroundColor: T.primary + '20' }]}>
                 <Feather name="lock" size={11} color={T.primary} />
                 <Text style={{ fontSize: 12, fontWeight: '700', color: T.primary }}>
-                  {Object.entries(lockedBalance).filter(([,v]) => v > 0).map(([k,v]) => `${v.toFixed(4)} ${k}`).join(' · ')} locked in P2P
+                  {Object.entries(lockedBalance).filter(([,v]) => (v as number) > 0).map(([k,v]) => `${(v as number).toFixed(4)} ${k}`).join(' · ')} locked in P2P
                 </Text>
               </View>
             </View>
@@ -778,7 +784,7 @@ export default function HomeScreen({ navigation }: any) {
               <TokenRow
                 symbol={a.symbol} amount={a.amount} usd={a.usd}
                 change24h={a.change24h} T={T} hideBalance={!balanceVisible}
-                currencyMeta={currencyMeta}
+                formatFiat={formatFiat}
                 onPress={() => navigation.navigate('CoinChart', { symbol: a.symbol })}
               />
               {idx < assetsList.length - 1 && (

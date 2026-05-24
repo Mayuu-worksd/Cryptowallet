@@ -204,7 +204,7 @@ const TradingChart = React.memo(({ prices, color, isDark }: TradingChartProps) =
 export default function CoinChartScreen({ route, navigation }: any) {
   const insets = useSafeAreaInsets();
   const { symbol } = route.params as { symbol: string };
-  const { isDarkMode, balances, ethBalance } = useWallet();
+  const { isDarkMode, balances, ethBalance, formatFiat } = useWallet() as any;
   const { prices } = useMarket();
   const T     = isDarkMode ? Theme.colors : Theme.lightColors;
   const color = COIN_COLORS[symbol] ?? T.primary;
@@ -396,7 +396,7 @@ export default function CoinChartScreen({ route, navigation }: any) {
                   {balance.toFixed(6)} {symbol}
                 </Text>
                 <Text style={[styles.holdingsUsd, { color: T.textMuted }]}>
-                  ≈ ${(typeof usdValue === 'number' && isFinite(usdValue) ? usdValue : 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  ≈ {formatFiat(typeof usdValue === 'number' && isFinite(usdValue) ? usdValue : 0)}
                 </Text>
               </View>
               <View style={[styles.holdingsBadge, { backgroundColor: color + '18' }]}>

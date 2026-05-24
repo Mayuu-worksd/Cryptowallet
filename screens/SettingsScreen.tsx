@@ -77,7 +77,7 @@ export default function SettingsScreen({ navigation }: any) {
     walletName, setWalletName,
     deleteWallet, enterReadOnlyMode, isDarkMode, toggleTheme, balances, ethBalance,
     pinEnabled, refreshPinEnabled, isReadOnly, kycStatus, accountType, setAccountType,
-    p2pCountry, p2pCurrency, setP2PPreferences,
+    p2pCountry, p2pCurrency, setP2PPreferences, setFiatCurrency, formatFiat,
   } = useWallet() as any;
   const isTronNetwork = network === 'TRON' || network === 'TRON Nile';
   // Show EVM address on EVM networks, TRON address on TRON networks
@@ -260,7 +260,7 @@ export default function SettingsScreen({ navigation }: any) {
         title="Select Region"
         items={COUNTRIES}
         selected={p2pCountry}
-        onSelect={(c: any) => { setP2PPreferences(c.name, c.currency); showToast(`Region updated to ${c.name}`, 'success'); }}
+        onSelect={(c: any) => { setP2PPreferences(c.name, c.currency); setFiatCurrency(c.currency); showToast(`Region updated to ${c.name}`, 'success'); }}
         type="country"
       />
       <SelectionModal 
@@ -269,7 +269,7 @@ export default function SettingsScreen({ navigation }: any) {
         title="Base Currency"
         items={CURRENCIES}
         selected={p2pCurrency}
-        onSelect={(c: any) => { setP2PPreferences(p2pCountry, c.code); showToast(`Currency updated to ${c.code}`, 'success'); }}
+        onSelect={(c: any) => { setP2PPreferences(p2pCountry, c.code); setFiatCurrency(c.code); showToast(`Currency updated to ${c.code}`, 'success'); }}
         type="currency"
       />
       <Modal visible={pinVerifyMode !== null} animationType="slide">
@@ -508,7 +508,7 @@ export default function SettingsScreen({ navigation }: any) {
                     <Text style={[styles.menuSub, { color: T.textMuted }]}>{amt.toFixed(4)} {sym}</Text>
                   </View>
                 </View>
-                <Text style={[styles.menuLabel, { color: T.text }]}>${usd.toFixed(2)}</Text>
+                <Text style={[styles.menuLabel, { color: T.text }]}>{formatFiat(usd)}</Text>
               </TouchableOpacity>
             );
           })}
