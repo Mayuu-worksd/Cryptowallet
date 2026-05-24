@@ -15,6 +15,7 @@ import { supabase, setWallet, clearWalletSession } from '../services/supabaseCli
 import { notificationService } from '../services/notificationService';
 import { DEFAULT_NETWORK, NETWORK_INFO } from '../constants';
 import { ESCROW_CONTRACTS } from '../services/escrowService';
+import { SUPPORTED_TOKENS, SUPPORTED_FIAT_CURRENCIES } from '../constants/currencyConfig';
 
 export type Transaction = {
   id: string;
@@ -115,26 +116,24 @@ type WalletContextType = {
   switchNetwork: (n: string) => void | Promise<void>;
   creditP2PBalance: (token: string, amount: number) => void;
   resetLockedBalances: () => void;
+  fiatCurrency: string;
+  setFiatCurrency: (currency: string) => Promise<void>;
+  formatFiat: (amountUSD: number) => string;
+  convertFiat: (amountUSD: number) => number;
+  fiatSymbol: string;
 };
 
 const WalletContext = createContext<WalletContextType>({} as WalletContextType);
 
 // Zero fallback — real prices always come from CoinGecko via marketService.
 // Using 0 ensures the UI shows a loading state rather than stale hardcoded values.
-const FALLBACK_PRICES: Record<string, CoinPrice> = {
-  ETH:   { usd: 0, change24h: 0 },
-  BTC:   { usd: 0, change24h: 0 },
-  USDT:  { usd: 0, change24h: 0 },
-  USDC:  { usd: 0, change24h: 0 },
-  DAI:   { usd: 0, change24h: 0 },
-  SOL:   { usd: 0, change24h: 0 },
-  MATIC: { usd: 0, change24h: 0 },
-  BNB:   { usd: 0, change24h: 0 },
-  TRX:   { usd: 0, change24h: 0 },
-};
+const FALLBACK_PRICES: Record<string, CoinPrice> = Object.fromEntries(
+  Object.keys(SUPPORTED_TOKENS).map(k => [k, { usd: 0, change24h: 0 }])
+);
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [isDarkMode,       setIsDarkMode]       = useState(true);
+  const [fiatCurrency,     setFiatCurrencyState] = useState('USD');
   const [accountType,      setAccountTypeState] = useState<'personal' | 'business'>('personal');
   const [accountTypeSet,   setAccountTypeSet]   = useState(false);
   const [p2pCountry,       setP2PCountryState]  = useState('India');
@@ -165,9 +164,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   });
   const [network,         setNetworkState]  = useState(DEFAULT_NETWORK);
   const [transactions,    setTransactions]  = useState<Transaction[]>([]);
-  const [balances, setBalances] = useState<Record<string, number>>({
-    ETH: 0, USDC: 0, USDT: 0, DAI: 0, BTC: 0, SOL: 0, CUSTOM: 0, TRX: 0
-  });
+  const [balances, setBalances] = useState<Record<string, number>>(
+    Object.fromEntries(Object.keys(SUPPORTED_TOKENS).map(k => [k, 0]))
+  );
   const [prices,          setPrices]        = useState<Record<string, CoinPrice>>(FALLBACK_PRICES);
   const [isPricesLoading, setIsPricesLoading] = useState(true);
   const [priceError,      setPriceError]    = useState(false);
@@ -178,7 +177,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [isSyncing,      setIsSyncing]      = useState(false);
   const pendingAddressRef  = useRef<{ address: string; net: string } | null>(null);
   const ethBalanceRef      = useRef('0.0');
-  const balancesRef        = useRef<Record<string, number>>({ ETH: 0, USDT: 0, USDC: 0, DAI: 0, BTC: 0, SOL: 0 });
+  const balancesRef        = useRef<Record<string, number>>(
+    Object.fromEntries(Object.keys(SUPPORTED_TOKENS).map(k => [k, 0]))
+  );
   const priceIntervalRef   = useRef<ReturnType<typeof setInterval> | null>(null);
   const newsIntervalRef    = useRef<ReturnType<typeof setInterval> | null>(null);
   const balanceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -409,15 +410,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const startup = async () => {
       try {
         // Load UI preferences first (fastest)
-        const [savedDarkMode, savedAccountType, savedP2PCountry, savedP2PCurrency, savedLockedBal] = await Promise.all([
+        const [savedDarkMode, savedAccountType, savedP2PCountry, savedP2PCurrency, savedLockedBal, savedFiatCurrency] = await Promise.all([
           AsyncStorage.getItem('cw_is_dark_mode'),
           AsyncStorage.getItem('cw_account_type'),
           AsyncStorage.getItem('cw_p2p_country'),
           AsyncStorage.getItem('cw_p2p_currency'),
           AsyncStorage.getItem('cw_locked_balance'),
+          AsyncStorage.getItem('cw_fiat_currency'),
         ]);
 
         if (savedDarkMode !== null) setIsDarkMode(savedDarkMode === 'true');
+        if (savedFiatCurrency !== null) setFiatCurrencyState(savedFiatCurrency);
         if (savedAccountType === 'business') setAccountTypeState('business');
         if (savedP2PCountry)  setP2PCountryState(savedP2PCountry);
         if (savedP2PCurrency) setP2PCurrencyState(savedP2PCurrency);
@@ -736,7 +739,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (transactions.length > 0 && !supabaseCardRestoredRef.current) {
       
       const recoveredTokenBals: Record<string, number> = { 
-        USDC: 0, USDT: 0, DAI: 0, BTC: 0, SOL: 0, CUSTOM: 0 
+        USDT: 0, USDC: 0, ETH: 0, BTC: 0, SOL: 0, BNB: 0, XRP: 0, TON: 0, TRX: 0, SUI: 0
       };
       let recoveredCardBal = 0;
       let hasCardActivity = false;
@@ -923,7 +926,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       ]);
 
       if (isNew || isSwitching) {
-        setBalances({ ETH: 0, USDT: 0, USDC: 0, DAI: 0, BTC: 0, SOL: 0 });
+        setBalances({ USDT: 0, USDC: 0, ETH: 0, BTC: 0, SOL: 0, BNB: 0, XRP: 0, TON: 0, TRX: 0, SUI: 0 });
         setEthBalance('0.0');
         setLockedBalance({});
       }
@@ -1074,7 +1077,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           const isSeller = o.seller_wallet?.toLowerCase() === data.address.toLowerCase();
           const statusMap: Record<string, Transaction['status']> = {
             completed: 'success', cancelled: 'failed',
-            open: 'pending', in_escrow: 'pending', fiat_sent: 'pending', disputed: 'pending',
+            open: 'pending', escrow_locked: 'pending', payment_pending: 'pending', payment_verification: 'pending', crypto_released: 'pending', disputed: 'pending',
           };
           return {
             id:       `p2p_${o.id}`,
@@ -1106,10 +1109,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           await AsyncStorage.setItem('cw_transactions', JSON.stringify(dedupedTxs));
         }
 
-        // ── Restore locked balances from active P2P orders ──
+        // ── Restore locked balances from active P2P sell orders only (buyer never locks) ──
         const activeLocks: Record<string, number> = {};
         (p2pOrders as any[]).forEach((o: any) => {
-          if (!['open', 'in_escrow', 'fiat_sent'].includes(o.status)) return;
+          if (!['open', 'escrow_locked', 'payment_pending', 'payment_verification', 'crypto_released'].includes(o.status)) return;
+          // Only seller locks crypto
           if (o.seller_wallet?.toLowerCase() === data.address.toLowerCase()) {
             activeLocks[o.token] = (activeLocks[o.token] || 0) + o.amount;
           }
@@ -1505,7 +1509,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (!walletAddress) return;
     // Clear cached data when switching networks
     setEthBalance('0.0');
-    setBalances({ ETH: 0, USDT: 0, USDC: 0, DAI: 0, BTC: 0, SOL: 0, TRX: 0 });
+    setBalances({ USDT: 0, USDC: 0, ETH: 0, BTC: 0, SOL: 0, BNB: 0, XRP: 0, TON: 0, TRX: 0, SUI: 0 });
     const isTronNet = n === 'TRON' || n === 'TRON Nile';
     if (isTronNet) {
       let tronAddr = await storageService.getTronAddress();
@@ -1527,6 +1531,40 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       fetchBalance(walletAddress, n);
     }
   }, [walletAddress, fetchBalance]);
+
+  const setFiatCurrency = useCallback(async (currency: string) => {
+    if (SUPPORTED_FIAT_CURRENCIES[currency]) {
+      setFiatCurrencyState(currency);
+      await AsyncStorage.setItem('cw_fiat_currency', currency);
+      if (walletAddress) {
+        profileService.upsert(walletAddress, { p2p_currency: currency }).catch(() => {});
+      }
+    }
+  }, [walletAddress]);
+
+  const fiatSymbol = useMemo(() => {
+    return SUPPORTED_FIAT_CURRENCIES[fiatCurrency]?.symbol ?? '$';
+  }, [fiatCurrency]);
+
+  const convertFiat = useCallback((amountUSD: number) => {
+    const rate = SUPPORTED_FIAT_CURRENCIES[fiatCurrency]?.rate ?? 1.0;
+    return amountUSD * rate;
+  }, [fiatCurrency]);
+
+  const formatFiat = useCallback((amountUSD: number) => {
+    const fiat = SUPPORTED_FIAT_CURRENCIES[fiatCurrency];
+    if (!fiat) return `$${amountUSD.toFixed(2)}`;
+    const converted = amountUSD * fiat.rate;
+    
+    if (fiat.code === 'JPY' || fiat.code === 'VND') {
+      return `${fiat.symbol}${Math.round(converted).toLocaleString(fiat.locale)}`;
+    }
+    
+    return `${fiat.symbol}${converted.toLocaleString(fiat.locale, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })}`;
+  }, [fiatCurrency]);
 
   const marketValue = useMemo(() => ({
     prices, isPricesLoading, priceError, news, isNewsLoading,
@@ -1551,6 +1589,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     generateMnemonic: () => walletService.generateMnemonic(),
     createWallet, importWallet, deleteWallet, enterReadOnlyMode, refreshBalance, refreshCardData, fetchBalance,
     sendETH, sendCrypto, topupCard, spendCard, toggleFreezeCard, applySwapBalances, switchNetwork,
+    fiatCurrency, setFiatCurrency, formatFiat, convertFiat, fiatSymbol,
   }), [
     isDarkMode, toggleTheme, accountType, accountTypeSet, setAccountType,
     p2pCountry, p2pCurrency, setP2PPreferences, lockedBalance, lockBalance, unlockBalance, resetLockedBalances, creditP2PBalance,
@@ -1561,6 +1600,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     cardDetails, cardCreated, createCard, updateCardDetails, generateCardDetails, cardTransactions,
     createWallet, importWallet, deleteWallet, enterReadOnlyMode, refreshBalance, refreshCardData, fetchBalance,
     sendETH, sendCrypto, topupCard, spendCard, toggleFreezeCard, applySwapBalances, switchNetwork,
+    fiatCurrency, setFiatCurrency, formatFiat, convertFiat, fiatSymbol,
   ]);
 
   return (

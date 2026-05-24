@@ -1,16 +1,9 @@
-// Single source of truth — symbol ↔ CoinGecko ID mapping
-export const SYMBOL_TO_COINGECKO_ID: Record<string, string> = {
-  ETH:   'ethereum',
-  BTC:   'bitcoin',
-  USDT:  'tether',
-  USDC:  'usd-coin',
-  DAI:   'dai',
-  SOL:   'solana',
-  MATIC: 'matic-network',
-  BNB:   'binancecoin',
-  TRX:   'tron',
-};
+import { SUPPORTED_TOKENS } from '../constants/currencyConfig';
 
+// Single source of truth — symbol ↔ CoinGecko ID mapping
+export const SYMBOL_TO_COINGECKO_ID: Record<string, string> = Object.fromEntries(
+  Object.entries(SUPPORTED_TOKENS).map(([k, v]) => [k, v.coingeckoId])
+);
 const COINGECKO_IDS_CSV = Object.values(SYMBOL_TO_COINGECKO_ID).join(',');
 const COINGECKO_URL = `https://api.coingecko.com/api/v3/simple/price?ids=${COINGECKO_IDS_CSV}&vs_currencies=usd&include_24hr_change=true`;
 

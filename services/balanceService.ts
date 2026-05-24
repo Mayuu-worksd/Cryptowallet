@@ -10,8 +10,6 @@ const AsyncStorage = Platform.OS === 'web'
     }
   : AsyncStorageNative;
 
-const CUSTOM_TOKEN_ADDRESS = (process.env.EXPO_PUBLIC_CUSTOM_TOKEN ?? '0x351028A22C876E0431b30921c0dD0a836a14899E').toLowerCase();
-
 const ERC20_ABI = ['function balanceOf(address owner) view returns (uint256)'];
 
 const TOKEN_CONTRACTS: Record<string, Record<string, string>> = {
@@ -27,18 +25,20 @@ const TOKEN_CONTRACTS: Record<string, Record<string, string>> = {
     Polygon:  '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
     Arbitrum: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
   },
-  DAI: {
-    Ethereum: '0x6B175474E89094C44Da98b954EedeAC495271d0F',
-    Sepolia:  '0x3e622317f8C93f7328350cF0B56d9eD4C620C5d6',
-    Polygon:  '0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063',
-    Arbitrum: '0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1',
-  },
-  CUSTOM: {
-    Sepolia: CUSTOM_TOKEN_ADDRESS,
-  },
 };
 
-const TOKEN_DECIMALS: Record<string, number> = { USDC: 6, USDT: 6, DAI: 18, CUSTOM: 18 };
+const TOKEN_DECIMALS: Record<string, number> = {
+  USDT: 6,
+  USDC: 6,
+  ETH: 18,
+  BTC: 8,
+  SOL: 9,
+  BNB: 18,
+  XRP: 6,
+  TON: 9,
+  TRX: 6,
+  SUI: 9,
+};
 
 const NETWORK_CONFIG: Record<string, { chainId: number; name: string }> = {
   Sepolia:  { chainId: 11155111, name: 'sepolia'   },
@@ -48,12 +48,16 @@ const NETWORK_CONFIG: Record<string, { chainId: number; name: string }> = {
 };
 
 export type WalletBalances = {
-  ETH: number;
-  USDC: number;
   USDT: number;
-  DAI: number;
-  CUSTOM: number;
+  USDC: number;
+  ETH: number;
+  BTC: number;
+  SOL: number;
+  BNB: number;
+  XRP: number;
+  TON: number;
   TRX: number;
+  SUI: number;
   [key: string]: number;
 };
 
@@ -76,63 +80,59 @@ export async function getWalletBalances(
       const { tronService } = await import('./tronService');
       const tronBals = await tronService.getAllBalances(walletAddress, network);
       const balances: WalletBalances = {
-        ETH: 0, USDC: tronBals.USDC, USDT: tronBals.USDT, DAI: 0, CUSTOM: 0,
+        USDT: tronBals.USDT,
+        USDC: tronBals.USDC,
+        ETH: 0,
         TRX: tronBals.TRX,
+        BTC: local.BTC ?? 0,
+        SOL: local.SOL ?? 0,
+        BNB: local.BNB ?? 0,
+        XRP: local.XRP ?? 0,
+        TON: local.TON ?? 0,
+        SUI: local.SUI ?? 0,
       };
       await AsyncStorage.setItem('cw_token_balances', JSON.stringify(balances)).catch(() => {});
       return balances;
     } catch {
-      return { ETH: 0, USDC: 0, USDT: local.USDT ?? 0, DAI: 0, CUSTOM: 0, TRX: local.TRX ?? 0 };
+      return {
+        USDT: local.USDT ?? 0,
+        USDC: local.USDC ?? 0,
+        ETH: 0,
+        TRX: local.TRX ?? 0,
+        BTC: local.BTC ?? 0,
+        SOL: local.SOL ?? 0,
+        BNB: local.BNB ?? 0,
+        XRP: local.XRP ?? 0,
+        TON: local.TON ?? 0,
+        SUI: local.SUI ?? 0,
+      };
     }
   }
 
   const provider  = makeProvider(network);
   const isTestnet = network === 'Sepolia';
 
-  const [ethRaw, usdcRaw, usdtRaw, daiRaw, customRaw] = await Promise.allSettled([
+  const [ethRaw, usdcRaw, usdtRaw] = await Promise.allSettled([
     provider.getBalance(walletAddress),
     fetchERC20(provider, walletAddress, TOKEN_CONTRACTS.USDC[network], TOKEN_DECIMALS.USDC),
     fetchERC20(provider, walletAddress, TOKEN_CONTRACTS.USDT[network], TOKEN_DECIMALS.USDT),
-    fetchERC20(provider, walletAddress, TOKEN_CONTRACTS.DAI[network],  TOKEN_DECIMALS.DAI),
-    fetchERC20(provider, walletAddress, TOKEN_CONTRACTS.CUSTOM[network], TOKEN_DECIMALS.CUSTOM),
   ]);
 
   const chainETH    = ethRaw.status    === 'fulfilled' ? parseFloat(ethers.formatEther(ethRaw.value)) : null;
   const chainUSDC   = usdcRaw.status   === 'fulfilled' ? usdcRaw.value : null;
   const chainUSDT   = usdtRaw.status   === 'fulfilled' ? usdtRaw.value : null;
-  const chainDAI    = daiRaw.status    === 'fulfilled' ? daiRaw.value  : null;
-  const chainCUSTOM = customRaw.status === 'fulfilled' ? customRaw.value : null;
-
-  // AUTO-HEAL: Calculate CUSTOM balance from history
-  let historyCUSTOM = 0;
-  try {
-    const raw = await AsyncStorage.getItem('cw_transactions').catch(() => null);
-    if (raw) {
-      const txs: any[] = JSON.parse(raw);
-      txs.forEach(t => {
-        const isSuccess = t.status === 'success' || t.status === 'completed';
-        if (!isSuccess) return;
-        const isCustom = (t as any).contractAddress?.toLowerCase() === CUSTOM_TOKEN_ADDRESS || t.coin === 'CUSTOM';
-        if (isCustom) {
-          const amt = parseFloat((t as any).buyAmount || t.amount);
-          if (!isNaN(amt)) {
-            const isIncoming = t.type === 'receive' || t.type === 'received' || t.type === 'swap';
-            historyCUSTOM += isIncoming ? amt : -amt;
-          }
-        }
-      });
-    }
-  } catch {
-    historyCUSTOM = local.CUSTOM || 0;
-  }
 
   const balances: WalletBalances = {
-    ETH: chainETH !== null ? chainETH : (local.ETH ?? 0),
-    USDC: isTestnet ? Math.max(chainUSDC ?? 0, local.USDC ?? 0) : (chainUSDC !== null ? chainUSDC : (local.USDC ?? 0)),
     USDT: isTestnet ? Math.max(chainUSDT ?? 0, local.USDT ?? 0) : (chainUSDT !== null ? chainUSDT : (local.USDT ?? 0)),
-    DAI:  isTestnet ? Math.max(chainDAI  ?? 0, local.DAI  ?? 0) : (chainDAI  !== null ? chainDAI  : (local.DAI  ?? 0)),
-    CUSTOM: isTestnet ? Math.max(chainCUSTOM ?? 0, historyCUSTOM, local.CUSTOM ?? 0) : (chainCUSTOM !== null ? chainCUSTOM : (local.CUSTOM ?? 0)),
+    USDC: isTestnet ? Math.max(chainUSDC ?? 0, local.USDC ?? 0) : (chainUSDC !== null ? chainUSDC : (local.USDC ?? 0)),
+    ETH: chainETH !== null ? chainETH : (local.ETH ?? 0),
+    BTC: local.BTC ?? 0,
+    SOL: local.SOL ?? 0,
+    BNB: local.BNB ?? 0,
+    XRP: local.XRP ?? 0,
+    TON: local.TON ?? 0,
     TRX: 0,
+    SUI: local.SUI ?? 0,
   };
 
   const hasAnyBalance = Object.values(balances).some(v => v > 0);

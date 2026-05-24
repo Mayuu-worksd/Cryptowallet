@@ -28,91 +28,19 @@ export const NETWORK_INFO: Record<string, { name: string; type: string; color: s
   'TRON Nile':        { name: 'TRON Nile',         type: 'Testnet', color: '#FF6B6B', symbol: 'TRX' },
 };
 
-// Zero fallback — real prices come from CoinGecko at runtime.
-export const FALLBACK_PRICES: Record<string, number> = {
-  ETH:   0,
-  BTC:   0,
-  USDT:  0,
-  SOL:   0,
-  MATIC: 0,
-  BNB:   0,
-  TRX:   0,
-};
+import { SUPPORTED_TOKENS } from './currencyConfig';
 
-export const COIN_COLORS: Record<string, string> = {
-  ETH:   '#627EEA',
-  BTC:   '#F7931A',
-  USDT:  '#26A17B',
-  USDC:  '#2775CA',
-  DAI:   '#F4B731',
-  SOL:   '#9945FF',
-  MATIC: '#8247E5',
-  BNB:   '#F3BA2F',
-  TRX:   '#EF0027',
-};
+export const COIN_COLORS: Record<string, string> = Object.fromEntries(
+  Object.entries(SUPPORTED_TOKENS).map(([k, v]) => [k, v.color])
+);
 
-export const COIN_META: Record<string, { name: string; symbol: string; iconUrl: string; color: string }> = {
-  ETH: {
-    name:    'Ethereum',
-    symbol:  'ETH',
-    iconUrl: 'https://coin-images.coingecko.com/coins/images/279/large/ethereum.png',
-    color:   '#627EEA',
-  },
-  BTC: {
-    name:    'Bitcoin',
-    symbol:  'BTC',
-    iconUrl: 'https://coin-images.coingecko.com/coins/images/1/large/bitcoin.png',
-    color:   '#F7931A',
-  },
-  USDT: {
-    name:    'Tether',
-    symbol:  'USDT',
-    iconUrl: 'https://coin-images.coingecko.com/coins/images/325/large/Tether.png',
-    color:   '#26A17B',
-  },
-  USDC: {
-    name:    'USD Coin',
-    symbol:  'USDC',
-    iconUrl: 'https://coin-images.coingecko.com/coins/images/6319/large/USD_Coin_icon.png',
-    color:   '#2775CA',
-  },
-  DAI: {
-    name:    'Dai',
-    symbol:  'DAI',
-    iconUrl: 'https://coin-images.coingecko.com/coins/images/9956/large/4943.png',
-    color:   '#F4B731',
-  },
-  SOL: {
-    name:    'Solana',
-    symbol:  'SOL',
-    iconUrl: 'https://coin-images.coingecko.com/coins/images/4128/large/solana.png',
-    color:   '#9945FF',
-  },
-  MATIC: {
-    name:    'Polygon',
-    symbol:  'MATIC',
-    iconUrl: 'https://coin-images.coingecko.com/coins/images/4713/large/matic-token-icon.png',
-    color:   '#8247E5',
-  },
-  TRX: {
-    name:    'TRON',
-    symbol:  'TRX',
-    iconUrl: 'https://coin-images.coingecko.com/coins/images/1094/large/tron-logo.png',
-    color:   '#EF0027',
-  },
-  BNB: {
-    name:    'BNB',
-    symbol:  'BNB',
-    iconUrl: 'https://coin-images.coingecko.com/coins/images/825/large/bnb-icon2_2x.png',
-    color:   '#F3BA2F',
-  },
-  CUSTOM: {
-    name:    'Custom Swap',
-    symbol:  'CUSTOM',
-    iconUrl: 'https://coin-images.coingecko.com/coins/images/279/large/ethereum.png',
-    color:   '#FF3B3B',
-  },
-};
+export const COIN_META: Record<string, { name: string; symbol: string; iconUrl: string; color: string }> = Object.fromEntries(
+  Object.entries(SUPPORTED_TOKENS).map(([k, v]) => [k, { name: v.name, symbol: v.symbol, iconUrl: v.iconUrl, color: v.color }])
+);
+
+export const FALLBACK_PRICES: Record<string, number> = Object.fromEntries(
+  Object.keys(SUPPORTED_TOKENS).map(k => [k, 0])
+);
 
 export const Theme = {
   colors: {
