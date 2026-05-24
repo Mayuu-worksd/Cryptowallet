@@ -630,8 +630,8 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
                       <View style={{ gap: 12 }}>
                         <View style={styles.bankDetailRow}>
                           <View>
-                            <Text style={styles.bankDetailLabel}>UPI ID (VPA)</Text>
-                            <Text style={styles.bankDetailValue}>{upiId}</Text>
+                            <Text style={[styles.bankDetailLabel, { color: T.textMuted }]}>UPI ID (VPA)</Text>
+                            <Text style={[styles.bankDetailValue, { color: T.text }]}>{upiId}</Text>
                           </View>
                           <TouchableOpacity 
                             style={styles.copyPill}
@@ -645,8 +645,8 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
                         </View>
                         <View style={styles.bankDivider} />
                         <View>
-                          <Text style={styles.bankDetailLabel}>Payee Name</Text>
-                          <Text style={styles.bankDetailValue}>P2P Premium Merchant</Text>
+                          <Text style={[styles.bankDetailLabel, { color: T.textMuted }]}>Payee Name</Text>
+                          <Text style={[styles.bankDetailValue, { color: T.text }]}>P2P Premium Merchant</Text>
                         </View>
                       </View>
                     );
@@ -657,8 +657,8 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
                     return (
                       <View style={styles.bankDetailRow}>
                         <View>
-                          <Text style={styles.bankDetailLabel}>PayPal Email</Text>
-                          <Text style={styles.bankDetailValue}>{email}</Text>
+                          <Text style={[styles.bankDetailLabel, { color: T.textMuted }]}>PayPal Email</Text>
+                          <Text style={[styles.bankDetailValue, { color: T.text }]}>{email}</Text>
                         </View>
                         <TouchableOpacity 
                           style={styles.copyPill}
@@ -677,15 +677,15 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
                     <View style={{ gap: 10 }}>
                       <View style={styles.bankDetailRow}>
                         <View>
-                          <Text style={styles.bankDetailLabel}>Bank Name</Text>
-                          <Text style={styles.bankDetailValue}>CryptoWallet International Bank</Text>
+                          <Text style={[styles.bankDetailLabel, { color: T.textMuted }]}>Bank Name</Text>
+                          <Text style={[styles.bankDetailValue, { color: T.text }]}>CryptoWallet International Bank</Text>
                         </View>
                       </View>
                       <View style={styles.bankDivider} />
                       <View style={styles.bankDetailRow}>
                         <View>
-                          <Text style={styles.bankDetailLabel}>Account Number</Text>
-                          <Text style={styles.bankDetailValue}>1009 8765 4321</Text>
+                          <Text style={[styles.bankDetailLabel, { color: T.textMuted }]}>Account Number</Text>
+                          <Text style={[styles.bankDetailValue, { color: T.text }]}>1009 8765 4321</Text>
                         </View>
                         <TouchableOpacity 
                           style={styles.copyPill}
@@ -700,8 +700,8 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
                       <View style={styles.bankDivider} />
                       <View style={styles.bankDetailRow}>
                         <View>
-                          <Text style={styles.bankDetailLabel}>IFSC / Routing Code</Text>
-                          <Text style={styles.bankDetailValue}>CWBK0001</Text>
+                          <Text style={[styles.bankDetailLabel, { color: T.textMuted }]}>IFSC / Routing Code</Text>
+                          <Text style={[styles.bankDetailValue, { color: T.text }]}>CWBK0001</Text>
                         </View>
                         <TouchableOpacity 
                           style={styles.copyPill}
@@ -888,32 +888,32 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
           
           <View style={{ gap: 12 }}>
             <View style={styles.flexRowBetween}>
-              <Text style={styles.detailsLabel}>Asset</Text>
+              <Text style={[styles.detailsLabel, { color: T.textMuted }]}>Asset</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <TokenSymbolIcon token={currentOrder.token} size={18} />
-                <Text style={styles.detailsValue}>{currentOrder.token}</Text>
+                <Text style={[styles.detailsValue, { color: T.text }]}>{currentOrder.token}</Text>
               </View>
             </View>
             
             <View style={[styles.bankDivider, { backgroundColor: T.border + '20' }]} />
             
             <View style={styles.flexRowBetween}>
-              <Text style={styles.detailsLabel}>Exchange Amount</Text>
-              <Text style={styles.detailsValue}>{currentOrder.amount} {currentOrder.token}</Text>
+              <Text style={[styles.detailsLabel, { color: T.textMuted }]}>Exchange Amount</Text>
+              <Text style={[styles.detailsValue, { color: T.text }]}>{currentOrder.amount} {currentOrder.token}</Text>
             </View>
 
             <View style={[styles.bankDivider, { backgroundColor: T.border + '20' }]} />
 
             <View style={styles.flexRowBetween}>
-              <Text style={styles.detailsLabel}>Payment Type</Text>
-              <Text style={styles.detailsValue}>{currentOrder.payment_method}</Text>
+              <Text style={[styles.detailsLabel, { color: T.textMuted }]}>Payment Type</Text>
+              <Text style={[styles.detailsValue, { color: T.text }]}>{currentOrder.payment_method}</Text>
             </View>
 
             <View style={[styles.bankDivider, { backgroundColor: T.border + '20' }]} />
 
             <View style={styles.flexRowBetween}>
-              <Text style={styles.detailsLabel}>Active Blockchain</Text>
-              <Text style={styles.detailsValue}>{network} Network</Text>
+              <Text style={[styles.detailsLabel, { color: T.textMuted }]}>Active Blockchain</Text>
+              <Text style={[styles.detailsValue, { color: T.text }]}>{network} Network</Text>
             </View>
           </View>
         </View>
@@ -1442,7 +1442,6 @@ const styles = StyleSheet.create({
   detailsLabel: {
     fontSize: 13,
     fontFamily: Fonts.bold,
-    color: '#8e8e93',
   },
   detailsValue: {
     fontSize: 14,
@@ -1491,7 +1490,6 @@ const styles = StyleSheet.create({
   bankDetailLabel: {
     fontSize: 11,
     fontFamily: Fonts.bold,
-    color: '#8e8e93',
     marginBottom: 4,
   },
   bankDetailValue: {
@@ -1610,6 +1608,7 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: 20,
     paddingTop: 16,
+    borderTopWidth: 1,
   },
   balanceWarningBanner: {
     flexDirection: 'row',
