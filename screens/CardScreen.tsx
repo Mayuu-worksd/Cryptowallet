@@ -15,11 +15,39 @@ import CreateCardFlow from '../components/card/CreateCardFlow';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CRIMSON = '#EC2629';
 const COINS = ['ETH', 'USDT'] as const;
-const ICONS = ['🛍️','🍔','☕','🎬','✈️','🎬','🎮','🏠','⚡','💊','📦','🎵'];
+const ICONS = ['🛍️','🍔','☕','🎬','✈️','🏥','🎮','🏠','⚡','💊','📦','🎵'];
 
 type CustomMerchant = { name: string; amount: string; icon: string };
 type CardSkin = 'standard' | 'solana' | 'nature';
-type PhysicalSkin = 'crimson' | 'platinum';
+type PhysicalTier = 'Classic' | 'Gold' | 'Platinum' | 'Travel';
+
+const PHYSICAL_GRADIENTS: Record<PhysicalTier, readonly [string, string, string]> = {
+  Classic:  ['#2B2B30', '#18181A', '#0D0D0E'] as const,
+  Gold:     ['#E5A93C', '#996515', '#4A3B18'] as const,
+  Platinum: ['#E5E7EB', '#9CA3AF', '#374151'] as const,
+  Travel:   ['#1E3A8A', '#0F172A', '#050515'] as const,
+};
+
+const PHYSICAL_LABELS: Record<PhysicalTier, string> = {
+  Classic:  'CLASSIC EDITION',
+  Gold:     'GOLD CENTURION',
+  Platinum: 'PLATINUM STELLAR',
+  Travel:   'TRAVEL EXPEDITION',
+};
+
+const PHYSICAL_DESCRIPTIONS: Record<PhysicalTier, string> = {
+  Classic:  'Solid matte slate card. Perfect for effortless daily transactions and international ATM withdrawals.',
+  Gold:     'Elite Emperor Gold finished metal card. Crafted for global business travelers and high-tier cashbacks.',
+  Platinum: 'Solid space platinum steel card. Heavyweight physical profile featuring bespoke concierge privileges.',
+  Travel:   'Deep Aero Indigo composite shell card. Zero foreign transaction fees and accelerated flight points.',
+};
+
+const PHYSICAL_PRICES: Record<PhysicalTier, string> = {
+  Classic:  'FREE',
+  Gold:     '$49.99/year',
+  Platinum: '$99.99/year',
+  Travel:   '$79.99/year',
+};
 
 export default function CardScreen({ navigation, route }: any) {
   const insets = useSafeAreaInsets();
@@ -37,7 +65,7 @@ export default function CardScreen({ navigation, route }: any) {
 
   const [activeTab, setActiveTab] = useState<'virtual' | 'physical'>('virtual');
   const [selectedSkin, setSelectedSkin] = useState<CardSkin>('standard');
-  const [physicalSkin, setPhysicalSkin] = useState<PhysicalSkin>('crimson');
+  const [physicalTier, setPhysicalTier] = useState<PhysicalTier>('Classic');
 
   // Swipe Scroll Refs for snap actions
   const virtualScrollRef = useRef<ScrollView>(null);
@@ -157,7 +185,7 @@ export default function CardScreen({ navigation, route }: any) {
     return `••••   ••••   ••••   ${num.slice(-4)}`;
   }, [cardDetails.number, showDetails, cardCreated]);
 
-  // Skin configurations
+  // Skin configurations for virtual
   const skinStyles = useMemo(() => {
     switch (selectedSkin) {
       case 'solana':
@@ -202,12 +230,14 @@ export default function CardScreen({ navigation, route }: any) {
     else if (index === 2 && selectedSkin !== 'nature') setSelectedSkin('nature');
   };
 
-  // Dynamic selector on swiping physical cards
+  // Dynamic selector on swiping physical cards (Classic, Gold, Platinum, Travel)
   const onPhysicalScroll = (event: any) => {
     const x = event.nativeEvent.contentOffset.x;
     const index = Math.round(x / SCREEN_WIDTH);
-    if (index === 0 && physicalSkin !== 'crimson') setPhysicalSkin('crimson');
-    else if (index === 1 && physicalSkin !== 'platinum') setPhysicalSkin('platinum');
+    if (index === 0 && physicalTier !== 'Classic') setPhysicalTier('Classic');
+    else if (index === 1 && physicalTier !== 'Gold') setPhysicalTier('Gold');
+    else if (index === 2 && physicalTier !== 'Platinum') setPhysicalTier('Platinum');
+    else if (index === 3 && physicalTier !== 'Travel') setPhysicalTier('Travel');
   };
 
   const handleIndicatorPress = (skin: CardSkin, index: number) => {
@@ -215,8 +245,8 @@ export default function CardScreen({ navigation, route }: any) {
     virtualScrollRef.current?.scrollTo({ x: index * SCREEN_WIDTH, animated: true });
   };
 
-  const handlePhysicalIndicatorPress = (skin: PhysicalSkin, index: number) => {
-    setPhysicalSkin(skin);
+  const handlePhysicalIndicatorPress = (tier: PhysicalTier, index: number) => {
+    setPhysicalTier(tier);
     physicalScrollRef.current?.scrollTo({ x: index * SCREEN_WIDTH, animated: true });
   };
 
@@ -388,7 +418,7 @@ export default function CardScreen({ navigation, route }: any) {
                 </ScrollView>
               </View>
             ) : (
-              /* Physical Premium Metal swiping variants */
+              /* Physical swiping card selector (Classic, Gold, Platinum, Travel) */
               <View style={styles.carouselWrapper}>
                 <ScrollView
                   ref={physicalScrollRef}
@@ -400,37 +430,60 @@ export default function CardScreen({ navigation, route }: any) {
                   style={styles.carouselScroll}
                   contentContainerStyle={styles.carouselContent}
                 >
-                  {/* Physical Skin 1: Flagship Crimson Metal */}
+                  {/* Tier 1: Classic Slate */}
                   <View style={styles.carouselItem}>
-                    <LinearGradient colors={['#C21E21', '#5B0006', '#120002']} style={[styles.portraitCard, styles.shadowWrapper]}>
+                    <LinearGradient colors={PHYSICAL_GRADIENTS.Classic} style={[styles.portraitCard, styles.shadowWrapper]}>
                       <View style={styles.glow} />
-                      {/* Premium Platinum Chip */}
+                      <View style={styles.cardChip}>
+                        <View style={styles.chipLineHorizontal} />
+                        <View style={styles.chipLineVertical} />
+                      </View>
+                      <View style={styles.cardWifi}>
+                        <Feather name="wifi" size={15} color="rgba(255,255,255,0.4)" style={{ transform: [{ rotate: '90deg' }] }} />
+                      </View>
+                      <View style={styles.brandRotatedContainer}>
+                        <View style={[styles.brandDot, { backgroundColor: CRIMSON }]} />
+                        <Text style={styles.brandRotatedText}>{PHYSICAL_LABELS.Classic}</Text>
+                      </View>
+                      <View style={styles.cardFaceHolderWrap}>
+                        <Text style={styles.cardFaceHolderLabel}>CARD HOLDER</Text>
+                        <Text style={styles.cardFaceHolderName}>{cardFaceHolderName}</Text>
+                      </View>
+                      <View style={styles.visaRotatedContainer}>
+                        <Text style={styles.visaRotatedText}>VISA</Text>
+                      </View>
+                    </LinearGradient>
+                  </View>
+
+                  {/* Tier 2: Gold Centurion */}
+                  <View style={styles.carouselItem}>
+                    <LinearGradient colors={PHYSICAL_GRADIENTS.Gold} style={[styles.portraitCard, styles.shadowWrapper]}>
+                      <View style={styles.glow} />
                       <View style={[styles.cardChip, { backgroundColor: '#E5E7EB', borderColor: '#9CA3AF' }]}>
                         <View style={[styles.chipLineHorizontal, { backgroundColor: '#6B7280' }]} />
                         <View style={[styles.chipLineVertical, { backgroundColor: '#6B7280' }]} />
                       </View>
                       <View style={styles.cardWifi}>
-                        <Feather name="wifi" size={15} color="rgba(255,255,255,0.5)" style={{ transform: [{ rotate: '90deg' }] }} />
+                        <Feather name="wifi" size={15} color="rgba(255,255,255,0.4)" style={{ transform: [{ rotate: '90deg' }] }} />
                       </View>
                       <View style={styles.brandRotatedContainer}>
                         <View style={[styles.brandDot, { backgroundColor: '#FFFFFF' }]} />
-                        <Text style={[styles.brandRotatedText, { color: '#E5E7EB' }]}>METAL PHYSICAL</Text>
+                        <Text style={styles.brandRotatedText}>{PHYSICAL_LABELS.Gold}</Text>
                       </View>
                       <View style={styles.cardFaceHolderWrap}>
                         <Text style={styles.cardFaceHolderLabel}>CARD HOLDER</Text>
-                        <Text style={[styles.cardFaceHolderName, { color: '#E5E7EB' }]}>{cardFaceHolderName}</Text>
+                        <Text style={styles.cardFaceHolderName}>{cardFaceHolderName}</Text>
                       </View>
                       <View style={styles.visaRotatedContainer}>
-                        <Text style={[styles.visaRotatedText, { color: '#E5E7EB' }]}>VISA</Text>
+                        <Text style={styles.visaRotatedText}>VISA</Text>
                       </View>
                     </LinearGradient>
                   </View>
 
-                  {/* Physical Skin 2: Platinum Steel Limited */}
+                  {/* Tier 3: Platinum Stellar */}
                   <View style={styles.carouselItem}>
-                    <LinearGradient colors={['#E5E7EB', '#9CA3AF', '#374151']} style={[styles.portraitCard, styles.shadowWrapper]}>
+                    <LinearGradient colors={PHYSICAL_GRADIENTS.Platinum} style={[styles.portraitCard, styles.shadowWrapper]}>
                       <View style={styles.glow} />
-                      {/* Premium Golden Chip */}
                       <View style={styles.cardChip}>
                         <View style={styles.chipLineHorizontal} />
                         <View style={styles.chipLineVertical} />
@@ -439,15 +492,40 @@ export default function CardScreen({ navigation, route }: any) {
                         <Feather name="wifi" size={15} color="rgba(0,0,0,0.3)" style={{ transform: [{ rotate: '90deg' }] }} />
                       </View>
                       <View style={styles.brandRotatedContainer}>
-                        <View style={[styles.brandDot, { backgroundColor: '#EC2629' }]} />
-                        <Text style={[styles.brandRotatedText, { color: '#131313' }]}>PLATINUM STEEL</Text>
+                        <View style={[styles.brandDot, { backgroundColor: CRIMSON }]} />
+                        <Text style={[styles.brandRotatedText, { color: '#131313' }]}>{PHYSICAL_LABELS.Platinum}</Text>
                       </View>
                       <View style={styles.cardFaceHolderWrap}>
-                        <Text style={[styles.cardFaceHolderLabel, { color: 'rgba(0,0,0,0.5)' }]}>CARD HOLDER</Text>
+                        <Text style={[styles.cardFaceHolderLabel, { color: 'rgba(0,0,0,0.4)' }]}>CARD HOLDER</Text>
                         <Text style={[styles.cardFaceHolderName, { color: '#131313' }]}>{cardFaceHolderName}</Text>
                       </View>
                       <View style={styles.visaRotatedContainer}>
                         <Text style={[styles.visaRotatedText, { color: '#131313' }]}>VISA</Text>
+                      </View>
+                    </LinearGradient>
+                  </View>
+
+                  {/* Tier 4: Travel Expedition */}
+                  <View style={styles.carouselItem}>
+                    <LinearGradient colors={PHYSICAL_GRADIENTS.Travel} style={[styles.portraitCard, styles.shadowWrapper]}>
+                      <View style={styles.glow} />
+                      <View style={styles.cardChip}>
+                        <View style={styles.chipLineHorizontal} />
+                        <View style={styles.chipLineVertical} />
+                      </View>
+                      <View style={styles.cardWifi}>
+                        <Feather name="wifi" size={15} color="rgba(255,255,255,0.4)" style={{ transform: [{ rotate: '90deg' }] }} />
+                      </View>
+                      <View style={styles.brandRotatedContainer}>
+                        <View style={[styles.brandDot, { backgroundColor: '#14F195' }]} />
+                        <Text style={styles.brandRotatedText}>{PHYSICAL_LABELS.Travel}</Text>
+                      </View>
+                      <View style={styles.cardFaceHolderWrap}>
+                        <Text style={styles.cardFaceHolderLabel}>CARD HOLDER</Text>
+                        <Text style={styles.cardFaceHolderName}>{cardFaceHolderName}</Text>
+                      </View>
+                      <View style={styles.visaRotatedContainer}>
+                        <Text style={styles.visaRotatedText}>VISA</Text>
                       </View>
                     </LinearGradient>
                   </View>
@@ -459,7 +537,7 @@ export default function CardScreen({ navigation, route }: any) {
             <Text style={[styles.standardCardTitle, { color: T.text }]}>
               {activeTab === 'virtual' 
                 ? (selectedSkin === 'standard' ? 'Standard card' : selectedSkin === 'solana' ? 'Solana edition' : 'Organic Leaf')
-                : (physicalSkin === 'crimson' ? 'Crimson Flagship Metal' : 'Limited Platinum Steel')}
+                : `${physicalTier} Metal Smartcard`}
             </Text>
             
             <Text style={[styles.standardCardSubtitle, { color: T.textMuted }]}>
@@ -470,9 +548,7 @@ export default function CardScreen({ navigation, route }: any) {
                     ? 'Unlock exclusive Web3 features and direct Solana native balance payments.'
                     : 'Eco-friendly smartcard made of biodegradable organic elements.'
               ) : (
-                physicalSkin === 'crimson'
-                  ? 'Premium 15g heavy metal card in brand Crimson. Standard KYC validation required.'
-                  : 'Exclusive platinum-finished brushed steel card. Extremely limited distribution.'
+                PHYSICAL_DESCRIPTIONS[physicalTier]
               )}
             </Text>
 
@@ -493,16 +569,17 @@ export default function CardScreen({ navigation, route }: any) {
               </View>
             ) : (
               <View style={styles.indicatorContainer}>
-                {[
-                  { key: 'crimson', color: '#EC2629' },
-                  { key: 'platinum', color: '#9CA3AF' }
-                ].map((s, idx) => (
-                  <TouchableOpacity
-                    key={s.key}
-                    onPress={() => handlePhysicalIndicatorPress(s.key as PhysicalSkin, idx)}
-                    style={[styles.indicatorDot, physicalSkin === s.key && styles.indicatorDotActive, { backgroundColor: s.color }]}
-                  />
-                ))}
+                {(['Classic', 'Gold', 'Platinum', 'Travel'] as PhysicalTier[]).map((tier, idx) => {
+                  const isActive = physicalTier === tier;
+                  const indicatorColor = tier === 'Gold' ? '#E5A93C' : tier === 'Platinum' ? '#9CA3AF' : tier === 'Travel' ? '#3B82F6' : '#1C1B1B';
+                  return (
+                    <TouchableOpacity
+                      key={tier}
+                      onPress={() => handlePhysicalIndicatorPress(tier, idx)}
+                      style={[styles.indicatorDot, isActive && styles.indicatorDotActive, { backgroundColor: indicatorColor }]}
+                    />
+                  );
+                })}
               </View>
             )}
 
@@ -517,12 +594,14 @@ export default function CardScreen({ navigation, route }: any) {
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
-                onPress={() => navigation.navigate(kycStatus === 'verified' ? 'ApplyPhysicalCard' : 'KYCStatus')}
+                onPress={() => navigation.navigate(kycStatus === 'verified' ? 'ApplyPhysicalCard' : 'KYCStatus', { preselectedVariant: physicalTier })}
                 style={[styles.applyButton, { backgroundColor: T.text }]}
                 activeOpacity={0.9}
               >
                 <Text style={[styles.applyButtonText, { color: T.background }]}>
-                  {kycStatus === 'verified' ? 'Order Physical Card · 20 USD' : 'Verify KYC to order'}
+                  {kycStatus === 'verified' 
+                    ? `Order ${physicalTier} Card · ${PHYSICAL_PRICES[physicalTier] === 'FREE' ? 'Free' : PHYSICAL_PRICES[physicalTier].split('/')[0]}` 
+                    : 'Verify KYC to order'}
                 </Text>
               </TouchableOpacity>
             )}
@@ -1136,8 +1215,8 @@ const styles = StyleSheet.create({
   brandRotatedText: {
     color: '#FFFFFF',
     fontSize: 11,
-    fontWeight: '300', // Thin luxury vertical brand font
-    letterSpacing: 4,  // High modern spacing
+    fontWeight: '300', 
+    letterSpacing: 4,  
     opacity: 0.85,
     fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif-light',
   },

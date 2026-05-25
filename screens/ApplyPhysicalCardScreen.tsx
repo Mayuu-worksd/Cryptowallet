@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Platform, ActivityIndicator, Modal, Dimensions, StatusBar,
@@ -62,14 +62,16 @@ const VARIANT_LABEL_ACCENTS: Record<string, string> = {
 const VARIANT_DESCRIPTIONS: Record<string, string> = {
   Classic:  'Solid matte slate card. Perfect for effortless daily transactions and international ATM withdrawals.',
   Gold:     'Elite Emperor Gold finished metal card. Crafted for global business travelers and high-tier cashbacks.',
-  Platinum: 'Solid brushed space platinum steel card. Heavyweight physical profile featuring bespoke concierge privileges.',
+  Platinum: 'Solid space platinum steel card. Heavyweight physical profile featuring bespoke concierge privileges.',
   Travel:   'Deep Aero Indigo composite shell card. Zero foreign transaction fees and accelerated flight points.',
 };
 
-export default function ApplyPhysicalCardScreen({ navigation }: any) {
+export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
   const { isDarkMode, walletAddress, kycStatus, cardDetails } = useWallet() as any;
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const insets = useSafeAreaInsets();
+
+  const { preselectedVariant } = route?.params || {};
 
   const [variants, setVariants] = useState<CardVariant[]>([]);
   const [selectedVariant, setSelectedVariant] = useState<CardVariant | null>(null);
@@ -85,8 +87,6 @@ export default function ApplyPhysicalCardScreen({ navigation }: any) {
   const [liveKycStatus, setLiveKycStatus] = useState(kycStatus);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'error' as 'success' | 'error' | 'info' });
 
-  const scrollRef = useRef<ScrollView>(null);
-
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'error') =>
     setToast({ visible: true, message, type });
 
@@ -99,37 +99,33 @@ export default function ApplyPhysicalCardScreen({ navigation }: any) {
     ]).then(([v, pending, requests, kycRecord]) => {
       const activeVariants = v.length > 0 ? v : DEFAULT_VARIANTS;
       setVariants(activeVariants);
-      setSelectedVariant(activeVariants[0]);
+
+      // Pre-select the card variant based on parameters sent from CardScreen
+      const searchName = preselectedVariant || 'Classic';
+      const matched = activeVariants.find(
+        x => x.name.toLowerCase() === searchName.toLowerCase()
+      );
+      setSelectedVariant(matched || activeVariants[0]);
+
       setHasPending(pending);
       setExistingRequest(requests[0] ?? null);
       setLiveKycStatus(kycRecord?.status ?? null);
     }).catch(() => {
-      // Fallback on offline supabase connectivity
+      // Fallback on supabase connection failure
+      const searchName = preselectedVariant || 'Classic';
+      const matched = DEFAULT_VARIANTS.find(
+        x => x.name.toLowerCase() === searchName.toLowerCase()
+      );
       setVariants(DEFAULT_VARIANTS);
-      setSelectedVariant(DEFAULT_VARIANTS[0]);
+      setSelectedVariant(matched || DEFAULT_VARIANTS[0]);
     }).finally(() => {
       setLoadingVariants(false);
       setCheckingExisting(false);
     });
-  }, []);
+  }, [preselectedVariant]);
 
   const shippingFee = selectedCountry ? (SHIPPING_FEES[selectedCountry] ?? SHIPPING_FEES['Other']) : null;
   const totalCost = (selectedVariant?.price ?? 0) + (shippingFee ?? 0);
-
-  const handleCardScroll = (event: any) => {
-    const x = event.nativeEvent.contentOffset.x;
-    const index = Math.round(x / SCREEN_WIDTH);
-    if (variants.length > 0 && index >= 0 && index < variants.length) {
-      setSelectedVariant(variants[index]);
-    }
-  };
-
-  const handleIndicatorPress = (index: number) => {
-    if (variants.length > index) {
-      setSelectedVariant(variants[index]);
-      scrollRef.current?.scrollTo({ x: index * SCREEN_WIDTH, animated: true });
-    }
-  };
 
   const handleSubmit = async () => {
     if (!selectedVariant) { showToast('Please select a card type'); return; }
@@ -152,6 +148,8 @@ export default function ApplyPhysicalCardScreen({ navigation }: any) {
       setSubmitting(false);
     }
   };
+
+  const cardFaceHolderName = cardDetails?.holderName?.toUpperCase() || 'CARD HOLDER';
 
   // ── Loading ────────────────────────────────────────────────────────────────
   if (checkingExisting) {
@@ -219,19 +217,17 @@ export default function ApplyPhysicalCardScreen({ navigation }: any) {
   }
 
   // ── Existing Request Status Screen Redesign ────────────────────────────────
-  if (existingRequest && !submitted) {
+  // Show status screen for any non-rejected existing request
+  if (existingRequest && !submitted && existingRequest.status !== 'rejected') {
     const req = existingRequest;
     const isApproved = req.status === 'approved';
-    const isRejected = req.status === 'rejected';
-    const statusColor = isApproved ? '#00C853' : isRejected ? CRIMSON : '#F59E0B';
-    const statusIcon  = isApproved ? 'check-circle' : isRejected ? 'x-circle' : 'clock';
-    const statusLabel = isApproved ? 'APPROVED' : isRejected ? 'REJECTED' : 'UNDER REVIEW';
-    const statusTitle = isApproved ? 'Card Ready for Dispatch' : isRejected ? 'Order Rejected' : 'Processing Order';
+    const statusColor = isApproved ? '#00C853' : '#F59E0B';
+    const statusIcon  = isApproved ? 'check-circle' : 'clock';
+    const statusLabel = isApproved ? 'APPROVED' : 'UNDER REVIEW';
+    const statusTitle = isApproved ? 'Card Ready for Dispatch' : 'Processing Order';
     const statusSub   = isApproved
       ? `Your high-fidelity physical card has been approved and is currently being minted and prepared for dispatch to ${req.country}.`
-      : isRejected
-      ? 'Your physical card order was declined after profile verification. Tap below to submit a new request.'
-      : 'Our core compliance desk is currently validating your wallet. Review will finish shortly.';
+      : 'Our compliance desk is currently validating your wallet. Review will finish shortly.';
 
     return (
       <View style={{ flex: 1, backgroundColor: T.background }}>
@@ -276,20 +272,15 @@ export default function ApplyPhysicalCardScreen({ navigation }: any) {
 
           <TouchableOpacity
             style={[styles.gateBtn, {
-              backgroundColor: isRejected ? T.text : T.surface,
-              borderWidth: isRejected ? 0 : 1,
+              backgroundColor: T.surface,
+              borderWidth: 1,
               borderColor: T.border,
               marginTop: 12,
             }]}
-            onPress={() => {
-              if (isRejected) { setExistingRequest(null); setHasPending(false); }
-              else navigation.goBack();
-            }}
+            onPress={() => navigation.goBack()}
             activeOpacity={0.85}
           >
-            <Text style={[styles.gateBtnText, { color: isRejected ? T.background : T.text }]}>
-              {isRejected ? 'Reapply for physical card' : 'Go back'}
-            </Text>
+            <Text style={[styles.gateBtnText, { color: T.text }]}>Go back</Text>
           </TouchableOpacity>
         </ScrollView>
       </View>
@@ -344,7 +335,11 @@ export default function ApplyPhysicalCardScreen({ navigation }: any) {
     );
   }
 
-  // ── Main Premium Swipe & Checkout Form ────────────────────────────────────
+  // Find premium gradients for the active card face preview
+  const activeGradient = selectedVariant ? (VARIANT_GRADIENTS[selectedVariant.name] ?? VARIANT_GRADIENTS.Classic) : VARIANT_GRADIENTS.Classic;
+  const activeLabel = selectedVariant ? (VARIANT_LABEL_ACCENTS[selectedVariant.name] ?? selectedVariant.name.toUpperCase()) : 'CLASSIC EDITION';
+  const isSilverChip = selectedVariant?.name === 'Platinum' || selectedVariant?.name === 'Classic';
+
   return (
     <View style={{ flex: 1, backgroundColor: T.background }}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
@@ -353,7 +348,7 @@ export default function ApplyPhysicalCardScreen({ navigation }: any) {
         onHide={() => setToast(p => ({ ...p, visible: false }))}
       />
 
-      {/* Country selection bottom sheet */}
+      {/* Country Selection Modal */}
       <Modal visible={countryModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalSheet, { backgroundColor: T.surface }]}>
@@ -390,120 +385,79 @@ export default function ApplyPhysicalCardScreen({ navigation }: any) {
         <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backArrowCircle, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
           <Feather name="chevron-left" size={20} color={T.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: T.text }]}>Mint physical smartcard</Text>
+        <Text style={[styles.headerTitle, { color: T.text }]}>Order Details</Text>
         <View style={{ width: 38 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         
-        {/* Verified Banner */}
+        {/* Verification banner */}
         <View style={[styles.verifiedBanner, { backgroundColor: 'rgba(0,200,83,0.06)', borderColor: 'rgba(0,200,83,0.2)' }]}>
           <Feather name="shield" size={16} color="#00C853" />
-          <Text style={[styles.verifiedText, { color: '#00C853' }]}>KYC Authenticated · Eligible for metal checkout</Text>
+          <Text style={[styles.verifiedText, { color: '#00C853' }]}>KYC Validated · Checkout Unlocked</Text>
         </View>
 
-        {/* Swipe Pager Header */}
-        <Text style={[styles.sectionTitle, { color: T.textMuted }]}>SWIPE TO CHOOSE TIER</Text>
+        {/* Selected Card Spec */}
+        <Text style={[styles.sectionTitle, { color: T.textMuted }]}>SELECTED CARD SPECIFICATION</Text>
 
         {loadingVariants ? (
           <ActivityIndicator color={CRIMSON} style={{ marginVertical: 32 }} />
         ) : (
-          <View style={styles.carouselContainer}>
-            <ScrollView
-              ref={scrollRef}
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              onScroll={handleCardScroll}
-              scrollEventThrottle={16}
-              contentContainerStyle={styles.carouselContent}
+          <View style={styles.cardPreviewContainer}>
+            <LinearGradient
+              colors={activeGradient}
+              style={[styles.portraitCard, styles.shadowWrapper]}
             >
-              {variants.map(v => {
-                const gradientColors = VARIANT_GRADIENTS[v.name] ?? VARIANT_GRADIENTS.Classic;
-                const labelText = VARIANT_LABEL_ACCENTS[v.name] ?? v.name.toUpperCase();
-                
-                // Platinum steel uses a silver metallic chip, others use gold
-                const isSilverCard = v.name === 'Platinum' || v.name === 'Classic';
-                
-                return (
-                  <View key={v.id} style={styles.carouselItem}>
-                    <LinearGradient
-                      colors={gradientColors}
-                      style={[styles.portraitCard, styles.shadowWrapper]}
-                    >
-                      <View style={styles.glow} />
-                      
-                      {/* Premium Card Chip */}
-                      <View style={[
-                        styles.cardChip,
-                        isSilverCard
-                          ? { backgroundColor: '#E5E7EB', borderColor: '#9CA3AF' }
-                          : { backgroundColor: '#E5A93C', borderColor: '#D4942A' }
-                      ]}>
-                        <View style={[styles.chipLineHorizontal, { backgroundColor: isSilverCard ? '#6B7280' : '#B57C1E' }]} />
-                        <View style={[styles.chipLineVertical, { backgroundColor: isSilverCard ? '#6B7280' : '#B57C1E' }]} />
-                      </View>
+              <View style={styles.glow} />
+              
+              {/* Gold or Silver smart contact chip */}
+              <View style={[
+                styles.cardChip,
+                isSilverChip
+                  ? { backgroundColor: '#E5E7EB', borderColor: '#9CA3AF' }
+                  : { backgroundColor: '#E5A93C', borderColor: '#D4942A' }
+              ]}>
+                <View style={[styles.chipLineHorizontal, { backgroundColor: isSilverChip ? '#6B7280' : '#B57C1E' }]} />
+                <View style={[styles.chipLineVertical, { backgroundColor: isSilverChip ? '#6B7280' : '#B57C1E' }]} />
+              </View>
 
-                      {/* Contactless symbol */}
-                      <View style={styles.cardWifi}>
-                        <Feather name="wifi" size={15} color={isSilverCard ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.4)'} style={{ transform: [{ rotate: '90deg' }] }} />
-                      </View>
+              {/* Wi-Fi wave symbol */}
+              <View style={styles.cardWifi}>
+                <Feather name="wifi" size={15} color={isSilverChip ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.4)'} style={{ transform: [{ rotate: '90deg' }] }} />
+              </View>
 
-                      {/* rotated vertical luxury spaced font */}
-                      <View style={styles.brandRotatedContainer}>
-                        <View style={[styles.brandDot, { backgroundColor: isSilverCard ? CRIMSON : '#FFFFFF' }]} />
-                        <Text style={[
-                          styles.brandRotatedText,
-                          { color: isSilverCard ? '#131313' : '#FFFFFF' }
-                        ]}>
-                          {labelText}
-                        </Text>
-                      </View>
+              {/* rotated vertical brand font styling */}
+              <View style={styles.brandRotatedContainer}>
+                <View style={[styles.brandDot, { backgroundColor: isSilverChip ? CRIMSON : '#FFFFFF' }]} />
+                <Text style={[
+                  styles.brandRotatedText,
+                  { color: isSilverChip ? '#131313' : '#FFFFFF' }
+                ]}>
+                  {activeLabel}
+                </Text>
+              </View>
 
-                      {/* Holder name printed horizontally */}
-                      <View style={styles.cardFaceHolderWrap}>
-                        <Text style={[styles.cardFaceHolderLabel, { color: isSilverCard ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.4)' }]}>CARD HOLDER</Text>
-                        <Text style={[styles.cardFaceHolderName, { color: isSilverCard ? '#131313' : '#FFFFFF' }]}>
-                          {cardDetails?.holderName || 'CARD HOLDER'}
-                        </Text>
-                      </View>
+              {/* Holder details */}
+              <View style={styles.cardFaceHolderWrap}>
+                <Text style={[styles.cardFaceHolderLabel, { color: isSilverChip ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.4)' }]}>CARD HOLDER</Text>
+                <Text style={[styles.cardFaceHolderName, { color: isSilverChip ? '#131313' : '#FFFFFF' }]}>
+                  {cardFaceHolderName}
+                </Text>
+              </View>
 
-                      {/* visa logo bottom-left */}
-                      <View style={styles.visaRotatedContainer}>
-                        <Text style={[styles.visaRotatedText, { color: isSilverCard ? '#131313' : '#FFFFFF' }]}>VISA</Text>
-                      </View>
-                    </LinearGradient>
-                  </View>
-                );
-              })}
-            </ScrollView>
-
-            {/* Indicator Dots */}
-            <View style={styles.indicatorContainer}>
-              {variants.map((v, idx) => {
-                const isSelected = selectedVariant?.id === v.id;
-                const dotColor = v.name === 'Gold' ? '#E5A93C' : v.name === 'Platinum' ? '#9CA3AF' : v.name === 'Travel' ? '#3B82F6' : '#1C1B1B';
-                return (
-                  <TouchableOpacity
-                    key={v.id}
-                    onPress={() => handleIndicatorPress(idx)}
-                    style={[
-                      styles.indicatorDot,
-                      isSelected && styles.indicatorDotActive,
-                      { backgroundColor: dotColor }
-                    ]}
-                  />
-                );
-              })}
-            </View>
+              {/* visa branding */}
+              <View style={styles.visaRotatedContainer}>
+                <Text style={[styles.visaRotatedText, { color: isSilverChip ? '#131313' : '#FFFFFF' }]}>VISA</Text>
+              </View>
+            </LinearGradient>
           </View>
         )}
 
-        {/* Selected Card tier info */}
+        {/* Selected Card Specs below card */}
         {selectedVariant && (
           <View style={styles.tierInfoBox}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <Text style={[styles.tierName, { color: T.text }]}>{selectedVariant.name} Metal</Text>
+              <Text style={[styles.tierName, { color: T.text }]}>{selectedVariant.name} Metal Spec</Text>
               <Text style={[styles.tierPrice, { color: selectedVariant.name === 'Gold' ? '#E5A93C' : CRIMSON }]}>
                 {selectedVariant.price === 0 ? 'FREE' : `$${selectedVariant.price.toFixed(2)}/yr`}
               </Text>
@@ -512,7 +466,7 @@ export default function ApplyPhysicalCardScreen({ navigation }: any) {
               {VARIANT_DESCRIPTIONS[selectedVariant.name] ?? 'Premium laser-etched heavy metal smartcard.'}
             </Text>
 
-            {/* Custom high-fidelity checkmarks features */}
+            {/* Custom checks */}
             <View style={styles.featuresList}>
               {selectedVariant.features.map(f => (
                 <View key={f} style={styles.featureRow}>
@@ -526,7 +480,7 @@ export default function ApplyPhysicalCardScreen({ navigation }: any) {
           </View>
         )}
 
-        {/* Shipping address select field */}
+        {/* Address selection form field */}
         <Text style={[styles.sectionTitle, { color: T.textMuted, marginTop: 12 }]}>SHIPPING DESTINATION</Text>
         <TouchableOpacity
           style={[styles.countrySelector, { backgroundColor: T.surface, borderColor: selectedCountry ? CRIMSON : T.border }]}
@@ -542,7 +496,7 @@ export default function ApplyPhysicalCardScreen({ navigation }: any) {
           <Feather name="chevron-down" size={16} color={T.textDim} />
         </TouchableOpacity>
 
-        {/* transparent checkout summary invoice block */}
+        {/* Transparent billing review ledger */}
         {selectedVariant && selectedCountry && (
           <View style={[styles.orderSummary, { backgroundColor: T.surface, borderColor: T.border }]}>
             <Text style={[styles.sectionTitle, { color: T.textMuted, marginBottom: 12, marginLeft: 0 }]}>BILLING LEDGER</Text>
@@ -583,6 +537,15 @@ export default function ApplyPhysicalCardScreen({ navigation }: any) {
               </Text>
             </>
           )}
+        </TouchableOpacity>
+
+        {/* Option to change card model and return */}
+        <TouchableOpacity
+          style={[styles.changeDesignBtn, { borderColor: T.border }]}
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.changeDesignText, { color: T.textDim }]}>Change card design</Text>
         </TouchableOpacity>
 
         <Text style={[styles.disclaimer, { color: T.textDim }]}>
@@ -642,23 +605,11 @@ const styles = StyleSheet.create({
 
   sectionTitle: { fontSize: 10, fontWeight: '800', letterSpacing: 1.2, marginBottom: 12, marginLeft: 2 },
 
-  // Redesigned Swiping Selector Carousel
-  carouselContainer: {
-    width: SCREEN_WIDTH,
-    alignSelf: 'center',
-    height: 380,
-    marginBottom: 20,
-  },
-  carouselScroll: {
-    flex: 1,
-  },
-  carouselContent: {
-    alignItems: 'center',
-  },
-  carouselItem: {
-    width: SCREEN_WIDTH,
+  // Bespoke static card face preview
+  cardPreviewContainer: {
     alignItems: 'center',
     justifyContent: 'center',
+    marginVertical: 18,
   },
   portraitCard: {
     width: 215,
@@ -731,7 +682,7 @@ const styles = StyleSheet.create({
   },
   brandRotatedText: {
     fontSize: 10,
-    fontWeight: '300', // Thin elegant card font style
+    fontWeight: '300', // Rotated luxury spaced font style
     letterSpacing: 4,
     opacity: 0.85,
     fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif-light',
@@ -765,26 +716,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     fontStyle: 'italic',
     letterSpacing: 0.5,
-  },
-
-  indicatorContainer: {
-    flexDirection: 'row',
-    gap: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  indicatorDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    opacity: 0.25,
-  },
-  indicatorDotActive: {
-    width: 18,
-    height: 7,
-    borderRadius: 4,
-    opacity: 1,
   },
 
   // Tier info block
@@ -843,6 +774,17 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   submitBtnText: { fontSize: 15, fontWeight: '900' },
+
+  changeDesignBtn: {
+    height: 48,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  changeDesignText: { fontSize: 13, fontWeight: '800' },
+
   disclaimer: { fontSize: 11, textAlign: 'center', lineHeight: 18, paddingHorizontal: 12 },
 
   // Redesigned Success Screens
