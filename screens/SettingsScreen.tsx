@@ -86,19 +86,6 @@ export default function SettingsScreen({ navigation }: any) {
   const { prices } = useMarket();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
 
-  const adminTapCount = React.useRef(0);
-  const adminTapTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  const handleHeaderTap = () => {
-    adminTapCount.current += 1;
-    if (adminTapTimer.current) clearTimeout(adminTapTimer.current);
-    if (adminTapCount.current >= 5) {
-      adminTapCount.current = 0;
-      navigation.navigate('Admin');
-      return;
-    }
-    adminTapTimer.current = setTimeout(() => { adminTapCount.current = 0; }, 2000);
-  };
-
   // Refresh pin badge whenever screen comes into focus
   React.useEffect(() => {
     refreshPinEnabled();
@@ -439,9 +426,7 @@ export default function SettingsScreen({ navigation }: any) {
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Main')} activeOpacity={0.7}>
           <Feather name="arrow-left" size={24} color={T.text} />
         </TouchableOpacity>
-        <TouchableOpacity onPress={handleHeaderTap} activeOpacity={1}>
-          <Text style={styles.headerTitle}>Profile & Settings</Text>
-        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Profile & Settings</Text>
         <View style={{ width: 40 }} />
       </View>
 

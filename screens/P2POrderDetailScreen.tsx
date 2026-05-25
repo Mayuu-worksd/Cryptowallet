@@ -81,6 +81,7 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
   const [uploadProgress, setUploadProgress] = useState(0);
   
   const scrollRef = useRef<ScrollView>(null);
+  const chatScrollRef = useRef<ScrollView>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastMsgCount = useRef(0);
   const msgAnimations = useRef<Record<string, Animated.Value>>({});
@@ -113,7 +114,7 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
           merged.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
           return merged;
         });
-        setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 50);
+        setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: false }), 50);
       }
     } catch {}
   }, [currentOrder.id]);
@@ -140,7 +141,7 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
           if (withoutOptimistic.find(m => m.id === payload.new.id)) return withoutOptimistic;
           const next = [...withoutOptimistic, payload.new];
           next.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-          setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
+          setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 80);
           return next;
         });
       })
@@ -170,7 +171,7 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
       created_at: new Date().toISOString(),
     };
     setMessages(prev => [...prev, optimistic]);
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+    setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 50);
     try {
       const { data } = await supabase.from('p2p_chat').insert({
         order_id:      currentOrder.id,
@@ -180,7 +181,7 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
       }).select().single();
       if (data) {
         setMessages(prev => {
-          const replaced = prev.map(m => m.id === optId ? data : m);
+          const replaced = prev.map((m: any) => m.id === optId ? data : m);
           replaced.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
           return replaced;
         });
@@ -452,7 +453,6 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
       <ScrollView 
         contentContainerStyle={styles.scroll} 
         showsVerticalScrollIndicator={false}
-        ref={scrollRef}
       >
         {/* Subtle Ambient status glow */}
         <LinearGradient
@@ -1083,7 +1083,7 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
                   if (utrRef.trim().length >= 6 && proofUrl) {
                     handleSubmitProof();
                   } else {
-                    scrollRef.current?.scrollToEnd({ animated: true });
+                    chatScrollRef.current?.scrollToEnd({ animated: true });
                     Alert.alert(
                       'Payment Proof Incomplete',
                       'Please complete fiat transfer, enter UTR transaction ID, and upload receipt screenshot inside instructions panel.',
@@ -1159,7 +1159,7 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
           {/* Message List */}
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <ScrollView
-              ref={scrollRef}
+              ref={chatScrollRef}
               style={{ flex: 1, backgroundColor: T.background }}
               contentContainerStyle={styles.chatMessages}
               showsVerticalScrollIndicator={false}

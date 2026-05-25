@@ -77,7 +77,6 @@ import VCCPhysicalScreen   from './screens/VCCPhysicalScreen';
 import VCCProcessingScreen from './screens/VCCProcessingScreen';
 import VCCSuccessScreen    from './screens/VCCSuccessScreen';
 import ApplyPhysicalCardScreen from './screens/ApplyPhysicalCardScreen';
-import AdminScreen            from './screens/AdminScreen';
 import BusinessKYCFormScreen     from './screens/BusinessKYCFormScreen';
 import BusinessKYCDocumentScreen from './screens/BusinessKYCDocumentScreen';
 import BusinessKYCResultScreen   from './screens/BusinessKYCResultScreen';
@@ -602,7 +601,6 @@ function MobileNavigator() {
             <Stack.Screen name="Landing"      component={LandingScreen} />
             <Stack.Screen name="CreateWallet" component={CreateWalletScreen} />
             <Stack.Screen name="ImportWallet" component={ImportWalletScreen} />
-            <Stack.Screen name="Admin"        component={AdminScreen} options={{ gestureEnabled: false }} />
           </>
         ) : (
           <>
@@ -636,7 +634,6 @@ function MobileNavigator() {
             <Stack.Screen name="VCCProcessing" component={VCCProcessingScreen} options={{ gestureEnabled: false }} />
             <Stack.Screen name="VCCSuccess"    component={VCCSuccessScreen} options={{ gestureEnabled: false }} />
             <Stack.Screen name="ApplyPhysicalCard" component={ApplyPhysicalCardScreen} />
-            <Stack.Screen name="Admin" component={AdminScreen} options={{ gestureEnabled: false }} />
             <Stack.Screen name="BusinessKYCForm"     component={BusinessKYCFormScreen} />
             <Stack.Screen name="BusinessKYCDocument" component={BusinessKYCDocumentScreen} />
             <Stack.Screen name="BusinessKYCResult"   component={BusinessKYCResultScreen} options={{ gestureEnabled: false }} />
@@ -699,7 +696,6 @@ function WebApp() {
       case 'VCCProcessing': return <VCCProcessingScreen navigation={nav} route={{}} />;
       case 'VCCSuccess':    return <VCCSuccessScreen navigation={nav} route={{}} />;
       case 'ApplyPhysicalCard': return <ApplyPhysicalCardScreen navigation={nav} />;
-      case 'Admin':         return <AdminScreen navigation={nav} />;
       case 'CreateWallet': return <CreateWalletScreen navigation={nav} />;
       case 'ImportWallet': return <ImportWalletScreen navigation={nav} />;
       case 'Landing':      return <LandingScreen navigation={nav} />;

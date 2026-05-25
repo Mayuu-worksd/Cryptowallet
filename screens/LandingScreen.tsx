@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Theme, Fonts } from '../constants';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScrollView, View, Text, StyleSheet, TouchableOpacity, Platform, Dimensions, Alert } from 'react-native';
@@ -11,20 +11,6 @@ export default function LandingScreen({ navigation }: any) {
   const { isDarkMode } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const isWeb = Platform.OS === 'web';
-  const tapCount = React.useRef(0);
-  const tapTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const handleLogoTap = () => {
-    tapCount.current += 1;
-    if (tapTimer.current) clearTimeout(tapTimer.current);
-    if (tapCount.current >= 5) {
-      tapCount.current = 0;
-      navigation.navigate('Admin');
-      return;
-    }
-    tapTimer.current = setTimeout(() => { tapCount.current = 0; }, 2000);
-  };
-
   if (isWeb) {
     return (
       <ScrollView style={[styles.container, { backgroundColor: T.background }]}>
@@ -56,7 +42,7 @@ export default function LandingScreen({ navigation }: any) {
           <View style={styles.heroContent}>
             <View style={webLandingStyles.securityPill}>
                <Feather name="shield" size={14} color={T.primary} />
-               <Text style={[webLandingStyles.securityPillText, { color: T.primary }]}>NON-CUSTODIAL · OPEN SOURCE</Text>
+               <Text style={[webLandingStyles.securityPillText, { color: T.primary }]}>NON-CUSTODIAL Â· OPEN SOURCE</Text>
             </View>
             <Text style={[styles.heroTitle, { color: T.text, fontSize: 80, lineHeight: 88 }]}>
               The Future of{'\n'}
@@ -112,7 +98,7 @@ export default function LandingScreen({ navigation }: any) {
               <View style={webLandingStyles.securityText}>
                  <Text style={webLandingStyles.securityTitle}>Multi-Layer Global Security</Text>
                  <Text style={webLandingStyles.securityDesc}>
-                    Your assets are protected by OS-level encryption and non-custodial key storage. Only you hold your private keys — no third party can access your funds.
+                    Your assets are protected by OS-level encryption and non-custodial key storage. Only you hold your private keys â€” no third party can access your funds.
                  </Text>
               </View>
               <View style={webLandingStyles.securityStats}>
@@ -130,7 +116,7 @@ export default function LandingScreen({ navigation }: any) {
 
         {/* Footer */}
         <View style={[styles.webFooter, { borderTopColor: T.border + '20' }]}>
-          <Text style={[styles.webFooterText, { color: T.textMuted }]}>© 2025 CryptoWallet. Self-custody wallet. Not a financial service.</Text>
+          <Text style={[styles.webFooterText, { color: T.textMuted }]}>Â© 2025 CryptoWallet. Self-custody wallet. Not a financial service.</Text>
           <View style={styles.webFooterLinks}>
             <Text style={[styles.webFooterLink, { color: T.textMuted }]}>Institutions</Text>
             <Text style={[styles.webFooterLink, { color: T.textMuted }]}>Privacy</Text>
@@ -148,9 +134,7 @@ export default function LandingScreen({ navigation }: any) {
       <View pointerEvents="none" style={[styles.glowRight, { backgroundColor: T.primary + '15' }]} />
 
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <TouchableOpacity onPress={handleLogoTap} activeOpacity={1}>
-          <Text style={[styles.headerTitle, { color: T.primary }]}>CryptoWallet</Text>
-        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: T.primary }]}>CryptoWallet</Text>
         <View style={[styles.langBadge, { backgroundColor: T.surface, borderColor: T.border }]}>
           <MaterialIcons name="language" size={16} color={T.primary} />
           <Text style={[styles.langText, { color: T.textMuted }]}>EN</Text>
@@ -172,7 +156,7 @@ export default function LandingScreen({ navigation }: any) {
 
         <Text style={[styles.title, { color: T.text }]}>Your Crypto,{'\n'}Your Control</Text>
         <Text style={[styles.subtitle, { color: T.textMuted }]}>
-          A non-custodial wallet — only you hold your keys. No bank, no middleman.
+          A non-custodial wallet â€” only you hold your keys. No bank, no middleman.
         </Text>
 
         <View style={styles.pillRow}>
@@ -204,7 +188,7 @@ export default function LandingScreen({ navigation }: any) {
 
       <View style={styles.footer}>
         <Text style={[styles.footerText, { color: T.textMuted }]}>
-          SECURE • MODERN • TRANSPARENT
+          SECURE â€¢ MODERN â€¢ TRANSPARENT
         </Text>
       </View>
     </View>
@@ -297,4 +281,6 @@ const webLandingStyles = StyleSheet.create({
   statVal: { color: '#FFF', fontSize: 48, fontFamily: Fonts.extraBold },
   statLab: { color: 'rgba(255,255,255,0.5)', fontSize: 14, fontFamily: Fonts.extraBold, letterSpacing: 1 },
 });
+
+
 

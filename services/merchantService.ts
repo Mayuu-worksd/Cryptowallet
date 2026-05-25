@@ -1,4 +1,4 @@
-/**
+﻿/**
  * merchantService.ts
  * Handles Business KYC, Merchant QR codes, and P2P marketplace
  */
@@ -8,7 +8,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from './supabaseClient';
 import { escrowService } from './escrowService';
 import { storageService } from './storageService';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export type BusinessKYCStatus = 'pending' | 'under_review' | 'approved' | 'rejected' | null;
 
@@ -78,7 +78,7 @@ export type EscrowLock = {
   created_at?: string;
 };
 
-// Admin support wallet — messages from this address get the SUPPORT badge in chat
+// Admin support wallet â€” messages from this address get the SUPPORT badge in chat
 export const ADMIN_SUPPORT_WALLET = 'support@cryptowallet';
 
 export const BUSINESS_TYPES = [
@@ -118,7 +118,7 @@ export async function getLiveRate(fromToken: string, toFiat: string): Promise<nu
     const cgJson = await cgRes.json();
     const fxJson = await fxRes.json();
 
-    // CoinGecko directly supports INR — use it if available
+    // CoinGecko directly supports INR â€” use it if available
     const directRate = cgJson?.[id]?.[fiatUpper.toLowerCase()];
     if (directRate) return parseFloat(directRate.toFixed(2));
 
@@ -132,12 +132,12 @@ export async function getLiveRate(fromToken: string, toFiat: string): Promise<nu
   }
 }
 
-// ─── Business KYC Service ─────────────────────────────────────────────────────
+// â”€â”€â”€ Business KYC Service â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const businessKYCService = {
 
   async getStatus(walletAddress: string): Promise<BusinessKYC | null> {
-    // Use atomic RPC — sets wallet context + reads in one transaction (same as KYC)
+    // Use atomic RPC â€” sets wallet context + reads in one transaction (same as KYC)
     const { data, error } = await supabase.rpc('get_business_kyc_status', {
       p_wallet: walletAddress.toLowerCase(),
     });
@@ -203,7 +203,7 @@ export const businessKYCService = {
   },
 };
 
-// ─── Merchant QR Service ──────────────────────────────────────────────────────
+// â”€â”€â”€ Merchant QR Service â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const merchantQRService = {
 
@@ -244,7 +244,7 @@ export const merchantQRService = {
   },
 };
 
-// ─── P2P Service ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ P2P Service â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const p2pService = {
 
@@ -322,7 +322,7 @@ export const p2pService = {
 
   async getMyOrders(walletAddress: string): Promise<P2POrder[]> {
     const addr = walletAddress.toLowerCase();
-    // Fetch as seller AND as buyer in one query — OR filter covers both
+    // Fetch as seller AND as buyer in one query â€” OR filter covers both
     const { data, error } = await supabase
       .from('p2p_orders')
       .select('*')
@@ -371,7 +371,7 @@ export const p2pService = {
     if (!network || network.trim() === '') throw new Error('Network must be specified');
     await setWallet(buyerWallet);
 
-    // Buyer does NOT lock their own crypto — seller already locked it at listing creation.
+    // Buyer does NOT lock their own crypto â€” seller already locked it at listing creation.
     // We only register the buyer on-chain so the contract knows who to release to.
     const isEVMNetwork = !['TRON', 'TRON Nile'].includes(network);
     if (isEVMNetwork && escrowService.isDeployed(network)) {
@@ -399,7 +399,7 @@ export const p2pService = {
     await supabase.from('escrow_locks').update({ buyer_wallet: buyerWallet.toLowerCase() }).eq('order_id', orderId);
   },
 
-  // Buyer initiates payment — moves order from escrow_locked → payment_pending
+  // Buyer initiates payment â€” moves order from escrow_locked â†’ payment_pending
   async initiatePayment(orderId: string, buyerWallet: string): Promise<void> {
     await setWallet(buyerWallet);
     const { error } = await supabase
@@ -411,7 +411,7 @@ export const p2pService = {
     if (error) throw error;
   },
 
-  // Buyer uploads payment proof and marks fiat as sent → payment_verification
+  // Buyer uploads payment proof and marks fiat as sent â†’ payment_verification
   async submitPaymentProof(
     orderId: string,
     buyerWallet: string,
@@ -450,7 +450,7 @@ export const p2pService = {
     if (error) throw error;
   },
 
-  // Legacy alias kept for backward compat — use submitPaymentProof for new flow
+  // Legacy alias kept for backward compat â€” use submitPaymentProof for new flow
   async markPaymentInitiated(orderId: string, network: string = 'Sepolia'): Promise<void> {
     if (!network || network.trim() === '') throw new Error('Network must be specified');
     const walletAddr = await storageService.getWalletAddress();
@@ -463,7 +463,7 @@ export const p2pService = {
     if (error) throw error;
   },
 
-  // Legacy alias — use submitPaymentProof for new flow
+  // Legacy alias â€” use submitPaymentProof for new flow
   async markFiatSent(orderId: string, network: string = 'Sepolia'): Promise<void> {
     if (!network || network.trim() === '') throw new Error('Network must be specified');
     const walletAddr = await storageService.getWalletAddress();
@@ -512,7 +512,7 @@ export const p2pService = {
         console.warn('[p2pService] On-chain release skipped:', e?.message);
       }
     }
-    // Move to crypto_released — stable state so buyer device can detect and credit balance
+    // Move to crypto_released â€” stable state so buyer device can detect and credit balance
     const { error: releaseError } = await supabase
       .from('p2p_orders')
       .update({
@@ -528,7 +528,7 @@ export const p2pService = {
     return { txHash: releaseTxHash };
   },
 
-  // Called by buyer device after crediting balance — finalises the order
+  // Called by buyer device after crediting balance â€” finalises the order
   async acknowledgeReceipt(orderId: string, buyerWallet: string): Promise<void> {
     await setWallet(buyerWallet);
     const { error } = await supabase
@@ -540,50 +540,6 @@ export const p2pService = {
     if (error) throw error;
   },
 
-  // Admin: verify payment and release escrow (platform-triggered release)
-  async adminVerifyAndRelease(
-    orderId: string,
-    adminNote: string = 'Payment verified by admin'
-  ): Promise<void> {
-    const { error } = await supabase
-      .from('p2p_orders')
-      .update({
-        status: 'crypto_released',
-        payment_verified_at: new Date().toISOString(),
-        payment_verified_by: 'admin',
-      })
-      .eq('id', orderId)
-      .eq('status', 'payment_verification');
-    if (error) throw error;
-    await supabase.from('escrow_locks').update({ status: 'released' }).eq('order_id', orderId);
-    try {
-      await supabase.from('p2p_chat').insert({
-        order_id:      orderId,
-        sender_wallet: ADMIN_SUPPORT_WALLET,
-        message:       `✅ ${adminNote}. Crypto has been released to the buyer.`,
-        is_support:    true,
-      });
-    } catch (_) {}
-  },
-
-  // Admin: refund seller (dispute resolved in seller's favour)
-  async adminRefundSeller(orderId: string): Promise<void> {
-    const { error } = await supabase
-      .from('p2p_orders')
-      .update({ status: 'cancelled' })
-      .eq('id', orderId)
-      .eq('status', 'disputed');
-    if (error) throw error;
-    await supabase.from('escrow_locks').update({ status: 'refunded' }).eq('order_id', orderId);
-    try {
-      await supabase.from('p2p_chat').insert({
-        order_id:      orderId,
-        sender_wallet: ADMIN_SUPPORT_WALLET,
-        message:       '🔄 Dispute resolved. Escrow has been refunded to the seller.',
-        is_support:    true,
-      });
-    } catch (_) {}
-  },
 
   async raiseDispute(orderId: string, network: string = 'Sepolia'): Promise<void> {
     if (!network || network.trim() === '') throw new Error('Network must be specified');
@@ -591,7 +547,6 @@ export const p2pService = {
     if (walletAddr) await setWallet(walletAddr);
 
     const isEVMNetwork = !['TRON', 'TRON Nile'].includes(network);
-    
     if (isEVMNetwork && escrowService.isDeployed(network)) {
       try {
         const privateKey = await storageService.getPrivateKey();
@@ -612,17 +567,14 @@ export const p2pService = {
       .eq('id', orderId);
     if (error) throw error;
 
-    // Auto-insert admin support welcome message so the chat is live immediately
     try {
       await supabase.from('p2p_chat').insert({
         order_id:      orderId,
         sender_wallet: ADMIN_SUPPORT_WALLET,
-        message:       '👋 Hi, I\'m from the CryptoWallet support team. I\'ve been assigned to your dispute. Please describe the issue and provide any payment proof. We will resolve this within 24 hours.',
+        message:       "👋 Hi, I'm from the CryptoWallet support team. I've been assigned to your dispute. Please describe the issue and provide any payment proof. We will resolve this within 24 hours.",
         is_support:    true,
       });
-    } catch (error) {
-      // Ignore chat insert errors
-    }
+    } catch (_) {}
   },
 
   async cancelOrder(orderId: string, walletAddress: string, network: string = 'Sepolia'): Promise<void> {
@@ -630,7 +582,6 @@ export const p2pService = {
     await setWallet(walletAddress);
 
     const isEVMNetwork = !['TRON', 'TRON Nile'].includes(network);
-    
     if (isEVMNetwork && escrowService.isDeployed(network)) {
       try {
         const privateKey = await storageService.getPrivateKey();
@@ -652,18 +603,6 @@ export const p2pService = {
       .eq('status', 'open');
     if (error) throw error;
     await supabase.from('escrow_locks').update({ status: 'refunded' }).eq('order_id', orderId);
-  },
-
-  // Admin: get all P2P orders with optional status filter
-  async getAllOrders(status?: string): Promise<P2POrder[]> {
-    let q = supabase
-      .from('p2p_orders')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (status && status !== 'all') q = q.eq('status', status);
-    const { data, error } = await q;
-    if (error) throw error;
-    return (data ?? []) as P2POrder[];
   },
 
   async getSellerStats(walletAddress: string): Promise<{ total: number; completed: number; rate: number }> {
