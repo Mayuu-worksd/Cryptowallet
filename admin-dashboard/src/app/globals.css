@@ -88,26 +88,64 @@ h1, h2, h3, h4, h5, h6, .display-font {
 
 /* Dynamic Dark Mode Overrides for Tailwind Utilities */
 
-/* Text colors */
-.dark .text-\[\#1a1a1a\] { color: var(--foreground) !important; }
-.dark .text-gray-400 { color: var(--text-dim) !important; }
-.dark .text-gray-500 { color: var(--text-muted) !important; }
-.dark .text-gray-600 { color: var(--text-dim) !important; }
+/* ── Text ── */
+.dark .text-\[\#1a1a1a\]  { color: var(--foreground) !important; }
+.dark .text-gray-400      { color: var(--text-dim) !important; }
+.dark .text-gray-500      { color: var(--text-muted) !important; }
+.dark .text-gray-600      { color: var(--text-dim) !important; }
+/* keep blue/red accent text readable */
+.dark .text-\[\#0055ff\]  { color: #60a5fa !important; }
 
-/* Background colors */
-.dark .bg-white { background-color: var(--card-bg) !important; }
-.dark .bg-\[\#f5f0e8\] { background-color: var(--surface-low) !important; }
+/* ── Backgrounds ── */
+.dark .bg-white                    { background-color: var(--card-bg) !important; }
+.dark .bg-\[\#f5f0e8\]            { background-color: var(--surface-low) !important; }
+.dark .bg-\[\#f5f0e8\]\/10        { background-color: rgba(32,31,31,0.5) !important; }
+/* stat card tints */
+.dark .\!bg-\[\#ffcc00\]\/10      { background-color: rgba(236,38,41,0.08) !important; }
+.dark .\!bg-\[\#ffcc00\]\/20      { background-color: rgba(236,38,41,0.12) !important; }
+.dark .\!bg-\[\#0055ff\]\/10      { background-color: rgba(96,165,250,0.08) !important; }
+/* chart tab toggle bg */
+.dark .bg-\[\#f5f0e8\]            { background-color: var(--surface-low) !important; }
+/* chart tab active */
+.dark .bg-\[\#1a1a1a\]            { background-color: var(--surface-high) !important; }
+/* hover row tint */
+.dark .hover\:bg-\[\#ffcc00\]\/5:hover { background-color: rgba(236,38,41,0.05) !important; }
+.dark .hover\:bg-white:hover       { background-color: var(--surface-high) !important; }
+.dark .hover\:bg-\[\#f5f0e8\]:hover { background-color: var(--surface-high) !important; }
 
-/* Border colors */
-.dark .border-\[\#1a1a1a\] { border-color: var(--border-color) !important; }
-.dark .border-\[\#1a1a1a\]\/10 { border-color: rgba(229, 226, 225, 0.1) !important; }
-.dark .border-b-3 { border-bottom-color: var(--border-color) !important; }
-.dark .border-r-3 { border-right-color: var(--border-color) !important; }
-.dark .border-t-3 { border-top-color: var(--border-color) !important; }
-.dark .border-l-3 { border-left-color: var(--border-color) !important; }
-.dark .divide-\[\#1a1a1a\]\/10 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(229, 226, 225, 0.1) !important; }
+/* ── Borders ── */
+.dark .border-\[\#1a1a1a\]         { border-color: var(--border-color) !important; }
+.dark .border-\[\#1a1a1a\]\/10     { border-color: rgba(229,226,225,0.1) !important; }
+.dark .border-b-3                  { border-bottom-color: var(--border-color) !important; }
+.dark .border-r-3                  { border-right-color: var(--border-color) !important; }
+.dark .border-t-3                  { border-top-color: var(--border-color) !important; }
+.dark .border-l-3                  { border-left-color: var(--border-color) !important; }
+.dark .divide-\[\#1a1a1a\]\/10 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(229,226,225,0.1) !important; }
+.dark .border-dashed               { border-color: var(--border-color) !important; }
 
-/* Inputs & selects */
+/* ── Slideout Drawers (bg-white panels) ── */
+.dark .max-w-2xl.bg-white          { background-color: var(--card-bg) !important; }
+.dark .bg-white.border-l-3        { background-color: var(--card-bg) !important; }
+/* drawer footer */
+.dark .border-t-3.bg-white         { background-color: var(--card-bg) !important; }
+/* inner white sections inside drawer */
+.dark .p-4.border-2.bg-white       { background-color: var(--surface-low) !important; }
+.dark .p-3\.5.border-2.bg-\[\#f5f0e8\] { background-color: var(--surface-low) !important; }
+.dark .p-3.border-2.bg-\[\#f5f0e8\]   { background-color: var(--surface-low) !important; }
+.dark .p-2.border.bg-\[\#f5f0e8\]     { background-color: var(--surface-low) !important; }
+
+/* ── Table header & filter bar ── */
+.dark thead tr                     { background-color: var(--surface-low) !important; }
+.dark .p-4.border-b-3.bg-\[\#f5f0e8\] { background-color: var(--surface-low) !important; }
+
+/* ── Chart tab toggle ── */
+.dark .border-2.border-\[\#1a1a1a\].bg-\[\#f5f0e8\].p-1 { background-color: var(--surface-low) !important; }
+.dark .border-2.border-\[\#1a1a1a\].bg-\[\#f5f0e8\].p-1 button:not(.bg-\[\#1a1a1a\]) { color: var(--foreground) !important; }
+
+/* ── Chart grid lines ── */
+.dark svg line { stroke: rgba(255,255,255,0.08) !important; }
+
+/* ── Inputs & selects ── */
 .dark .brutalist-input,
 .dark .brutalist-select {
   background-color: var(--surface-high) !important;
@@ -116,8 +154,15 @@ h1, h2, h3, h4, h5, h6, .display-font {
 }
 .dark .brutalist-input::placeholder { color: var(--text-dim) !important; }
 
-/* Hover row tint — use red-tinted instead of yellow */
-.dark .hover\:bg-\[\#ffcc00\]\/5:hover { background-color: rgba(236, 38, 41, 0.05) !important; }
+/* ── KYC filter pill bar ── */
+.dark .flex.flex-wrap.items-center.gap-1\.5.p-1.border-2.bg-white { background-color: var(--surface-low) !important; }
+.dark .flex.flex-wrap.items-center.gap-1\.5.p-1.border-2.bg-white button:not(.bg-\[\#1a1a1a\]) { color: var(--foreground) !important; }
+
+/* ── Shadow overrides (dark border → subtle) ── */
+.dark .shadow-\[4px_4px_0px_0px_rgba\(26\,26\,26\,1\)\]  { box-shadow: 4px 4px 0px 0px var(--border-color) !important; }
+.dark .shadow-\[3px_3px_0px_0px_rgba\(26\,26\,26\,1\)\]  { box-shadow: 3px 3px 0px 0px var(--border-color) !important; }
+.dark .shadow-\[2px_2px_0px_0px_rgba\(26\,26\,26\,1\)\]  { box-shadow: 2px 2px 0px 0px var(--border-color) !important; }
+.dark .shadow-\[1px_1px_0px_0px_rgba\(26\,26\,26\,1\)\]  { box-shadow: 1px 1px 0px 0px var(--border-color) !important; }
 
 
 /* Brutalist Custom Utilities with variable themes */
@@ -133,6 +178,13 @@ h1, h2, h3, h4, h5, h6, .display-font {
 .brutalist-card:hover {
   transform: translate(-2px, -2px);
   box-shadow: 6px 6px 0px 0px var(--border-color);
+}
+
+/* Ensure all text inside cards respects theme foreground */
+.brutalist-card h1, .brutalist-card h2, .brutalist-card h3,
+.brutalist-card h4, .brutalist-card p, .brutalist-card span,
+.brutalist-card td, .brutalist-card th {
+  color: inherit;
 }
 
 .brutalist-card-yellow {
@@ -304,6 +356,11 @@ h1, h2, h3, h4, h5, h6, .display-font {
 .brutalist-table td {
   border-bottom: 2px solid var(--border-color);
   border-right: 2px solid var(--border-color);
+  color: var(--foreground);
+}
+
+/* Table body rows inherit theme color */
+.brutalist-table tbody tr {
   color: var(--foreground);
 }
 
