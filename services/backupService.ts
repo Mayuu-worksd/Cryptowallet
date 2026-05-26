@@ -49,20 +49,9 @@ export const backupService = {
     try {
       const { error } = await supabase.auth.signInWithOtp({
         email: cleanEmail,
-        options: { shouldCreateUser: false },
+        options: { shouldCreateUser: true },
       });
-      if (error) {
-        // If user doesn't exist in auth, create them first then resend
-        if (error.message?.toLowerCase().includes('not found') || error.message?.toLowerCase().includes('no user')) {
-          const { error: err2 } = await supabase.auth.signInWithOtp({
-            email: cleanEmail,
-            options: { shouldCreateUser: true },
-          });
-          if (err2) return { success: false, error: err2.message };
-          return { success: true };
-        }
-        return { success: false, error: error.message };
-      }
+      if (error) return { success: false, error: error.message };
       return { success: true };
     } catch (e: any) {
       return { success: false, error: e?.message || 'Failed to send verification code.' };
