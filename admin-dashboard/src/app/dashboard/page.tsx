@@ -117,18 +117,21 @@ export default function OverviewPage() {
     : (stats?.usersByDay ?? [0, 0, 0, 0, 0, 0, 0]);
 
   const chartLabels = stats?.chartLabels ?? ['', '', '', '', '', '', ''];
-  const maxVal = Math.max(...activeChart, 1);
-  const minVal = Math.min(...activeChart, 0);
-  const width = 500;
-  const height = 150;
+  const W = 500;
+  const H = 160;
+  const PAD = 20;
 
-  const points = activeChart.map((val, index) => {
-    const x = (index / (activeChart.length - 1)) * width;
-    const y = height - ((val - minVal) / (maxVal - minVal || 1)) * (height - 30) - 15;
-    return `${x},${y}`;
-  }).join(' ');
+  // Safe min/max — always leave vertical room even when all values are equal
+  const rawMax = Math.max(...activeChart);
+  const rawMin = Math.min(...activeChart);
+  const maxVal = rawMax === rawMin ? rawMax + 1 : rawMax;
+  const minVal = rawMin;
 
-  const fillPoints = `${points} ${width},${height} 0,${height}`;
+  const toX = (i: number) => (i / (activeChart.length - 1)) * W;
+  const toY = (v: number) => H - PAD - ((v - minVal) / (maxVal - minVal)) * (H - PAD * 2);
+
+  const points = activeChart.map((v, i) => `${toX(i)},${toY(v)}`).join(' ');
+  const areaPoints = `${activeChart.map((v, i) => `${toX(i)},${toY(v)}`).join(' ')} ${W},${H} 0,${H}`;
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -270,36 +273,41 @@ export default function OverviewPage() {
               </div>
             </div>
 
-            <div className="relative flex-1 min-h-[180px] flex items-end py-4">
+            <div className="relative w-full" style={{ height: 200 }}>
               {isLoading ? (
-                <div className="w-full flex items-center justify-center">
+                <div className="absolute inset-0 flex items-center justify-center">
                   <Loader2 className="h-6 w-6 animate-spin text-[#1a1a1a]" />
                 </div>
               ) : (
-                <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible">
+                <svg
+                  viewBox={`0 0 ${W} ${H}`}
+                  preserveAspectRatio="none"
+                  className="absolute inset-0 w-full h-full"
+                >
                   <defs>
-                    <linearGradient id="glowLine" x1="0" y1="0" x2="1" y2="0">
+                    <linearGradient id="chartGrad" x1="0" y1="0" x2="1" y2="0">
                       <stop offset="0%" stopColor="#ffcc00" />
                       <stop offset="100%" stopColor="#0055ff" />
                     </linearGradient>
+                    <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#0055ff" stopOpacity="0.15" />
+                      <stop offset="100%" stopColor="#0055ff" stopOpacity="0" />
+                    </linearGradient>
                   </defs>
-                  <line x1="0" y1={height * 0.25} x2={width} y2={height * 0.25} stroke="#1a1a1a" strokeOpacity="0.1" strokeDasharray="3,3" />
-                  <line x1="0" y1={height * 0.5}  x2={width} y2={height * 0.5}  stroke="#1a1a1a" strokeOpacity="0.1" strokeDasharray="3,3" />
-                  <line x1="0" y1={height * 0.75} x2={width} y2={height * 0.75} stroke="#1a1a1a" strokeOpacity="0.1" strokeDasharray="3,3" />
-                  
-                  {/* Neon path */}
-                  <polyline fill="none" stroke="url(#glowLine)" strokeWidth="3" points={points} />
-                  
-                  {/* Solid heavy dots */}
-                  {activeChart.map((val, index) => {
-                    const x = (index / (activeChart.length - 1)) * width;
-                    const y = height - ((val - minVal) / (maxVal - minVal || 1)) * (height - 30) - 15;
-                    return (
-                      <g key={index}>
-                        <circle cx={x} cy={y} r="6" className="fill-[#ffcc00] stroke-[#1a1a1a] stroke-[2px]" />
-                      </g>
-                    );
-                  })}
+                  {/* Grid lines */}
+                  {[0.25, 0.5, 0.75].map(r => (
+                    <line key={r} x1="0" y1={H * r} x2={W} y2={H * r}
+                      stroke="#1a1a1a" strokeOpacity="0.08" strokeDasharray="4,4" />
+                  ))}
+                  {/* Area fill */}
+                  <polygon points={areaPoints} fill="url(#areaGrad)" />
+                  {/* Line */}
+                  <polyline fill="none" stroke="url(#chartGrad)" strokeWidth="2.5" strokeLinejoin="round" points={points} />
+                  {/* Dots */}
+                  {activeChart.map((v, i) => (
+                    <circle key={i} cx={toX(i)} cy={toY(v)} r="5"
+                      fill="#ffcc00" stroke="#1a1a1a" strokeWidth="2" />
+                  ))}
                 </svg>
               )}
             </div>
