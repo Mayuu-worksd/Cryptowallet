@@ -46,17 +46,26 @@ export const backupService = {
    */
   async sendOTP(email: string): Promise<{ success: boolean; error?: string }> {
     const cleanEmail = email.trim().toLowerCase();
+    console.log('[OTP] sendOTP called for:', cleanEmail);
+    console.log('[OTP] Supabase URL:', supabase.supabaseUrl ?? 'not set');
     try {
-      const { error } = await supabase.auth.signInWithOtp({
+      console.log('[OTP] Calling supabase.auth.signInWithOtp...');
+      const { data, error } = await supabase.auth.signInWithOtp({
         email: cleanEmail,
         options: {
           shouldCreateUser: true,
           data: { app: 'cryptowallet' },
         },
       });
-      if (error) return { success: false, error: error.message };
+      console.log('[OTP] signInWithOtp response — data:', JSON.stringify(data), '| error:', JSON.stringify(error));
+      if (error) {
+        console.error('[OTP] SEND FAILED:', error.message, '| status:', error.status, '| name:', error.name);
+        return { success: false, error: error.message };
+      }
+      console.log('[OTP] Email sent successfully to', cleanEmail);
       return { success: true };
     } catch (e: any) {
+      console.error('[OTP] EXCEPTION in sendOTP:', e?.message, e);
       return { success: false, error: e?.message || 'Failed to send verification code.' };
     }
   },
@@ -64,15 +73,22 @@ export const backupService = {
   async verifyOTP(email: string, token: string): Promise<{ success: boolean; error?: string }> {
     const cleanEmail = email.trim().toLowerCase();
     const cleanToken = token.trim();
+    console.log('[OTP] verifyOTP called — email:', cleanEmail, '| token:', cleanToken);
     try {
-      const { error } = await supabase.auth.verifyOtp({
+      const { data, error } = await supabase.auth.verifyOtp({
         email: cleanEmail,
         token: cleanToken,
         type: 'email',
       });
-      if (!error) return { success: true };
+      console.log('[OTP] verifyOtp response — data:', JSON.stringify(data), '| error:', JSON.stringify(error));
+      if (!error) {
+        console.log('[OTP] Verification SUCCESS');
+        return { success: true };
+      }
+      console.error('[OTP] VERIFY FAILED:', error.message);
       return { success: false, error: 'Invalid or expired verification code. Please request a new one.' };
     } catch (e: any) {
+      console.error('[OTP] EXCEPTION in verifyOTP:', e?.message, e);
       return { success: false, error: e?.message || 'Verification failed.' };
     }
   },
