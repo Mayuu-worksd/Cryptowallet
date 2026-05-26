@@ -49,7 +49,10 @@ export const backupService = {
     try {
       const { error } = await supabase.auth.signInWithOtp({
         email: cleanEmail,
-        options: { shouldCreateUser: true },
+        options: {
+          shouldCreateUser: true,
+          data: { app: 'cryptowallet' },
+        },
       });
       if (error) return { success: false, error: error.message };
       return { success: true };
@@ -58,30 +61,16 @@ export const backupService = {
     }
   },
 
-  /**
-   * Verifies the OTP code entered by the user against Supabase Auth.
-   * No backdoors, no local fallback — real verification only.
-   */
   async verifyOTP(email: string, token: string): Promise<{ success: boolean; error?: string }> {
     const cleanEmail = email.trim().toLowerCase();
     const cleanToken = token.trim();
     try {
-      // Try 'email' type first (used for magic link / OTP sign-in)
       const { error } = await supabase.auth.verifyOtp({
         email: cleanEmail,
         token: cleanToken,
         type: 'email',
       });
       if (!error) return { success: true };
-
-      // Fallback: try 'magiclink' type
-      const { error: err2 } = await supabase.auth.verifyOtp({
-        email: cleanEmail,
-        token: cleanToken,
-        type: 'magiclink',
-      });
-      if (!err2) return { success: true };
-
       return { success: false, error: 'Invalid or expired verification code. Please request a new one.' };
     } catch (e: any) {
       return { success: false, error: e?.message || 'Verification failed.' };
