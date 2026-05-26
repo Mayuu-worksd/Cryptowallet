@@ -20,27 +20,27 @@ const CRIMSON = '#EC2629';
 // Fallback metadata to ensure instant rendering with zero blank states
 const DEFAULT_VARIANTS: CardVariant[] = [
   {
-    id: 'classic',
-    name: 'Classic',
-    price: 0,
+    id: 'classic', name: 'Classic', variant_name: 'Classic Edition',
+    network: 'Visa', price: 0, annual_fee_usd: 0, transaction_limit_usd: 5000,
+    design_url: '', color_hex: '#1C1B1B', card_color_hex: '#1C1B1B', is_active: true,
     features: ['No annual maintenance fee', 'Global ATM cash withdrawals', '2% Cashback on retail spend'],
   },
   {
-    id: 'gold',
-    name: 'Gold',
-    price: 49.99,
+    id: 'gold', name: 'Gold', variant_name: 'Gold Centurion',
+    network: 'Visa', price: 49.99, annual_fee_usd: 49.99, transaction_limit_usd: 20000,
+    design_url: '', color_hex: '#E5A93C', card_color_hex: '#E5A93C', is_active: true,
     features: ['Elite metal card finish', 'Complimentary lounge key access', '4% Cashback on all dining'],
   },
   {
-    id: 'platinum',
-    name: 'Platinum',
-    price: 99.99,
+    id: 'platinum', name: 'Platinum', variant_name: 'Platinum Stellar',
+    network: 'Visa', price: 99.99, annual_fee_usd: 99.99, transaction_limit_usd: 50000,
+    design_url: '', color_hex: '#9CA3AF', card_color_hex: '#9CA3AF', is_active: true,
     features: ['Brushed solid steel weight', 'Comprehensive travel insurance', '24/7 dedicated personal concierge'],
   },
   {
-    id: 'travel',
-    name: 'Travel',
-    price: 79.99,
+    id: 'travel', name: 'Travel', variant_name: 'Travel Expedition',
+    network: 'Visa', price: 79.99, annual_fee_usd: 79.99, transaction_limit_usd: 30000,
+    design_url: '', color_hex: '#1E3A8A', card_color_hex: '#1E3A8A', is_active: true,
     features: ['Zero foreign exchange markups', 'Double points on airlines & hotel booking', 'Priority global lounge access'],
   },
 ];
