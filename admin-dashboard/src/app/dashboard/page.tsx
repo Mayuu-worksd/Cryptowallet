@@ -20,6 +20,7 @@ import {
   Globe,
   Radio,
   Gavel,
+  CreditCard,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -35,13 +36,17 @@ export default function OverviewPage() {
         { data: businessKyc },
         { data: transactions },
         { data: p2pOrders },
+        { data: cardRequests },
       ] = await Promise.all([
         supabase.from('wallet_profiles').select('*'),
         supabase.from('kyc').select('*'),
         supabase.from('business_kyc').select('*'),
         supabase.from('transactions').select('*').order('created_at', { ascending: true }),
         supabase.from('p2p_orders').select('*'),
+        supabase.from('card_requests').select('id, status'),
       ]);
+
+      const cardRequestsPending = (cardRequests ?? []).filter((c: any) => c.status === 'pending').length;
 
       const totalUsers = profiles?.length ?? 0;
       const totalTransactions = transactions?.length ?? 0;
@@ -96,7 +101,7 @@ export default function OverviewPage() {
         totalUsers, totalTransactions, totalP2P,
         kycPending, kycVerified, kycRejected,
         merchantPending, merchantApproved,
-        totalRevenue,
+        totalRevenue, cardRequestsPending,
         chartLabels: last7.map(d => d.label),
         volumeByDay,
         usersByDay,
@@ -141,8 +146,8 @@ export default function OverviewPage() {
         )}
       </div>
 
-      {/* 4 Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* 5 Stat Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
 
         {/* Total Users */}
         <div className="brutalist-card p-6">
@@ -196,6 +201,28 @@ export default function OverviewPage() {
             {isLoading ? '—' : stats?.kycPending ?? 0}
           </h3>
           <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-2 font-mono">KYC Reviews Awaiting Action</p>
+        </div>
+
+        {/* Card Requests */}
+        <div className="brutalist-card p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="h-12 w-12 border-2 border-[#1a1a1a] bg-[#0055ff] flex items-center justify-center text-white">
+              <CreditCard className="h-6 w-6" />
+            </div>
+            {(stats?.cardRequestsPending ?? 0) > 0 ? (
+              <span className="text-[9px] font-extrabold border-2 border-[#1a1a1a] bg-[#e63b2e] text-white px-2 py-0.5 uppercase tracking-wider font-display animate-pulse">
+                {stats?.cardRequestsPending} Pending
+              </span>
+            ) : (
+              <span className="text-[9px] font-extrabold border-2 border-[#1a1a1a] bg-[#f5f0e8] px-2 py-0.5 uppercase tracking-wider font-display">
+                All Processed
+              </span>
+            )}
+          </div>
+          <h3 className="text-4xl font-extrabold tracking-tight text-[#1a1a1a] font-mono leading-none">
+            {isLoading ? '—' : stats?.cardRequestsPending ?? 0}
+          </h3>
+          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-2 font-mono">Card Orders Pending</p>
         </div>
 
         {/* Total Revenue */}

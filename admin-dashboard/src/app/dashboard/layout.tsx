@@ -22,6 +22,7 @@ import {
   ChevronRight,
   Sun,
   Moon,
+  CreditCard,
 } from 'lucide-react';
 
 interface SidebarItem {
@@ -117,6 +118,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'Merchant Hub', href: '/dashboard/merchants', icon: Store },
     { name: 'P2P & Escrow', href: '/dashboard/p2p', icon: RefreshCw },
     { name: 'Transactions', href: '/dashboard/transactions', icon: ArrowLeftRight },
+    { name: 'Card Requests', href: '/dashboard/cards', icon: CreditCard },
     { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
   ];
 
