@@ -7,7 +7,7 @@ module.exports = {
     icon: "./assets/icon.png",
     userInterfaceStyle: "dark",
     sdkVersion: "54.0.0",
-    jsEngine: "hermes",
+    jsEngine: "jsc",
     fastRefresh: true,
     updates: {
       url: "https://u.expo.dev/cde8eb79-39ce-4b25-83f1-3b3410e7bcb4",
