@@ -1,4 +1,5 @@
 'use client';
+export const dynamic = 'force-dynamic';
 
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -57,14 +58,8 @@ export default function MerchantsPage() {
       });
 
       if (error) {
-        console.warn('RPC admin_get_business_kyc failed, querying table directamente:', error.message);
-        let query = supabase.from('business_kyc').select('*');
-        if (statusFilter !== 'all') {
-          query = query.eq('status', statusFilter);
-        }
-        const { data: tblData, error: tblError } = await query.order('created_at', { ascending: false });
-        if (tblError) throw tblError;
-        return tblData || [];
+        console.error('RPC admin_get_business_kyc failed:', error.message);
+        throw error;
       }
       return data || [];
     },
@@ -83,19 +78,11 @@ export default function MerchantsPage() {
       });
 
       if (error) {
-        console.warn('RPC admin_update_business_kyc failed, direct table update:', error.message);
-        const { error: tableError } = await supabase
-          .from('business_kyc')
-          .update({
-            status: mappedStatus,
-            admin_notes: notes || null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('wallet_address', addr);
-        if (tableError) throw tableError;
+        console.error('RPC admin_update_business_kyc failed:', error.message);
+        throw error;
       }
 
-      // Automatically upgrade wallet account_type to 'business' if approved
+      // Automatically upgrade/revert wallet account_type
       if (mappedStatus === 'approved') {
         const { error: upgradeError } = await supabase
           .from('wallet_profiles')
@@ -103,6 +90,14 @@ export default function MerchantsPage() {
           .eq('wallet_address', addr);
         if (upgradeError) {
           console.warn('Failed to upgrade wallet_profile account_type:', upgradeError.message);
+        }
+      } else if (mappedStatus === 'rejected') {
+        const { error: revertError } = await supabase
+          .from('wallet_profiles')
+          .update({ account_type: 'personal' })
+          .eq('wallet_address', addr);
+        if (revertError) {
+          console.warn('Failed to revert wallet_profile account_type:', revertError.message);
         }
       }
     },
@@ -173,7 +168,7 @@ export default function MerchantsPage() {
         <div className="brutalist-card p-4 !bg-[#ffcc00]/20">
           <p className="text-[9px] text-emerald-600 font-bold uppercase tracking-wider font-mono">Authorized Corporate</p>
           <h4 className="text-2xl font-extrabold text-[#1a1a1a] mt-1.5 font-mono">
-            {isLoading ? '...' : countByStatus('approved') || countByStatus('verified')}
+            {isLoading ? '...' : countByStatus('approved')}
           </h4>
         </div>
 
