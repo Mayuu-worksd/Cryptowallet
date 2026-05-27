@@ -96,6 +96,42 @@ h1, h2, h3, h4, h5, h6, .display-font {
 /* keep blue/red accent text readable */
 .dark .text-\[\#0055ff\]  { color: #60a5fa !important; }
 
+/* Ensure yellow background elements maintain high-contrast dark text in dark mode */
+.dark .bg-\[\#ffcc00\],
+.dark .bg-\[\#ffcc00\].text-\[\#1a1a1a\],
+.dark .bg-\[\#ffcc00\] .text-\[\#1a1a1a\],
+.dark .bg-\[\#ffcc00\] h1,
+.dark .bg-\[\#ffcc00\] h2,
+.dark .bg-\[\#ffcc00\] h3,
+.dark .bg-\[\#ffcc00\] h4,
+.dark .bg-\[\#ffcc00\] p,
+.dark .bg-\[\#ffcc00\] span,
+.dark .bg-\[\#ffcc00\] div,
+.dark .bg-\[\#ffcc00\] td,
+.dark .bg-\[\#ffcc00\] th,
+.dark .bg-\[\#ffcc00\] a,
+.dark .bg-\[\#ffcc00\] svg,
+.dark .bg-\[\#ffcc00\] button,
+.dark .bg-\[\#ffcc00\] *,
+.dark [class*="bg-[#ffcc00]"],
+.dark [class*="bg-[#ffcc00]"] * {
+  color: #1a1a1a !important;
+}
+
+/* Prevent icon overlap in brutalist inputs */
+.brutalist-input.\!pl-9,
+.brutalist-input.pl-9,
+.brutalist-input.\!pl-10,
+.brutalist-input.pl-10 {
+  padding-left: 2.75rem !important;
+}
+.brutalist-input.\!pr-9,
+.brutalist-input.pr-9,
+.brutalist-input.\!pr-10,
+.brutalist-input.pr-10 {
+  padding-right: 2.75rem !important;
+}
+
 /* ── Backgrounds ── */
 .dark .bg-white                    { background-color: var(--card-bg) !important; }
 .dark .bg-\[\#f5f0e8\]            { background-color: var(--surface-low) !important; }
@@ -292,7 +328,10 @@ h1, h2, h3, h4, h5, h6, .display-font {
   background-color: var(--card-bg);
   border: 3px solid var(--border-color);
   border-radius: 0px;
-  padding: 0.5rem 0.75rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
   color: var(--foreground);
   font-family: 'Inter', sans-serif;
   transition: all 0.1s ease;

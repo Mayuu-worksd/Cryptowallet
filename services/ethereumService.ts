@@ -1,6 +1,14 @@
 import { ethers } from 'ethers';
 import { NETWORKS } from '../constants';
 
+// ethers v5/v6 compatibility shims
+const formatEther  = (ethers as any).formatEther  ?? ethers.utils.formatEther;
+const formatUnits  = (ethers as any).formatUnits  ?? ethers.utils.formatUnits;
+const parseEther   = (ethers as any).parseEther   ?? ethers.utils.parseEther;
+const parseUnits   = (ethers as any).parseUnits   ?? ethers.utils.parseUnits;
+const isAddress    = (ethers as any).isAddress    ?? ethers.utils.isAddress;
+const JsonRpcProvider = (ethers as any).JsonRpcProvider ?? ethers.providers.JsonRpcProvider;
+
 const ERC20_ABI = [
   'function balanceOf(address owner) view returns (uint256)',
   'function decimals() view returns (uint8)',
@@ -34,10 +42,10 @@ const NETWORK_CONFIG: Record<string, { chainId: number; name: string }> = {
   Arbitrum: { chainId: 42161,    name: 'arbitrum'  },
 };
 
-let provider: ethers.JsonRpcProvider | null = null;
+let provider: any = null;
 let currentNetwork = 'Sepolia';
 
-export function getProvider(network: string = currentNetwork): ethers.JsonRpcProvider {
+export function getProvider(network: string = currentNetwork): any {
   // Prevent TRON networks from being used with EVM provider
   if (network === 'TRON' || network === 'TRON Nile') {
     throw new Error(`Cannot use EVM provider for ${network}. Use tronService instead.`);
@@ -45,7 +53,7 @@ export function getProvider(network: string = currentNetwork): ethers.JsonRpcPro
   if (!provider || network !== currentNetwork) {
     const rpcUrl    = NETWORKS[network]    ?? NETWORKS['Sepolia'];
     const netConfig = NETWORK_CONFIG[network] ?? NETWORK_CONFIG['Sepolia'];
-    provider = new ethers.JsonRpcProvider(rpcUrl, { chainId: netConfig.chainId, name: netConfig.name }, { staticNetwork: true });
+    provider = new JsonRpcProvider(rpcUrl, { chainId: netConfig.chainId, name: netConfig.name }, { staticNetwork: true });
     currentNetwork = network;
   }
   return provider;
@@ -67,7 +75,7 @@ export const ethereumService = {
         contract.balanceOf(address),
         contract.decimals(),
       ]);
-      return parseFloat(ethers.formatUnits(raw, Number(decimals)));
+      return parseFloat(formatUnits(raw, Number(decimals)));
     } catch {
       return 0;
     }
@@ -76,7 +84,7 @@ export const ethereumService = {
   async getETHBalance(address: string, network?: string): Promise<string> {
     try {
       const bal = await getProvider(network).getBalance(address);
-      return ethers.formatEther(bal);
+      return formatEther(bal);
     } catch {
       return '0.0';
     }
@@ -88,20 +96,20 @@ export const ethereumService = {
     amount: string,
     network?: string
   ): Promise<{ gasCostEth: string; gasPrice: bigint; gasLimit: bigint }> {
-    const defaultGasPrice = ethers.parseUnits('20', 'gwei');
+    const defaultGasPrice = parseUnits('20', 'gwei');
     const defaultGasLimit = 21000n;
     const fallback = {
-      gasCostEth: ethers.formatEther(defaultGasLimit * defaultGasPrice),
+      gasCostEth: formatEther(defaultGasLimit * defaultGasPrice),
       gasPrice:   defaultGasPrice,
       gasLimit:   defaultGasLimit,
     };
     if (!from || !to || !amount || parseFloat(amount) <= 0) return fallback;
     try {
       const p        = getProvider(network);
-      const gasLimit = await p.estimateGas({ from, to, value: ethers.parseEther(amount) });
+      const gasLimit = await p.estimateGas({ from, to, value: parseEther(amount) });
       const feeData  = await p.getFeeData();
       const gasPrice = feeData.maxFeePerGas ?? feeData.gasPrice ?? defaultGasPrice;
-      return { gasCostEth: ethers.formatEther(gasLimit * gasPrice), gasPrice, gasLimit };
+      return { gasCostEth: formatEther(gasLimit * gasPrice), gasPrice, gasLimit };
     } catch {
       return fallback;
     }
@@ -116,7 +124,7 @@ export const ethereumService = {
     try {
       if (!privateKey || typeof privateKey !== 'string')
         return { hash: '', success: false, error: 'Wallet not available' };
-      if (!ethers.isAddress(toAddress))
+      if (!isAddress(toAddress))
         return { hash: '', success: false, error: 'Invalid recipient address' };
       const parsedAmount = parseFloat(amount);
       if (isNaN(parsedAmount) || parsedAmount <= 0 || parsedAmount > 1_000_000)
@@ -125,12 +133,12 @@ export const ethereumService = {
       const p           = getProvider(network);
       const wallet      = new ethers.Wallet(privateKey, p);
       const balance     = await p.getBalance(wallet.address);
-      const sendAmount  = ethers.parseEther(amount);
+      const sendAmount  = parseEther(amount);
       const { gasPrice, gasLimit, gasCostEth } = await ethereumService.estimateGas(wallet.address, toAddress, amount, network);
       const totalNeeded = sendAmount + gasLimit * gasPrice;
 
       if (balance < totalNeeded) {
-        const balEth = parseFloat(ethers.formatEther(balance)).toFixed(6);
+        const balEth = parseFloat(formatEther(balance)).toFixed(6);
         const gasEth = parseFloat(gasCostEth).toFixed(6);
         return { hash: '', success: false, error: `Insufficient balance. You need ${amount} ETH + ${gasEth} ETH gas. Available: ${balEth} ETH` };
       }

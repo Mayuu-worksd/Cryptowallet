@@ -132,7 +132,7 @@ export default function TransactionsPage() {
               placeholder="Search transaction hash signature, wallet node profile, token asset..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full brutalist-input pl-10 focus:ring-0"
+              className="w-full brutalist-input !pl-10 focus:ring-0"
             />
           </div>
 

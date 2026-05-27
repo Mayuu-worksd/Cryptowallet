@@ -216,7 +216,7 @@ export default function MerchantsPage() {
               placeholder="Search business, reg no, wallet..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full brutalist-input pl-9 focus:ring-0"
+              className="w-full brutalist-input !pl-9 focus:ring-0"
             />
           </div>
         </div>
@@ -307,9 +307,9 @@ export default function MerchantsPage() {
                     <td className="py-4 px-6 text-right">
                       <button
                         onClick={() => openMerchant(m)}
-                        className="px-3 py-1.5 brutalist-button text-xs shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]"
+                        className="px-3 py-1.5 brutalist-button text-xs shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] flex items-center gap-1.5"
                       >
-                        <Eye className="h-3.5 w-3.5 inline mr-1" />
+                        <Eye className="h-3.5 w-3.5" />
                         <span>Inspect Corporate</span>
                       </button>
                     </td>
@@ -420,9 +420,9 @@ export default function MerchantsPage() {
                         href={signedUrls.doc}
                         target="_blank"
                         rel="noreferrer"
-                        className="brutalist-button px-3.5 py-1.5 text-[10px]"
+                        className="brutalist-button px-3.5 py-1.5 text-[10px] flex items-center justify-center gap-1.5"
                       >
-                        <FileText className="h-3.5 w-3.5 inline mr-1" />
+                        <FileText className="h-3.5 w-3.5" />
                         <span>View doc</span>
                       </a>
                     ) : (
@@ -442,9 +442,10 @@ export default function MerchantsPage() {
                       href={signedUrls.directorId}
                       target="_blank"
                       rel="noreferrer"
-                      className="brutalist-button px-3.5 py-1.5 text-[10px] !bg-[#0055ff] !text-white hover:!bg-[#1a1a1a] hover:!text-white"
+                      className="brutalist-button px-3.5 py-1.5 text-[10px] !bg-[#0055ff] !text-white hover:!bg-[#1a1a1a] hover:!text-white flex items-center justify-center gap-1.5"
                     >
-                      View ID
+                      <User className="h-3.5 w-3.5" />
+                      <span>View ID</span>
                     </a>
                   </div>
                 )}
@@ -497,9 +498,9 @@ export default function MerchantsPage() {
                 <div className="flex gap-4">
                   <button
                     onClick={() => setShowRejectForm(true)}
-                    className="flex-1 brutalist-button py-3 !bg-[#e63b2e] !text-white text-xs"
+                    className="flex-1 brutalist-button py-3 !bg-[#e63b2e] !text-white text-xs flex items-center justify-center gap-1.5"
                   >
-                    <XCircle className="h-4 w-4 inline mr-1" />
+                    <XCircle className="h-4 w-4" />
                     <span>Decline Hub</span>
                   </button>
                   <button
@@ -509,10 +510,13 @@ export default function MerchantsPage() {
                       }
                     }}
                     disabled={processReview.isPending}
-                    className="flex-1 brutalist-button-blue py-3 text-xs disabled:opacity-50"
+                    className="flex-1 brutalist-button-blue py-3 text-xs disabled:opacity-50 flex items-center justify-center gap-1.5"
                   >
-                    {processReview.isPending && <Loader2 className="h-4 w-4 animate-spin inline mr-1" />}
-                    <CheckCircle className="h-4 w-4 inline mr-1" />
+                    {processReview.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <CheckCircle className="h-4 w-4" />
+                    )}
                     <span>Authorize Corp</span>
                   </button>
                 </div>

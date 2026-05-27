@@ -1,7 +1,7 @@
-﻿import React from 'react';
+import React from 'react';
 import { Theme, Fonts } from '../constants';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ScrollView, View, Text, StyleSheet, TouchableOpacity, Platform, Dimensions, Alert } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, TouchableOpacity, Platform, Dimensions, Alert, Image } from 'react-native';
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -16,7 +16,10 @@ export default function LandingScreen({ navigation }: any) {
       <ScrollView style={[styles.container, { backgroundColor: T.background }]}>
         {/* Navbar */}
         <View style={styles.webNav}>
-          <Text style={[styles.headerTitle, { color: T.primary, fontSize: 24 }]}>CryptoWallet</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Image source={require('../assets/logo.png')} style={{ width: 36, height: 36, borderRadius: 8 }} resizeMode="contain" />
+            <Text style={[styles.headerTitle, { color: T.primary, fontSize: 24 }]}>CryptoWallet</Text>
+          </View>
           <View style={{ flex: 1 }} />
           <View style={styles.webNavLinks}>
             <TouchableOpacity onPress={() => Alert.alert('Feature coming soon!')} activeOpacity={0.7}>
@@ -60,10 +63,16 @@ export default function LandingScreen({ navigation }: any) {
                 <Feather name="arrow-right" size={20} color="#FFF" />
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.secondaryBtn, { borderColor: T.border, width: 240 }]}
+                style={[styles.secondaryBtn, { borderColor: T.border, width: 200 }]}
                 onPress={() => navigation.navigate('ImportWallet')}
               >
-                <Text style={[styles.secondaryBtnText, { color: T.text }]}>Restore Access</Text>
+                <Text style={[styles.secondaryBtnText, { color: T.text }]}>Mnemonic Import</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.secondaryBtn, { borderColor: T.border, width: 200 }]}
+                onPress={() => navigation.navigate('RecoverWallet')}
+              >
+                <Text style={[styles.secondaryBtnText, { color: T.text }]}>Email Recovery</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -134,7 +143,10 @@ export default function LandingScreen({ navigation }: any) {
       <View pointerEvents="none" style={[styles.glowRight, { backgroundColor: T.primary + '15' }]} />
 
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <Text style={[styles.headerTitle, { color: T.primary }]}>CryptoWallet</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Image source={require('../assets/logo.png')} style={{ width: 28, height: 28, borderRadius: 6 }} resizeMode="contain" />
+          <Text style={[styles.headerTitle, { color: T.primary }]}>CryptoWallet</Text>
+        </View>
         <View style={[styles.langBadge, { backgroundColor: T.surface, borderColor: T.border }]}>
           <MaterialIcons name="language" size={16} color={T.primary} />
           <Text style={[styles.langText, { color: T.textMuted }]}>EN</Text>
@@ -143,15 +155,7 @@ export default function LandingScreen({ navigation }: any) {
 
       <View style={styles.content}>
         <View style={styles.graphicContainer}>
-          <LinearGradient colors={[T.primaryDark, T.primary]} style={styles.graphicCore}>
-            <MaterialIcons name="account-balance-wallet" size={72} color="#FFF" style={{ opacity: 0.9 }} />
-            <View style={[styles.floatingIcon, { top: -20, right: -10, backgroundColor: T.surface }]}>
-              <MaterialIcons name="lock" size={22} color={T.primary} />
-            </View>
-            <View style={[styles.floatingIcon, { bottom: -20, left: -10, backgroundColor: T.surface }]}>
-              <Feather name="shield" size={22} color={T.primary} />
-            </View>
-          </LinearGradient>
+          <Image source={require('../assets/logo.png')} style={{ width: 140, height: 140, borderRadius: 36 }} resizeMode="contain" />
         </View>
 
         <Text style={[styles.title, { color: T.text }]}>Your Crypto,{'\n'}Your Control</Text>
@@ -183,6 +187,14 @@ export default function LandingScreen({ navigation }: any) {
             <Text style={[styles.restoreText, { color: T.text }]}>Import Existing Wallet</Text>
           </TouchableOpacity>
           <Text style={[styles.btnHint, { color: T.textMuted }]}>Already have a wallet? Restore it here</Text>
+
+          <TouchableOpacity
+            style={[styles.restoreBtn, { backgroundColor: T.surface, borderColor: T.border }]}
+            onPress={() => navigation.navigate('RecoverWallet')}
+          >
+            <Text style={[styles.restoreText, { color: T.text }]}>Recover Using Email</Text>
+          </TouchableOpacity>
+          <Text style={[styles.btnHint, { color: T.textMuted }]}>Recover encrypted cloud backup via OTP</Text>
         </View>
       </View>
 

@@ -210,7 +210,7 @@ export default function P2PPage() {
               placeholder="Search wallet, asset, fiat..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full brutalist-input pl-9 focus:ring-0"
+              className="w-full brutalist-input !pl-9 focus:ring-0"
             />
           </div>
         </div>

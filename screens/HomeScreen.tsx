@@ -73,17 +73,17 @@ const ActionBtn = memo(({ icon, label, onPress, T, isDark }: {
   return (
     <TouchableOpacity
       style={{ flex: 1, alignItems: 'center', gap: 8 }}
-      onPress={onPress}
-      onPressIn={() => Animated.spring(scale, { toValue: 0.88, useNativeDriver: true, speed: 30, bounciness: 6 }).start()}
-      onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 14 }).start()}
+      onPress={() => { haptics.selection(); onPress(); }}
+      onPressIn={() => Animated.spring(scale, { toValue: 0.85, useNativeDriver: true, tension: 300, friction: 18 }).start()}
+      onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 200, friction: 14 }).start()}
       activeOpacity={1}
     >
       <Animated.View style={[
-        { width: 58, height: 58, borderRadius: 29, backgroundColor: isDark ? '#1c1b1b' : '#F1F3F4',
+        { width: 60, height: 60, borderRadius: 30, backgroundColor: isDark ? '#1c1b1b' : '#F1F3F4',
           alignItems: 'center', justifyContent: 'center',
           borderWidth: 1, borderColor: isDark ? '#2a2a2a' : '#E8EAED',
-          shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.15, shadowRadius: 6, elevation: 4 },
+          shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.18, shadowRadius: 8, elevation: 5 },
         { transform: [{ scale }] },
       ]}>
         <MaterialIcons name={icon} size={24} color={isDark ? '#FFFFFF' : '#131313'} />
@@ -105,31 +105,40 @@ const TokenRow = memo(({ symbol, amount, usd, change24h, T, hideBalance, onPress
   symbol: string; amount: number; usd: number; change24h: number; T: any; hideBalance: boolean; onPress: () => void;
   formatFiat: (usd: number) => string;
 }) => {
+  const scale = useRef(new Animated.Value(1)).current;
   const safeChange = typeof change24h === 'number' && isFinite(change24h) ? change24h : 0;
   const safeUsd    = typeof usd === 'number' && isFinite(usd) ? usd : 0;
   const safeAmt    = typeof amount === 'number' && isFinite(amount) ? amount : 0;
   const isUp = safeChange >= 0;
   return (
-    <TouchableOpacity style={styles.tokenItem} onPress={onPress} activeOpacity={0.7}>
-      <View style={styles.tokenLeft}>
-        <CoinIcon symbol={symbol} size={44} />
-        <View style={{ marginLeft: 14 }}>
-          <Text style={[styles.tokenName, { color: T.text }]}>{COIN_META[symbol]?.name ?? symbol}</Text>
-          <Text style={[styles.tokenSub, { color: T.textMuted }]}>
-            {hideBalance ? '••••' : `${safeAmt.toFixed(4)} ${symbol}`}
-          </Text>
+    <TouchableOpacity
+      style={styles.tokenItem}
+      onPress={() => { haptics.selection(); onPress(); }}
+      onPressIn={() => Animated.spring(scale, { toValue: 0.97, tension: 300, friction: 20, useNativeDriver: true }).start()}
+      onPressOut={() => Animated.spring(scale, { toValue: 1, tension: 200, friction: 14, useNativeDriver: true }).start()}
+      activeOpacity={1}
+    >
+      <View style={[{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flex: 1 }]}>
+        <View style={styles.tokenLeft}>
+          <CoinIcon symbol={symbol} size={44} />
+          <View style={{ marginLeft: 14 }}>
+            <Text style={[styles.tokenName, { color: T.text }]}>{COIN_META[symbol]?.name ?? symbol}</Text>
+            <Text style={[styles.tokenSub, { color: T.textMuted }]}>
+              {hideBalance ? '••••' : `${safeAmt.toFixed(4)} ${symbol}`}
+            </Text>
+          </View>
         </View>
-      </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <View style={{ alignItems: 'flex-end' }}>
-          <Text style={[styles.tokenUsd, { color: T.text }]}>
-            {hideBalance ? '••••' : formatFiat(safeUsd)}
-          </Text>
-          <Text style={{ fontSize: 12, fontFamily: Fonts.semiBold, color: isUp ? T.success : T.error }}>
-            {isUp ? '▲' : '▼'} {Math.abs(safeChange).toFixed(2)}%
-          </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={[styles.tokenUsd, { color: T.text }]}>
+              {hideBalance ? '••••' : formatFiat(safeUsd)}
+            </Text>
+            <Text style={{ fontSize: 12, fontFamily: Fonts.semiBold, color: isUp ? T.success : T.error }}>
+              {isUp ? '▲' : '▼'} {Math.abs(safeChange).toFixed(2)}%
+            </Text>
+          </View>
+          <Feather name="chevron-right" size={14} color={T.border} />
         </View>
-        <Feather name="chevron-right" size={14} color={T.border} />
       </View>
     </TouchableOpacity>
   );
@@ -448,6 +457,24 @@ export default function HomeScreen({ navigation }: any) {
   const [showAddrSheet, setShowAddrSheet] = useState(false);
   const [addrCopied, setAddrCopied] = useState<string | null>(null);
 
+  // ── Double-tap balance to hide/show ──
+  const lastBalanceTap = useRef(0);
+  const balanceScale = useRef(new Animated.Value(1)).current;
+  const handleBalanceTap = useCallback(() => {
+    const now = Date.now();
+    if (now - lastBalanceTap.current < 300) {
+      haptics.selection();
+      Animated.sequence([
+        Animated.spring(balanceScale, { toValue: 0.95, tension: 300, friction: 18, useNativeDriver: true }),
+        Animated.spring(balanceScale, { toValue: 1, tension: 200, friction: 14, useNativeDriver: true }),
+      ]).start();
+      toggleBalanceVisible();
+      lastBalanceTap.current = 0;
+    } else {
+      lastBalanceTap.current = now;
+    }
+  }, [toggleBalanceVisible, balanceScale]);
+
   const copyAddress = useCallback((addr: string, label: string) => {
     Clipboard.setStringAsync(addr);
     setAddrCopied(label);
@@ -624,7 +651,7 @@ export default function HomeScreen({ navigation }: any) {
           activeOpacity={0.7}
         >
           <View style={[styles.avatarWrap, { backgroundColor: T.primary + '18' }]}>
-            <MaterialIcons name="account-balance-wallet" size={20} color={T.primary} />
+            <Image source={require('../assets/logo.png')} style={{ width: 24, height: 24, borderRadius: 4 }} resizeMode="contain" />
           </View>
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -637,8 +664,17 @@ export default function HomeScreen({ navigation }: any) {
                 <Feather name="chevron-down" size={10} color={networkColor} />
               </View>
             </View>
-            <Text style={[styles.addressText, { color: T.textMuted }]}>
-              {isTron
+            <Text style={[styles.addressText, { color: T.textMuted }]}
+              onLongPress={() => {
+                const addr = isTron ? tronAddress : walletAddress;
+                if (!addr) return;
+                haptics.heavy();
+                Clipboard.setStringAsync(addr);
+                setAddrCopied(isTron ? 'TRON' : 'ETH');
+                setTimeout(() => setAddrCopied(null), 2000);
+              }}
+            >
+              {addrCopied ? '✓ Copied!' : isTron
                 ? (tronAddress ? `${tronAddress.slice(0, 6)}...${tronAddress.slice(-4)}` : 'Deriving...')
                 : (walletAddress ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}` : '')}
             </Text>
@@ -692,24 +728,26 @@ export default function HomeScreen({ navigation }: any) {
           {isInitialLoad ? (
             <SkeletonBox width={200} height={52} borderRadius={12} T={T} style={{ marginBottom: 8 }} />
           ) : (
-            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
-              <Text
-                style={[styles.balanceValue, { color: T.text, fontSize: totalConverted > 9999999 ? 32 : 44 }]}
-              >
-                {balanceVisible ? fmtBalance(totalUsd) : `${fiatSymbol} ••••••`}
-              </Text>
-              <TouchableOpacity
-                onPress={() => {
-                  haptics.selection();
-                  setShowCurrencyPicker(true);
-                }}
-                activeOpacity={0.7}
-                style={[styles.currencyToggle, { backgroundColor: T.surfaceLow, borderColor: T.border }]}
-              >
-                <Text style={[styles.currencyToggleText, { color: T.textMuted }]}>{fiatCurrency}</Text>
-                <Feather name="chevron-down" size={12} color={T.textMuted} />
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity onPress={handleBalanceTap} activeOpacity={1}>
+              <Animated.View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8, transform: [{ scale: balanceScale }] }}>
+                <Text
+                  style={[styles.balanceValue, { color: T.text, fontSize: totalConverted > 9999999 ? 32 : 44 }]}
+                >
+                  {balanceVisible ? fmtBalance(totalUsd) : `${fiatSymbol} ••••••`}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    haptics.selection();
+                    setShowCurrencyPicker(true);
+                  }}
+                  activeOpacity={0.7}
+                  style={[styles.currencyToggle, { backgroundColor: T.surfaceLow, borderColor: T.border }]}
+                >
+                  <Text style={[styles.currencyToggleText, { color: T.textMuted }]}>{fiatCurrency}</Text>
+                  <Feather name="chevron-down" size={12} color={T.textMuted} />
+                </TouchableOpacity>
+              </Animated.View>
+            </TouchableOpacity>
           )}
           {!isInitialLoad && balanceVisible && assetsList.length > 0 && (
             <ChangePill assetsList={assetsList} T={T} />
@@ -750,12 +788,19 @@ export default function HomeScreen({ navigation }: any) {
 
         {/* ── My Assets ── */}
         <View style={[styles.assetsContainer, { backgroundColor: T.surface, borderColor: T.border }]}>
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: T.text }]}>My Assets</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Portfolio')} activeOpacity={0.7}>
-              <Text style={{ color: T.primary, fontSize: 13, fontWeight: '700' }}>View All →</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.sectionHeader}
+            onPress={() => navigation.navigate('Assets')}
+            activeOpacity={0.8}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={[styles.sectionTitleDot, { backgroundColor: T.primary }]} />
+              <Text style={[styles.sectionTitle, { color: T.text }]}>My Assets</Text>
+            </View>
+            <View style={[styles.sectionArrow, { backgroundColor: T.primary + '15', borderColor: T.primary + '30' }]}>
+              <Feather name="chevron-right" size={14} color={T.primary} />
+            </View>
+          </TouchableOpacity>
           {isInitialLoad ? (
             [0,1,2].map(i => (
               <View key={i} style={[styles.tokenItem, { gap: 12 }]}>
@@ -889,7 +934,9 @@ const styles = StyleSheet.create({
 
   assetsContainer: { borderRadius: 20, padding: 14, borderWidth: 1, marginBottom: 8 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-  sectionTitle: { fontSize: 16, fontFamily: Fonts.extraBold, letterSpacing: -0.2 },
+  sectionTitle: { fontSize: 17, fontFamily: Fonts.extraBold, letterSpacing: -0.3 },
+  sectionTitleDot: { width: 4, height: 18, borderRadius: 2 },
+  sectionArrow: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
 
   tokenItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8 },
   tokenLeft: { flexDirection: 'row', alignItems: 'center' },

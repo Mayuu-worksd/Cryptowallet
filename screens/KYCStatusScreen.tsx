@@ -8,7 +8,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useWallet } from '../store/WalletContext';
-import { Theme } from '../constants';
+import { Theme, Fonts } from '../constants';
 import { kycService, KYCRecord, KYCStatus, cardRequestService } from '../services/supabaseService';
 
 const { width } = Dimensions.get('window');
@@ -87,20 +87,20 @@ export default function KYCStatusScreen({ navigation }: any) {
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       
       {/* Custom Header */}
-      <View style={[s.header, { paddingTop: insets.top + 12 }]}>
+      <View style={[s.header, { paddingTop: insets.top + 12, borderBottomColor: T.border }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={[s.backBtn, { backgroundColor: T.surfaceLow }]}>
-           <Feather name="arrow-left" size={24} color={T.text} />
+           <Feather name="arrow-left" size={20} color={T.text} />
         </TouchableOpacity>
         <Text style={[s.headerTitle, { color: T.text }]}>Identity Status</Text>
         <TouchableOpacity onPress={load} style={[s.backBtn, { backgroundColor: T.surfaceLow }]}>
-           <Feather name="refresh-cw" size={18} color={T.textDim} />
+           <Feather name="refresh-cw" size={17} color={T.textDim} />
         </TouchableOpacity>
       </View>
 
       {!record ? (
         <View style={s.emptyContainer}>
            <View style={[s.emptyIconCircle, { backgroundColor: `${T.primary}10`, borderColor: `${T.primary}20` }]}>
-              <Feather name="shield" size={50} color={T.primary} />
+              <Feather name="shield" size={44} color={T.primary} />
            </View>
            <Text style={[s.emptyTitle, { color: T.text }]}>Verification Needed</Text>
            <Text style={[s.emptySub, { color: T.textDim }]}>To access premium card features and higher limits, please verify your identity.</Text>
@@ -120,7 +120,7 @@ export default function KYCStatusScreen({ navigation }: any) {
                     <Text style={s.heroDesc}>{cfg!.desc}</Text>
                  </View>
                  <View style={s.heroIconCircle}>
-                    <Feather name={cfg!.icon} size={32} color={cfg!.color} />
+                    <Feather name={cfg!.icon} size={28} color={cfg!.color} />
                  </View>
               </View>
               <View style={s.heroStatusPill}>
@@ -176,7 +176,7 @@ export default function KYCStatusScreen({ navigation }: any) {
                  <View key={f.label} style={[s.detailRow, i < fields.length - 1 && { borderBottomWidth: 1, borderBottomColor: T.border }]}>
                     <Text style={[s.detailLabel, { color: T.textDim }]}>{f.label}</Text>
                     <Text style={[s.detailValue, { color: T.text }]}>{f.value}</Text>
-                 </View>
+                  </View>
               ))}
            </View>
 
@@ -226,7 +226,7 @@ export default function KYCStatusScreen({ navigation }: any) {
                  </TouchableOpacity>
               )}
               {status === 'verified' && (
-                 <TouchableOpacity style={[s.mainAction, { backgroundColor: T.success }]} onPress={() => navigation.navigate('ApplyPhysicalCard')}>
+                 <TouchableOpacity style={[s.mainAction, { backgroundColor: T.success }]} onPress={() => navigation.navigate('Card', { initialTab: 'physical' })}>
                     <Text style={s.mainActionText}>Order Physical Card</Text>
                     <Feather name="credit-card" size={20} color="#FFF" />
                  </TouchableOpacity>
@@ -245,32 +245,37 @@ export default function KYCStatusScreen({ navigation }: any) {
 const s = StyleSheet.create({
   root: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 20 },
-  backBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 18, fontWeight: '900' },
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+  },
+  backBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 18, fontFamily: Fonts.extraBold, letterSpacing: -0.5 },
   
-  emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 },
-  emptyIconCircle: { width: 100, height: 100, borderRadius: 50, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
-  emptyTitle: { fontSize: 24, fontWeight: '900', marginBottom: 12 },
-  emptySub: { fontSize: 16, textAlign: 'center', lineHeight: 24, opacity: 0.7, marginBottom: 40 },
-  startBtn: { height: 64, width: '100%', borderRadius: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
-  startBtnText: { color: '#FFF', fontSize: 18, fontWeight: '900' },
+  emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
+  emptyIconCircle: { width: 90, height: 90, borderRadius: 45, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
+  emptyTitle: { fontSize: 24, fontFamily: Fonts.extraBold, marginBottom: 12 },
+  emptySub: { fontSize: 14, fontFamily: Fonts.medium, textAlign: 'center', lineHeight: 22, opacity: 0.8, marginBottom: 40 },
+  startBtn: { height: 64, width: '100%', borderRadius: 32, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
+  startBtnText: { color: '#FFF', fontSize: 16, fontFamily: Fonts.extraBold },
   
-  scroll: { paddingHorizontal: 20, paddingBottom: 60 },
+  scroll: { paddingHorizontal: 20, paddingBottom: 60, paddingTop: 16 },
   
   heroCard: { width: '100%', borderRadius: 32, padding: 24, marginBottom: 32, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10 },
   heroContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
   heroTextWrap: { flex: 1, marginRight: 16 },
-  heroLabel: { color: '#FFF', fontSize: 24, fontWeight: '900', marginBottom: 8 },
-  heroDesc: { color: '#FFF', fontSize: 14, opacity: 0.9, lineHeight: 20 },
-  heroIconCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center' },
+  heroLabel: { color: '#FFF', fontSize: 24, fontFamily: Fonts.extraBold, marginBottom: 8 },
+  heroDesc: { color: '#FFF', fontSize: 13, fontFamily: Fonts.medium, opacity: 0.9, lineHeight: 20 },
+  heroIconCircle: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center' },
   heroStatusPill: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
-  statusPillText: { color: '#FFF', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
+  statusPillText: { color: '#FFF', fontSize: 11, fontFamily: Fonts.extraBold, letterSpacing: 1 },
   
-  sectionTitle: { fontSize: 12, fontWeight: '900', letterSpacing: 1.5, marginBottom: 12, marginTop: 12 },
+  sectionTitle: { fontSize: 12, fontFamily: Fonts.extraBold, letterSpacing: 1.5, marginBottom: 12, marginTop: 12 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 },
-  premiumCard: { borderRadius: 28, borderWidth: 1.5, padding: 24, marginBottom: 24 },
+  premiumCard: { borderRadius: 24, borderWidth: 1, padding: 24, marginBottom: 24 },
   
   timelineItem: { flexDirection: 'row', gap: 16 },
   timelineLeft: { alignItems: 'center', width: 24 },
@@ -279,23 +284,23 @@ const s = StyleSheet.create({
   timelineLine: { width: 2, flex: 1, marginVertical: 4 },
   timelineLineFill: { width: '100%', borderRadius: 2 },
   timelineRight: { flex: 1, paddingBottom: 24 },
-  timelineLabel: { fontSize: 16, fontWeight: '800', marginBottom: 2 },
-  timelineState: { fontSize: 13, fontWeight: '600' },
+  timelineLabel: { fontSize: 15, fontFamily: Fonts.bold, marginBottom: 2 },
+  timelineState: { fontSize: 13, fontFamily: Fonts.semiBold },
   
   editFab: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   detailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 18 },
-  detailLabel: { fontSize: 14, fontWeight: '600' },
-  detailValue: { fontSize: 15, fontWeight: '800' },
+  detailLabel: { fontSize: 13, fontFamily: Fonts.bold },
+  detailValue: { fontSize: 14, fontFamily: Fonts.extraBold },
   
   docGrid: { flexDirection: 'row', gap: 16, marginBottom: 32 },
-  docCard: { flex: 1, borderRadius: 24, borderWidth: 1.5, padding: 16, alignItems: 'center' },
+  docCard: { flex: 1, borderRadius: 24, borderWidth: 1, padding: 16, alignItems: 'center' },
   docIconWrap: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-  docLabel: { fontSize: 14, fontWeight: '800', marginBottom: 4 },
-  docStatus: { fontSize: 12, fontWeight: '700' },
+  docLabel: { fontSize: 14, fontFamily: Fonts.bold, marginBottom: 4 },
+  docStatus: { fontSize: 12, fontFamily: Fonts.semiBold },
   
   actionGroup: { gap: 12 },
-  mainAction: { height: 64, borderRadius: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
-  mainActionText: { color: '#FFF', fontSize: 18, fontWeight: '900' },
-  secondaryAction: { height: 60, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  secondaryActionText: { fontSize: 16, fontWeight: '700' }
+  mainAction: { height: 64, borderRadius: 32, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
+  mainActionText: { color: '#FFF', fontSize: 16, fontFamily: Fonts.extraBold },
+  secondaryAction: { height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
+  secondaryActionText: { fontSize: 15, fontFamily: Fonts.bold }
 });

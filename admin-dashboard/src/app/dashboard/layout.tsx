@@ -132,12 +132,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Logo Panel */}
         <div className="h-20 flex items-center justify-between px-6 border-b-3 border-[var(--border-color)] bg-[var(--accent-yellow)]">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 border-2 border-[#1a1a1a] bg-white flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]">
-              <Shield className="h-5 w-5 text-[#1a1a1a]" />
+            <div className="h-10 w-10 overflow-hidden rounded">
+              <img src="/logo.png" alt="CryptoWallet" className="w-full h-full object-contain" />
             </div>
             <div>
-              <h2 className="text-md font-bold tracking-tight text-[#1a1a1a] font-display uppercase">VAULT_ADMIN</h2>
-              <p className="text-[10px] font-bold text-[#1a1a1a] uppercase tracking-widest leading-none">
+              <h2 className="text-md font-bold tracking-tight text-white font-display uppercase">VAULT_ADMIN</h2>
+              <p className="text-[10px] font-bold text-white uppercase tracking-widest leading-none">
                 V2.0.48
               </p>
             </div>
@@ -213,10 +213,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {/* Header */}
             <div className="h-20 flex items-center justify-between px-6 border-b-3 border-[var(--border-color)] bg-[var(--accent-yellow)]">
               <div className="flex items-center gap-2">
-                <div className="h-8 w-8 border-2 border-[#1a1a1a] bg-white flex items-center justify-center">
-                  <Shield className="h-4.5 w-4.5 text-[#1a1a1a]" />
+                <div className="h-8 w-8 overflow-hidden rounded">
+                  <img src="/logo.png" alt="CryptoWallet" className="w-full h-full object-contain" />
                 </div>
-                <span className="text-sm font-bold text-[#1a1a1a] font-display">VAULT_ADMIN</span>
+                <span className="text-sm font-bold text-white font-display">VAULT_ADMIN</span>
               </div>
               <button
                 onClick={() => setMobileMenuOpen(false)}

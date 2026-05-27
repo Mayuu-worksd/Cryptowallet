@@ -9,6 +9,7 @@ import { MaterialIcons, Feather } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { useWallet } from '../store/WalletContext';
 import Toast from '../components/Toast';
+import { usePreventScreenCapture } from 'expo-screen-capture';
 
 const SAVING_STEPS = [
   { icon: 'lock',         label: 'Encrypting keys...' },
@@ -77,6 +78,7 @@ function SavingOverlay({ visible, done, isDarkMode }: { visible: boolean; done: 
 type Step = 'info' | 'phrase' | 'verify' | 'done';
 
 export default function CreateWalletScreen({ navigation }: any) {
+  usePreventScreenCapture();
   const { createWallet, importWallet, isDarkMode } = useWallet();
   const [loading, setLoading]       = useState(false);
   const [savingDone, setSavingDone] = useState(false);

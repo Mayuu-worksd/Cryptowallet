@@ -107,6 +107,14 @@ export default function CardScreen({ navigation, route }: any) {
     navigation.setParams({ qrMerchant: undefined });
   }, [route?.params?.qrMerchant]);
 
+  // Handle initial tab routing
+  useEffect(() => {
+    if (route?.params?.initialTab === 'physical') {
+      setActiveTab('physical');
+      navigation.setParams({ initialTab: undefined });
+    }
+  }, [route?.params?.initialTab]);
+
   const topupTokenBalance = useMemo(() =>
     topupToken === 'ETH' ? parseFloat(ethBalance) : (balances[topupToken] ?? 0),
     [topupToken, ethBalance, balances]);

@@ -3,6 +3,11 @@ import { Platform } from 'react-native';
 import AsyncStorageNative from '@react-native-async-storage/async-storage';
 import { RPC_URLS } from '../config';
 
+// ethers v5/v6 compatibility shims
+const formatEther = (ethers as any).formatEther ?? ethers.utils.formatEther;
+const formatUnits = (ethers as any).formatUnits ?? ethers.utils.formatUnits;
+const JsonRpcProvider = (ethers as any).JsonRpcProvider ?? ethers.providers.JsonRpcProvider;
+
 const AsyncStorage = Platform.OS === 'web'
   ? {
       getItem: async (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
@@ -61,10 +66,10 @@ export type WalletBalances = {
   [key: string]: number;
 };
 
-function makeProvider(network: string): ethers.JsonRpcProvider {
+function makeProvider(network: string) {
   const rpcUrl = RPC_URLS[network] ?? RPC_URLS['Sepolia'];
   const netCfg = NETWORK_CONFIG[network] ?? NETWORK_CONFIG['Sepolia'];
-  return new ethers.JsonRpcProvider(rpcUrl, { chainId: netCfg.chainId, name: netCfg.name }, { staticNetwork: true });
+  return new JsonRpcProvider(rpcUrl, { chainId: netCfg.chainId, name: netCfg.name }, { staticNetwork: true });
 }
 
 export async function getWalletBalances(
@@ -118,7 +123,7 @@ export async function getWalletBalances(
     fetchERC20(provider, walletAddress, TOKEN_CONTRACTS.USDT[network], TOKEN_DECIMALS.USDT),
   ]);
 
-  const chainETH    = ethRaw.status    === 'fulfilled' ? parseFloat(ethers.formatEther(ethRaw.value)) : null;
+  const chainETH  = ethRaw.status  === 'fulfilled' ? parseFloat(formatEther(ethRaw.value)) : null;
   const chainUSDC   = usdcRaw.status   === 'fulfilled' ? usdcRaw.value : null;
   const chainUSDT   = usdtRaw.status   === 'fulfilled' ? usdtRaw.value : null;
 
@@ -153,7 +158,7 @@ async function fetchERC20(
   try {
     const contract = new ethers.Contract(contractAddress, ERC20_ABI, provider);
     const raw: bigint = await contract.balanceOf(address);
-    return parseFloat(ethers.formatUnits(raw, decimals));
+    return parseFloat(formatUnits(raw, decimals));
   } catch {
     return 0;
   }

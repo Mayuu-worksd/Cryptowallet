@@ -91,6 +91,32 @@ export default function SettingsScreen({ navigation }: any) {
     refreshPinEnabled();
   }, []);
 
+  const [hasCloudBackup, setHasCloudBackup] = useState(false);
+
+  const checkCloudBackup = async () => {
+    if (!walletAddress) return;
+    try {
+      const cleanAddress = walletAddress.trim().toLowerCase();
+      const { supabase } = require('../services/supabaseClient');
+      const { data } = await supabase
+        .from('backup_records')
+        .select('id')
+        .eq('wallet_address', cleanAddress)
+        .maybeSingle();
+      setHasCloudBackup(!!data);
+    } catch (e) {
+      // Ignore
+    }
+  };
+
+  React.useEffect(() => {
+    checkCloudBackup();
+    const unsubscribe = navigation.addListener('focus', () => {
+      checkCloudBackup();
+    });
+    return unsubscribe;
+  }, [navigation, walletAddress]);
+
   const [renameModal, setRenameModal]   = useState(false);
   const [nameInput, setNameInput]       = useState(walletName);
   const [accountTypeModal, setAccountTypeModal] = useState(false);
@@ -725,23 +751,67 @@ export default function SettingsScreen({ navigation }: any) {
             />
           </View>
 
-          {/* View Seed Phrase */}
-          <TouchableOpacity
-            style={[styles.menuRow, { borderBottomWidth: 1, borderBottomColor: T.border }]}
-            activeOpacity={0.7}
-            onPress={handleViewPhrase}
-          >
-            <View style={styles.menuLeft}>
-              <View style={[styles.menuIconBox, { backgroundColor: T.background }]}>
-                <Feather name="shield" size={18} color={T.text} />
+          {/* Security & Backup Section */}
+          <Text style={[styles.sectionTitle, { color: T.textMuted, marginTop: 24, marginBottom: 8 }]}>Security & Cloud Backup</Text>
+          <View style={[styles.cardBlock, { backgroundColor: T.surface, marginBottom: 16 }]}>
+            {/* Show Recovery Phrase */}
+            <TouchableOpacity
+              style={[styles.menuRow, { borderBottomWidth: 1, borderBottomColor: T.border }]}
+              activeOpacity={0.7}
+              onPress={handleViewPhrase}
+            >
+              <View style={styles.menuLeft}>
+                <View style={[styles.menuIconBox, { backgroundColor: T.background }]}>
+                  <Feather name="eye" size={18} color={T.primary} />
+                </View>
+                <View>
+                  <Text style={[styles.menuLabel, { color: T.text }]}>Show Recovery Phrase</Text>
+                  <Text style={[styles.menuSub, { color: T.textMuted }]}>View your BIP39 recovery phrase</Text>
+                </View>
               </View>
-              <View>
-                <Text style={[styles.menuLabel, { color: T.text }]}>View Seed Phrase</Text>
-                <Text style={[styles.menuSub, { color: T.textMuted }]}>Backup your recovery phrase</Text>
+              <Feather name="chevron-right" size={20} color={T.textMuted} />
+            </TouchableOpacity>
+
+            {/* Secure Cloud Backup */}
+            <TouchableOpacity
+              style={[styles.menuRow, { borderBottomWidth: 1, borderBottomColor: T.border }]}
+              activeOpacity={0.7}
+              onPress={() => navigation.navigate('CloudBackup')}
+            >
+              <View style={styles.menuLeft}>
+                <View style={[styles.menuIconBox, { backgroundColor: T.background }]}>
+                  <Feather name="cloud" size={18} color={T.primary} />
+                </View>
+                <View>
+                  <Text style={[styles.menuLabel, { color: T.text }]}>Secure Cloud Backup</Text>
+                  <Text style={[styles.menuSub, { color: T.textMuted }]}>Back up your encrypted wallet keys securely</Text>
+                </View>
               </View>
-            </View>
-            <Feather name="chevron-right" size={20} color={T.textMuted} />
-          </TouchableOpacity>
+              <View style={[styles.pinBadge, { backgroundColor: hasCloudBackup ? T.success + '20' : T.error + '20' }]}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: hasCloudBackup ? T.success : T.error }}>
+                  {hasCloudBackup ? 'ACTIVE' : 'NOT ENABLED'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Recovery Settings */}
+            <TouchableOpacity
+              style={styles.menuRow}
+              activeOpacity={0.7}
+              onPress={() => navigation.navigate('RecoverySettings')}
+            >
+              <View style={styles.menuLeft}>
+                <View style={[styles.menuIconBox, { backgroundColor: T.background }]}>
+                  <Feather name="settings" size={18} color={T.primary} />
+                </View>
+                <View>
+                  <Text style={[styles.menuLabel, { color: T.text }]}>Recovery Settings</Text>
+                  <Text style={[styles.menuSub, { color: T.textMuted }]}>Configure cloud credentials & password</Text>
+                </View>
+              </View>
+              <Feather name="chevron-right" size={20} color={T.textMuted} />
+            </TouchableOpacity>
+          </View>
 
           {/* Transaction History */}
           <TouchableOpacity

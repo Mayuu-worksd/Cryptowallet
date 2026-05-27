@@ -55,8 +55,8 @@ export default function LoginPage() {
           
           {/* Header */}
           <div className="flex flex-col items-center mb-8">
-            <div className="h-14 w-14 border-3 border-[#1a1a1a] bg-[#ffcc00] flex items-center justify-center shadow-[3px_3px_0px_0px_rgba(26,26,26,1)] mb-4">
-              <Shield className="h-7 w-7 text-[#1a1a1a]" />
+            <div className="h-16 w-16 mb-4">
+              <img src="/logo.png" alt="CryptoWallet" className="w-full h-full object-contain" />
             </div>
             <h1 className="text-2xl font-extrabold text-[#1a1a1a] font-display uppercase tracking-tight text-center leading-none">
               CryptoWallet Admin
@@ -90,7 +90,7 @@ export default function LoginPage() {
                   placeholder="Enter admin username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="w-full brutalist-input pl-10 focus:ring-0 text-xs font-bold"
+                  className="w-full brutalist-input !pl-10 focus:ring-0 text-xs font-bold"
                 />
               </div>
             </div>
@@ -112,7 +112,7 @@ export default function LoginPage() {
                   placeholder="Enter admin password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full brutalist-input pl-10 pr-10 focus:ring-0 text-xs font-bold"
+                  className="w-full brutalist-input !pl-10 !pr-10 focus:ring-0 text-xs font-bold"
                 />
                 <button
                   type="button"

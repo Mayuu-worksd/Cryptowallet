@@ -8,6 +8,7 @@ import { useWallet } from '../store/WalletContext';
 import { Theme } from '../constants';
 import { p2pService, P2POrder, FIAT_CURRENCIES, PAYMENT_METHODS, getLiveRate, calcPlatformFee } from '../services/merchantService';
 import TransactionLoader from '../components/ui/TransactionLoader';
+import { supabase } from '../services/supabaseClient';
 
 const TOKENS   = ['ETH', 'USDC', 'USDT', 'BTC', 'SOL', 'BNB', 'XRP', 'TON', 'TRX', 'SUI'];
 const COUNTRIES = ['United States','United Kingdom','India','UAE','Singapore','Germany','France','Australia','Canada','Brazil','Other'];
@@ -615,8 +616,12 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const hasFetchedOnce = useRef(false);
-  // Auto-switch to My Orders tab if buyer has active in-progress orders
   const hasAutoSwitched = useRef(false);
+
+  // Reset fetch flag when walletAddress becomes available
+  useEffect(() => {
+    if (walletAddress) hasFetchedOnce.current = false;
+  }, [walletAddress]);
   const [filterFiat, setFilterFiat] = useState<string>('ALL');
   const [showSellModal, setShowSellModal] = useState(false);
 
@@ -674,7 +679,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
   }, [walletAddress, lockedBalance, resetLockedBalances]);
 
   const loadOrders = useCallback(async (isRefresh = false) => {
-    // First load shows skeleton, subsequent refreshes update silently
+    if (!walletAddress) return;
     if (!hasFetchedOnce.current) {
       setLoading(true);
     } else if (isRefresh) {
@@ -683,34 +688,19 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
     try {
       if (tab === 'buy') {
         const all = await p2pService.getOpenOrders(walletAddress);
-        // Never show your own orders in the Buy tab
-        const visible = all.filter(o =>
-          o.seller_wallet.toLowerCase() !== walletAddress.toLowerCase()
-        );
+        const visible = all.filter(o => o.seller_wallet.toLowerCase() !== walletAddress.toLowerCase());
         setOrders(filterFiat === 'ALL' ? visible : visible.filter(o => o.fiat_currency === filterFiat));
       } else {
-        const [data, activeBuys] = await Promise.all([
-          p2pService.getMyOrders(walletAddress),
-          p2pService.getActiveBuyOrders(walletAddress),
-        ]);
-        const seen = new Set<string>();
-        const merged: P2POrder[] = [];
-        for (const o of [...data, ...activeBuys]) {
-          if (o.id && seen.has(o.id)) continue;
-          if (o.id) seen.add(o.id);
-          merged.push(o);
-        }
-        const filtered = merged.filter(o => {
-          const iAmBuyer = o.buyer_wallet?.toLowerCase() === walletAddress.toLowerCase();
-          if (iAmBuyer) return true;
-          return isBusiness ? o.is_merchant === true : o.is_merchant !== true;
-        });
-        setOrders(filtered);
+        const myOrders = await p2pService.getMyOrders(walletAddress);
+        setOrders(myOrders);
       }
-    } catch {}
-    hasFetchedOnce.current = true;
-    setLoading(false);
-    setRefreshing(false);
+    } catch (e: any) {
+      // silent — show empty state instead of crashing
+    } finally {
+      hasFetchedOnce.current = true;
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, [tab, filterFiat, walletAddress, isBusiness]);
 
   // Auto-switch to My Orders if buyer has active in-progress orders (runs once on mount)
@@ -1243,6 +1233,16 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
         </View>
       )}
 
+      {/* Escrow network notice */}
+      {tab === 'sell' && network !== 'Sepolia' && (
+        <View style={{ marginHorizontal: 16, marginTop: 10, padding: 12, borderRadius: 14, backgroundColor: T.error + '15', borderWidth: 1, borderColor: T.error + '40', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Feather name="alert-circle" size={14} color={T.error} />
+          <Text style={{ color: T.error, fontSize: 12, fontWeight: '700', flex: 1 }}>
+            P2P trading requires Sepolia testnet. Switch network in Settings to create orders.
+          </Text>
+        </View>
+      )}
+
       {/* List */}
       {loading ? (
         <View style={{ padding: 16, gap: 12 }}>
@@ -1294,7 +1294,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
       ) : (
         <FlatList
           data={orders}
-          keyExtractor={item => item.id ?? Math.random().toString()}
+          keyExtractor={(item, index) => item.id ?? String(index)}
           renderItem={({ item }) => (
             <OrderCard order={item} T={T} walletAddress={walletAddress}
               onPress={() => navigation.navigate('P2POrderDetail', { order: item })} />

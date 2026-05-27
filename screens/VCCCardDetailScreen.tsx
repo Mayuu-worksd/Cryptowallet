@@ -23,6 +23,7 @@ import { useWallet } from '../store/WalletContext';
 import { Theme } from '../constants';
 import { vccService, dbCardService } from '../services/supabaseService';
 import Toast from '../components/Toast';
+import { usePreventScreenCapture } from 'expo-screen-capture';
 
 type CardData = {
   cardNumber: string;   // full 16-digit (shown masked by default)
@@ -36,6 +37,7 @@ type CardData = {
 };
 
 export default function VCCCardDetailScreen({ navigation }: any) {
+  usePreventScreenCapture();
   const { walletAddress, isDarkMode, cardDetails, cardBalance, cardCreated } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const insets = useSafeAreaInsets();

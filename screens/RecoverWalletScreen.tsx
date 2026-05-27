@@ -11,7 +11,6 @@ import Toast from '../components/Toast';
 import { backupService } from '../services/backupService';
 import { haptics } from '../utils/haptics';
 
-// Stepper overlay for restoring
 const RECOVERY_STEPS = [
   { icon: 'download-cloud', label: 'Downloading cloud backup...' },
   { icon: 'unlock',         label: 'Decrypting keys locally...'  },
@@ -24,7 +23,6 @@ function RecoveryOverlay({ visible, isDarkMode, step }: { visible: boolean; isDa
   const scaleAnim = useRef(new Animated.Value(0.88)).current;
   const spinAnim  = useRef(new Animated.Value(0)).current;
 
-  // Spin animation
   useEffect(() => {
     if (!visible) return;
     const spin = Animated.loop(
@@ -34,7 +32,6 @@ function RecoveryOverlay({ visible, isDarkMode, step }: { visible: boolean; isDa
     return () => spin.stop();
   }, [visible]);
 
-  // Fade-in on mount
   useEffect(() => {
     if (visible) {
       Animated.parallel([
@@ -63,23 +60,12 @@ function RecoveryOverlay({ visible, isDarkMode, step }: { visible: boolean; isDa
               <Feather name={current.icon as any} size={30} color={isDone ? T.success : T.primary} />
             </View>
           </View>
-
-          <Text style={[styles.overlayTitle, { color: T.text }]}>
-            {current.label}
-          </Text>
-
+          <Text style={[styles.overlayTitle, { color: T.text }]}>{current.label}</Text>
           <View style={styles.dotsRow}>
             {RECOVERY_STEPS.map((_, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.dot,
-                  { backgroundColor: i <= step ? T.primary : T.border, width: i === step ? 20 : 8 }
-                ]}
-              />
+              <View key={i} style={[styles.dot, { backgroundColor: i <= step ? T.primary : T.border, width: i === step ? 20 : 8 }]} />
             ))}
           </View>
-
           <Text style={[styles.overlaySubtitle, { color: T.textMuted }]}>
             {isDone ? 'Taking you to your wallet...' : 'Decrypting secure offline keys'}
           </Text>
@@ -90,25 +76,22 @@ function RecoveryOverlay({ visible, isDarkMode, step }: { visible: boolean; isDa
 }
 
 export default function RecoverWalletScreen({ navigation }: any) {
-  const { isDarkMode, importWallet, hasWallet } = useWallet();
+  const { isDarkMode, importWallet } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const insets = useSafeAreaInsets();
 
-  // Stepper steps: 0: Enter Email, 1: Verify OTP, 2: Enter Backup Password
   const [step, setStep] = useState(0);
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
+  const [otpVerified, setOtpVerified] = useState(false);
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-
-  // Statuses
   const [loading, setLoading] = useState(false);
   const [overlayVisible, setOverlayVisible] = useState(false);
   const [overlayStep, setOverlayStep] = useState(0);
   const [countdown, setCountdown] = useState(0);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'success' as 'success' | 'error' | 'info' });
 
-  // Animation values
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
 
@@ -163,13 +146,14 @@ export default function RecoverWalletScreen({ navigation }: any) {
   const handleVerifyOTP = async () => {
     const cleanOtp = otp.trim();
     if (cleanOtp.length < 6) {
-      showToast('Verification code must be 6 digits.', 'error');
+      showToast('Please enter the verification code.', 'error');
       return;
     }
     setLoading(true);
     try {
       const res = await backupService.verifyOTP(email, cleanOtp);
       if (res.success) {
+        setOtpVerified(true);
         showToast('Email verified successfully!', 'success');
         animateToStep(2);
       } else {
@@ -187,36 +171,25 @@ export default function RecoverWalletScreen({ navigation }: any) {
       showToast('Please enter your backup password.', 'error');
       return;
     }
-
+    // Guard: OTP must have been verified in this session before recovery is allowed
+    if (!otpVerified) {
+      showToast('Email verification required before recovery. Please restart the process.', 'error');
+      animateToStep(0);
+      return;
+    }
     setOverlayStep(0);
     setOverlayVisible(true);
-
     try {
-      // 1. Download and Decrypt (simulated step timers for smooth UX)
       await new Promise(resolve => setTimeout(resolve, 800));
       setOverlayStep(1);
-
       const res = await backupService.recoverWallet(email, password);
-      
-      if (!res.success || !res.mnemonic) {
-        throw new Error(res.error || 'Failed to decrypt backup.');
-      }
-
+      if (!res.success || !res.mnemonic) throw new Error(res.error || 'Failed to decrypt backup.');
       await new Promise(resolve => setTimeout(resolve, 800));
       setOverlayStep(2);
-
-      // 2. Import into active session
       await importWallet(res.mnemonic);
       haptics.success();
       showToast('Wallet recovered successfully!', 'success');
-
-      // Keep success overlay up briefly before navigating
-      setTimeout(() => {
-        setOverlayVisible(false);
-        // Navigation is handled automatically in App.tsx because hasWallet becomes true.
-        // But for safety in Web/React Navigation, also execute a redirect if needed
-      }, 1000);
-
+      setTimeout(() => setOverlayVisible(false), 1000);
     } catch (e: any) {
       setOverlayVisible(false);
       showToast(e.message || 'Incorrect backup password or corrupted data.', 'error');
@@ -226,7 +199,6 @@ export default function RecoverWalletScreen({ navigation }: any) {
   return (
     <View style={[styles.container, { backgroundColor: T.background }]}>
       <RecoveryOverlay visible={overlayVisible} isDarkMode={isDarkMode} step={overlayStep} />
-
       <Toast
         visible={toast.visible}
         message={toast.message}
@@ -235,7 +207,6 @@ export default function RecoverWalletScreen({ navigation }: any) {
         onHide={() => setToast(p => ({ ...p, visible: false }))}
       />
 
-      {/* Header */}
       <View style={[styles.header, { backgroundColor: isDarkMode ? 'rgba(19,19,19,0.95)' : 'rgba(247,249,251,0.95)', paddingTop: insets.top + 12 }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <TouchableOpacity style={styles.iconBtn} onPress={() => step > 0 ? animateToStep(step - 1) : navigation.goBack()} activeOpacity={0.7}>
@@ -247,12 +218,9 @@ export default function RecoverWalletScreen({ navigation }: any) {
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+
             {step === 0 && (
               <View>
                 <View style={styles.iconHeader}>
@@ -264,8 +232,6 @@ export default function RecoverWalletScreen({ navigation }: any) {
                     Enter your registered email address to locate and restore your encrypted cloud wallet backup.
                   </Text>
                 </View>
-
-                {/* Email Form */}
                 <View style={[styles.inputGroup, { backgroundColor: T.surface }]}>
                   <Text style={[styles.label, { color: T.textMuted }]}>Email Address</Text>
                   <TextInput
@@ -279,17 +245,8 @@ export default function RecoverWalletScreen({ navigation }: any) {
                     autoCorrect={false}
                   />
                 </View>
-
-                {/* Continue button */}
-                <TouchableOpacity
-                  style={[styles.primaryBtn, { backgroundColor: T.primary }]}
-                  onPress={handleSendOTP}
-                  disabled={loading}
-                  activeOpacity={0.8}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#FFF" />
-                  ) : (
+                <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: T.primary }]} onPress={handleSendOTP} disabled={loading} activeOpacity={0.8}>
+                  {loading ? <ActivityIndicator color="#FFF" /> : (
                     <>
                       <Text style={styles.primaryBtnText}>Send Verification Code</Text>
                       <Feather name="arrow-right" size={18} color="#FFF" />
@@ -307,48 +264,33 @@ export default function RecoverWalletScreen({ navigation }: any) {
                   </View>
                   <Text style={[styles.title, { color: T.text }]}>Enter Code</Text>
                   <Text style={[styles.subtitle, { color: T.textMuted }]}>
-                    We've sent a 6-digit verification code to{' '}
+                    We've sent a verification code to{' '}
                     <Text style={{ color: T.text, fontWeight: '700' }}>{email}</Text>.
                     {' '}Enter it below to authorize recovery.
                   </Text>
                 </View>
-
-                {/* OTP input */}
                 <View style={[styles.inputGroup, { backgroundColor: T.surface }]}>
                   <Text style={[styles.label, { color: T.textMuted }]}>Verification Code</Text>
                   <TextInput
                     style={[styles.input, { color: T.text, borderColor: T.border, fontSize: 24, letterSpacing: 8, textAlign: 'center' }]}
-                    placeholder="000000"
+                    placeholder="00000000"
                     placeholderTextColor={T.textDim}
                     value={otp}
                     onChangeText={setOtp}
                     keyboardType="number-pad"
-                    maxLength={6}
+                    maxLength={8}
                   />
                   <View style={styles.resendRow}>
                     <Text style={{ color: T.textMuted, fontSize: 13 }}>Didn't receive code?</Text>
-                    <TouchableOpacity
-                      onPress={handleSendOTP}
-                      disabled={countdown > 0}
-                      activeOpacity={0.7}
-                    >
+                    <TouchableOpacity onPress={handleSendOTP} disabled={countdown > 0} activeOpacity={0.7}>
                       <Text style={{ color: countdown > 0 ? T.textMuted : T.primary, fontSize: 13, fontWeight: '700' }}>
                         {countdown > 0 ? ` Resend in ${countdown}s` : ' Resend Code'}
                       </Text>
                     </TouchableOpacity>
                   </View>
                 </View>
-
-                {/* Continue button */}
-                <TouchableOpacity
-                  style={[styles.primaryBtn, { backgroundColor: T.primary }]}
-                  onPress={handleVerifyOTP}
-                  disabled={loading}
-                  activeOpacity={0.8}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#FFF" />
-                  ) : (
+                <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: T.primary }]} onPress={handleVerifyOTP} disabled={loading} activeOpacity={0.8}>
+                  {loading ? <ActivityIndicator color="#FFF" /> : (
                     <>
                       <Text style={styles.primaryBtnText}>Verify Code</Text>
                       <Feather name="check" size={18} color="#FFF" />
@@ -366,11 +308,9 @@ export default function RecoverWalletScreen({ navigation }: any) {
                   </View>
                   <Text style={[styles.title, { color: T.text }]}>Enter Password</Text>
                   <Text style={[styles.subtitle, { color: T.textMuted }]}>
-                    Input the backup password you created when establishing this cloud backup. This is required to decrypt your private keys locally on this device.
+                    Input the backup password you created when establishing this cloud backup.
                   </Text>
                 </View>
-
-                {/* Password input */}
                 <View style={[styles.inputGroup, { backgroundColor: T.surface }]}>
                   <Text style={[styles.label, { color: T.textMuted }]}>Backup Password</Text>
                   <View style={styles.passwordWrapper}>
@@ -384,27 +324,18 @@ export default function RecoverWalletScreen({ navigation }: any) {
                       autoCapitalize="none"
                       autoCorrect={false}
                     />
-                    <TouchableOpacity
-                      style={styles.eyeBtn}
-                      onPress={() => setShowPassword(!showPassword)}
-                      activeOpacity={0.7}
-                    >
-                      <Feather name={showPassword ? "eye-off" : "eye"} size={20} color={T.textMuted} />
+                    <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowPassword(!showPassword)} activeOpacity={0.7}>
+                      <Feather name={showPassword ? 'eye-off' : 'eye'} size={20} color={T.textMuted} />
                     </TouchableOpacity>
                   </View>
                 </View>
-
-                {/* Recover button */}
-                <TouchableOpacity
-                  style={[styles.primaryBtn, { backgroundColor: T.primary }]}
-                  onPress={handleRecoverWallet}
-                  activeOpacity={0.8}
-                >
+                <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: T.primary }]} onPress={handleRecoverWallet} activeOpacity={0.8}>
                   <Text style={styles.primaryBtnText}>Download & Decrypt</Text>
                   <Feather name="download-cloud" size={18} color="#FFF" />
                 </TouchableOpacity>
               </View>
             )}
+
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -421,14 +352,11 @@ const styles = StyleSheet.create({
   },
   iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20 },
   logoText: { fontSize: 20, fontWeight: '800', letterSpacing: -0.5 },
-
   scroll: { paddingTop: 130, paddingHorizontal: 24, paddingBottom: 60 },
-
   iconHeader: { alignItems: 'center', marginBottom: 32 },
   iconCircle: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   title: { fontSize: 28, fontFamily: Fonts.extraBold, marginBottom: 12, letterSpacing: -0.5, textAlign: 'center' },
   subtitle: { fontSize: 14, lineHeight: 22, textAlign: 'center', paddingHorizontal: 12 },
-
   inputGroup: { padding: 20, borderRadius: 16, marginBottom: 24 },
   label: { fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 },
   input: {
@@ -436,17 +364,13 @@ const styles = StyleSheet.create({
     fontSize: 16, fontFamily: Fonts.bold, backgroundColor: 'rgba(0,0,0,0.15)',
   },
   resendRow: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12 },
-
   passwordWrapper: { flexDirection: 'row', alignItems: 'center', position: 'relative' },
   eyeBtn: { position: 'absolute', right: 16, height: '100%', justifyContent: 'center', zIndex: 10 },
-
   primaryBtn: {
     height: 64, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
     shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 16, elevation: 6,
   },
   primaryBtnText: { color: '#FFF', fontSize: 16, fontFamily: Fonts.extraBold },
-
-  // Overlay
   overlay: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   overlayCard: {
     width: '100%', maxWidth: 340, borderRadius: 28, borderWidth: 1,

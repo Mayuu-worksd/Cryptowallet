@@ -76,12 +76,10 @@ export default function SplashScreen({ onFinish }: Props) {
 
   return (
     <Animated.View style={[styles.wrapper, { opacity: screenOpacity }]}>
-      <StatusBar barStyle="light-content" backgroundColor={Theme.colors.primary} />
+      <StatusBar barStyle="light-content" backgroundColor="#000000" />
 
-      {/* Background with Depth */}
-      <View style={[styles.bg, { backgroundColor: Theme.colors.primary }]}>
-        <View style={styles.gradientOverlay} />
-      </View>
+      {/* Background */}
+      <View style={[styles.bg, { backgroundColor: '#000000' }]} />
 
       {/* Main Content Area */}
       <View style={styles.content}>
@@ -89,14 +87,11 @@ export default function SplashScreen({ onFinish }: Props) {
           styles.logoContainer,
           { transform: [{ scale: logoScale }], opacity: logoOpacity }
         ]}>
-          <View style={styles.logoShadow} />
-          <View style={styles.logoBox}>
-            <Image 
-              source={require('../assets/icon.png')} 
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
-          </View>
+          <Image 
+            source={require('../assets/logo.png')} 
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
         </Animated.View>
 
         <Animated.View style={{ 
@@ -149,37 +144,15 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   logoContainer: {
-    marginBottom: 40,
-    width: 100,
-    height: 100,
+    marginBottom: 32,
+    width: 180,
+    height: 180,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  logoShadow: {
-    position: 'absolute',
-    width: 80,
-    height: 80,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    transform: [{ translateY: 10 }],
-  },
-  logoBox: {
-    width: 90,
-    height: 90,
-    borderRadius: 22,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 10,
   },
   logoImage: {
-    width: '70%',
-    height: '70%',
+    width: 180,
+    height: 180,
   },
   appName: {
     fontSize: 34,

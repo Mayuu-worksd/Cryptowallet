@@ -140,7 +140,7 @@ export default function VCCSuccessScreen({ navigation, route }: any) {
         {!isPhysical && (
           <TouchableOpacity
             style={[s.upsellCard, { backgroundColor: T.surface, borderColor: T.border }]}
-            onPress={() => navigation.navigate('VCCPhysical', { variant, vccCard })}
+            onPress={() => navigation.navigate('Card', { initialTab: 'physical' })}
             activeOpacity={0.85}
           >
             <View style={[s.upsellIcon, { backgroundColor: T.primary + '12' }]}>

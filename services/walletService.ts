@@ -2,6 +2,20 @@ import { ethers } from 'ethers';
 import { storageService } from './storageService';
 import { deriveTronAddress } from './tronService';
 
+// ethers v5/v6 compatibility shims
+const isAddress   = (ethers as any).isAddress   ?? ethers.utils.isAddress;
+const fromMnemonic = (mnemonic: string) => {
+  // v6: ethers.Wallet.fromPhrase  |  v5: ethers.Wallet.fromMnemonic
+  if ((ethers.Wallet as any).fromPhrase) return (ethers.Wallet as any).fromPhrase(mnemonic);
+  return (ethers.Wallet as any).fromMnemonic(mnemonic);
+};
+const hdNodeFromMnemonic = (mnemonic: string, path: string) => {
+  // v6: ethers.HDNodeWallet.fromPhrase  |  v5: ethers.utils.HDNode.fromMnemonic
+  if ((ethers as any).HDNodeWallet?.fromPhrase)
+    return (ethers as any).HDNodeWallet.fromPhrase(mnemonic, undefined, path);
+  return ethers.utils.HDNode.fromMnemonic(mnemonic).derivePath(path);
+};
+
 export type WalletData = {
   address: string;      // EVM address (0x...)
   tronAddress: string;  // TRON address (T...)
@@ -40,12 +54,9 @@ export const walletService = {
   async importFromMnemonic(mnemonic: string): Promise<WalletData> {
     const normalized = mnemonic.trim().toLowerCase().replace(/\s+/g, ' ');
     const wordCount = normalized.split(' ').length;
-    console.log(`[WalletService] importFromMnemonic START — ${wordCount} words`);
-    const t0 = Date.now();
     try {
-      const wallet = ethers.Wallet.fromPhrase(normalized);
+      const wallet = fromMnemonic(normalized);
       const tron   = await deriveTronAddress(normalized);
-      console.log(`[WalletService] EVM: ${wallet.address} | TRON: ${tron.address} (${Date.now() - t0}ms)`);
       return {
         address:        wallet.address,
         tronAddress:    tron.address,
@@ -54,7 +65,6 @@ export const walletService = {
         mnemonic:       normalized,
       };
     } catch (e: any) {
-      console.error(`[WalletService] FAILED after ${Date.now() - t0}ms —`, e?.message);
       throw new Error('Invalid seed phrase. Please check your words and try again.');
     }
   },
@@ -69,13 +79,13 @@ export const walletService = {
   // Derive a specific account index from a mnemonic
   deriveAccount(mnemonic: string, index: number): { address: string; privateKey: string } {
     const path = `m/44'/60'/0'/0/${index}`;
-    const wallet = ethers.HDNodeWallet.fromPhrase(mnemonic, undefined, path);
+    const wallet = hdNodeFromMnemonic(mnemonic, path);
     return { address: wallet.address, privateKey: wallet.privateKey };
   },
 
   // Validate an Ethereum address
   isValidAddress(address: string): boolean {
-    return ethers.isAddress(address);
+    return isAddress(address);
   },
 
   async walletExists(): Promise<boolean> {

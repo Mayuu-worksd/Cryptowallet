@@ -6,6 +6,10 @@
 
 import { Platform } from 'react-native';
 import { ethers } from 'ethers';
+
+// ethers v5 compatibility shim — utils functions moved to top-level in v6
+const formatEther = (ethers as any).formatEther ?? ethers.utils.formatEther;
+const formatUnits = (ethers as any).formatUnits ?? ethers.utils.formatUnits;
 import AsyncStorageNative from '@react-native-async-storage/async-storage';
 import { etherscanService, ChainTx, TokenTx } from './etherscanService';
 import { tronService, TronTx } from './tronService';
@@ -129,7 +133,7 @@ function fromCardTx(tx: CardTx): UnifiedTx {
 
 function fromChainTx(tx: ChainTx, walletAddress: string, ethPriceUsd: number): UnifiedTx {
   const isSend  = tx.from.toLowerCase() === walletAddress.toLowerCase();
-  const ethAmt  = parseFloat(ethers.formatEther(tx.value || '0'));
+  const ethAmt  = parseFloat(formatEther(tx.value || '0'));
   const usd     = (ethAmt * ethPriceUsd).toFixed(2);
   const date    = new Date(parseInt(tx.timeStamp, 10) * 1000).toISOString();
   const status: UnifiedTx['status'] = tx.isError === '0' ? 'completed' : 'failed';
@@ -393,7 +397,7 @@ export const transactionService = {
       for (const tx of chainTxs) {
         if (tx.isError !== '0' || knownHashes.has(tx.hash)) continue;
         const isOut  = tx.from.toLowerCase() === walletAddress.toLowerCase();
-        const ethAmt = parseFloat(ethers.formatEther(tx.value || '0'));
+        const ethAmt = parseFloat(formatEther(tx.value || '0'));
         if (ethAmt <= 0) continue;
         newTxs.push({
           id:       tx.hash,
@@ -414,7 +418,7 @@ export const transactionService = {
       for (const tx of internalTxs) {
         if (tx.isError !== '0' || knownHashes.has(tx.hash)) continue;
         const isOut   = tx.from.toLowerCase() === walletAddress.toLowerCase();
-        const ethAmt2 = parseFloat(ethers.formatEther(tx.value || '0'));
+        const ethAmt2 = parseFloat(formatEther(tx.value || '0'));
         if (ethAmt2 <= 0) continue;
         newTxs.push({
           id:         tx.hash + '_int',
@@ -438,7 +442,7 @@ export const transactionService = {
         const isOut = tx.from.toLowerCase() === walletAddress.toLowerCase();
         const isCustom = tx.contractAddress.toLowerCase() === CUSTOM_TOKEN_ADDRESS;
         
-        const amt = parseFloat(ethers.formatUnits(tx.value, parseInt(tx.tokenDecimal, 10)));
+        const amt = parseFloat(formatUnits(tx.value, parseInt(tx.tokenDecimal, 10)));
         if (amt <= 0) continue;
 
         newTxs.push({

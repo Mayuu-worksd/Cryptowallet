@@ -10,6 +10,20 @@
 
 import { ethers } from 'ethers';
 
+// ethers v5/v6 compatibility shims
+const keccak256 = (ethers as any).keccak256 ?? ethers.utils.keccak256;
+const SigningKey = (ethers as any).SigningKey ?? ethers.utils.SigningKey;
+const computePublicKey = (key: any, compressed: boolean) => {
+  if ((ethers as any).SigningKey?.computePublicKey)
+    return (ethers as any).SigningKey.computePublicKey(key, compressed);
+  return ethers.utils.computePublicKey(key, compressed);
+};
+const hdNodeFromMnemonic = (mnemonic: string, path: string) => {
+  if ((ethers as any).HDNodeWallet?.fromPhrase)
+    return (ethers as any).HDNodeWallet.fromPhrase(mnemonic, undefined, path);
+  return ethers.utils.HDNode.fromMnemonic(mnemonic).derivePath(path);
+};
+
 // ─── Base58Check (TRON address encoding) ─────────────────────────────────────
 const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 
@@ -118,13 +132,10 @@ function bytesToHex(bytes: Uint8Array): string {
 
 // ─── TRON address from private key ───────────────────────────────────────────
 async function tronAddressFromPrivateKey(privateKey: string): Promise<string> {
-  const signingKey = new ethers.SigningKey(privateKey);
-  // Get uncompressed public key (65 bytes, 0x04 prefix)
-  const uncompressedHex = ethers.SigningKey.computePublicKey(signingKey.publicKey, false);
-  // Drop '0x04' prefix → 64 bytes of raw public key
+  const signingKey = new SigningKey(privateKey);
+  const uncompressedHex = computePublicKey(signingKey.publicKey, false);
   const pubKeyHex = uncompressedHex.slice(4);
-  // Keccak256 of the 64-byte public key
-  const keccakHash = ethers.keccak256('0x' + pubKeyHex);
+  const keccakHash = keccak256('0x' + pubKeyHex);
   // Take last 20 bytes (40 hex chars), prepend 0x41 (TRON mainnet prefix)
   const addressHex = '41' + keccakHash.slice(-40);
   const addressBytes = hexToBytes(addressHex);
@@ -183,9 +194,8 @@ export async function deriveTronAddress(mnemonic: string): Promise<{
   privateKey: string;
 }> {
   // TRON uses BIP44 path m/44'/195'/0'/0/0
-  const hdNode = ethers.HDNodeWallet.fromPhrase(
+  const hdNode = hdNodeFromMnemonic(
     mnemonic.trim().toLowerCase(),
-    undefined,
     "m/44'/195'/0'/0/0"
   );
   const tronAddr = await tronAddressFromPrivateKey(hdNode.privateKey);
@@ -430,7 +440,7 @@ function hexToTronAddress(hexAddr: string): string {
  */
 function signTronTx(tx: any, privateKey: string): any {
   const txID      = tx.txID; // hex string without 0x
-  const signingKey = new ethers.SigningKey(privateKey);
+  const signingKey = new SigningKey(privateKey);
   const msgBytes  = hexToBytes(txID);
   const sig       = signingKey.sign(msgBytes);
 

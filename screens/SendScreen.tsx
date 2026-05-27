@@ -64,7 +64,19 @@ export default function SendScreen({ navigation, route }: any) {
   const [toast, setToast]               = useState({ visible: false, message: '', type: 'success' as 'success' | 'error' | 'info' });
 
   const btnScale   = useRef(new Animated.Value(1)).current;
-  const sendingRef = useRef(false); // double-tap guard
+  const shakeAnim  = useRef(new Animated.Value(0)).current;
+  const sendingRef = useRef(false);
+
+  const shakeError = () => {
+    haptics.error();
+    Animated.sequence([
+      Animated.timing(shakeAnim, { toValue: -8, duration: 55, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue:  8, duration: 55, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: -6, duration: 55, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue:  6, duration: 55, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue:  0, duration: 55, useNativeDriver: true }),
+    ]).start();
+  };
 
   useEffect(() => {
     if (scannedAddr) validateAddress(scannedAddr);
@@ -210,7 +222,7 @@ export default function SendScreen({ navigation, route }: any) {
       err = true; 
     }
 
-    if (err) { haptics.error(); return; }
+    if (err) { shakeError(); return; }
     haptics.selection();
 
     Animated.sequence([
@@ -276,24 +288,8 @@ export default function SendScreen({ navigation, route }: any) {
     } else if (selectedToken === 'ETH') {
       result = await sendETH(address, amount);
     } else {
-      // Simulated token transfer for other non-native assets (USDT, USDC, BTC, SOL, BNB, XRP, TON, SUI)
-      await new Promise(resolve => setTimeout(resolve, 3500));
-      const simulatedHash = '0x' + Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join('');
-      
-      // Deduct balance locally
-      await applySwapBalances(selectedToken, parsedAmount, selectedToken, 0);
-      
-      addTx({
-        type:     'sent',
-        coin:     selectedToken,
-        amount:   parsedAmount.toFixed(6),
-        usdValue: (parsedAmount * coinPrice).toFixed(2),
-        address,
-        status:   'success',
-        txHash:   simulatedHash,
-      });
-
-      result = { success: true, hash: simulatedHash };
+      // Non-native tokens (BTC, SOL, BNB, XRP, TON, SUI, USDT on EVM) are not yet supported for real on-chain sends.
+      result = { success: false, error: `Sending ${selectedToken} is not yet supported. Use a dedicated ${selectedToken} wallet.` };
     }
 
     setSending(false);
@@ -315,7 +311,9 @@ export default function SendScreen({ navigation, route }: any) {
     }
   };
 
-  const canReview = !addressError && !amountError && !!address && !!amount && parsedAmount > 0;
+  const SUPPORTED_SEND_TOKENS = ['ETH', 'TRX'];
+  const isTokenSupported = SUPPORTED_SEND_TOKENS.includes(selectedToken);
+  const canReview = !addressError && !amountError && !!address && !!amount && parsedAmount > 0 && isTokenSupported;
 
   return (
     <KeyboardAvoidingView style={[styles.container, { backgroundColor: T.background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -515,9 +513,19 @@ export default function SendScreen({ navigation, route }: any) {
 
       </ScrollView>
 
+      {/* Unsupported token warning */}
+      {!isTokenSupported && (
+        <View style={{ marginHorizontal: 24, marginBottom: 12, padding: 14, borderRadius: 16, backgroundColor: T.error + '15', borderWidth: 1, borderColor: T.error + '40', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <Feather name="alert-circle" size={16} color={T.error} />
+          <Text style={{ color: T.error, fontSize: 13, fontFamily: Fonts.semiBold, flex: 1 }}>
+            Sending {selectedToken} is not yet supported. Only ETH and TRX on-chain sends are available.
+          </Text>
+        </View>
+      )}
+
       {/* Action Bar */}
       <View style={[styles.actionBar, { paddingBottom: insets.bottom + 16 }]}>
-        <Animated.View style={{ transform: [{ scale: btnScale }] }}>
+        <Animated.View style={{ transform: [{ scale: btnScale }, { translateX: shakeAnim }] }}>
           <TouchableOpacity
             style={[styles.mainBtn, !canReview && styles.btnDisabled]}
             onPress={handleReview}

@@ -13,6 +13,7 @@ import { useWallet, useMarket } from '../store/WalletContext';
 import { Theme, Fonts } from '../constants';
 import Toast from '../components/Toast';
 import { transactionService, UnifiedTx } from '../services/transactionService';
+import { haptics } from '../utils/haptics';
 
 // ─── Filter tabs ──────────────────────────────────────────────────────────────
 const FILTERS = ['All', 'Send', 'Receive', 'Swap', 'Card', 'P2P'] as const;
@@ -129,6 +130,7 @@ const sk = StyleSheet.create({
 const TxRow = memo(({ tx, T, cfg, onPress }: {
   tx: UnifiedTx; T: any; cfg: TxConfig; onPress: () => void;
 }) => {
+  const scale = useRef(new Animated.Value(1)).current;
   const isDebit  = tx.type === 'send' || (tx.type === 'card' && !tx.label.includes('Top-up'));
   const amtColor = isDebit ? T.error : T.success;
   const sign     = isDebit ? '−' : '+';
@@ -136,42 +138,46 @@ const TxRow = memo(({ tx, T, cfg, onPress }: {
   return (
     <TouchableOpacity
       style={[styles.txRow, { backgroundColor: T.surface, borderColor: T.border }]}
-      onPress={onPress}
-      activeOpacity={0.75}
+      onPress={() => { haptics.selection(); onPress(); }}
+      onPressIn={() => Animated.spring(scale, { toValue: 0.97, tension: 300, friction: 20, useNativeDriver: true }).start()}
+      onPressOut={() => Animated.spring(scale, { toValue: 1, tension: 200, friction: 14, useNativeDriver: true }).start()}
+      activeOpacity={1}
     >
-      <View style={[styles.txIcon, { backgroundColor: cfg.bg }]}>
-        {cfg.icon}
-      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+        <View style={[styles.txIcon, { backgroundColor: cfg.bg }]}>
+          {cfg.icon}
+        </View>
 
-      <View style={styles.txMid}>
-        <Text style={[styles.txLabel, { color: T.text }]} numberOfLines={1}>{tx.label}</Text>
-        <Text style={[styles.txAddr, { color: T.textMuted }]} numberOfLines={1}>
-          {tx.type === 'send'
-            ? (tx.to.length > 20   ? `${tx.to.slice(0, 8)}…${tx.to.slice(-6)}`   : tx.to)
-            : tx.type === 'receive'
-            ? (tx.from && tx.from !== 'You' && tx.from.length > 6
-                ? `${tx.from.slice(0, 8)}…${tx.from.slice(-6)}`
-                : 'Received to your wallet')
-            : tx.label}
-        </Text>
-        <Text style={[styles.txDate, { color: T.textDim }]}>
-          {transactionService.formatDate(tx.date)}
-        </Text>
-      </View>
+        <View style={styles.txMid}>
+          <Text style={[styles.txLabel, { color: T.text }]} numberOfLines={1}>{tx.label}</Text>
+          <Text style={[styles.txAddr, { color: T.textMuted }]} numberOfLines={1}>
+            {tx.type === 'send'
+              ? (tx.to.length > 20   ? `${tx.to.slice(0, 8)}…${tx.to.slice(-6)}`   : tx.to)
+              : tx.type === 'receive'
+              ? (tx.from && tx.from !== 'You' && tx.from.length > 6
+                  ? `${tx.from.slice(0, 8)}…${tx.from.slice(-6)}`
+                  : 'Received to your wallet')
+              : tx.label}
+          </Text>
+          <Text style={[styles.txDate, { color: T.textDim }]}>
+            {transactionService.formatDate(tx.date)}
+          </Text>
+        </View>
 
-      <View style={styles.txRight}>
-        <Text style={[styles.txAmount, { color: amtColor }]}>
-          {sign}{parseFloat(tx.amount).toFixed(
-            tx.token === 'USD' ? 2 : tx.token === 'ETH' ? 5 : 4
-          )} {tx.token}
-        </Text>
-        <Text style={[styles.txUsd, { color: T.textMuted }]}>
-          ${parseFloat(tx.usdValue || '0').toFixed(2)}
-        </Text>
-        <StatusBadge status={tx.status} T={T} />
-      </View>
+        <View style={styles.txRight}>
+          <Text style={[styles.txAmount, { color: amtColor }]}>
+            {sign}{parseFloat(tx.amount).toFixed(
+              tx.token === 'USD' ? 2 : tx.token === 'ETH' ? 5 : 4
+            )} {tx.token}
+          </Text>
+          <Text style={[styles.txUsd, { color: T.textMuted }]}>
+            ${parseFloat(tx.usdValue || '0').toFixed(2)}
+          </Text>
+          <StatusBadge status={tx.status} T={T} />
+        </View>
 
-      <Feather name="chevron-right" size={13} color={T.border} style={{ marginLeft: 4 }} />
+        <Feather name="chevron-right" size={13} color={T.border} style={{ marginLeft: 4 }} />
+      </View>
     </TouchableOpacity>
   );
 });
@@ -427,7 +433,7 @@ export default function HistoryScreen({ navigation }: any) {
               <TouchableOpacity
                 key={f}
                 style={[styles.tab, active && { borderBottomColor: T.primary, borderBottomWidth: 2 }]}
-                onPress={() => setActiveFilter(f)}
+                onPress={() => { haptics.selection(); setActiveFilter(f); }}
                 activeOpacity={0.7}
               >
                 <Text style={[styles.tabText, { color: active ? T.primary : T.textMuted }]}>{f}</Text>

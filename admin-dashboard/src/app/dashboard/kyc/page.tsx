@@ -31,6 +31,7 @@ export default function KycPage() {
   const [selectedKyc, setSelectedKyc] = useState<any>(null);
   const [adminNotes, setAdminNotes] = useState<string>('');
   const [showRejectForm, setShowRejectForm] = useState(false);
+  const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [signedUrls, setSignedUrls] = useState<{ doc?: string; selfie?: string; video?: string }>({});
   const [urlsLoading, setUrlsLoading] = useState(false);
   const queryClient = useQueryClient();
@@ -48,7 +49,7 @@ export default function KycPage() {
       ]);
       setSignedUrls({ doc: doc || undefined, selfie: selfie || undefined, video: video || undefined });
     } catch (e) {
-      console.error('Failed to generate signed URLs:', e);
+      // Signed URL generation failed — show empty state, do not expose error details
     } finally {
       setUrlsLoading(false);
     }
@@ -102,6 +103,7 @@ export default function KycPage() {
   const processReview = useMutation({
     mutationFn: async ({ wallet, status, notes }: { wallet: string; status: string; notes: string }) => {
       const addr = wallet.toLowerCase().trim();
+      if (!/^0x[0-9a-f]{40}$/.test(addr)) throw new Error('Invalid wallet address format');
       const mappedStatus = status === 'approve' ? 'verified' : 'rejected';
       
       const { error } = await supabase.rpc('admin_update_kyc', {
@@ -136,9 +138,9 @@ export default function KycPage() {
   const filteredSubmissions = (submissions || []).filter((s: any) => {
     const term = searchTerm.toLowerCase();
     return (
-      s.full_name.toLowerCase().includes(term) ||
-      s.wallet_address.toLowerCase().includes(term) ||
-      s.email.toLowerCase().includes(term) ||
+      (s.full_name || '').toLowerCase().includes(term) ||
+      (s.wallet_address || '').toLowerCase().includes(term) ||
+      (s.email || '').toLowerCase().includes(term) ||
       (s.nationality || '').toLowerCase().includes(term)
     );
   });
@@ -235,7 +237,7 @@ export default function KycPage() {
               placeholder="Search name, wallet, email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full brutalist-input pl-9 focus:ring-0"
+              className="w-full brutalist-input !pl-9 focus:ring-0"
             />
           </div>
         </div>
@@ -296,7 +298,7 @@ export default function KycPage() {
 
                     {/* Nationality */}
                     <td className="py-4 px-4 border-r border-[#1a1a1a]/10 font-bold">
-                      {kyc.nationality || 'United Kingdom'}
+                      {kyc.nationality || '—'}
                     </td>
 
                     {/* Doc type */}
@@ -327,9 +329,9 @@ export default function KycPage() {
                     <td className="py-4 px-6 text-right">
                       <button
                         onClick={() => openKyc(kyc)}
-                        className="px-3 py-1.5 brutalist-button text-xs shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]"
+                        className="px-3 py-1.5 brutalist-button text-xs shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] flex items-center gap-1.5"
                       >
-                        <Eye className="h-3.5 w-3.5 inline mr-1" />
+                        <Eye className="h-3.5 w-3.5" />
                         <span>Inspect Doc</span>
                       </button>
                     </td>
@@ -378,7 +380,7 @@ export default function KycPage() {
                     <User className="h-5 w-5 text-gray-600" />
                     <div>
                       <p className="text-[9px] text-gray-500 uppercase font-bold tracking-wider font-mono">Full Name</p>
-                      <p className="text-xs font-bold text-[#1a1a1a] font-display uppercase">{selectedKyc.full_name || 'Sophia Laurent'}</p>
+                      <p className="text-xs font-bold text-[#1a1a1a] font-display uppercase">{selectedKyc.full_name || 'Unspecified Name'}</p>
                     </div>
                   </div>
                   <div className="p-3.5 border-2 border-[#1a1a1a] bg-[#f5f0e8] flex items-center gap-2.5">
@@ -426,9 +428,9 @@ export default function KycPage() {
                           href={signedUrls.doc}
                           target="_blank"
                           rel="noreferrer"
-                          className="mt-4 brutalist-button px-3 py-2 text-center text-[10px]"
+                          className="mt-4 brutalist-button px-3 py-2 text-center text-[10px] flex items-center justify-center gap-1.5"
                         >
-                          <FileText className="h-3.5 w-3.5 inline mr-1" />
+                          <FileText className="h-3.5 w-3.5" />
                           <span>View Doc File</span>
                         </a>
                       ) : (
@@ -449,9 +451,9 @@ export default function KycPage() {
                           href={signedUrls.selfie}
                           target="_blank"
                           rel="noreferrer"
-                          className="mt-4 brutalist-button px-3 py-2 text-center text-[10px] !bg-[#0055ff] !text-white hover:!bg-[#1a1a1a] hover:!text-white"
+                          className="mt-4 brutalist-button px-3 py-2 text-center text-[10px] !bg-[#0055ff] !text-white hover:!bg-[#1a1a1a] hover:!text-white flex items-center justify-center gap-1.5"
                         >
-                          <User className="h-3.5 w-3.5 inline mr-1" />
+                          <User className="h-3.5 w-3.5" />
                           <span>View Selfie File</span>
                         </a>
                       ) : (
@@ -505,7 +507,7 @@ export default function KycPage() {
             <div className="mt-8 pt-4 border-t-3 border-[#1a1a1a] bg-white">
               {showRejectForm ? (
                 <div className="space-y-3 font-mono">
-                  <p className="text-[10px] text-[#e63b2e] font-extrabold uppercase tracking-wider">Provide rejection remarks first</p>
+                  <p className="text-[10px] text-[#e63b2e] font-extrabold uppercase tracking-wider">Provide rejection remarks first (min. 10 characters)</p>
                   <div className="flex gap-3">
                     <button
                       onClick={() => setShowRejectForm(false)}
@@ -515,13 +517,10 @@ export default function KycPage() {
                     </button>
                     <button
                       onClick={() => {
-                        if (!adminNotes.trim()) {
-                          alert('Please provide a rejection reason in the remarks field.');
-                          return;
-                        }
+                        if (adminNotes.trim().length < 10) return;
                         processReview.mutate({ wallet: selectedKyc.wallet_address, status: 'reject', notes: adminNotes });
                       }}
-                      disabled={processReview.isPending}
+                      disabled={processReview.isPending || adminNotes.trim().length < 10}
                       className="flex-1 brutalist-button py-2.5 !bg-[#e63b2e] !text-white text-xs disabled:opacity-50"
                     >
                       {processReview.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin inline mr-1" />}
@@ -533,26 +532,69 @@ export default function KycPage() {
                 <div className="flex gap-4">
                   <button
                     onClick={() => setShowRejectForm(true)}
-                    className="flex-1 brutalist-button py-3 !bg-[#e63b2e] !text-white text-xs"
+                    className="flex-1 brutalist-button py-3 !bg-[#e63b2e] !text-white text-xs flex items-center justify-center gap-1.5"
                   >
-                    <XCircle className="h-4 w-4 inline mr-1" />
+                    <XCircle className="h-4 w-4" />
                     <span>Reject Identity</span>
                   </button>
                   <button
-                    onClick={() => {
-                      if (confirm('Verify identity? This will unlock full fiat card capabilities for this profile.')) {
-                        processReview.mutate({ wallet: selectedKyc.wallet_address, status: 'approve', notes: adminNotes });
-                      }
-                    }}
+                    onClick={() => setShowVerifyModal(true)}
                     disabled={processReview.isPending}
-                    className="flex-1 brutalist-button-blue py-3 text-xs disabled:opacity-50"
+                    className="flex-1 brutalist-button-blue py-3 text-xs disabled:opacity-50 flex items-center justify-center gap-1.5"
                   >
-                    {processReview.isPending && <Loader2 className="h-4 w-4 animate-spin inline mr-1" />}
-                    <CheckCircle className="h-4 w-4 inline mr-1" />
+                    {processReview.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <CheckCircle className="h-4 w-4" />
+                    )}
                     <span>Verify Identity</span>
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Verify Confirmation Modal ── */}
+      {showVerifyModal && selectedKyc && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+          <div className="fixed inset-0 bg-[#1a1a1a]/70" onClick={() => setShowVerifyModal(false)} />
+          <div className="relative z-10 bg-white border-3 border-[#1a1a1a] shadow-[6px_6px_0px_0px_rgba(26,26,26,1)] p-8 max-w-md w-full mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="h-10 w-10 bg-[#ffcc00] border-2 border-[#1a1a1a] flex items-center justify-center">
+                <ShieldCheck className="h-5 w-5 text-[#1a1a1a]" />
+              </div>
+              <h3 className="text-lg font-extrabold text-[#1a1a1a] font-display uppercase">Confirm Verification</h3>
+            </div>
+            <p className="text-sm text-[#1a1a1a] font-mono mb-2">
+              You are about to <strong>verify</strong> the identity of:
+            </p>
+            <p className="text-sm font-extrabold text-[#1a1a1a] font-display uppercase mb-1">
+              {selectedKyc.full_name || 'Unspecified Name'}
+            </p>
+            <p className="text-[10px] text-gray-500 font-mono mb-6">{selectedKyc.wallet_address}</p>
+            <p className="text-xs text-gray-600 font-mono mb-6">
+              This will unlock full fiat card capabilities for this profile. This action is logged and cannot be undone without a manual override.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowVerifyModal(false)}
+                className="flex-1 brutalist-button-white py-2.5 text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowVerifyModal(false);
+                  processReview.mutate({ wallet: selectedKyc.wallet_address, status: 'approve', notes: adminNotes });
+                }}
+                disabled={processReview.isPending}
+                className="flex-1 brutalist-button-blue py-2.5 text-xs disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {processReview.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
+                Confirm Verify
+              </button>
             </div>
           </div>
         </div>

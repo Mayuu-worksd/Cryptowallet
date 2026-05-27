@@ -10,6 +10,7 @@ import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_7
 const { useMemo, useCallback } = React;
 
 import { Theme, Fonts } from './constants';
+import LogoLoader from './components/LogoLoader';
 
 const navigationRef = createNavigationContainerRef<any>();
 
@@ -91,6 +92,9 @@ import CoinChartScreen    from './screens/CoinChartScreen';
 import OnboardingScreen, { shouldShowOnboarding } from './screens/OnboardingScreen';
 import AccountTypeScreen from './screens/AccountTypeScreen';
 import WebLayout          from './components/WebLayout';
+import CloudBackupScreen from './screens/CloudBackupScreen';
+import RecoverySettingsScreen from './screens/RecoverySettingsScreen';
+import RecoverWalletScreen from './screens/RecoverWalletScreen';
 
 const Tab   = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -101,10 +105,10 @@ function TabIcon({ name, color, focused }: { name: any; color: string; focused: 
   const scale = React.useRef(new Animated.Value(1)).current;
   React.useEffect(() => {
     Animated.spring(scale, {
-      toValue: focused ? 1.2 : 1,
+      toValue: focused ? 1.15 : 1,
       useNativeDriver: true,
-      speed: 20,
-      bounciness: 12,
+      tension: 300,
+      friction: 18,
     }).start();
   }, [focused]);
   return (
@@ -113,6 +117,126 @@ function TabIcon({ name, color, focused }: { name: any; color: string; focused: 
     </Animated.View>
   );
 }
+
+// ─── Premium Custom Tab Bar ─────────────────────────────────────────────────────────────────────────
+function CustomTabBar({ state, descriptors, navigation: nav }: any) {
+  const { isDarkMode, accountType } = useWallet();
+  const TC = isDarkMode ? Theme.colors : Theme.lightColors;
+  const { useSafeAreaInsets } = require('react-native-safe-area-context');
+  const insets = useSafeAreaInsets();
+
+  const personalTabs = [
+    { name: 'Home',    icon: 'layers',    label: 'Wallet'  },
+    { name: 'P2P',     icon: 'repeat',    label: 'P2P'     },
+    { name: 'QRCenter',icon: null,        label: 'Actions' },
+    { name: 'Assets',  icon: 'pie-chart', label: 'Assets'  },
+    { name: 'Profile', icon: 'user',      label: 'Profile' },
+  ];
+
+  const businessTabs = [
+    { name: 'Home',     icon: 'layers',    label: 'Wallet'   },
+    { name: 'P2P',      icon: 'repeat',    label: 'P2P'      },
+    { name: 'QRCenter', icon: null,        label: 'Actions'  },
+    { name: 'Merchant', icon: 'briefcase', label: 'Merchant' },
+    { name: 'Profile',  icon: 'user',      label: 'Profile'  },
+  ];
+
+  const tabs = accountType === 'business' ? businessTabs : personalTabs;
+
+  return (
+    <View style={[
+      customTabStyles.container,
+      {
+        backgroundColor: TC.surface,
+        borderTopColor: TC.border,
+        paddingBottom: insets.bottom || 8,
+      }
+    ]}>
+      {tabs.map((tab, index) => {
+        const routeIndex = state.routes.findIndex((r: any) => r.name === tab.name);
+        const focused = state.index === routeIndex;
+        const color = focused ? TC.primary : TC.textMuted;
+
+        // Center FAB button
+        if (tab.icon === null) {
+          return <CenterQRButton key={tab.name} TC={TC} />;
+        }
+
+        // Profile tab with double-tap
+        if (tab.name === 'Profile') {
+          return (
+            <DoubleTapProfileButton
+              key={tab.name}
+              color={color}
+              focused={focused}
+              TC={TC}
+              onPress={() => {
+                const event = nav.emit({ type: 'tabPress', target: state.routes[routeIndex]?.key, canPreventDefault: true });
+                if (!focused && !event.defaultPrevented) nav.navigate(tab.name);
+              }}
+            >
+              <TabIcon name={tab.icon} color={color} focused={focused} />
+              <Text style={[customTabStyles.label, { color }]}>{tab.label}</Text>
+            </DoubleTapProfileButton>
+          );
+        }
+
+        return (
+          <TouchableOpacity
+            key={tab.name}
+            style={customTabStyles.tab}
+            onPress={() => {
+              const event = nav.emit({ type: 'tabPress', target: state.routes[routeIndex]?.key, canPreventDefault: true });
+              if (!focused && !event.defaultPrevented) nav.navigate(tab.name);
+            }}
+            activeOpacity={0.7}
+          >
+            {focused && (
+              <View style={[customTabStyles.activePill, { backgroundColor: TC.primary + '15' }]} />
+            )}
+            <TabIcon name={tab.icon} color={color} focused={focused} />
+            <Text style={[customTabStyles.label, { color }]}>{tab.label}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
+const customTabStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    paddingTop: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 12,
+  },
+  tab: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4,
+    position: 'relative',
+    minHeight: 52,
+  },
+  activePill: {
+    position: 'absolute',
+    top: 0,
+    width: 48,
+    height: 32,
+    borderRadius: 16,
+  },
+  label: {
+    fontSize: 10,
+    fontFamily: Fonts.bold,
+    marginTop: 4,
+    letterSpacing: 0.2,
+  },
+});
 
 function CenterQRButton({ TC }: { TC: any }) {
   const navigation = useNavigation<any>();
@@ -288,97 +412,36 @@ function Tabs() {
   const { isDarkMode, accountType } = useWallet();
   const TC = isDarkMode ? Theme.colors : Theme.lightColors;
 
-  const tabBarStyle = useMemo(() => ({
-    backgroundColor: TC.surface,
-    borderTopColor: TC.border,
-    borderTopWidth: 1,
-    // Let React Navigation + SafeAreaProvider handle bottom inset automatically
-    // Do NOT set height or paddingBottom manually — causes double-inset on gesture nav devices
-    paddingTop: 8,
-  }), [TC.surface, TC.border]);
-
   const screenOptions = useCallback(() => ({
     headerShown: false,
-    tabBarStyle,
-    tabBarActiveTintColor: TC.primary,
-    tabBarInactiveTintColor: TC.textMuted,
-    tabBarLabelStyle: { fontSize: 11, fontFamily: Fonts.bold, marginTop: 4 },
-    tabBarBackground: () => (
-      <View style={{ flex: 1, backgroundColor: TC.surface, borderTopWidth: 1, borderTopColor: TC.border }} />
-    ),
-  }), [tabBarStyle, TC.primary, TC.textMuted, TC.surface, TC.border]);
+    tabBarStyle: { display: 'none' as const },
+  }), []);
 
   if (accountType === 'business') {
     return (
-      <Tab.Navigator screenOptions={screenOptions}>
-        <Tab.Screen name="Home" component={HomeScreen} options={{
-          tabBarLabel: 'Wallet',
-          tabBarIcon: ({ color, focused }) => <TabIcon name="layers" color={color} focused={focused} />,
-        }} />
-        <Tab.Screen name="P2P" component={P2PMarketplaceScreen} options={{
-          tabBarLabel: 'P2P',
-          tabBarIcon: ({ color, focused }) => <TabIcon name="repeat" color={color} focused={focused} />,
-        }} />
-        <Tab.Screen
-          name="QRCenter"
-          component={HomeScreen}
-          options={{
-            tabBarLabel: () => null,
-            tabBarIcon: () => null,
-            tabBarButton: () => <CenterQRButton TC={TC} />,
-          }}
-        />
-        <Tab.Screen name="Merchant" component={MerchantDashboardScreen} options={{
-          tabBarLabel: 'Merchant',
-          tabBarIcon: ({ color, focused }) => <TabIcon name="briefcase" color={color} focused={focused} />,
-        }} />
-        <Tab.Screen name="Profile" component={SettingsScreen} options={{
-          tabBarLabel: 'Profile',
-          tabBarIcon: ({ color, focused }) => <TabIcon name="user" color={color} focused={focused} />,
-          tabBarButton: (props) => (
-            <DoubleTapProfileButton color={props.accessibilityState?.selected ? TC.primary : TC.textMuted} focused={!!props.accessibilityState?.selected} TC={TC} onPress={props.onPress}>
-              <TabIcon name="user" color={props.accessibilityState?.selected ? TC.primary : TC.textMuted} focused={!!props.accessibilityState?.selected} />
-              <Text style={{ fontSize: 11, fontWeight: '700', color: props.accessibilityState?.selected ? TC.primary : TC.textMuted, marginTop: 4 }}>Profile</Text>
-            </DoubleTapProfileButton>
-          ),
-        }} />
+      <Tab.Navigator
+        screenOptions={screenOptions}
+        tabBar={(props) => <CustomTabBar {...props} />}
+      >
+        <Tab.Screen name="Home"     component={HomeScreen} />
+        <Tab.Screen name="P2P"      component={P2PMarketplaceScreen} />
+        <Tab.Screen name="QRCenter" component={HomeScreen} />
+        <Tab.Screen name="Merchant" component={MerchantDashboardScreen} />
+        <Tab.Screen name="Profile"  component={SettingsScreen} />
       </Tab.Navigator>
     );
   }
 
   return (
-    <Tab.Navigator screenOptions={screenOptions}>
-      <Tab.Screen name="Home" component={HomeScreen} options={{
-        tabBarLabel: 'Wallet',
-        tabBarIcon: ({ color, focused }) => <TabIcon name="layers" color={color} focused={focused} />,
-      }} />
-      <Tab.Screen name="P2P" component={P2PMarketplaceScreen} options={{
-        tabBarLabel: 'P2P',
-        tabBarIcon: ({ color, focused }) => <TabIcon name="repeat" color={color} focused={focused} />,
-      }} />
-      <Tab.Screen
-        name="QRCenter"
-        component={HomeScreen}
-        options={{
-          tabBarLabel: () => null,
-          tabBarIcon: () => null,
-          tabBarButton: () => <CenterQRButton TC={TC} />,
-        }}
-      />
-      <Tab.Screen name="Assets" component={PortfolioScreen} options={{
-        tabBarLabel: 'Assets',
-        tabBarIcon: ({ color, focused }) => <TabIcon name="pie-chart" color={color} focused={focused} />,
-      }} />
-      <Tab.Screen name="Profile" component={SettingsScreen} options={{
-        tabBarLabel: 'Profile',
-        tabBarIcon: ({ color, focused }) => <TabIcon name="user" color={color} focused={focused} />,
-        tabBarButton: (props) => (
-          <DoubleTapProfileButton color={props.accessibilityState?.selected ? TC.primary : TC.textMuted} focused={!!props.accessibilityState?.selected} TC={TC} onPress={props.onPress}>
-            <TabIcon name="user" color={props.accessibilityState?.selected ? TC.primary : TC.textMuted} focused={!!props.accessibilityState?.selected} />
-            <Text style={{ fontSize: 11, fontWeight: '700', color: props.accessibilityState?.selected ? TC.primary : TC.textMuted, marginTop: 4 }}>Profile</Text>
-          </DoubleTapProfileButton>
-        ),
-      }} />
+    <Tab.Navigator
+      screenOptions={screenOptions}
+      tabBar={(props) => <CustomTabBar {...props} />}
+    >
+      <Tab.Screen name="Home"    component={HomeScreen} />
+      <Tab.Screen name="P2P"     component={P2PMarketplaceScreen} />
+      <Tab.Screen name="QRCenter" component={HomeScreen} />
+      <Tab.Screen name="Assets"  component={PortfolioScreen} />
+      <Tab.Screen name="Profile" component={SettingsScreen} />
     </Tab.Navigator>
   );
 }
@@ -555,11 +618,7 @@ function MobileNavigator() {
   }, [pinState]);
 
   if (isLoadingWallet || pinState === 'checking' || !accountTypeChecked) {
-    return (
-      <View style={{ flex: 1, backgroundColor: T.background, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color={T.primary} />
-      </View>
-    );
+    return <LogoLoader visible={true} />;
   }
 
   // Show AccountTypeScreen if the user hasn't set their preferences (Account Type / Country)
@@ -601,6 +660,7 @@ function MobileNavigator() {
             <Stack.Screen name="Landing"      component={LandingScreen} />
             <Stack.Screen name="CreateWallet" component={CreateWalletScreen} />
             <Stack.Screen name="ImportWallet" component={ImportWalletScreen} />
+            <Stack.Screen name="RecoverWallet" component={RecoverWalletScreen} />
           </>
         ) : (
           <>
@@ -609,6 +669,7 @@ function MobileNavigator() {
             <Stack.Screen name="Receive"   component={ReceiveScreen}   />
             <Stack.Screen name="Swap"      component={SwapScreen}      />
             <Stack.Screen name="History"   component={HistoryScreen}   />
+            <Stack.Screen name="Assets"    component={PortfolioScreen} />
             <Stack.Screen name="Portfolio" component={PortfolioScreen} />
             <Stack.Screen name="Settings"  component={SettingsScreen}  />
             <Stack.Screen name="Profile"   component={SettingsScreen}  />
@@ -616,6 +677,8 @@ function MobileNavigator() {
             <Stack.Screen name="Scan"      component={ScanScreen}      options={{ contentStyle: { backgroundColor: '#000' } }} />
             <Stack.Screen name="CoinChart"  component={CoinChartScreen} />
             <Stack.Screen name="Card"        component={CardScreen} />
+            <Stack.Screen name="CloudBackup" component={CloudBackupScreen} />
+            <Stack.Screen name="RecoverySettings" component={RecoverySettingsScreen} />
             <Stack.Screen name="KYCForm"       component={KYCFormScreen} />
             <Stack.Screen name="KYCUpload"     component={KYCUploadScreen} />
             <Stack.Screen name="KYCStatus"     component={KYCStatusScreen} />
@@ -643,72 +706,95 @@ function MobileNavigator() {
             <Stack.Screen name="P2POrderDetail"      component={P2POrderDetailScreen} />
             <Stack.Screen name="MyP2POrders"         component={P2PMarketplaceScreen} />
           </>
-        )}
+        ) }
       </Stack.Navigator>
     </PinSetupContext.Provider>
   );
 }
 
+function GlobalLoadingOverlay() {
+  const wallet = useWallet();
+  // Safe check if WalletContext is loaded
+  if (!wallet) return null;
+  const { isGlobalLoading, globalLoadingMessage } = wallet as any;
+  if (!isGlobalLoading) return null;
+
+  return <LogoLoader visible={true} message={globalLoadingMessage || 'LOADING'} />;
+}
+
 function WebApp() {
-  const { hasWallet, isLoadingWallet, walletAddress, network } = useWallet();
+  const { hasWallet, isLoadingWallet, walletAddress, network, isDarkMode } = useWallet() as any;
+  const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const [currentScreen, setCurrentScreen] = React.useState('Home');
+  const [currentParams, setCurrentParams] = React.useState<any>(null);
 
   React.useEffect(() => {
-    if (!isLoadingWallet) setCurrentScreen(hasWallet ? 'Home' : 'Landing');
+    if (!isLoadingWallet) {
+      setCurrentScreen(hasWallet ? 'Home' : 'Landing');
+      setCurrentParams(null);
+    }
   }, [isLoadingWallet, hasWallet]);
 
-  const setScreen = React.useCallback((screen: string) => setCurrentScreen(screen), []);
   const nav = React.useMemo(() => ({
-    navigate: setScreen,
-    goBack: () => setCurrentScreen(cs => cs === 'ImportWallet' || cs === 'CreateWallet' ? 'Landing' : 'Home'),
-    replace: setScreen,
-  } as any), [setScreen]);
+    navigate: (screen: string, params?: any) => {
+      setCurrentParams(params || null);
+      setCurrentScreen(screen);
+    },
+    goBack: () => {
+      setCurrentParams(null);
+      setCurrentScreen(cs => cs === 'ImportWallet' || cs === 'CreateWallet' || cs === 'RecoverWallet' ? 'Landing' : 'Home');
+    },
+    replace: (screen: string, params?: any) => {
+      setCurrentParams(params || null);
+      setCurrentScreen(screen);
+    },
+  } as any), []);
 
   const renderScreen = () => {
+    const route = { params: currentParams };
     switch (currentScreen) {
-      case 'Home':         return <HomeScreen navigation={nav} />;
-      case 'Send':         return <SendScreen navigation={nav} />;
-      case 'Receive':      return <ReceiveScreen navigation={nav} />;
-      case 'Swap':         return <SwapScreen navigation={nav} />;
-      case 'Card':         return <CardScreen navigation={nav} />;
+      case 'Home':         return <HomeScreen navigation={nav} route={route} />;
+      case 'Send':         return <SendScreen navigation={nav} route={route} />;
+      case 'Receive':      return <ReceiveScreen navigation={nav} route={route} />;
+      case 'Swap':         return <SwapScreen navigation={nav} route={route} />;
+      case 'Card':         return <CardScreen navigation={nav} route={route} />;
       case 'Assets':
-      case 'Portfolio':    return <PortfolioScreen navigation={nav} />;
-      case 'History':      return <HistoryScreen navigation={nav} />;
+      case 'Portfolio':    return <PortfolioScreen navigation={nav} route={route} />;
+      case 'History':      return <HistoryScreen navigation={nav} route={route} />;
       case 'Profile':
-      case 'Settings':     return <SettingsScreen navigation={nav} />;
-      case 'Support':      return <SupportScreen navigation={nav} />;
-      case 'Scan':         return <ScanScreen navigation={nav} />;
-      case 'KYCForm':       return <KYCFormScreen navigation={nav} />;
-      case 'KYCUpload':     return <KYCUploadScreen navigation={nav} />;
-      case 'KYCStatus':     return <KYCStatusScreen navigation={nav} />;
-      case 'KYCIntro':      return <KYCIntroScreen navigation={nav} />;
-      case 'KYCDocument':   return <KYCDocumentScreen navigation={nav} route={{}} />;
-      case 'KYCScan':       return <KYCScanScreen navigation={nav} route={{}} />;
-      case 'KYCLiveness':   return <KYCLivenessScreen navigation={nav} route={{}} />;
-      case 'KYCSelfieMode': return <KYCSelfieModeScreen navigation={nav} route={{}} />;
-      case 'KYCVideoLiveness': return <KYCVideoLivenessScreen navigation={nav} route={{}} />;
-      case 'KYCCodeSelfie': return <KYCCodeSelfieScreen navigation={nav} route={{}} />;
-      case 'KYCProcessing': return <KYCProcessingScreen navigation={nav} route={{}} />;
-      case 'KYCResult':     return <KYCResultScreen navigation={nav} />;
-      case 'VCCVariant':    return <VCCVariantScreen navigation={nav} />;
-      case 'VCCPreview':    return <VCCPreviewScreen navigation={nav} route={{}} />;
-      case 'VCCPhysical':   return <VCCPhysicalScreen navigation={nav} route={{}} />;
-      case 'VCCProcessing': return <VCCProcessingScreen navigation={nav} route={{}} />;
-      case 'VCCSuccess':    return <VCCSuccessScreen navigation={nav} route={{}} />;
-      case 'ApplyPhysicalCard': return <ApplyPhysicalCardScreen navigation={nav} />;
-      case 'CreateWallet': return <CreateWalletScreen navigation={nav} />;
-      case 'ImportWallet': return <ImportWalletScreen navigation={nav} />;
-      case 'Landing':      return <LandingScreen navigation={nav} />;
-      default:             return <HomeScreen navigation={nav} />;
+      case 'Settings':     return <SettingsScreen navigation={nav} route={route} />;
+      case 'Support':      return <SupportScreen navigation={nav} route={route} />;
+      case 'Scan':         return <ScanScreen navigation={nav} route={route} />;
+      case 'CloudBackup':  return <CloudBackupScreen navigation={nav} route={route} />;
+      case 'RecoverySettings': return <RecoverySettingsScreen navigation={nav} route={route} />;
+      case 'KYCForm':       return <KYCFormScreen navigation={nav} route={route} />;
+      case 'KYCUpload':     return <KYCUploadScreen navigation={nav} route={route} />;
+      case 'KYCStatus':     return <KYCStatusScreen navigation={nav} route={route} />;
+      case 'KYCIntro':      return <KYCIntroScreen navigation={nav} route={route} />;
+      case 'KYCDocument':   return <KYCDocumentScreen navigation={nav} route={route} />;
+      case 'KYCScan':       return <KYCScanScreen navigation={nav} route={route} />;
+      case 'KYCLiveness':   return <KYCLivenessScreen navigation={nav} route={route} />;
+      case 'KYCSelfieMode': return <KYCSelfieModeScreen navigation={nav} route={route} />;
+      case 'KYCVideoLiveness': return <KYCVideoLivenessScreen navigation={nav} route={route} />;
+      case 'KYCCodeSelfie': return <KYCCodeSelfieScreen navigation={nav} route={route} />;
+      case 'KYCProcessing': return <KYCProcessingScreen navigation={nav} route={route} />;
+      case 'KYCResult':     return <KYCResultScreen navigation={nav} route={route} />;
+      case 'VCCVariant':    return <VCCVariantScreen navigation={nav} route={route} />;
+      case 'VCCPreview':    return <VCCPreviewScreen navigation={nav} route={route} />;
+      case 'VCCPhysical':   return <VCCPhysicalScreen navigation={nav} route={route} />;
+      case 'VCCProcessing': return <VCCProcessingScreen navigation={nav} route={route} />;
+      case 'VCCSuccess':    return <VCCSuccessScreen navigation={nav} route={route} />;
+      case 'ApplyPhysicalCard': return <ApplyPhysicalCardScreen navigation={nav} route={route} />;
+      case 'CreateWallet': return <CreateWalletScreen navigation={nav} route={route} />;
+      case 'ImportWallet': return <ImportWalletScreen navigation={nav} route={route} />;
+      case 'RecoverWallet': return <RecoverWalletScreen navigation={nav} route={route} />;
+      case 'Landing':      return <LandingScreen navigation={nav} route={route} />;
+      default:             return <HomeScreen navigation={nav} route={route} />;
     }
   };
 
   if (isLoadingWallet) {
-    return (
-      <View style={{ flex: 1, backgroundColor: T.background, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color={T.primary} />
-      </View>
-    );
+    return <LogoLoader visible={true} />;
   }
 
   if (!hasWallet) {
@@ -760,10 +846,8 @@ export default function App() {
 
   if (showOnboarding === null || !fontsReady) {
     return (
-      <GestureHandlerRootView style={{ flex: 1, backgroundColor: Theme.colors.primary }}>
-        <View style={{ flex: 1, backgroundColor: Theme.colors.primary, alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator size="large" color="#FFF" />
-        </View>
+      <GestureHandlerRootView style={{ flex: 1, backgroundColor: Theme.colors.background }}>
+        <LogoLoader visible={true} />
       </GestureHandlerRootView>
     );
   }
@@ -771,7 +855,10 @@ export default function App() {
   if (Platform.OS === 'web' && isDesktop) {
     return (
       <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#101114' }}>
-        <WalletProvider><WebApp /></WalletProvider>
+        <WalletProvider>
+          <WebApp />
+          <GlobalLoadingOverlay />
+        </WalletProvider>
       </GestureHandlerRootView>
     );
   }
@@ -801,6 +888,7 @@ export default function App() {
           }}
         >
           <MobileNavigator />
+          <GlobalLoadingOverlay />
         </NavigationContainer>
       </WalletProvider>
       {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}

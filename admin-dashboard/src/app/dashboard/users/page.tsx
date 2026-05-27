@@ -157,7 +157,7 @@ export default function UsersPage() {
             placeholder="Search wallet, profile name, or country..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full brutalist-input pl-10 focus:ring-0 focus:border-[#1a1a1a]"
+            className="w-full brutalist-input !pl-10 focus:ring-0 focus:border-[#1a1a1a]"
           />
         </div>
         <div className="text-xs font-bold text-[#1a1a1a] uppercase font-display border-2 border-[#1a1a1a] bg-[#ffcc00] px-3 py-1.5 shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]">

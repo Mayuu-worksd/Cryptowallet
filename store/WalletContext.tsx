@@ -121,6 +121,9 @@ type WalletContextType = {
   formatFiat: (amountUSD: number) => string;
   convertFiat: (amountUSD: number) => number;
   fiatSymbol: string;
+  isGlobalLoading: boolean;
+  setGlobalLoading: (loading: boolean, message?: string) => void;
+  globalLoadingMessage: string;
 };
 
 const WalletContext = createContext<WalletContextType>({} as WalletContextType);
@@ -172,6 +175,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [priceError,      setPriceError]    = useState(false);
   const [news,            setNews]          = useState<NewsItem[]>([]);
   const [isNewsLoading,   setIsNewsLoading] = useState(true);
+  const [isGlobalLoading, setIsGlobalLoading] = useState(false);
+  const [globalLoadingMessage, setGlobalLoadingMessage] = useState('LOADING');
 
   const [dataLoaded,     setDataLoaded]     = useState(false);
   const [isSyncing,      setIsSyncing]      = useState(false);
@@ -943,18 +948,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         await setWallet(data.address);
 
         // ── Fetch everything from Supabase in parallel ──
-        const [vcc, dbCard, dbTxs, variants, kycRecord, p2pOrders] = await Promise.all([
+        const [vcc, dbCard, dbTxs, variants, kycRecord] = await Promise.all([
           vccService.getCard(data.address),
           dbCardService.getCard(data.address),
           txService.getAll(data.address, 500),
           cardVariantService.getVariants(),
           kycService.getStatus(data.address),
-          supabase
-            .from('p2p_orders')
-            .select('*')
-            .or(`seller_wallet.eq.${data.address.toLowerCase()},buyer_wallet.eq.${data.address.toLowerCase()}`)
-            .order('created_at', { ascending: false })
-            .then(r => r.data ?? []),
+          Promise.resolve([]),
         ]);
 
         // ── Restore KYC status ──
@@ -1072,52 +1072,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             txHash:   t.tx_hash,
           }));
 
-        // ── Restore P2P orders as transactions ──
-        const p2pTxs: Transaction[] = (p2pOrders as any[]).map((o: any) => {
-          const isSeller = o.seller_wallet?.toLowerCase() === data.address.toLowerCase();
-          const statusMap: Record<string, Transaction['status']> = {
-            completed: 'success', cancelled: 'failed',
-            open: 'pending', escrow_locked: 'pending', payment_pending: 'pending', payment_verification: 'pending', crypto_released: 'pending', disputed: 'pending',
-          };
-          return {
-            id:       `p2p_${o.id}`,
-            type:     isSeller ? 'sent' as const : 'received' as const,
-            coin:     o.token,
-            amount:   String(o.amount),
-            usdValue: String(o.fiat_total ?? 0),
-            address:  isSeller
-              ? `P2P Sale · ${o.token} → ${o.fiat_currency}`
-              : `P2P Buy · ${o.fiat_currency} → ${o.token}`,
-            status:   statusMap[o.status] ?? 'pending',
-            date:     o.created_at
-              ? new Date(o.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-              : new Date().toLocaleDateString(),
-          };
-        });
-
-        // Merge: Supabase txs + P2P txs, deduplicate by id
-        const allTxs = [...restoredTxs, ...p2pTxs];
-        const seenIds = new Set<string>();
-        const dedupedTxs = allTxs.filter(t => {
-          if (seenIds.has(t.id)) return false;
-          seenIds.add(t.id);
-          return true;
-        });
-
-        if (dedupedTxs.length > 0) {
-          setTransactions(dedupedTxs);
-          await AsyncStorage.setItem('cw_transactions', JSON.stringify(dedupedTxs));
+        if (restoredTxs.length > 0) {
+          setTransactions(restoredTxs);
+          await AsyncStorage.setItem('cw_transactions', JSON.stringify(restoredTxs));
         }
 
-        // ── Restore locked balances from active P2P sell orders only (buyer never locks) ──
+        // P2P orders are loaded directly in P2PMarketplaceScreen via getMyOrders
+
+        // ── Restore locked balances from active P2P sell orders ──
         const activeLocks: Record<string, number> = {};
-        (p2pOrders as any[]).forEach((o: any) => {
-          if (!['open', 'escrow_locked', 'payment_pending', 'payment_verification', 'crypto_released'].includes(o.status)) return;
-          // Only seller locks crypto
-          if (o.seller_wallet?.toLowerCase() === data.address.toLowerCase()) {
-            activeLocks[o.token] = (activeLocks[o.token] || 0) + o.amount;
-          }
-        });
+        // locked balances are managed by P2PMarketplaceScreen via healLockedBalance
         if (Object.keys(activeLocks).length > 0) {
           setLockedBalance(activeLocks);
           await AsyncStorage.setItem('cw_locked_balance', JSON.stringify(activeLocks));
@@ -1590,6 +1554,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     createWallet, importWallet, deleteWallet, enterReadOnlyMode, refreshBalance, refreshCardData, fetchBalance,
     sendETH, sendCrypto, topupCard, spendCard, toggleFreezeCard, applySwapBalances, switchNetwork,
     fiatCurrency, setFiatCurrency, formatFiat, convertFiat, fiatSymbol,
+    isGlobalLoading,
+    setGlobalLoading: (loading: boolean, msg?: string) => {
+      if (msg) setGlobalLoadingMessage(msg);
+      setIsGlobalLoading(loading);
+    },
+    globalLoadingMessage
   }), [
     isDarkMode, toggleTheme, accountType, accountTypeSet, setAccountType,
     p2pCountry, p2pCurrency, setP2PPreferences, lockedBalance, lockBalance, unlockBalance, resetLockedBalances, creditP2PBalance,
@@ -1601,6 +1571,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     createWallet, importWallet, deleteWallet, enterReadOnlyMode, refreshBalance, refreshCardData, fetchBalance,
     sendETH, sendCrypto, topupCard, spendCard, toggleFreezeCard, applySwapBalances, switchNetwork,
     fiatCurrency, setFiatCurrency, formatFiat, convertFiat, fiatSymbol,
+    isGlobalLoading,
+    globalLoadingMessage
   ]);
 
   return (

@@ -129,7 +129,7 @@ export default function CardsPage() {
               placeholder="Search wallet, card type, country..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full brutalist-input pl-9 focus:ring-0"
+              className="w-full brutalist-input !pl-9 focus:ring-0"
             />
           </div>
         </div>
