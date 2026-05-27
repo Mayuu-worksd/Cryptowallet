@@ -11,9 +11,9 @@ module.exports = {
     fastRefresh: true,
     updates: {
       url: "https://u.expo.dev/141850e9-e38b-44a9-9af9-4f6ecc270bc2",
-      enabled: false,
+      enabled: true,
       fallbackToCacheTimeout: 0,
-      checkAutomatically: "NEVER",
+      checkAutomatically: "ON_LOAD",
     },
     splash: {
       image: "./assets/splash-icon.png",
