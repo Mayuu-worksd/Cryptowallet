@@ -59,9 +59,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       setTheme(savedTheme);
       document.documentElement.classList.toggle('dark', savedTheme === 'dark');
     } else {
-      // Enforce dark mode as the absolute default state
-      setTheme('dark');
-      document.documentElement.classList.add('dark');
+      setTheme('light');
+      document.documentElement.classList.remove('dark');
     }
   }, []);
 

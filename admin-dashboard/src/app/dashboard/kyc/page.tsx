@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { isAddress } from 'ethers';
 import { supabase, getKYCSignedUrl, extractStoragePath } from '@/lib/supabase';
 import {
   Shield,
@@ -48,8 +49,9 @@ export default function KycPage() {
         kyc.selfie_video_url ? getKYCSignedUrl(extractStoragePath(kyc.selfie_video_url)) : Promise.resolve(''),
       ]);
       setSignedUrls({ doc: doc || undefined, selfie: selfie || undefined, video: video || undefined });
-    } catch (e) {
-      // Signed URL generation failed — show empty state, do not expose error details
+    } catch (e: any) {
+      console.error('Failed to generate signed URLs for KYC documents:', e);
+      alert(e?.message || 'Failed to load document URLs. They might be missing or private.');
     } finally {
       setUrlsLoading(false);
     }
@@ -59,21 +61,16 @@ export default function KycPage() {
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['admin-kyc-stats'],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('admin_get_kyc_stats');
-      if (error) {
-        console.warn('RPC admin_get_kyc_stats failed, counting tables:', error.message);
-        // Fallback to table queries
-        const { data: allKyc } = await supabase.from('kyc').select('status');
-        const kList = allKyc || [];
-        return {
-          total: kList.length,
-          pending: kList.filter(k => k.status === 'pending').length,
-          under_review: kList.filter(k => k.status === 'under_review').length,
-          verified: kList.filter(k => k.status === 'verified').length,
-          rejected: kList.filter(k => k.status === 'rejected').length,
-        };
-      }
-      return data;
+      const { data: allKyc, error } = await supabase.from('kyc').select('status');
+      if (error) throw error;
+      const kList = allKyc || [];
+      return {
+        total: kList.length,
+        pending: kList.filter(k => k.status === 'pending').length,
+        under_review: kList.filter(k => k.status === 'under_review').length,
+        verified: kList.filter(k => k.status === 'verified').length,
+        rejected: kList.filter(k => k.status === 'rejected').length,
+      };
     },
   });
 
@@ -86,14 +83,8 @@ export default function KycPage() {
       });
 
       if (error) {
-        console.warn('RPC admin_get_all_kyc failed, querying table directly:', error.message);
-        let query = supabase.from('kyc').select('*');
-        if (statusFilter !== 'all') {
-          query = query.eq('status', statusFilter);
-        }
-        const { data: tblData, error: tblError } = await query.order('created_at', { ascending: false });
-        if (tblError) throw tblError;
-        return tblData || [];
+        console.error('RPC admin_get_all_kyc failed:', error.message);
+        throw error;
       }
       return data || [];
     },
@@ -102,27 +93,24 @@ export default function KycPage() {
   // 3. Process Review Mutation (Approve/Reject)
   const processReview = useMutation({
     mutationFn: async ({ wallet, status, notes }: { wallet: string; status: string; notes: string }) => {
-      const addr = wallet.toLowerCase().trim();
-      if (!/^0x[0-9a-f]{40}$/.test(addr)) throw new Error('Invalid wallet address format');
+      const addr = wallet.trim();
+      if (!isAddress(addr)) throw new Error('Invalid wallet address format (checksum failed)');
+      const normalizedAddr = addr.toLowerCase();
       const mappedStatus = status === 'approve' ? 'verified' : 'rejected';
       
+      if (mappedStatus === 'rejected' && (!notes || notes.trim().length < 10)) {
+        throw new Error('Rejection requires at least 10 characters of remarks.');
+      }
+      
       const { error } = await supabase.rpc('admin_update_kyc', {
-        p_wallet: addr,
+        p_wallet: normalizedAddr,
         p_status: mappedStatus,
         p_notes: notes || null,
       });
 
       if (error) {
-        console.warn('RPC admin_update_kyc failed, direct table update:', error.message);
-        const { error: tableError } = await supabase
-          .from('kyc')
-          .update({
-            status: mappedStatus,
-            admin_notes: notes || null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('wallet_address', addr);
-        if (tableError) throw tableError;
+        console.error('RPC admin_update_kyc failed:', error.message);
+        throw error;
       }
     },
     onSuccess: () => {
@@ -304,7 +292,7 @@ export default function KycPage() {
                     {/* Doc type */}
                     <td className="py-4 px-4 border-r border-[#1a1a1a]/10">
                       <span className="px-2 py-0.5 border border-[#1a1a1a] bg-white text-[#1a1a1a] text-[9px] font-extrabold uppercase font-mono">
-                        {kyc.document_type || 'Passport'}
+                        {kyc.document_type || 'Unknown'}
                       </span>
                     </td>
 
@@ -387,21 +375,21 @@ export default function KycPage() {
                     <Globe className="h-5 w-5 text-gray-600" />
                     <div>
                       <p className="text-[9px] text-gray-500 uppercase font-bold tracking-wider font-mono">Nationality</p>
-                      <p className="text-xs font-bold text-[#1a1a1a] font-display uppercase">{selectedKyc.nationality || 'United States'}</p>
+                      <p className="text-xs font-bold text-[#1a1a1a] font-display uppercase">{selectedKyc.nationality || 'Unknown'}</p>
                     </div>
                   </div>
                   <div className="p-3.5 border-2 border-[#1a1a1a] bg-[#f5f0e8] flex items-center gap-2.5">
                     <Calendar className="h-5 w-5 text-gray-600" />
                     <div>
                       <p className="text-[9px] text-gray-500 uppercase font-bold tracking-wider font-mono">Date of Birth</p>
-                      <p className="text-xs font-mono font-bold text-[#1a1a1a]">{selectedKyc.dob || '1992-05-14'}</p>
+                      <p className="text-xs font-mono font-bold text-[#1a1a1a]">{selectedKyc.dob || 'Unknown'}</p>
                     </div>
                   </div>
                   <div className="p-3.5 border-2 border-[#1a1a1a] bg-[#f5f0e8] flex items-center gap-2.5">
                     <FileText className="h-5 w-5 text-gray-600" />
                     <div>
                       <p className="text-[9px] text-gray-500 uppercase font-bold tracking-wider font-mono">Document Code</p>
-                      <p className="text-xs font-bold text-[#0055ff] font-mono">{selectedKyc.unique_code || 'US-PASSPORT-43A2'}</p>
+                      <p className="text-xs font-bold text-[#0055ff] font-mono">{selectedKyc.unique_code || '---'}</p>
                     </div>
                   </div>
                 </div>

@@ -11,15 +11,24 @@ export default function AnalyticsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['admin-analytics-real'],
     queryFn: async () => {
-      const [
-        { data: profiles },
-        { data: transactions },
-        { data: p2pOrders },
-      ] = await Promise.all([
-        supabase.from('wallet_profiles').select('wallet_address, token_balances, created_at'),
+      const SWAP_FEE   = 0.001;  // 0.10%
+      const CARD_FEE   = 0.0015; // 0.15%
+      const P2P_FEE    = 0.005;  // 0.50% — matches PLATFORM_FEE_RATE in merchantService
+
+      const [profilesRes, txRes, p2pRes] = await Promise.all([
+        supabase.rpc('admin_get_wallet_profiles').then(r =>
+          r.error ? supabase.from('wallet_profiles').select('wallet_address, token_balances, created_at') : r
+        ),
         supabase.from('transactions').select('type, usd_value, amount, token, status, created_at').order('created_at', { ascending: true }),
         supabase.from('p2p_orders').select('status, fiat_total, created_at'),
       ]);
+
+      if (txRes.error)  throw new Error(`Failed to load transactions: ${txRes.error.message}`);
+      if (p2pRes.error) throw new Error(`Failed to load P2P orders: ${p2pRes.error.message}`);
+
+      const profiles   = profilesRes.data ?? [];
+      const transactions = txRes.data ?? [];
+      const p2pOrders    = p2pRes.data ?? [];
 
       // ── Last 7 days labels ──
       const today = new Date();
@@ -34,60 +43,71 @@ export default function AnalyticsPage() {
 
       // ── Volume per day (swap USD) ──
       const volumeByDay = last7.map(({ date }) =>
-        (transactions ?? [])
+        transactions
           .filter(t => t.created_at?.slice(0, 10) === date && t.type === 'swap')
           .reduce((acc, t) => acc + Number(t.usd_value || 0), 0)
       );
 
       // ── Cumulative users per day ──
       const usersByDay = last7.map(({ date }) =>
-        (profiles ?? []).filter(p => p.created_at?.slice(0, 10) <= date).length
+        profiles.filter((p: any) => p.created_at?.slice(0, 10) <= date).length
       );
 
-      // ── Revenue per day (0.1% swap + 0.15% card topup) ──
+      // ── Revenue per day ──
       const revenueByDay = last7.map(({ date }) => {
-        const dayTxs = (transactions ?? []).filter(t => t.created_at?.slice(0, 10) === date);
-        const swapFee = dayTxs.filter(t => t.type === 'swap').reduce((a, t) => a + Number(t.usd_value || 0) * 0.001, 0);
-        const cardFee = dayTxs.filter(t => t.type === 'card_topup').reduce((a, t) => a + Number(t.usd_value || 0) * 0.0015, 0);
+        const dayTxs = transactions.filter(t => t.created_at?.slice(0, 10) === date);
+        const swapFee = dayTxs.filter(t => t.type === 'swap').reduce((a, t) => a + Number(t.usd_value || 0) * SWAP_FEE, 0);
+        const cardFee = dayTxs.filter(t => t.type === 'card_topup').reduce((a, t) => a + Number(t.usd_value || 0) * CARD_FEE, 0);
         return swapFee + cardFee;
       });
 
       // ── Transaction type splits ──
-      const txList = transactions ?? [];
-      const swapTxs   = txList.filter(t => t.type === 'swap');
-      const sendTxs   = txList.filter(t => t.type === 'send');
-      const topupTxs  = txList.filter(t => t.type === 'card_topup' || t.type === 'card_spend');
+      const swapTxs  = transactions.filter(t => t.type === 'swap');
+      const sendTxs  = transactions.filter(t => t.type === 'send');
+      const topupTxs = transactions.filter(t => t.type === 'card_topup' || t.type === 'card_spend');
 
       const swapUsd  = swapTxs.reduce((a, t) => a + Number(t.usd_value || 0), 0);
       const sendUsd  = sendTxs.reduce((a, t) => a + Number(t.usd_value || 0), 0);
       const topupUsd = topupTxs.reduce((a, t) => a + Number(t.usd_value || 0), 0);
 
       // ── Protocol fees ──
-      const swapFeeTotal  = swapUsd * 0.001;
-      const cardFeeTotal  = topupUsd * 0.0015;
-      const p2pFeeTotal   = (p2pOrders ?? []).filter(o => o.status === 'completed')
-        .reduce((a, o) => a + Number(o.fiat_total || 0) * 0.0015, 0);
+      const swapFeeTotal = swapUsd * SWAP_FEE;
+      const cardFeeTotal = topupUsd * CARD_FEE;
+      const p2pFeeTotal  = p2pOrders.filter(o => o.status === 'completed')
+        .reduce((a, o) => a + Number(o.fiat_total || 0) * P2P_FEE, 0);
       const totalFees = swapFeeTotal + cardFeeTotal + p2pFeeTotal;
 
       // ── Token pool from real wallet_profiles.token_balances ──
       const tokenTotals: Record<string, number> = {};
-      (profiles ?? []).forEach(p => {
+      profiles.forEach((p: any) => {
         if (!p.token_balances) return;
         try {
           const bal = typeof p.token_balances === 'string' ? JSON.parse(p.token_balances) : p.token_balances;
-          Object.entries(bal).forEach(([token, amount]) => {
-            tokenTotals[token] = (tokenTotals[token] ?? 0) + Number(amount);
-          });
-        } catch {}
+          if (bal && typeof bal === 'object') {
+            Object.entries(bal).forEach(([token, amount]) => {
+              tokenTotals[token] = (tokenTotals[token] ?? 0) + Number(amount);
+            });
+          }
+        } catch {
+          // skip malformed entry — does not affect other profiles
+        }
       });
 
       const tokenEntries = Object.entries(tokenTotals).sort((a, b) => b[1] - a[1]);
       const grandTotal = tokenEntries.reduce((a, [, v]) => a + v, 0);
 
       const TOKEN_COLORS: Record<string, string> = {
-        USDT: '#0055ff', USDC: '#ffcc00', ETH: '#e63b2e',
-        TRX: '#1a1a1a', BNB: '#ffcc00', BTC: '#e63b2e',
-        SOL: '#0055ff', DAI: '#f5f0e8',
+        USDT: '#26A17B',
+        USDC: '#2775CA',
+        ETH:  '#627EEA',
+        BTC:  '#F7931A',
+        SOL:  '#9945FF',
+        BNB:  '#F3BA2F',
+        XRP:  '#23292F',
+        TON:  '#0088CC',
+        TRX:  '#EF0027',
+        SUI:  '#6FBCF0',
+        DAI:  '#F5AC37',
       };
 
       return {
@@ -105,7 +125,7 @@ export default function AnalyticsPage() {
         TOKEN_COLORS,
       };
     },
-    refetchInterval: 20000,
+    refetchInterval: 60000,
   });
 
   const chartMap = {
@@ -116,8 +136,8 @@ export default function AnalyticsPage() {
 
   const currentPoints = chartMap[activeSegment].points;
   const chartLabels   = data?.chartLabels ?? ['', '', '', '', '', '', ''];
-  const max = Math.max(...currentPoints, 1);
-  const min = Math.min(...currentPoints, 0);
+  const max = currentPoints.length > 0 ? Math.max(...currentPoints, 1) : 1;
+  const min = currentPoints.length > 0 ? Math.min(...currentPoints, 0) : 0;
   const W = 600; const H = 180;
 
   const svgPoints = currentPoints.map((val, idx) => {
@@ -131,7 +151,7 @@ export default function AnalyticsPage() {
   return (
     <div className="space-y-8 animate-fade-in relative min-h-screen pb-12">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-3 border-[#1a1a1a] pb-6 bg-[#0055ff] p-6 text-white shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] border-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-3 border-[var(--border-color)] pb-6 bg-[#ffcc00] p-6 shadow-[4px_4px_0px_0px_var(--border-color)] border-3">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight font-display uppercase leading-none">System Analytics Desk</h1>
           <p className="text-xs font-bold font-mono uppercase tracking-wider mt-2">All figures pulled live from Supabase — zero hardcoded metrics</p>
@@ -148,7 +168,7 @@ export default function AnalyticsPage() {
             </h4>
             <p className="text-[10px] text-gray-500 font-mono mt-0.5 font-bold uppercase">{isLoading ? '—' : data?.swapCount} swap transactions</p>
           </div>
-          <div className="h-10 w-10 border-2 border-[#1a1a1a] bg-[#ffcc00] flex items-center justify-center text-[#1a1a1a] shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]">
+          <div className="h-10 w-10 border-2 border-[var(--border-color)] bg-[var(--accent-yellow)] flex items-center justify-center text-[var(--foreground)] shadow-[2px_2px_0px_0px_var(--border-color)]">
             <ArrowLeftRight className="h-5 w-5" />
           </div>
         </div>
@@ -161,7 +181,7 @@ export default function AnalyticsPage() {
             </h4>
             <p className="text-[10px] text-gray-500 font-mono mt-0.5 font-bold uppercase">{isLoading ? '—' : data?.sendCount} send transactions</p>
           </div>
-          <div className="h-10 w-10 border-2 border-[#1a1a1a] bg-[#e63b2e] text-white flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]">
+          <div className="h-10 w-10 border-2 border-[var(--border-color)] bg-[var(--accent-red)] text-white flex items-center justify-center shadow-[2px_2px_0px_0px_var(--border-color)]">
             <TrendingUp className="h-5 w-5" />
           </div>
         </div>
@@ -174,7 +194,7 @@ export default function AnalyticsPage() {
             </h4>
             <p className="text-[10px] text-gray-500 font-mono mt-0.5 font-bold uppercase">{isLoading ? '—' : data?.topupCount} card transactions</p>
           </div>
-          <div className="h-10 w-10 border-2 border-[#1a1a1a] bg-[#0055ff] text-white flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]">
+          <div className="h-10 w-10 border-2 border-[var(--border-color)] bg-[var(--accent-blue)] text-white flex items-center justify-center shadow-[2px_2px_0px_0px_var(--border-color)]">
             <CreditCard className="h-5 w-5" />
           </div>
         </div>
@@ -218,9 +238,9 @@ export default function AnalyticsPage() {
                 </pattern>
               </defs>
               <rect width={W} height={H} fill="url(#brutalistGrid)" />
-              <line x1="0" y1={H * 0.25} x2={W} y2={H * 0.25} stroke="#1a1a1a" strokeDasharray="3,3" strokeOpacity="0.1" />
-              <line x1="0" y1={H * 0.5}  x2={W} y2={H * 0.5}  stroke="#1a1a1a" strokeDasharray="3,3" strokeOpacity="0.1" />
-              <line x1="0" y1={H * 0.75} x2={W} y2={H * 0.75} stroke="#1a1a1a" strokeDasharray="3,3" strokeOpacity="0.1" />
+              <line x1="0" y1={H * 0.25} x2={W} y2={H * 0.25} stroke="var(--border-color)" strokeDasharray="3,3" strokeOpacity="0.4" />
+              <line x1="0" y1={H * 0.5}  x2={W} y2={H * 0.5}  stroke="var(--border-color)" strokeDasharray="3,3" strokeOpacity="0.4" />
+              <line x1="0" y1={H * 0.75} x2={W} y2={H * 0.75} stroke="var(--border-color)" strokeDasharray="3,3" strokeOpacity="0.4" />
               <polygon points={svgArea} fill="#0055ff" fillOpacity="0.08" />
               <polyline fill="none" stroke="#1a1a1a" strokeWidth="3" points={svgPoints} />
               {currentPoints.map((val, idx) => {
@@ -228,7 +248,7 @@ export default function AnalyticsPage() {
                 const y = H - ((val - min) / (max - min || 1)) * (H - 40) - 20;
                 return (
                   <g key={idx}>
-                    <circle cx={x} cy={y} r="5" className="fill-[#ffcc00] stroke-[#1a1a1a] stroke-2" />
+                    <circle cx={x} cy={y} r="5" fill="var(--accent-yellow)" stroke="var(--border-color)" strokeWidth="2" />
                   </g>
                 );
               })}
@@ -270,8 +290,8 @@ export default function AnalyticsPage() {
                         {amount.toLocaleString(undefined, { maximumFractionDigits: 4 })} ({pct.toFixed(1)}%)
                       </span>
                     </div>
-                    <div className="h-3.5 w-full bg-white border-2 border-[#1a1a1a] rounded-none overflow-hidden">
-                      <div className="h-full rounded-none transition-all duration-700 border-r-2 border-[#1a1a1a]" style={{ width: `${pct}%`, backgroundColor: color }} />
+                    <div className="h-3.5 w-full bg-[var(--card-bg)] border-2 border-[var(--border-color)] rounded-none overflow-hidden">
+                      <div className="h-full rounded-none transition-all duration-700 border-r-2 border-[var(--border-color)]" style={{ width: `${pct}%`, backgroundColor: color }} />
                     </div>
                   </div>
                 );
@@ -287,32 +307,32 @@ export default function AnalyticsPage() {
             <p className="text-xs text-gray-500 font-mono font-semibold uppercase tracking-wide mb-6">Calculated from live swap, card, and P2P transaction records</p>
 
             <div className="space-y-4 font-mono text-xs">
-              <div className="p-3.5 border-2 border-[#1a1a1a] bg-[#f5f0e8] flex items-center justify-between">
+              <div className="p-3.5 border-2 border-[var(--border-color)] bg-[var(--surface-low)] flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-bold text-[#1a1a1a]">0.10% Exchange Spread</p>
+                  <p className="text-xs font-bold text-[var(--foreground)]">0.10% Exchange Spread</p>
                   <p className="text-[10px] text-gray-500 font-semibold uppercase mt-0.5">From {data?.swapCount ?? 0} swap transactions</p>
                 </div>
-                <span className="text-xs font-extrabold text-[#1a1a1a]">
+                <span className="text-xs font-extrabold text-[var(--foreground)]">
                   {isLoading ? '—' : `$${(data?.swapFeeTotal ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                 </span>
               </div>
 
-              <div className="p-3.5 border-2 border-[#1a1a1a] bg-[#f5f0e8] flex items-center justify-between">
+              <div className="p-3.5 border-2 border-[var(--border-color)] bg-[var(--surface-low)] flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-bold text-[#1a1a1a]">0.15% Card Top-up Spread</p>
+                  <p className="text-xs font-bold text-[var(--foreground)]">0.15% Card Top-up Spread</p>
                   <p className="text-[10px] text-gray-500 font-semibold uppercase mt-0.5">From {data?.topupCount ?? 0} card transactions</p>
                 </div>
-                <span className="text-xs font-extrabold text-[#1a1a1a]">
+                <span className="text-xs font-extrabold text-[var(--foreground)]">
                   {isLoading ? '—' : `$${(data?.cardFeeTotal ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                 </span>
               </div>
 
-              <div className="p-3.5 border-2 border-[#1a1a1a] bg-[#f5f0e8] flex items-center justify-between">
+              <div className="p-3.5 border-2 border-[var(--border-color)] bg-[var(--surface-low)] flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-bold text-[#1a1a1a]">0.15% P2P Escrow Fee</p>
+                  <p className="text-xs font-bold text-[var(--foreground)]">0.50% P2P Escrow Fee</p>
                   <p className="text-[10px] text-gray-500 font-semibold uppercase mt-0.5">From completed P2P trades</p>
                 </div>
-                <span className="text-xs font-extrabold text-[#1a1a1a]">
+                <span className="text-xs font-extrabold text-[var(--foreground)]">
                   {isLoading ? '—' : `$${(data?.p2pFeeTotal ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                 </span>
               </div>

@@ -8,13 +8,32 @@ import {
   XCircle, Loader2, Package, Truck, X, MapPin, DollarSign,
 } from 'lucide-react';
 
+interface CardRequest {
+  id: string;
+  wallet_address: string;
+  card_type: string;
+  country: string;
+  shipping_fee: string | number | null;
+  total_cost: string | number | null;
+  status: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+function safeParseFloat(value: string | number | null | undefined): number {
+  const n = parseFloat(String(value ?? 0));
+  return isNaN(n) ? 0 : n;
+}
+
 export default function CardsPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedRequest, setSelectedRequest] = useState<any>(null);
+  const [selectedRequest, setSelectedRequest] = useState<CardRequest | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [mutateError, setMutateError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
-  const { data: requests, isLoading, refetch, isRefetching } = useQuery({
+  const { data: requests, isLoading, error: queryError, refetch, isRefetching } = useQuery({
     queryKey: ['admin-card-requests', statusFilter],
     queryFn: async () => {
       let query = supabase
@@ -24,10 +43,16 @@ export default function CardsPage() {
       if (statusFilter !== 'all') query = query.eq('status', statusFilter);
       const { data, error } = await query;
       if (error) throw error;
-      return data || [];
+      return (data || []) as CardRequest[];
     },
     refetchInterval: 20000,
   });
+
+  React.useEffect(() => {
+    if (queryError) {
+      setFetchError((queryError as Error).message || 'Failed to load card requests.');
+    }
+  }, [queryError]);
 
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
@@ -36,21 +61,27 @@ export default function CardsPage() {
         .update({ status, updated_at: new Date().toISOString() })
         .eq('id', id);
       if (error) throw error;
+      return status;
     },
-    onSuccess: () => {
+    onSuccess: (newStatus) => {
+      setMutateError(null);
       queryClient.invalidateQueries({ queryKey: ['admin-card-requests'] });
-      setSelectedRequest((prev: any) => prev ? { ...prev, status: selectedRequest?._pendingStatus } : null);
+      setSelectedRequest((prev) => prev ? { ...prev, status: newStatus } : null);
+    },
+    onError: (err) => {
+      setMutateError((err as Error).message || 'Failed to update card request status.');
     },
   });
 
   const handleStatusChange = (id: string, status: string) => {
-    const label = status === 'approved' ? 'APPROVE' : status === 'rejected' ? 'REJECT' : 'mark as SHIPPED';
+    const labels: Record<string, string> = { approved: 'APPROVE', rejected: 'REJECT', shipped: 'mark as SHIPPED' };
+    const label = labels[status] ?? status.toUpperCase();
     if (!confirm(`Are you sure you want to ${label} this card request?`)) return;
-    setSelectedRequest((prev: any) => prev ? { ...prev, _pendingStatus: status } : null);
+    setMutateError(null);
     updateStatus.mutate({ id, status });
   };
 
-  const filtered = (requests || []).filter((r: any) => {
+  const filtered = (requests || []).filter((r: CardRequest) => {
     const term = searchTerm.toLowerCase();
     return (
       r.wallet_address?.toLowerCase().includes(term) ||
@@ -59,7 +90,7 @@ export default function CardsPage() {
     );
   });
 
-  const countByStatus = (s: string) => (requests || []).filter((r: any) => r.status === s).length;
+  const countByStatus = (s: string) => (requests || []).filter((r: CardRequest) => r.status === s).length;
 
   const STATUS_STYLES: Record<string, string> = {
     pending:  'bg-white text-[#1a1a1a] animate-pulse',
@@ -70,6 +101,22 @@ export default function CardsPage() {
 
   return (
     <div className="space-y-8 animate-fade-in relative min-h-screen pb-12">
+      {/* Error banners */}
+      {fetchError && (
+        <div className="flex items-center gap-2 px-4 py-3 border-2 border-[#1a1a1a] bg-[#e63b2e] text-white text-xs font-bold font-mono uppercase">
+          <XCircle className="h-4 w-4 shrink-0" />
+          <span>{fetchError}</span>
+          <button onClick={() => setFetchError(null)} className="ml-auto"><X className="h-4 w-4" /></button>
+        </div>
+      )}
+      {mutateError && (
+        <div className="flex items-center gap-2 px-4 py-3 border-2 border-[#1a1a1a] bg-[#e63b2e] text-white text-xs font-bold font-mono uppercase">
+          <XCircle className="h-4 w-4 shrink-0" />
+          <span>{mutateError}</span>
+          <button onClick={() => setMutateError(null)} className="ml-auto"><X className="h-4 w-4" /></button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-3 border-[#1a1a1a] pb-6 bg-[#ffcc00] p-6 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] border-3">
         <div>
@@ -182,7 +229,7 @@ export default function CardsPage() {
                       </div>
                     </td>
                     <td className="py-4 px-4 border-r border-[#1a1a1a]/10 text-right font-bold">
-                      ${parseFloat(r.total_cost || 0).toFixed(2)}
+                      ${safeParseFloat(r.total_cost).toFixed(2)}
                     </td>
                     <td className="py-4 px-4 border-r border-[#1a1a1a]/10 text-gray-500">
                       {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -237,8 +284,8 @@ export default function CardsPage() {
                   {[
                     { label: 'Card Type', value: selectedRequest.card_type },
                     { label: 'Country', value: selectedRequest.country },
-                    { label: 'Shipping Fee', value: `$${parseFloat(selectedRequest.shipping_fee || 0).toFixed(2)}` },
-                    { label: 'Total Cost', value: `$${parseFloat(selectedRequest.total_cost || 0).toFixed(2)}` },
+                    { label: 'Shipping Fee', value: `$${safeParseFloat(selectedRequest.shipping_fee).toFixed(2)}` },
+                    { label: 'Total Cost', value: `$${safeParseFloat(selectedRequest.total_cost).toFixed(2)}` },
                     { label: 'Submitted', value: new Date(selectedRequest.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) },
                     { label: 'Current Status', value: selectedRequest.status?.toUpperCase() },
                   ].map(row => (
