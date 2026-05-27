@@ -155,7 +155,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <button
             onClick={handleLogout}
             disabled={loggingOut}
-            className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-[var(--border-color)] bg-[var(--accent-red)] text-white text-xs font-bold font-display uppercase tracking-wider shadow-[2px_2px_0px_0px_var(--border-color)] hover:bg-[var(--border-color)] hover:text-[var(--accent-red)] active:translate-y-[1px] active:shadow-[1px_1px_0px_0px_var(--border-color)] transition-all cursor-pointer disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-[var(--border-color)] bg-[var(--accent-red)] text-black text-xs font-bold font-display uppercase tracking-wider shadow-[2px_2px_0px_0px_var(--border-color)] hover:opacity-80 active:translate-y-[1px] transition-all cursor-pointer disabled:opacity-50"
           >
             <LogOut className="h-4 w-4" />
             <span>{loggingOut ? 'Terminating...' : 'Terminate Node'}</span>

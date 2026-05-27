@@ -154,14 +154,6 @@ export default function OverviewPage() {
 
         {/* Total Users */}
         <div className="brutalist-card p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="h-12 w-12 border-2 border-[#1a1a1a] bg-[#ffcc00] flex items-center justify-center text-[#1a1a1a]">
-              <Users className="h-6 w-6" />
-            </div>
-            <span className="text-[9px] font-extrabold border-2 border-[#1a1a1a] bg-[#f5f0e8] px-2 py-0.5 uppercase tracking-wider font-display">
-              Total Wallet Nodes
-            </span>
-          </div>
           <h3 className="text-4xl font-extrabold tracking-tight text-[#1a1a1a] font-mono leading-none">
             {isLoading ? '—' : (stats?.totalUsers ?? 0).toLocaleString()}
           </h3>
@@ -170,14 +162,6 @@ export default function OverviewPage() {
 
         {/* Total Transactions */}
         <div className="brutalist-card p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="h-12 w-12 border-2 border-[#1a1a1a] bg-[#0055ff] flex items-center justify-center text-white">
-              <ArrowLeftRight className="h-6 w-6" />
-            </div>
-            <span className="text-[9px] font-extrabold border-2 border-[#1a1a1a] bg-[#f5f0e8] px-2 py-0.5 uppercase tracking-wider font-display">
-              Transactions Audited
-            </span>
-          </div>
           <h3 className="text-4xl font-extrabold tracking-tight text-[#1a1a1a] font-mono leading-none">
             {isLoading ? '—' : (stats?.totalTransactions ?? 0).toLocaleString()}
           </h3>
@@ -186,20 +170,6 @@ export default function OverviewPage() {
 
         {/* Pending KYC */}
         <div className="brutalist-card p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="h-12 w-12 border-2 border-[#1a1a1a] bg-[#ffcc00] flex items-center justify-center text-[#1a1a1a]">
-              <ShieldCheck className="h-6 w-6" />
-            </div>
-            {(stats?.kycPending ?? 0) > 0 ? (
-              <span className="text-[9px] font-extrabold border-2 border-[#1a1a1a] bg-[#e63b2e] text-white px-2 py-0.5 uppercase tracking-wider font-display animate-pulse">
-                {stats?.kycPending} Urgent
-              </span>
-            ) : (
-              <span className="text-[9px] font-extrabold border-2 border-[#1a1a1a] bg-[#f5f0e8] px-2 py-0.5 uppercase tracking-wider font-display">
-                All Cleared
-              </span>
-            )}
-          </div>
           <h3 className="text-4xl font-extrabold tracking-tight text-[#1a1a1a] font-mono leading-none">
             {isLoading ? '—' : stats?.kycPending ?? 0}
           </h3>
@@ -208,20 +178,6 @@ export default function OverviewPage() {
 
         {/* Card Requests */}
         <div className="brutalist-card p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="h-12 w-12 border-2 border-[#1a1a1a] bg-[#0055ff] flex items-center justify-center text-white">
-              <CreditCard className="h-6 w-6" />
-            </div>
-            {(stats?.cardRequestsPending ?? 0) > 0 ? (
-              <span className="text-[9px] font-extrabold border-2 border-[#1a1a1a] bg-[#e63b2e] text-white px-2 py-0.5 uppercase tracking-wider font-display animate-pulse">
-                {stats?.cardRequestsPending} Pending
-              </span>
-            ) : (
-              <span className="text-[9px] font-extrabold border-2 border-[#1a1a1a] bg-[#f5f0e8] px-2 py-0.5 uppercase tracking-wider font-display">
-                All Processed
-              </span>
-            )}
-          </div>
           <h3 className="text-4xl font-extrabold tracking-tight text-[#1a1a1a] font-mono leading-none">
             {isLoading ? '—' : stats?.cardRequestsPending ?? 0}
           </h3>
@@ -230,18 +186,10 @@ export default function OverviewPage() {
 
         {/* Total Revenue */}
         <div className="brutalist-card p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="h-12 w-12 border-2 border-[#1a1a1a] bg-[#ffcc00] flex items-center justify-center text-[#1a1a1a]">
-              <DollarSign className="h-6 w-6" />
-            </div>
-            <span className="text-[9px] font-extrabold border-2 border-[#1a1a1a] bg-[#f5f0e8] px-2 py-0.5 uppercase tracking-wider font-display">
-              Swap & Card Commissions
-            </span>
-          </div>
           <h3 className="text-3xl font-extrabold tracking-tight text-[#1a1a1a] font-mono leading-none">
             {isLoading ? '—' : `$${(stats?.totalRevenue ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
           </h3>
-          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-2 font-mono">Platform Accumulated Revenue</p>
+          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-2 font-mono">Swap &amp; Card Commissions</p>
         </div>
 
       </div>
