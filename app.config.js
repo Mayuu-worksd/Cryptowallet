@@ -10,7 +10,7 @@ module.exports = {
     jsEngine: "hermes",
     fastRefresh: true,
     updates: {
-      url: "https://u.expo.dev/141850e9-e38b-44a9-9af9-4f6ecc270bc2",
+      url: "https://u.expo.dev/b642bc6a-f2df-412d-839c-7f43ed34fab7",
       enabled: true,
       fallbackToCacheTimeout: 0,
       checkAutomatically: "ON_LOAD",
@@ -68,10 +68,10 @@ module.exports = {
         },
       ],
     ],
-    owner: "Mayur12390",
+    owner: "mayur12390",
     extra: {
       eas: {
-        projectId: "141850e9-e38b-44a9-9af9-4f6ecc270bc2",
+        projectId: "b642bc6a-f2df-412d-839c-7f43ed34fab7",
       },
     },
   },
