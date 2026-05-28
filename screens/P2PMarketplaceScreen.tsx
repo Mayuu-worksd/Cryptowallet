@@ -20,17 +20,17 @@ const TOKEN_COLORS: Record<string, string> = {
 };
 
 const TOKEN_LOGOS: Record<string, string> = {
-  ETH:  'https://assets.coingecko.com/coins/images/279/large/ethereum.png',
-  USDC: 'https://assets.coingecko.com/coins/images/6319/large/USD_Coin_icon.png',
-  USDT: 'https://assets.coingecko.com/coins/images/325/large/Tether.png',
-  DAI:  'https://assets.coingecko.com/coins/images/9956/large/4943.png',
-  BTC:  'https://assets.coingecko.com/coins/images/1/large/bitcoin.png',
-  SOL:  'https://assets.coingecko.com/coins/images/4128/large/solana.png',
-  BNB:  'https://assets.coingecko.com/coins/images/825/large/bnb-icon2_2x.png',
-  XRP:  'https://assets.coingecko.com/coins/images/44/large/xrp-symbol-white-128.png',
-  TON:  'https://assets.coingecko.com/coins/images/17980/large/ton_symbol.png',
-  TRX:  'https://assets.coingecko.com/coins/images/1094/large/tron-logo.png',
-  SUI:  'https://assets.coingecko.com/coins/images/26375/large/sui_asset.jpeg',
+  ETH:  'https://assets.coingecko.com/coins/images/279/large/ethereum.png?v=2',
+  USDC: 'https://assets.coingecko.com/coins/images/6319/large/USD_Coin_icon.png?v=2',
+  USDT: 'https://assets.coingecko.com/coins/images/325/large/Tether.png?v=2',
+  DAI:  'https://assets.coingecko.com/coins/images/9956/large/4943.png?v=2',
+  BTC:  'https://assets.coingecko.com/coins/images/1/large/bitcoin.png?v=2',
+  SOL:  'https://assets.coingecko.com/coins/images/4128/large/solana.png?v=2',
+  BNB:  'https://assets.coingecko.com/coins/images/825/large/bnb-icon2_2x.png?v=2',
+  XRP:  'https://assets.coingecko.com/coins/images/44/large/xrp-symbol-white-128.png?v=2',
+  TON:  'https://assets.coingecko.com/coins/images/17980/large/ton_symbol.png?v=2',
+  TRX:  'https://assets.coingecko.com/coins/images/1094/large/tron-logo.png?v=2',
+  SUI:  'https://assets.coingecko.com/coins/images/26375/large/sui_asset.jpeg?v=2',
 };
 
 function TokenSymbolIcon({ token, size = 44 }: { token: string; size?: number }) {
