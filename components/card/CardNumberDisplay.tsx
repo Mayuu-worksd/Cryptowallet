@@ -1,125 +1,80 @@
-/**
- * CardNumberDisplay — Production fintech card number renderer
- *
- * Strategy (same as Revolut / RedotPay):
- *   - Split into 4 groups of 4 characters
- *   - Each group is ONE Text element with a fixed minWidth
- *   - No per-character splitting → no width calculation bugs
- *   - No letterSpacing → no overflow on any Android OEM
- *   - No adjustsFontSizeToFit → no shrink surprises
- *   - Inter_700Bold bundled font → identical on every device
- *   - AppState listener → auto-mask on background
- *   - usePreventScreenCapture → blocks screenshots while revealed
- */
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  Animated, AppState, ActivityIndicator,
+  AppState, ActivityIndicator,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { haptics } from '../../utils/haptics';
 
-// Prevent screen capture only when revealed — lazy import so it never crashes
 let preventScreenCapture: (() => void) | null = null;
 let allowScreenCapture: (() => void) | null = null;
 try {
   const sc = require('expo-screen-capture');
   preventScreenCapture = sc.preventScreenCaptureAsync ?? sc.preventScreenCapture ?? null;
   allowScreenCapture   = sc.allowScreenCaptureAsync   ?? sc.allowScreenCapture   ?? null;
-} catch (_e) {}
+} catch {}
 
 interface Props {
-  cardNumber: string;   // raw 16-digit string or formatted "1234 5678 9012 3456"
-  expiry:     string;   // "MM/YY"
-  cvv:        string;   // "123"
+  cardNumber: string;
+  expiry:     string;
+  cvv:        string;
   holderName: string;
   textColor:  string;
   accentColor: string;
   mutedColor:  string;
-  // standalone widget mode (used in CardScreen credentials panel)
   widgetMode?: boolean;
   widgetBg?:   string;
   widgetBorder?: string;
 }
 
-// Split raw digits into 4 groups of 4
-function toGroups(raw: string): [string, string, string, string] {
-  const d = raw.replace(/\D/g, '').padEnd(16, '0');
-  return [d.slice(0, 4), d.slice(4, 8), d.slice(8, 12), d.slice(12, 16)];
+function normalizeNumber(raw: string): string {
+  const digits = raw.replace(/\s/g, '').replace(/\D/g, '');
+  if (digits.length !== 16) return '';
+  return `${digits.slice(0,4)} ${digits.slice(4,8)} ${digits.slice(8,12)} ${digits.slice(12,16)}`;
 }
 
-// A single group — either 4 digits or 4 bullets
-function Group({ value, revealed, color }: { value: string; revealed: boolean; color: string }) {
-  const display = revealed ? value : '••••';
-  return (
-    <View style={g.wrap}>
-      <Text style={[g.text, { color }]} allowFontScaling={false}>
-        {display}
-      </Text>
-    </View>
-  );
+function maskNumber(normalized: string): string {
+  if (!normalized) return '•••• •••• •••• ••••';
+  const last4 = normalized.replace(/\s/g, '').slice(-4);
+  return `•••• •••• •••• ${last4}`;
 }
 
-const g = StyleSheet.create({
-  wrap: {
-    width: 56,          // fixed — same on every screen density
-    alignItems: 'center',
-  },
-  text: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 20,
-    includeFontPadding: false,
-    textAlignVertical: 'center',
-    // NO letterSpacing — causes overflow on Android
-    // NO adjustsFontSizeToFit — causes shrink on small screens
-  },
-});
+export function hasFullNumber(raw: string): boolean {
+  return raw.replace(/\s/g, '').replace(/\D/g, '').length === 16;
+}
 
-// ─── Standalone Widget (used in CardScreen credentials panel) ─────────────────
 export function CardCredentialsWidget({
   cardNumber, expiry, cvv, holderName,
   textColor, accentColor, mutedColor,
   widgetBg = '#1c1b1b', widgetBorder = '#2a2a2a',
 }: Props) {
-  const [revealed,    setRevealed]    = useState(false);
-  const [loading,     setLoading]     = useState(false);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const [revealed, setRevealed] = useState(false);
+  const [loading,  setLoading]  = useState(false);
 
-  // Auto-mask when app goes to background
+  // Source of truth: props from WalletContext (decrypted from Supabase)
+  const realNumber = normalizeNumber(cardNumber);
+  const realCvv    = /^\d{3}$/.test(cvv)    ? cvv    : '';
+  const realExpiry = /^\d{2}\/\d{2}$/.test(expiry) ? expiry : '';
+
+  // Auto-mask on background
   useEffect(() => {
-    const sub = AppState.addEventListener('change', state => {
-      if (state !== 'active') setRevealed(false);
+    const sub = AppState.addEventListener('change', s => {
+      if (s !== 'active') setRevealed(false);
     });
     return () => sub.remove();
   }, []);
 
-  // Auto-mask after 30 seconds
+  // Auto-mask after 30s
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    if (revealed) {
-      timerRef.current = setTimeout(() => setRevealed(false), 30000);
-    }
+    if (revealed) timerRef.current = setTimeout(() => setRevealed(false), 30000);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [revealed]);
 
-  // Screen capture prevention
   useEffect(() => {
-    if (revealed) {
-      try { preventScreenCapture?.(); } catch (_e) {}
-    } else {
-      try { allowScreenCapture?.(); } catch (_e) {}
-    }
-  }, [revealed]);
-
-  // Fade animation on toggle
-  useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: revealed ? 1 : 0,
-      duration: 200,
-      useNativeDriver: true,
-    }).start();
+    if (revealed) { try { preventScreenCapture?.(); } catch {} }
+    else          { try { allowScreenCapture?.();   } catch {} }
   }, [revealed]);
 
   const handleToggle = useCallback(() => {
@@ -127,14 +82,15 @@ export function CardCredentialsWidget({
     haptics.selection();
     if (!revealed) {
       setLoading(true);
-      setTimeout(() => { setLoading(false); setRevealed(true); }, 500);
+      setTimeout(() => { setLoading(false); setRevealed(true); }, 300);
     } else {
       setRevealed(false);
     }
   }, [loading, revealed]);
 
-  const groups = toGroups(cardNumber);
-  const last4  = groups[3];
+  const displayNumber = revealed && realNumber ? realNumber : maskNumber(realNumber);
+  const displayCvv    = revealed && realCvv    ? realCvv    : '•••';
+  const displayExpiry = revealed && realExpiry ? realExpiry : '••/••';
 
   return (
     <View style={[w.container, { backgroundColor: widgetBg, borderColor: widgetBorder }]}>
@@ -167,44 +123,29 @@ export function CardCredentialsWidget({
       {/* Card Number */}
       <View style={w.section}>
         <Text style={[w.label, { color: mutedColor }]} allowFontScaling={false}>CARD NUMBER</Text>
-        <View style={w.numberRow}>
-          {groups.map((grp, i) => (
-            <React.Fragment key={i}>
-              <Group value={grp} revealed={revealed} color={textColor} />
-              {i < 3 && <View style={w.dot} />}
-            </React.Fragment>
-          ))}
-          {revealed && (
-            <TouchableOpacity
-              style={w.copyBtn}
-              onPress={() => {
-                haptics.selection();
-                // copy handled by parent via onCopy prop if needed
-              }}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Feather name="copy" size={14} color={accentColor} />
-            </TouchableOpacity>
-          )}
-        </View>
+        <Text
+          style={[w.numberText, { color: textColor, fontFamily: 'Inter_700Bold' }]}
+          allowFontScaling={false}
+        >
+          {displayNumber}
+        </Text>
       </View>
 
-      {/* Divider */}
       <View style={[w.divider, { backgroundColor: widgetBorder }]} />
 
-      {/* Expiry + CVV */}
+      {/* Expiry + CVV + Holder */}
       <View style={w.bottomRow}>
         <View style={w.bottomItem}>
           <Text style={[w.label, { color: mutedColor }]} allowFontScaling={false}>EXPIRES</Text>
           <Text style={[w.bottomValue, { color: textColor }]} allowFontScaling={false}>
-            {revealed ? expiry : '••/••'}
+            {displayExpiry}
           </Text>
         </View>
         <View style={[w.bottomDivider, { backgroundColor: widgetBorder }]} />
         <View style={w.bottomItem}>
           <Text style={[w.label, { color: mutedColor }]} allowFontScaling={false}>CVV</Text>
           <Text style={[w.bottomValue, { color: textColor }]} allowFontScaling={false}>
-            {revealed ? cvv : '•••'}
+            {displayCvv}
           </Text>
         </View>
         <View style={[w.bottomDivider, { backgroundColor: widgetBorder }]} />
@@ -220,7 +161,6 @@ export function CardCredentialsWidget({
         </View>
       </View>
 
-      {/* Auto-hide notice */}
       {revealed && (
         <View style={[w.notice, { backgroundColor: accentColor + '10' }]}>
           <Feather name="clock" size={10} color={accentColor} />
@@ -234,78 +174,47 @@ export function CardCredentialsWidget({
 }
 
 const w = StyleSheet.create({
-  container: {
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 20,
-    marginBottom: 20,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  iconBadge: { width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: 11, fontFamily: 'Inter_800ExtraBold', letterSpacing: 1 },
-  revealBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12,
-  },
-  revealText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
-
-  section: { marginBottom: 16 },
-  label: { fontSize: 9, fontFamily: 'Inter_700Bold', letterSpacing: 1, marginBottom: 10 },
-
-  numberRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 0,
-  },
-  dot: {
-    width: 8,
-    alignItems: 'center',
-  },
-  copyBtn: { marginLeft: 12 },
-
-  divider: { height: 1, marginBottom: 16 },
-
-  bottomRow: { flexDirection: 'row', alignItems: 'center' },
-  bottomItem: { flex: 1 },
-  bottomDivider: { width: 1, height: 32, marginHorizontal: 12 },
-  bottomValue: {
-    fontSize: 15,
-    fontFamily: 'Inter_700Bold',
-    includeFontPadding: false,
-  },
-
-  notice: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    marginTop: 14, paddingHorizontal: 10, paddingVertical: 6,
-    borderRadius: 8, alignSelf: 'flex-start',
-  },
-  noticeText: { fontSize: 10, fontFamily: 'Inter_600SemiBold' },
+  container:    { borderRadius: 20, borderWidth: 1, padding: 20, marginBottom: 20 },
+  header:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  titleRow:     { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  iconBadge:    { width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  title:        { fontSize: 11, fontWeight: '800', letterSpacing: 1 },
+  revealBtn:    { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12 },
+  revealText:   { fontSize: 12, fontWeight: '700' },
+  section:      { marginBottom: 16 },
+  label:        { fontSize: 9, fontWeight: '700', letterSpacing: 1, marginBottom: 8 },
+  numberText:   { fontSize: 18, fontWeight: '700', letterSpacing: 2 },
+  divider:      { height: 1, marginBottom: 16 },
+  bottomRow:    { flexDirection: 'row', alignItems: 'center' },
+  bottomItem:   { flex: 1 },
+  bottomDivider:{ width: 1, height: 32, marginHorizontal: 12 },
+  bottomValue:  { fontSize: 15, fontWeight: '700' },
+  notice:       { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 14, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, alignSelf: 'flex-start' },
+  noticeText:   { fontSize: 10, fontWeight: '600' },
 });
 
-// ─── Inline card face number (used inside card gradient) ──────────────────────
+// Inline card face number (used on card gradient)
 export function CardFaceNumber({
   cardNumber, revealed, color,
 }: { cardNumber: string; revealed: boolean; color: string }) {
-  const groups = toGroups(cardNumber);
+  const normalized = normalizeNumber(cardNumber);
+  const groups = normalized ? normalized.split(' ') : ['••••', '••••', '••••', '••••'];
+
   return (
-    <View style={f.row}>
+    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
       {groups.map((grp, i) => (
         <React.Fragment key={i}>
-          <Group value={grp} revealed={revealed} color={color} />
-          {i < 3 && <Text style={[f.sep, { color }]} allowFontScaling={false}> </Text>}
+          <Text
+            style={{ fontFamily: 'Inter_700Bold', fontSize: 18, fontWeight: '700', color }}
+            allowFontScaling={false}
+          >
+            {revealed ? grp : '••••'}
+          </Text>
+          {i < 3 && (
+            <Text style={{ color, fontSize: 18, marginHorizontal: 4 }} allowFontScaling={false}> </Text>
+          )}
         </React.Fragment>
       ))}
     </View>
   );
 }
-
-const f = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center' },
-  sep: { fontFamily: 'Inter_700Bold', fontSize: 20, width: 8 },
-});

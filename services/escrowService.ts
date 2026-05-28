@@ -79,7 +79,7 @@ export function orderIdToBytes32(orderId: string): string {
   return '0x' + hex.padEnd(64, '0').slice(0, 64);
 }
 
-function getContract(network: string, signerOrProvider: ethers.Signer | ethers.Provider) {
+function getContract(network: string, signerOrProvider: ethers.Signer | ethers.providers.Provider) {
   // TRON networks don't use EVM escrow contracts
   if (network === 'TRON' || network === 'TRON Nile') {
     throw new Error(`Escrow contract not available on ${network}. Use TRC20 tokens directly.`);
@@ -123,15 +123,15 @@ export const escrowService = {
     const contract  = getContract(network, wallet);
     const orderKey  = orderIdToBytes32(orderId);
 
-    let tx: ethers.TransactionResponse;
+    let tx: ethers.providers.TransactionResponse;
 
     if (token === 'ETH') {
-      const value = ethers.parseEther(amount.toString());
+      const value = ethers.utils.parseEther(amount.toString());
       tx = await contract.depositETH(orderKey, { value });
     } else {
       const tokenAddr = getTokenAddress(token, network);
       const decimals  = getTokenDecimals(token);
-      const rawAmount = ethers.parseUnits(amount.toString(), decimals);
+      const rawAmount = ethers.utils.parseUnits(amount.toString(), decimals);
 
       // Approve escrow contract to spend tokens first
       const tokenContract = new ethers.Contract(tokenAddr, ERC20_ABI, wallet);

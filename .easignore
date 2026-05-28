@@ -1,8 +1,40 @@
+# Dependencies & build output
 node_modules/
 .expo/
 dist/
 web-build/
 *.tsbuildinfo
+
+# Admin dashboard (not part of mobile build)
+admin-dashboard/
+
+# SQL migration files
+*.sql
+
+# HTML mockups
 *.html
+
+# Design/screenshot files in root only (not assets/)
+asset_raw.html
+receive_redesign.png
+stitch_card_design.png
+stitch_screenshot.png
+
+# Test/debug files
+test.txt
+quote_test.json
+quote_test2.json
+response.json
+response2.json
+
+# Docs
+README.md
+FIX_SUMMARY.md
+INTEGRATION_GUIDE.md
+
+# Misc
 .vercel/
-node_modules/.react-native-worklets-*
+.kilocode/
+.aider.chat.history.md
+.aider.input.history
+package.json.xG7kZYuWoIzDAkTIVqjomCp5vtzBC0BIyWCdmGPHZz4

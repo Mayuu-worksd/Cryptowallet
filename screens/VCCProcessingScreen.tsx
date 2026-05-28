@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, Animated, Platform, TouchableOpacity, StatusBar
 import { Feather } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
 import { vccService, VCCCardVariant } from '../services/supabaseService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type StepState = 'waiting' | 'loading' | 'done' | 'error';
 
@@ -16,7 +17,7 @@ const STEP_LABELS = [
 ];
 
 export default function VCCProcessingScreen({ navigation, route }: any) {
-  const { isDarkMode, walletAddress } = useWallet() as any;
+  const { isDarkMode, walletAddress, setCardDetails, refreshCardData } = useWallet() as any;
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const { variant, holderName, isPhysical, shippingFeeUsd, previewNumber, previewExpiry, previewCVV }: {
     variant: VCCCardVariant; holderName: string; isPhysical: boolean; shippingFeeUsd: number;
@@ -53,6 +54,29 @@ export default function VCCProcessingScreen({ navigation, route }: any) {
       const result = await vccService.applyCard(
         walletAddress, variant, holderName, isPhysical, shippingFeeUsd,
       );
+
+      // Save newly issued card to local state & storage so it can be revealed
+      const details = {
+        number:     previewNumber ?? result.cardNumber,
+        expiry:     result.vccCard.expiry_mm_yy,
+        cvv:        previewCVV    ?? result.cvv,
+        brand:      (result.vccCard.card_network === 'Mastercard' ? 'MASTERCARD' : 'VISA') as 'VISA' | 'MASTERCARD',
+        holderName: result.vccCard.card_holder_name,
+        design:     variant?.color_hex ?? 'dark',
+      };
+
+      await AsyncStorage.multiSet([
+        ['cw_card_created', 'true'],
+        ['cw_card_balance', String(result.vccCard.balance)],
+        ['cw_card_details', JSON.stringify(details)],
+      ]).catch(() => {});
+
+      if (setCardDetails) {
+        setCardDetails(details);
+      }
+      if (refreshCardData) {
+        await refreshCardData().catch(() => {});
+      }
 
       setStep(0, 'done'); setStep(1, 'loading');
       await new Promise(r => setTimeout(r, 600));

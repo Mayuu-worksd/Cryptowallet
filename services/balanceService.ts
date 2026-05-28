@@ -149,7 +149,7 @@ export async function getWalletBalances(
 }
 
 async function fetchERC20(
-  provider: ethers.JsonRpcProvider,
+  provider: ethers.providers.JsonRpcProvider,
   address: string,
   contractAddress: string | undefined,
   decimals: number,

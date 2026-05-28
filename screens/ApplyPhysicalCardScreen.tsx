@@ -9,8 +9,8 @@ import { useWallet } from '../store/WalletContext';
 import { Theme } from '../constants';
 import Toast from '../components/Toast';
 import {
-  cardVariantService, cardRequestService, kycService,
-  CardVariant, COUNTRIES, SHIPPING_FEES,
+  cardVariantService, cardRequestService, kycService, shippingFeeService, fiatCurrencyService,
+  CardVariant, ShippingFee, FiatCurrency,
 } from '../services/supabaseService';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -66,8 +66,26 @@ const VARIANT_DESCRIPTIONS: Record<string, string> = {
   Travel:   'Deep Aero Indigo composite shell card. Zero foreign transaction fees and accelerated flight points.',
 };
 
+const FALLBACK_SHIPPING_FEES: Record<string, number> = {
+  'United States':   9.99,
+  'United Kingdom': 12.99,
+  'Canada':         11.99,
+  'Australia':      14.99,
+  'Germany':        13.99,
+  'France':         13.99,
+  'India':          19.99,
+  'Singapore':      16.99,
+  'UAE':            17.99,
+  'Brazil':         22.99,
+  'Japan':          15.99,
+  'South Korea':    15.99,
+  'Other':          24.99,
+};
+
+const FALLBACK_COUNTRIES = Object.keys(FALLBACK_SHIPPING_FEES);
+
 export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
-  const { isDarkMode, walletAddress, kycStatus, cardDetails } = useWallet() as any;
+  const { isDarkMode, walletAddress, kycStatus, cardDetails, p2pCurrency } = useWallet() as any;
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const insets = useSafeAreaInsets();
 
@@ -87,6 +105,11 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
   const [liveKycStatus, setLiveKycStatus] = useState(kycStatus);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'error' as 'success' | 'error' | 'info' });
 
+  // Dynamic pricing & currency states
+  const [shippingFeesList, setShippingFeesList] = useState<ShippingFee[]>([]);
+  const [fiatCurrencies, setFiatCurrencies] = useState<FiatCurrency[]>([]);
+  const [selectedFiat, setSelectedFiat] = useState<string>('USD');
+
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'error') =>
     setToast({ visible: true, message, type });
 
@@ -96,7 +119,9 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
       cardRequestService.hasPendingRequest(walletAddress),
       cardRequestService.getRequests(walletAddress),
       kycService.getStatus(walletAddress),
-    ]).then(([v, pending, requests, kycRecord]) => {
+      shippingFeeService.getAll(),
+      fiatCurrencyService.getAll(),
+    ]).then(([v, pending, requests, kycRecord, shippingList, fiatList]) => {
       const activeVariants = v.length > 0 ? v : DEFAULT_VARIANTS;
       setVariants(activeVariants);
 
@@ -110,6 +135,13 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
       setHasPending(pending);
       setExistingRequest(requests[0] ?? null);
       setLiveKycStatus(kycRecord?.status ?? null);
+      setShippingFeesList(shippingList ?? []);
+      setFiatCurrencies(fiatList ?? []);
+
+      // Pre-select user's default P2P currency if it is configured
+      const defaultCurrency = (p2pCurrency || 'USD').toUpperCase();
+      const hasFiat = (fiatList ?? []).some(f => f.code.toUpperCase() === defaultCurrency);
+      setSelectedFiat(hasFiat ? defaultCurrency : 'USD');
     }).catch(() => {
       // Fallback on supabase connection failure
       const searchName = preselectedVariant || 'Classic';
@@ -118,14 +150,53 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
       );
       setVariants(DEFAULT_VARIANTS);
       setSelectedVariant(matched || DEFAULT_VARIANTS[0]);
+
+      // Fallback shipping fees
+      const fallbackShipping = Object.entries(FALLBACK_SHIPPING_FEES).map(([country_name, fee_usd]) => ({
+        country_name, country_code: '', fee_usd
+      }));
+      setShippingFeesList(fallbackShipping);
+
+      // Fallback fiat currencies
+      const fallbackFiats: FiatCurrency[] = [
+        { code: 'USD', symbol: '$', name: 'US Dollar', rate: 1.0 },
+        { code: 'INR', symbol: '₹', name: 'Indian Rupee', rate: 83.5 },
+        { code: 'EUR', symbol: '€', name: 'Euro', rate: 0.92 },
+        { code: 'GBP', symbol: '£', name: 'British Pound', rate: 0.79 },
+      ];
+      setFiatCurrencies(fallbackFiats);
+      setSelectedFiat('USD');
     }).finally(() => {
       setLoadingVariants(false);
       setCheckingExisting(false);
     });
-  }, [preselectedVariant]);
+  }, [preselectedVariant, walletAddress, p2pCurrency]);
 
-  const shippingFee = selectedCountry ? (SHIPPING_FEES[selectedCountry] ?? SHIPPING_FEES['Other']) : null;
-  const totalCost = (selectedVariant?.price ?? 0) + (shippingFee ?? 0);
+  // Derived pricing calculations
+  const matchedShipping = shippingFeesList.find(s => s.country_name === selectedCountry);
+  const shippingFeeUSD = selectedCountry ? (matchedShipping?.fee_usd ?? 24.99) : 0;
+
+  const cardPriceUSD = selectedVariant?.price ?? 0;
+  const activationFeeUSD = selectedVariant?.activation_fee_usd ?? 0;
+  const yearlyFeeUSD = selectedVariant?.annual_fee_usd ?? 0;
+
+  const totalCostUSD = cardPriceUSD + activationFeeUSD + shippingFeeUSD;
+
+  // Currency multiplier conversion helpers
+  const selectedFiatObj = fiatCurrencies.find(f => f.code === selectedFiat) || { code: 'USD', symbol: '$', rate: 1.0 };
+  const fiatSymbol = selectedFiatObj.symbol ?? '$';
+  const fiatRate = selectedFiatObj.rate ?? 1.0;
+
+  const formatLocalFiat = (amountUSD: number) => {
+    const converted = amountUSD * fiatRate;
+    if (selectedFiat === 'JPY' || selectedFiat === 'VND') {
+      return `${fiatSymbol}${Math.round(converted).toLocaleString()}`;
+    }
+    return `${fiatSymbol}${converted.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })}`;
+  };
 
   const handleSubmit = async () => {
     if (!selectedVariant) { showToast('Please select a card type'); return; }
@@ -137,8 +208,8 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
         wallet_address: walletAddress,
         card_type:      selectedVariant.name,
         country:        selectedCountry,
-        shipping_fee:   shippingFee!,
-        total_cost:     totalCost,
+        shipping_fee:   shippingFeeUSD,
+        total_cost:     totalCostUSD,
       });
       setSubmittedRequest(req);
       setSubmitted(true);
@@ -257,8 +328,8 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
             {[
               { label: 'Card Specification', value: req.card_type },
               { label: 'Destination Country', value: req.country },
-              { label: 'Express Delivery',   value: `$${parseFloat(req.shipping_fee).toFixed(2)}` },
-              { label: 'Total Minting Fee',  value: `$${parseFloat(req.total_cost).toFixed(2)}` },
+              { label: 'Express Delivery',   value: formatLocalFiat(parseFloat(req.shipping_fee)) },
+              { label: 'Total Minting Fee',  value: formatLocalFiat(parseFloat(req.total_cost)) },
               { label: 'Purchase Date',     value: new Date(req.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) },
             ].map((row, i, arr) => (
               <View key={row.label} style={[styles.summaryRow,
@@ -305,9 +376,10 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
           {[
             { label: 'Smartcard Tier', value: selectedVariant?.name ?? '' },
             { label: 'Dispatch Country', value: selectedCountry },
-            { label: 'Minting Fee', value: selectedVariant?.price === 0 ? 'Free' : `$${selectedVariant?.price.toFixed(2)}` },
-            { label: 'Shipping Charge', value: `$${shippingFee?.toFixed(2)}` },
-            { label: 'Total Invoiced', value: `$${totalCost.toFixed(2)}` },
+            { label: 'Minting Fee', value: cardPriceUSD === 0 ? 'Free' : formatLocalFiat(cardPriceUSD) },
+            { label: 'Activation Fee', value: activationFeeUSD === 0 ? 'Free' : formatLocalFiat(activationFeeUSD) },
+            { label: 'Shipping Charge', value: formatLocalFiat(shippingFeeUSD) },
+            { label: 'Total Invoiced', value: formatLocalFiat(totalCostUSD) },
           ].map((row, i, arr) => (
             <View
               key={row.label}
@@ -335,9 +407,15 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
     );
   }
 
-  // Find premium gradients for the active card face preview
-  const activeGradient = selectedVariant ? (VARIANT_GRADIENTS[selectedVariant.name] ?? VARIANT_GRADIENTS.Classic) : VARIANT_GRADIENTS.Classic;
-  const activeLabel = selectedVariant ? (VARIANT_LABEL_ACCENTS[selectedVariant.name] ?? selectedVariant.name.toUpperCase()) : 'CLASSIC EDITION';
+  // Find premium gradients and labels dynamically from database configuration, with static custom fallbacks
+  const activeGradient = selectedVariant?.gradient_colors && selectedVariant.gradient_colors.length >= 2
+    ? selectedVariant.gradient_colors
+    : (selectedVariant ? (VARIANT_GRADIENTS[selectedVariant.name] ?? VARIANT_GRADIENTS.Classic) : VARIANT_GRADIENTS.Classic);
+
+  const activeLabel = selectedVariant?.variant_name
+    ? selectedVariant.variant_name.toUpperCase()
+    : (selectedVariant ? (VARIANT_LABEL_ACCENTS[selectedVariant.name] ?? selectedVariant.name.toUpperCase()) : 'CLASSIC EDITION');
+
   const isSilverChip = selectedVariant?.name === 'Platinum' || selectedVariant?.name === 'Classic';
 
   return (
@@ -359,22 +437,26 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
               </TouchableOpacity>
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
-              {COUNTRIES.map(c => (
-                <TouchableOpacity
-                  key={c}
-                  style={[styles.countryRow, { borderBottomColor: T.border }]}
-                  onPress={() => { setSelectedCountry(c); setCountryModal(false); }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.countryName, { color: T.text }]}>{c}</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={[styles.countryFee, { color: T.textMuted }]}>
-                      ${SHIPPING_FEES[c].toFixed(2)} delivery
-                    </Text>
-                    {selectedCountry === c && <Feather name="check" size={16} color={CRIMSON} />}
-                  </View>
-                </TouchableOpacity>
-              ))}
+              {shippingFeesList.map(s => {
+                const c = s.country_name;
+                const fee = s.fee_usd;
+                return (
+                  <TouchableOpacity
+                    key={c}
+                    style={[styles.countryRow, { borderBottomColor: T.border }]}
+                    onPress={() => { setSelectedCountry(c); setCountryModal(false); }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.countryName, { color: T.text }]}>{c}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text style={[styles.countryFee, { color: T.textMuted }]}>
+                        {formatLocalFiat(fee)} delivery
+                      </Text>
+                      {selectedCountry === c && <Feather name="check" size={16} color={CRIMSON} />}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
           </View>
         </View>
@@ -459,9 +541,14 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <Text style={[styles.tierName, { color: T.text }]}>{selectedVariant.name} Metal Spec</Text>
               <Text style={[styles.tierPrice, { color: selectedVariant.name === 'Gold' ? '#E5A93C' : CRIMSON }]}>
-                {selectedVariant.price === 0 ? 'FREE' : `$${selectedVariant.price.toFixed(2)}/yr`}
+                {yearlyFeeUSD === 0 ? 'FREE' : `${formatLocalFiat(yearlyFeeUSD)}/yr`}
               </Text>
             </View>
+            {activationFeeUSD > 0 && (
+              <Text style={{ fontSize: 12, fontWeight: '700', color: T.textMuted, marginBottom: 8 }}>
+                One-time setup fee: {formatLocalFiat(activationFeeUSD)}
+              </Text>
+            )}
             <Text style={[styles.tierDesc, { color: T.textMuted }]}>
               {VARIANT_DESCRIPTIONS[selectedVariant.name] ?? 'Premium laser-etched heavy metal smartcard.'}
             </Text>
@@ -496,13 +583,51 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
           <Feather name="chevron-down" size={16} color={T.textDim} />
         </TouchableOpacity>
 
+        {/* Billing Currency Selection Segment */}
+        {selectedVariant && selectedCountry && fiatCurrencies.length > 0 && (
+          <View style={{ marginBottom: 16 }}>
+            <Text style={[styles.sectionTitle, { color: T.textMuted, marginBottom: 8, marginLeft: 2 }]}>SELECT BILLING CURRENCY</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
+              {fiatCurrencies.map(fc => {
+                const isSelected = fc.code === selectedFiat;
+                return (
+                  <TouchableOpacity
+                    key={fc.code}
+                    onPress={() => setSelectedFiat(fc.code)}
+                    activeOpacity={0.8}
+                    style={{
+                      paddingHorizontal: 16,
+                      paddingVertical: 10,
+                      borderRadius: 14,
+                      borderWidth: isSelected ? 2 : 1,
+                      borderColor: isSelected ? CRIMSON : T.border,
+                      backgroundColor: isSelected ? 'rgba(236,38,41,0.06)' : T.surface,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '900', color: isSelected ? CRIMSON : T.text }}>
+                      {fc.symbol} {fc.code}
+                    </Text>
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: T.textMuted }}>
+                      ({fc.rate}x)
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
+
         {/* Transparent billing review ledger */}
         {selectedVariant && selectedCountry && (
           <View style={[styles.orderSummary, { backgroundColor: T.surface, borderColor: T.border }]}>
             <Text style={[styles.sectionTitle, { color: T.textMuted, marginBottom: 12, marginLeft: 0 }]}>BILLING LEDGER</Text>
             {[
-              { label: `${selectedVariant.name} Card Minting Fee`, value: selectedVariant.price === 0 ? 'Free' : `$${selectedVariant.price.toFixed(2)}` },
-              { label: `Express Dispatch to ${selectedCountry}`, value: `$${shippingFee!.toFixed(2)}` },
+              { label: `${selectedVariant.name} Card Minting Fee`, value: cardPriceUSD === 0 ? 'Free' : formatLocalFiat(cardPriceUSD) },
+              { label: 'One-time Card Activation Fee', value: activationFeeUSD === 0 ? 'Free' : formatLocalFiat(activationFeeUSD) },
+              { label: `Express Dispatch to ${selectedCountry}`, value: formatLocalFiat(shippingFeeUSD) },
             ].map(row => (
               <View key={row.label} style={styles.summaryRow}>
                 <Text style={[styles.summaryLabel, { color: T.textMuted }]}>{row.label}</Text>
@@ -512,7 +637,7 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
             
             <View style={[styles.totalRow, { borderTopColor: T.border }]}>
               <Text style={[styles.totalLabel, { color: T.text }]}>Total Invoice</Text>
-              <Text style={[styles.totalValue, { color: CRIMSON }]}>${totalCost.toFixed(2)}</Text>
+              <Text style={[styles.totalValue, { color: CRIMSON }]}>{formatLocalFiat(totalCostUSD)}</Text>
             </View>
           </View>
         )}
@@ -533,7 +658,7 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
             <>
               <Feather name="credit-card" size={16} color={T.background} />
               <Text style={[styles.submitBtnText, { color: T.background }]}>
-                {selectedVariant && selectedCountry ? `Pay & Order · $${totalCost.toFixed(2)}` : 'Confirm Order'}
+                {selectedVariant && selectedCountry ? `Pay & Order · ${formatLocalFiat(totalCostUSD)}` : 'Confirm Order'}
               </Text>
             </>
           )}

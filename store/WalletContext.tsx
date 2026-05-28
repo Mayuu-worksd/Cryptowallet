@@ -512,9 +512,23 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             }
           }
           if (savedCard)        setCardBalance(parseFloat(savedCard));
-          if (savedDetails)     setCardDetails(JSON.parse(savedDetails));
           if (savedCardCreated) setCardCreated(savedCardCreated === 'true');
           if (savedCardTxs)     setCardTransactions(JSON.parse(savedCardTxs));
+          if (savedDetails) {
+            const parsed = JSON.parse(savedDetails);
+            // Normalize number to "XXXX XXXX XXXX XXXX" format
+            if (parsed?.number) {
+              const digits = String(parsed.number).replace(/\s/g, '').replace(/\D/g, '');
+              if (digits.length === 16) {
+                const fixed = `${digits.slice(0,4)} ${digits.slice(4,8)} ${digits.slice(8,12)} ${digits.slice(12,16)}`;
+                if (parsed.number !== fixed) {
+                  parsed.number = fixed;
+                  AsyncStorage.setItem('cw_card_details', JSON.stringify(parsed)).catch(() => {});
+                }
+              }
+            }
+            setCardDetails(parsed);
+          }
           setCardFrozen(savedFrozen);
           if (savedTokenBals) {
             const parsed = JSON.parse(savedTokenBals);
@@ -568,16 +582,43 @@ export function WalletProvider({ children }: { children: ReactNode }) {
                 AsyncStorage.setItem('cw_locked_balance', JSON.stringify(profileForStartup.locked_balances)).catch(() => {});
               }
             }
+            // Helper: generate a Luhn-valid 16-digit number + CVV and save to Supabase
+            const generateAndSaveCredentials = (network: 'Visa' | 'Mastercard' = 'Visa'): { number: string; cvv: string } => {
+              const prefix = network === 'Mastercard' ? 5 : 4;
+              const buf = new Uint8Array(14);
+              crypto.getRandomValues(buf);
+              const d: number[] = [prefix, ...Array.from(buf).map(b => b % 10)];
+              let s = 0;
+              for (let i = 0; i < 15; i++) { let v = d[i]; if ((15 - i) % 2 === 0) { v *= 2; if (v > 9) v -= 9; } s += v; }
+              d.push((10 - (s % 10)) % 10);
+              const num = `${d.slice(0,4).join('')} ${d.slice(4,8).join('')} ${d.slice(8,12).join('')} ${d.slice(12,16).join('')}`;
+              const cvvBuf = new Uint8Array(1);
+              crypto.getRandomValues(cvvBuf);
+              const cvv = String(100 + (cvvBuf[0] % 900));
+              dbCardService.saveCredentials(address, num, cvv).catch(() => {});
+              return { number: num, cvv };
+            };
+
             if (vcc) {
               const variant = variants.find(v => v.id === vcc.card_variant);
-              // Preserve full card number from AsyncStorage if it exists
-              const existingDetails = savedDetails ? JSON.parse(savedDetails) : null;
-              const existingNumber = existingDetails?.number ?? '';
-              const hasFullNumber = /^\d{4}\s\d{4}\s\d{4}\s\d{4}$/.test(existingNumber);
+              let finalNumber = dbCard ? dbCardService.decryptNumber(dbCard, address) : '';
+              let finalCvv    = dbCard ? dbCardService.decryptCvv(dbCard, address)    : '';
+              // Fall back to AsyncStorage
+              if (!finalNumber) {
+                const local = savedDetails ? JSON.parse(savedDetails) : null;
+                if (/^\d{4}\s\d{4}\s\d{4}\s\d{4}$/.test(local?.number ?? '')) finalNumber = local.number;
+                if (/^\d{3}$/.test(local?.cvv ?? '')) finalCvv = local.cvv;
+              }
+              // Still nothing — generate fresh credentials for this existing user
+              if (!finalNumber) {
+                const fresh = generateAndSaveCredentials(vcc.card_network as 'Visa' | 'Mastercard');
+                finalNumber = fresh.number;
+                finalCvv    = fresh.cvv;
+              }
               const restoredDetails = {
-                number:     hasFullNumber ? existingNumber : ('•••• •••• •••• ' + vcc.card_last4),
+                number:     finalNumber,
                 expiry:     vcc.expiry_mm_yy,
-                cvv:        existingDetails?.cvv && existingDetails.cvv !== '•••' ? existingDetails.cvv : '•••',
+                cvv:        finalCvv,
                 brand:      (vcc.card_network === 'Mastercard' ? 'MASTERCARD' : 'VISA') as 'VISA' | 'MASTERCARD',
                 holderName: vcc.card_holder_name,
                 design:     variant?.color_hex ?? 'dark',
@@ -592,13 +633,25 @@ export function WalletProvider({ children }: { children: ReactNode }) {
                 ['cw_card_details', JSON.stringify(restoredDetails)],
               ]);
             } else if (dbCard) {
-              const existingDetails = savedDetails ? JSON.parse(savedDetails) : null;
-              const existingNumber = existingDetails?.number ?? '';
-              const hasFullNumber = /^\d{4}\s\d{4}\s\d{4}\s\d{4}$/.test(existingNumber);
+              let finalNumber = dbCardService.decryptNumber(dbCard, address);
+              let finalCvv    = dbCardService.decryptCvv(dbCard, address);
+              // Fall back to AsyncStorage
+              if (!finalNumber) {
+                const local = savedDetails ? JSON.parse(savedDetails) : null;
+                if (/^\d{4}\s\d{4}\s\d{4}\s\d{4}$/.test(local?.number ?? '')) finalNumber = local.number;
+                if (/^\d{3}$/.test(local?.cvv ?? '')) finalCvv = local.cvv;
+              }
+              // Still nothing — generate fresh credentials
+              if (!finalNumber) {
+                const fresh = generateAndSaveCredentials('Visa');
+                finalNumber = fresh.number;
+                finalCvv    = fresh.cvv;
+              }
+              const localDetails = savedDetails ? JSON.parse(savedDetails) : null;
               const restoredDetails = {
-                number:     hasFullNumber ? existingNumber : ('•••• •••• •••• ' + dbCard.card_last4),
-                expiry:     existingDetails?.expiry ?? (dbCard.expiry_month + '/' + dbCard.expiry_year),
-                cvv:        existingDetails?.cvv && existingDetails.cvv !== '•••' ? existingDetails.cvv : '•••',
+                number:     finalNumber,
+                expiry:     localDetails?.expiry ?? (dbCard.expiry_month + '/' + dbCard.expiry_year),
+                cvv:        finalCvv,
                 brand:      'VISA' as const,
                 holderName: dbCard.holder_name,
                 design:     dbCard.design,
@@ -996,10 +1049,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         // ── Restore card (vcc_cards takes priority over cards table) ──
         if (vcc) {
           const variant = variants.find(v => v.id === vcc.card_variant);
+          const decryptedNumber = dbCard ? dbCardService.decryptNumber(dbCard, data.address) : '';
+          const decryptedCvv    = dbCard ? dbCardService.decryptCvv(dbCard, data.address)    : '';
           const restoredDetails = {
-            number:     '•••• •••• •••• ' + vcc.card_last4,
+            number:     decryptedNumber || ('•••• •••• •••• ' + vcc.card_last4),
             expiry:     vcc.expiry_mm_yy,
-            cvv:        '•••',
+            cvv:        decryptedCvv || '•••',
             brand:      (vcc.card_network === 'Mastercard' ? 'MASTERCARD' : 'VISA') as 'VISA' | 'MASTERCARD',
             holderName: vcc.card_holder_name,
             design:     variant?.color_hex ?? 'dark',
@@ -1014,10 +1069,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             ['cw_card_details', JSON.stringify(restoredDetails)],
           ]);
         } else if (dbCard) {
+          const decryptedNumber = dbCardService.decryptNumber(dbCard, data.address);
+          const decryptedCvv    = dbCardService.decryptCvv(dbCard, data.address);
           const restoredDetails = {
-            number:     '•••• •••• •••• ' + dbCard.card_last4,
+            number:     decryptedNumber || ('•••• •••• •••• ' + dbCard.card_last4),
             expiry:     dbCard.expiry_month + '/' + dbCard.expiry_year,
-            cvv:        '•••',
+            cvv:        decryptedCvv || '•••',
             brand:      'VISA' as const,
             holderName: dbCard.holder_name,
             design:     dbCard.design,
@@ -1334,35 +1391,35 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         cardVariantService.getVariants(),
       ]);
       if (vcc) {
-        const variant = variants.find(v => v.id === vcc.card_variant);
-        const existing = await AsyncStorage.getItem('cw_card_details').catch(() => null);
-        const existingParsed = existing ? JSON.parse(existing) : null;
-        const existingNum = existingParsed?.number ?? '';
-        const hasFullNum = /^\d{4}\s\d{4}\s\d{4}\s\d{4}$/.test(existingNum);
-        const details = {
-          number:     hasFullNum ? existingNum : ('•••• •••• •••• ' + vcc.card_last4),
-          expiry:     vcc.expiry_mm_yy,
-          cvv:        existingParsed?.cvv && existingParsed.cvv !== '•••' ? existingParsed.cvv : '•••',
-          brand:      (vcc.card_network === 'Mastercard' ? 'MASTERCARD' : 'VISA') as 'VISA' | 'MASTERCARD',
-          holderName: vcc.card_holder_name,
-          design:     variant?.color_hex ?? 'dark',
-        };
+        // Try Supabase decrypt; fall back to current state (already loaded from AsyncStorage)
+        const decryptedNumber = dbCard ? dbCardService.decryptNumber(dbCard, walletAddress) : '';
+        const decryptedCvv    = dbCard ? dbCardService.decryptCvv(dbCard, walletAddress)    : '';
         setCardCreated(true);
         setCardBalance(vcc.balance);
         setCardFrozen(vcc.card_status === 'frozen');
-        setCardDetails(details);
-        AsyncStorage.multiSet([['cw_card_balance', String(vcc.balance)], ['cw_card_details', JSON.stringify(details)]]).catch(() => {});
+        setCardDetails(prev => {
+          const hasValidPrev = /^\d{4}\s\d{4}\s\d{4}\s\d{4}$/.test(prev.number);
+          const hasValidPrevCvv = /^\d{3}$/.test(prev.cvv);
+          const newNum = decryptedNumber || (hasValidPrev ? prev.number : ('•••• •••• •••• ' + vcc.card_last4));
+          const newCvv = decryptedCvv    || (hasValidPrevCvv ? prev.cvv : '•••');
+          if (prev.number === newNum && prev.cvv === newCvv && prev.holderName === vcc.card_holder_name && prev.expiry === vcc.expiry_mm_yy) return prev;
+          return { ...prev, number: newNum, cvv: newCvv, holderName: vcc.card_holder_name, expiry: vcc.expiry_mm_yy };
+        });
+        AsyncStorage.multiSet([['cw_card_balance', String(vcc.balance)]]).catch(() => {});
       } else if (dbCard) {
-        const existing = await AsyncStorage.getItem('cw_card_details').catch(() => null);
-        const existingParsed = existing ? JSON.parse(existing) : null;
-        const existingNum = existingParsed?.number ?? '';
-        const hasFullNum = /^\d{4}\s\d{4}\s\d{4}\s\d{4}$/.test(existingNum);
-        if (hasFullNum && existingParsed) {
-          setCardDetails({ ...existingParsed, holderName: dbCard.holder_name, design: dbCard.design });
-        }
+        const decryptedNumber = dbCardService.decryptNumber(dbCard, walletAddress);
+        const decryptedCvv    = dbCardService.decryptCvv(dbCard, walletAddress);
         setCardCreated(true);
         setCardBalance(dbCard.balance);
         setCardFrozen(dbCard.status === 'frozen');
+        setCardDetails(prev => {
+          const hasValidPrev = /^\d{4}\s\d{4}\s\d{4}\s\d{4}$/.test(prev.number);
+          const hasValidPrevCvv = /^\d{3}$/.test(prev.cvv);
+          const newNum = decryptedNumber || (hasValidPrev ? prev.number : ('•••• •••• •••• ' + dbCard.card_last4));
+          const newCvv = decryptedCvv    || (hasValidPrevCvv ? prev.cvv : '•••');
+          if (prev.number === newNum && prev.cvv === newCvv) return prev;
+          return { ...prev, number: newNum, cvv: newCvv, holderName: dbCard.holder_name, expiry: dbCard.expiry_month + '/' + dbCard.expiry_year };
+        });
         AsyncStorage.setItem('cw_card_balance', String(dbCard.balance)).catch(() => {});
       }
       const cardTxs: CardTransaction[] = dbTxs
@@ -1385,55 +1442,65 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, [walletAddress]);
 
   const createCard = useCallback((holderName: string, design: string) => {
-    // Generate random card details (not wallet-derived)
-    const arr = new Uint8Array(14);
-    crypto.getRandomValues(arr);
-    const digits = [4, ...Array.from(arr).map(b => b % 10)];
+    // Generate Luhn-valid 16-digit VISA number
+    const buf = new Uint8Array(14);
+    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+      crypto.getRandomValues(buf);
+    } else {
+      for (let i = 0; i < 14; i++) buf[i] = Math.floor(Math.random() * 256);
+    }
+    const d: number[] = [4, ...Array.from(buf).map(b => b % 10)];
     let sum = 0;
-    for (let i = 0; i < 15; i++) { let d = digits[i]; if ((15 - i) % 2 === 0) { d *= 2; if (d > 9) d -= 9; } sum += d; }
-    digits.push((10 - (sum % 10)) % 10);
-    const cardNumber = digits.join('').replace(/(.{4})/g, '$1 ').trim();
+    for (let i = 0; i < 15; i++) {
+      let v = d[i];
+      if ((15 - i) % 2 === 0) { v *= 2; if (v > 9) v -= 9; }
+      sum += v;
+    }
+    d.push((10 - (sum % 10)) % 10);
+    const cardNumber = `${d.slice(0,4).join('')} ${d.slice(4,8).join('')} ${d.slice(8,12).join('')} ${d.slice(12,16).join('')}`;
+
     const now = new Date();
     const expiry = `${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getFullYear() + 3).slice(-2)}`;
-    const cvvArr = new Uint8Array(1);
-    crypto.getRandomValues(cvvArr);
-    const cvv = String(100 + (cvvArr[0] % 900));
-    const last4 = cardNumber.replace(/\s/g, '').slice(-4);
-    const [expMonth, expYear] = expiry.split('/');
 
-    const details = { number: cardNumber, expiry, cvv, brand: 'VISA' as const, holderName: holderName.toUpperCase().trim() || 'CARD HOLDER', design };
+    const cvvBuf = new Uint8Array(2);
+    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+      crypto.getRandomValues(cvvBuf);
+    } else {
+      cvvBuf[0] = Math.floor(Math.random() * 256);
+      cvvBuf[1] = Math.floor(Math.random() * 256);
+    }
+    const cvv = String(100 + ((cvvBuf[0] * 256 + cvvBuf[1]) % 900));
+    const last4 = d.slice(12, 16).join('');
+    const [expMonth, expYear] = expiry.split('/');
+    const cleanName = holderName.toUpperCase().trim() || 'CARD HOLDER';
+
+    const details = { number: cardNumber, expiry, cvv, brand: 'VISA' as const, holderName: cleanName, design };
     setCardDetails(details);
     setCardCreated(true);
-    AsyncStorage.setItem('cw_card_created', 'true');
-    AsyncStorage.setItem('cw_card_details', JSON.stringify(details));
+    // Always persist to AsyncStorage so reveal works immediately even if Supabase is slow
+    AsyncStorage.setItem('cw_card_details', JSON.stringify(details)).catch(() => {});
+    AsyncStorage.setItem('cw_card_created', 'true').catch(() => {});
 
-    // Encrypt card number using wallet address as key and save to Supabase
-    const encryptCardNumber = (num: string, key: string): string => {
-      const keyBytes = key.toLowerCase().replace('0x', '');
-      const clean = num.replace(/\s/g, '');
-      return Array.from(clean).map((ch, i) => {
-        const k = parseInt(keyBytes[i % keyBytes.length] ?? '0', 16);
-        return String.fromCharCode(ch.charCodeAt(0) ^ k);
-      }).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join('');
-    };
-    const encrypted = encryptCardNumber(cardNumber, walletAddress);
-    dbCardService.saveEncryptedNumber(walletAddress, encrypted).catch(() => {});
-
+    // Save to Supabase as primary store — encrypted number + CVV
     dbCardService.getCard(walletAddress).then(existing => {
+      const cardPayload = {
+        wallet_address: walletAddress,
+        card_last4:     last4,
+        expiry_month:   expMonth ?? '12',
+        expiry_year:    expYear  ?? '28',
+        card_type:      'classic',
+        balance:        0,
+        status:         'active' as const,
+        holder_name:    cleanName,
+        design,
+      };
+      const saveCredentials = () => dbCardService.saveCredentials(walletAddress, cardNumber, cvv).catch(() => {});
       if (existing) {
-        dbCardService.updateDesign(walletAddress, { holder_name: holderName, design }).catch(() => {});
+        dbCardService.updateDesign(walletAddress, { holder_name: cleanName, design })
+          .then(saveCredentials).catch(() => {});
       } else {
-        dbCardService.createCard({
-          wallet_address: walletAddress,
-          card_last4:     last4,
-          expiry_month:   expMonth ?? '12',
-          expiry_year:    expYear  ?? '28',
-          card_type:      'classic',
-          balance:        0,
-          status:         'active',
-          holder_name:    holderName,
-          design,
-        }).catch(() => {});
+        dbCardService.createCard(cardPayload)
+          .then(saveCredentials).catch(() => {});
       }
     }).catch(() => {});
   }, [walletAddress]);

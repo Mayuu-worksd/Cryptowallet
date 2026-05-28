@@ -15,7 +15,8 @@
     "noEmit": true
   },
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "admin-dashboard"
   ],
   "extends": "expo/tsconfig.base"
 }

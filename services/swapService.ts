@@ -5,8 +5,8 @@ import { SUPPORTED_TOKENS as CONFIG_SUPPORTED_TOKENS } from '../constants/curren
 
 const AsyncStorage = Platform.OS === 'web'
   ? {
-      getItem: async (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
-      setItem: async (k: string, v: string) => { try { localStorage.setItem(k, v); } catch (_e) {} },
+      getItem: async (k: string) => { try { return localStorage.getItem(k); } catch (e) { console.error('localStorage getItem failed', e); return null; } },
+      setItem: async (k: string, v: string) => { try { localStorage.setItem(k, v); } catch (e) { console.error('localStorage setItem failed', e); } },
     }
   : AsyncStorageNative;
 
@@ -183,7 +183,7 @@ async function try0xQuote(
   if (!base || !tokens?.[from] || !tokens?.[to]) return null;
 
   try {
-    const sellAmountWei = ethers.parseUnits(amount, TOKEN_DECIMALS[from] ?? 18).toString();
+    const sellAmountWei = ethers.utils.parseUnits(amount, TOKEN_DECIMALS[from] ?? 18).toString();
     const chainId = network === 'Ethereum' ? '1' : network === 'Polygon' ? '137' : '42161';
     // Include taker address if available — required for accurate quotes on 0x v2
     const takerParam = walletAddress ? `&taker=${walletAddress}` : '';
@@ -199,18 +199,18 @@ async function try0xQuote(
     const res = await fetch(url, { headers, signal: controller.signal }).finally(() => clearTimeout(timer));
     if (!res.ok) {
       const errBody = await res.json().catch(() => ({})) as any;
-      console.warn('[0x price] failed', res.status, errBody?.reason ?? errBody?.message ?? errBody);
+      console.error('[0x price] failed', res.status, errBody?.reason ?? errBody?.message ?? errBody);
       return null;
     }
     const data = await res.json();
     if (!data.buyAmount) {
-      console.warn('[0x price] no buyAmount in response', data);
+      console.error('[0x price] no buyAmount in response', data);
       return null;
     }
 
-    const buyAmt = parseFloat(ethers.formatUnits(data.buyAmount, TOKEN_DECIMALS[to] ?? 18));
+    const buyAmt = parseFloat(ethers.utils.formatUnits(data.buyAmount, TOKEN_DECIMALS[to] ?? 18));
     const gasEth = data.totalNetworkFee
-      ? parseFloat(ethers.formatEther(data.totalNetworkFee)).toFixed(6)
+      ? parseFloat(ethers.utils.formatEther(data.totalNetworkFee)).toFixed(6)
       : '0.003';
     const rate = buyAmt / parseFloat(amount);
 
@@ -231,7 +231,7 @@ async function try0xQuote(
       needsApproval:   from !== 'ETH' && !!data.issues?.allowance,
     };
   } catch (e: any) {
-    console.warn('[0x price] exception', e?.message ?? e);
+    console.error('[0x price] exception', e?.message ?? e);
     return null;
   }
 }
@@ -242,17 +242,17 @@ async function tryUniswapSepoliaQuote(
 ): Promise<SwapQuote | null> {
   if (!SEPOLIA_TOKENS[from] || !SEPOLIA_TOKENS[to]) return null;
   try {
-    const provider  = new ethers.JsonRpcProvider(rpcUrl);
+    const provider  = new ethers.providers.JsonRpcProvider(rpcUrl);
     const quoter    = new ethers.Contract(UNISWAP_QUOTER_SEPOLIA, QUOTER_ABI, provider);
     const tokenIn   = from === 'ETH' ? SEPOLIA_TOKENS.WETH : SEPOLIA_TOKENS[from];
     const tokenOut  = to   === 'ETH' ? SEPOLIA_TOKENS.WETH : SEPOLIA_TOKENS[to];
-    const amtIn     = ethers.parseUnits(amount, TOKEN_DECIMALS[from] ?? 18);
+    const amtIn     = ethers.utils.parseUnits(amount, TOKEN_DECIMALS[from] ?? 18);
     // Hard 6s timeout — Sepolia RPC can be slow
     const amtOut: bigint = await Promise.race([
       quoter.quoteExactInputSingle.staticCall(tokenIn, tokenOut, POOL_FEE, amtIn, 0),
       new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 6000)),
     ]);
-    const buyAmt = parseFloat(ethers.formatUnits(amtOut, TOKEN_DECIMALS[to] ?? 18));
+    const buyAmt = parseFloat(ethers.utils.formatUnits(amtOut, TOKEN_DECIMALS[to] ?? 18));
     const rate   = buyAmt / parseFloat(amount);
     return {
       buyAmount:       buyAmt.toFixed(6),
@@ -270,7 +270,7 @@ async function tryUniswapSepoliaQuote(
       allowanceTarget: UNISWAP_ROUTER_SEPOLIA,
       needsApproval:   from !== 'ETH',
     };
-  } catch { return null; }
+  } catch (e) { console.error('Uniswap quote exception', e); return null; }
 }
 
 // ─── Layer 3: CoinGecko ───────────────────────────────────────────────────────
@@ -295,9 +295,9 @@ async function tryCoinGeckoQuote(from: string, to: string, amount: string): Prom
       const existing = await AsyncStorage.getItem('cw_price_cache');
       const prev = existing ? JSON.parse(existing) : {};
       await AsyncStorage.setItem('cw_price_cache', JSON.stringify({ ...prev, [from]: fromUsd, [to]: toUsd, ts: Date.now() }));
-    } catch (_e) {}
+    } catch (e) { console.error('Failed to save prices', e); }
     return buildSimulatedQuote(from, to, amount, fromUsd, toUsd, 'coingecko');
-  } catch { return null; }
+  } catch (e) { console.error('CoinGecko quote exception', e); return null; }
 }
 
 // ─── Layer 4: Cached / hardcoded (NEVER fails) ───────────────────────────────
@@ -312,7 +312,7 @@ async function tryCachedQuote(from: string, to: string, amount: string): Promise
       if (cached[from] && cached[from] > 0) fromUsd = cached[from];
       if (cached[to]   && cached[to]   > 0) toUsd   = cached[to];
     }
-  } catch (_e) {}
+  } catch (e) { console.error('Failed to get cached prices', e); }
   return buildSimulatedQuote(from, to, amount, fromUsd, toUsd, 'cached');
 }
 
@@ -353,7 +353,7 @@ async function _execute0x(
   if (!base || !tokens) return { success: false, error: `0x not supported on ${network}` };
 
   onStatus?.('Fetching executable quote...');
-  const sellAmt = ethers.parseUnits(quote.sellAmount, TOKEN_DECIMALS[quote.fromToken] ?? 18).toString();
+  const sellAmt = ethers.utils.parseUnits(quote.sellAmount, TOKEN_DECIMALS[quote.fromToken] ?? 18).toString();
   const chainId = network === 'Ethereum' ? '1' : network === 'Polygon' ? '137' : '42161';
   const url = `${base}/swap/permit2/quote?chainId=${chainId}&sellToken=${tokens[quote.fromToken]}&buyToken=${tokens[quote.toToken]}&sellAmount=${sellAmt}&taker=${wallet.address}&slippageBps=100`;
   if (!isSafeUrl(url, ALLOWED_ZRX_HOSTS)) return { success: false, error: 'Blocked unsafe URL' };
@@ -370,18 +370,18 @@ async function _execute0x(
   const data = await res.json();
 
   if (data.issues?.balance) {
-    const needed = ethers.formatUnits(data.issues.balance.expected, TOKEN_DECIMALS[quote.fromToken] ?? 18);
+    const needed = ethers.utils.formatUnits(data.issues.balance.expected, TOKEN_DECIMALS[quote.fromToken] ?? 18);
     return { success: false, error: `Insufficient balance. Need ${parseFloat(needed).toFixed(6)} ${quote.fromToken}.` };
   }
 
   if (quote.fromToken !== 'ETH' && data.issues?.allowance?.spender) {
     onStatus?.(`Approving ${quote.fromToken}...`);
     const token = new ethers.Contract(tokens[quote.fromToken], ERC20_ABI, wallet);
-    const allowance: bigint = await token.allowance(wallet.address, data.issues.allowance.spender);
-    if (allowance < BigInt(sellAmt)) {
-      const approveTx = await token.approve(data.issues.allowance.spender, ethers.MaxUint256);
+    const allowance: ethers.BigNumber = await token.allowance(wallet.address, data.issues.allowance.spender);
+    if (allowance.lt(sellAmt)) {
+      const approveTx = await token.approve(data.issues.allowance.spender, ethers.constants.MaxUint256);
       onStatus?.('Waiting for approval...');
-      await approveTx.wait();
+      await approveTx.wait(2);
     }
   }
 
@@ -396,9 +396,9 @@ async function _execute0x(
 
   const tx      = await wallet.sendTransaction(txReq);
   onStatus?.(`Submitted! ${tx.hash.slice(0, 12)}...`);
-  const receipt = await tx.wait();
+  const receipt = await tx.wait(2);
   onStatus?.('Swap complete!');
-  return { success: true, hash: receipt!.hash, explorerUrl: `https://etherscan.io/tx/${receipt!.hash}` };
+  return { success: true, hash: receipt!.transactionHash, explorerUrl: `https://etherscan.io/tx/${receipt!.transactionHash}` };
 }
 
 // ─── Execute Uniswap V3 swap (Sepolia) ───────────────────────────────────────
@@ -412,20 +412,20 @@ async function _executeUniswapSepolia(
   const tokenOut  = isToETH   ? SEPOLIA_TOKENS.WETH : SEPOLIA_TOKENS[quote.toToken];
   if (!tokenIn || !tokenOut) return { success: false, error: `Token not supported on Sepolia` };
 
-  const amtIn  = ethers.parseUnits(quote.sellAmount, TOKEN_DECIMALS[quote.fromToken] ?? 18);
-  const minOut = ethers.parseUnits(quote.minimumReceived, TOKEN_DECIMALS[quote.toToken] ?? 18);
+  const amtIn  = ethers.utils.parseUnits(quote.sellAmount, TOKEN_DECIMALS[quote.fromToken] ?? 18);
+  const minOut = ethers.utils.parseUnits(quote.minimumReceived, TOKEN_DECIMALS[quote.toToken] ?? 18);
 
   if (isFromETH) {
     onStatus?.('Wrapping ETH → WETH...');
     const weth = new ethers.Contract(SEPOLIA_TOKENS.WETH, WETH_ABI, wallet);
-    await (await weth.deposit({ value: amtIn })).wait();
+    await (await weth.deposit({ value: amtIn })).wait(2);
   }
 
   onStatus?.('Approving Uniswap router...');
   const tokenContract = new ethers.Contract(tokenIn, ERC20_ABI, wallet);
-  const allowance: bigint = await tokenContract.allowance(wallet.address, UNISWAP_ROUTER_SEPOLIA);
-  if (allowance < amtIn) {
-    await (await tokenContract.approve(UNISWAP_ROUTER_SEPOLIA, ethers.MaxUint256)).wait();
+  const allowance: ethers.BigNumber = await tokenContract.allowance(wallet.address, UNISWAP_ROUTER_SEPOLIA);
+  if (allowance.lt(amtIn)) {
+    await (await tokenContract.approve(UNISWAP_ROUTER_SEPOLIA, ethers.constants.MaxUint256)).wait(2);
   }
 
   onStatus?.('Executing Uniswap V3 swap...');
@@ -435,17 +435,17 @@ async function _executeUniswapSepolia(
     { gasLimit: 400000 }
   );
   onStatus?.(`Submitted! ${swapTx.hash.slice(0, 12)}...`);
-  const receipt = await swapTx.wait();
+  const receipt = await swapTx.wait(2);
 
   if (isToETH) {
     onStatus?.('Unwrapping WETH → ETH...');
     const weth = new ethers.Contract(SEPOLIA_TOKENS.WETH, WETH_ABI, wallet);
-    const bal: bigint = await weth.balanceOf(wallet.address);
-    if (bal > 0n) await (await weth.withdraw(bal)).wait();
+    const bal: ethers.BigNumber = await weth.balanceOf(wallet.address);
+    if (bal.gt(0)) await (await weth.withdraw(bal)).wait(2);
   }
 
   onStatus?.('Swap complete!');
-  return { success: true, hash: receipt!.hash, explorerUrl: `https://sepolia.etherscan.io/tx/${receipt!.hash}` };
+  return { success: true, hash: receipt!.transactionHash, explorerUrl: `https://sepolia.etherscan.io/tx/${receipt!.transactionHash}` };
 }
 
 // ─── Execute simulated swap ───────────────────────────────────────────────────
@@ -464,7 +464,7 @@ async function _saveSwapHistory(data: SwapQuote & { txHash: string; isSimulated:
   try {
     const raw = await AsyncStorage.getItem('swap_transactions');
     let history: any[] = [];
-    try { history = raw ? JSON.parse(raw) : []; } catch (_e) {}
+    try { history = raw ? JSON.parse(raw) : []; } catch (e) { console.error('Failed to parse swap_transactions', e); history = []; }
     history.unshift({
       id:         Date.now().toString(),
       type:       'swap',
@@ -479,7 +479,7 @@ async function _saveSwapHistory(data: SwapQuote & { txHash: string; isSimulated:
       date:       new Date().toISOString(),
     });
     await AsyncStorage.setItem('swap_transactions', JSON.stringify(history.slice(0, 100)));
-  } catch (_e) {}
+  } catch (e) { console.error('Failed to save swap_transactions', e); }
 }
 
 export const saveSwapToHistory = _saveSwapHistory;
@@ -516,7 +516,7 @@ async function _doExecuteSwap(
       return result;
     }
 
-    const provider = new ethers.JsonRpcProvider(rpcUrl);
+    const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
     const wallet   = new ethers.Wallet(privateKey, provider);
 
     let result: SwapResult;

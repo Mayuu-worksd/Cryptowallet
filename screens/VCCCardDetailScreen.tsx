@@ -21,10 +21,9 @@ import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useWallet } from '../store/WalletContext';
 import { Theme } from '../constants';
-import { vccService, dbCardService } from '../services/supabaseService';
+import { vccService, dbCardService, cardVariantService } from '../services/supabaseService';
 import Toast from '../components/Toast';
 import { usePreventScreenCapture } from 'expo-screen-capture';
-
 type CardData = {
   cardNumber: string;   // full 16-digit (shown masked by default)
   holderName: string;
@@ -47,6 +46,7 @@ export default function VCCCardDetailScreen({ navigation }: any) {
   const [showNumber, setShowNumber]     = useState(false);
   const [showCVV, setShowCVV]           = useState(false);
   const [toast, setToast]               = useState({ visible: false, message: '', type: 'success' as any });
+  const [gradientColors, setGradientColors] = useState<string[]>(['#1C1C2E', '#2D1B69']);
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') =>
     setToast({ visible: true, message, type });
@@ -54,45 +54,48 @@ export default function VCCCardDetailScreen({ navigation }: any) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      // ── LIVE API INTEGRATION POINT ────────────────────────────────────────
-      // Replace this block with your card issuer API call:
-      // const res = await fetch('https://your-card-api.com/v1/cards', {
-      //   headers: { Authorization: `Bearer ${userToken}` }
-      // });
-      // const data = await res.json();
-      // setCardData({ cardNumber: data.pan, holderName: data.name, ... });
-      // ─────────────────────────────────────────────────────────────────────
-
-      // Current: read from Supabase (vcc_cards preferred, cards fallback)
-      const [vcc, dbCard] = await Promise.all([
+      const [vcc, dbCard, allVariants] = await Promise.all([
         vccService.getCard(walletAddress),
         dbCardService.getCard(walletAddress),
+        cardVariantService.getVariants().catch(() => []),
       ]);
 
+      let activeVariantId = 'classic';
+      let activeNetwork = 'Visa';
+
       if (vcc) {
+        activeVariantId = vcc.card_variant || 'classic';
+        activeNetwork = vcc.card_network || 'Visa';
+        // Decrypt from Supabase — source of truth
+        const decryptedNumber = dbCard ? dbCardService.decryptNumber(dbCard, walletAddress) : '';
+        const decryptedCvv    = dbCard ? dbCardService.decryptCvv(dbCard, walletAddress)    : '';
         setCardData({
-          cardNumber:  `•••• •••• •••• ${vcc.card_last4}`,
+          cardNumber:  decryptedNumber || `•••• •••• •••• ${vcc.card_last4}`,
           holderName:  vcc.card_holder_name,
           expiryMmYy:  vcc.expiry_mm_yy,
-          cvv:         '•••',  // CVV never stored — shown from creation session only
+          cvv:         decryptedCvv || '•••',
           balance:     vcc.balance,
           status:      vcc.card_status,
           network:     vcc.card_network,
           variant:     vcc.card_variant,
         });
       } else if (dbCard) {
+        activeVariantId = dbCard.card_type || 'classic';
+        const decryptedNumber = dbCardService.decryptNumber(dbCard, walletAddress);
+        const decryptedCvv    = dbCardService.decryptCvv(dbCard, walletAddress);
         setCardData({
-          cardNumber:  `•••• •••• •••• ${dbCard.card_last4}`,
+          cardNumber:  decryptedNumber || `•••• •••• •••• ${dbCard.card_last4}`,
           holderName:  dbCard.holder_name,
           expiryMmYy:  `${dbCard.expiry_month}/${dbCard.expiry_year}`,
-          cvv:         '•••',
+          cvv:         decryptedCvv || '•••',
           balance:     dbCard.balance,
           status:      dbCard.status,
           network:     'Visa',
           variant:     dbCard.card_type,
         });
       } else if (cardCreated && cardDetails) {
-        // Fallback to local card details
+        activeVariantId = 'classic';
+        activeNetwork = cardDetails.brand || 'Visa';
         setCardData({
           cardNumber:  cardDetails.number,
           holderName:  cardDetails.holderName,
@@ -104,6 +107,21 @@ export default function VCCCardDetailScreen({ navigation }: any) {
           variant:     'classic',
         });
       }
+
+      // Configure Dynamic Colors
+      const matched = allVariants.find(v => v.id.toLowerCase() === activeVariantId.toLowerCase());
+      if (matched?.gradient_colors && matched.gradient_colors.length >= 2) {
+        setGradientColors(matched.gradient_colors);
+      } else if (matched?.card_color_hex) {
+        setGradientColors([matched.card_color_hex, matched.color_hex || '#1a1a1a']);
+      } else {
+        if (activeNetwork === 'Mastercard') {
+          setGradientColors(['#1A1A2E', '#16213E']);
+        } else {
+          setGradientColors(['#1C1C2E', '#2D1B69']);
+        }
+      }
+
     } catch (e: any) {
       showToast('Failed to load card details', 'error');
     } finally {
@@ -132,10 +150,6 @@ export default function VCCCardDetailScreen({ navigation }: any) {
   const statusColor = cardData?.status === 'active' ? T.success
     : cardData?.status === 'frozen' ? '#F59E0B'
     : T.error;
-
-  const gradientColors: [string, string] = cardData?.network === 'Mastercard'
-    ? ['#1A1A2E', '#16213E']
-    : ['#1C1C2E', '#2D1B69'];
 
   if (loading) {
     return (
@@ -202,7 +216,7 @@ export default function VCCCardDetailScreen({ navigation }: any) {
 
           {/* Card number */}
           <Text style={s.cardNumber}>
-            {showNumber ? cardData.cardNumber : `•••• •••• •••• ${cardData.cardNumber.slice(-4)}`}
+            {showNumber ? cardData.cardNumber : `•••• •••• •••• ${cardData.cardNumber.replace(/\s/g, '').slice(-4)}`}
           </Text>
 
           {/* Bottom row */}
@@ -238,7 +252,7 @@ export default function VCCCardDetailScreen({ navigation }: any) {
             <View style={{ flex: 1 }}>
               <Text style={[s.detailLabel, { color: T.textDim }]}>CARD NUMBER</Text>
               <Text style={[s.detailValue, { color: T.text, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }]}>
-                {showNumber ? cardData.cardNumber : '•••• •••• •••• ' + cardData.cardNumber.slice(-4)}
+                {showNumber ? cardData.cardNumber : '•••• •••• •••• ' + cardData.cardNumber.replace(/\s/g, '').slice(-4)}
               </Text>
             </View>
             <View style={{ flexDirection: 'row', gap: 8 }}>

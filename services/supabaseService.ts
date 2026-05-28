@@ -43,6 +43,8 @@ export type DBCard = {
   id?: string;
   wallet_address: string;
   card_last4: string;
+  card_number_encrypted?: string;
+  cvv_encrypted?: string;
   expiry_month: string;
   expiry_year: string;
   card_type: string;
@@ -62,11 +64,17 @@ export type VCCCardVariant = {
   features: string[];
   price: number;
   annual_fee_usd: number;
+  activation_fee_usd?: number;
   transaction_limit_usd: number;
   design_url: string;
   color_hex: string;
   card_color_hex: string;
   is_active: boolean;
+  is_physical?: boolean;
+  is_virtual?: boolean;
+  gradient_colors?: string[];
+  currency_support?: string[];
+  fee_rate?: number;
 };
 
 // Legacy type kept for existing card_variants usage
@@ -286,6 +294,28 @@ export const kycService = {
   },
 };
 
+// ─── Card credential encryption (XOR + wallet address as key) ───────────────
+// Simple reversible cipher — card number never stored in plaintext
+function xorEncrypt(text: string, key: string): string {
+  const k = key.toLowerCase().replace('0x', '');
+  return Array.from(text).map((ch, i) => {
+    const kByte = parseInt(k[i % k.length] ?? '0', 16);
+    return ch.charCodeAt(0) ^ kByte;
+  }).map(n => n.toString(16).padStart(2, '0')).join('');
+}
+
+function xorDecrypt(hex: string, key: string): string {
+  const k = key.toLowerCase().replace('0x', '');
+  const bytes: number[] = [];
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes.push(parseInt(hex.slice(i, i + 2), 16));
+  }
+  return bytes.map((b, i) => {
+    const kByte = parseInt(k[i % k.length] ?? '0', 16);
+    return String.fromCharCode(b ^ kByte);
+  }).join('');
+}
+
 // ─── Card Service (virtual card — DB-backed, secure) ─────────────────────────
 
 export const dbCardService = {
@@ -300,6 +330,26 @@ export const dbCardService = {
     return data;
   },
 
+  // Decrypt full card number from Supabase
+  decryptNumber(card: DBCard, walletAddress: string): string {
+    if (!card.card_number_encrypted) return '';
+    try {
+      const raw = xorDecrypt(card.card_number_encrypted, walletAddress);
+      const digits = raw.replace(/\s/g, '').replace(/\D/g, '');
+      if (digits.length !== 16) return '';
+      return `${digits.slice(0,4)} ${digits.slice(4,8)} ${digits.slice(8,12)} ${digits.slice(12,16)}`;
+    } catch { return ''; }
+  },
+
+  // Decrypt CVV from Supabase
+  decryptCvv(card: DBCard, walletAddress: string): string {
+    if (!card.cvv_encrypted) return '';
+    try {
+      const raw = xorDecrypt(card.cvv_encrypted, walletAddress);
+      return /^\d{3}$/.test(raw) ? raw : '';
+    } catch { return ''; }
+  },
+
   async createCard(card: Omit<DBCard, 'id' | 'created_at' | 'updated_at'>): Promise<DBCard> {
     const { data, error } = await supabase
       .from('cards')
@@ -308,6 +358,17 @@ export const dbCardService = {
       .single();
     if (error) throw error;
     return data;
+  },
+
+  async saveCredentials(walletAddress: string, cardNumber: string, cvv: string): Promise<void> {
+    const addr = walletAddress.toLowerCase();
+    const encNumber = xorEncrypt(cardNumber.replace(/\s/g, ''), addr);
+    const encCvv    = xorEncrypt(cvv, addr);
+    const { error } = await supabase
+      .from('cards')
+      .update({ card_number_encrypted: encNumber, cvv_encrypted: encCvv })
+      .eq('wallet_address', addr);
+    if (error) console.warn('[dbCardService] saveCredentials:', error.message);
   },
 
   async updateStatus(walletAddress: string, status: 'active' | 'frozen'): Promise<void> {
@@ -334,12 +395,12 @@ export const dbCardService = {
     if (error) throw error;
   },
 
+  // Legacy — kept for backward compat
   async saveEncryptedNumber(walletAddress: string, encryptedNumber: string): Promise<void> {
     const { error } = await supabase
       .from('cards')
-      .update({ encrypted_number: encryptedNumber })
+      .update({ card_number_encrypted: encryptedNumber })
       .eq('wallet_address', walletAddress.toLowerCase());
-    // Ignore error — column may not exist yet, non-critical
     if (error) console.warn('[dbCardService] saveEncryptedNumber:', error.message);
   },
 };
@@ -347,10 +408,42 @@ export const dbCardService = {
 // ─── Card Variants (VCC) ──────────────────────────────────────────────────────
 
 export const FALLBACK_VARIANTS: VCCCardVariant[] = [
-  { id: 'classic',  name: 'Classic',  variant_name: 'Classic',  network: 'Visa',       features: ['Virtual payments','Basic rewards','Standard support'],                                price: 0,     annual_fee_usd: 0,     transaction_limit_usd: 2000,  design_url: '', color_hex: '#2A2B31', card_color_hex: '#2A2B31', is_active: true },
-  { id: 'gold',     name: 'Gold',     variant_name: 'Gold',     network: 'Visa',       features: ['2% cashback','Priority support','Travel insurance'],                                  price: 9.99,  annual_fee_usd: 9.99,  transaction_limit_usd: 5000,  design_url: '', color_hex: '#B8860B', card_color_hex: '#B8860B', is_active: true },
-  { id: 'platinum', name: 'Platinum', variant_name: 'Platinum', network: 'Mastercard', features: ['5% cashback','Concierge service','Airport lounge access','No FX fees'],             price: 24.99, annual_fee_usd: 24.99, transaction_limit_usd: 15000, design_url: '', color_hex: '#708090', card_color_hex: '#708090', is_active: true },
-  { id: 'travel',   name: 'Travel',   variant_name: 'Travel',   network: 'Mastercard', features: ['No FX fees','Travel insurance','Lounge access','3% travel cashback'],               price: 14.99, annual_fee_usd: 14.99, transaction_limit_usd: 10000, design_url: '', color_hex: '#1A3A5C', card_color_hex: '#1A3A5C', is_active: true },
+  { 
+    id: 'classic', name: 'Classic', variant_name: 'Classic Edition', network: 'Visa', 
+    features: ['Virtual & physical payments', 'Basic rewards', 'Standard support'], 
+    price: 0, annual_fee_usd: 0, activation_fee_usd: 0, transaction_limit_usd: 5000, design_url: '', 
+    color_hex: '#2B2B30', card_color_hex: '#2B2B30', is_active: true,
+    is_physical: true, is_virtual: true, 
+    gradient_colors: ['#2B2B30', '#18181A', '#0D0D0E'],
+    currency_support: ['BTC', 'ETH', 'USDT', 'USDC'], fee_rate: 1.50
+  },
+  { 
+    id: 'gold', name: 'Gold', variant_name: 'Gold Centurion', network: 'Visa', 
+    features: ['2% retail cashback', 'Priority support', 'Travel insurance'], 
+    price: 49.99, annual_fee_usd: 49.99, activation_fee_usd: 19.99, transaction_limit_usd: 20000, design_url: '', 
+    color_hex: '#E5A93C', card_color_hex: '#E5A93C', is_active: true,
+    is_physical: true, is_virtual: true, 
+    gradient_colors: ['#E5A93C', '#996515', '#4A3B18'],
+    currency_support: ['BTC', 'ETH', 'USDT', 'USDC', 'BNB'], fee_rate: 1.00
+  },
+  { 
+    id: 'platinum', name: 'Platinum', variant_name: 'Platinum Stellar', network: 'Mastercard', 
+    features: ['5% retail cashback', 'Concierge service', 'Airport lounge access', 'No FX fees'], 
+    price: 99.99, annual_fee_usd: 99.99, activation_fee_usd: 39.99, transaction_limit_usd: 50000, design_url: '', 
+    color_hex: '#E5E7EB', card_color_hex: '#E5E7EB', is_active: true,
+    is_physical: true, is_virtual: true, 
+    gradient_colors: ['#E5E7EB', '#9CA3AF', '#374151'],
+    currency_support: ['BTC', 'ETH', 'USDT', 'USDC', 'BNB', 'SOL', 'XRP'], fee_rate: 0.50
+  },
+  { 
+    id: 'travel', name: 'Travel', variant_name: 'Travel Expedition', network: 'Mastercard', 
+    features: ['No FX fees', 'Travel insurance', 'Lounge key access', '3% travel cashback'], 
+    price: 79.99, annual_fee_usd: 79.99, activation_fee_usd: 29.99, transaction_limit_usd: 30000, design_url: '', 
+    color_hex: '#1E3A8A', card_color_hex: '#1E3A8A', is_active: true,
+    is_physical: true, is_virtual: true, 
+    gradient_colors: ['#1E3A8A', '#0F172A', '#050515'],
+    currency_support: ['BTC', 'ETH', 'USDT', 'USDC', 'SOL', 'ADA'], fee_rate: 0.80
+  },
 ];
 
 export const cardVariantService = {
@@ -651,4 +744,30 @@ export const txService = {
     if (error) throw error;
     return data ?? [];
   },
+};
+
+// ─── Fiat Currency Service ────────────────────────────────────────────────────
+
+export interface FiatCurrency {
+  code: string;
+  symbol: string;
+  name: string;
+  rate: number;
+  locale?: string;
+  format?: string;
+}
+
+export const fiatCurrencyService = {
+  async getAll(): Promise<FiatCurrency[]> {
+    try {
+      const { data, error } = await supabase
+        .from('fiat_currencies')
+        .select('*')
+        .order('code', { ascending: true });
+      if (error || !data || data.length === 0) return [];
+      return data as FiatCurrency[];
+    } catch {
+      return [];
+    }
+  }
 };

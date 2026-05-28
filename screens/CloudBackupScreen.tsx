@@ -3,6 +3,7 @@ import { Theme, Fonts } from '../constants';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   Platform, KeyboardAvoidingView, ScrollView, Animated, ActivityIndicator, StatusBar,
+  Keyboard,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialIcons, Ionicons } from '@expo/vector-icons';
@@ -29,6 +30,19 @@ export default function CloudBackupScreen({ navigation }: any) {
   const [loading, setLoading] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'success' as 'success' | 'error' | 'info' });
+  const [alreadyBacked, setAlreadyBacked] = useState(false);
+  const [checkingBackup, setCheckingBackup] = useState(true);
+
+  const confirmPasswordRef = useRef<TextInput>(null);
+  const scrollRef = useRef<ScrollView>(null);
+
+  // Check if backup already exists on mount
+  useEffect(() => {
+    if (!walletAddress) { setCheckingBackup(false); return; }
+    backupService.checkBackupExists(walletAddress)
+      .then(exists => { setAlreadyBacked(exists); setCheckingBackup(false); })
+      .catch(() => setCheckingBackup(false));
+  }, [walletAddress]);
 
   // Focus states for dynamic border highlights
   const [isPasswordFocused, setIsPasswordFocused] = useState(false);
@@ -39,6 +53,20 @@ export default function CloudBackupScreen({ navigation }: any) {
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
+
+  // Auto-dismiss keyboard + scroll to confirm when password becomes valid
+  const prevPasswordValid = useRef(false);
+  useEffect(() => {
+    if (step !== 2) return;
+    if (isPasswordValid && !prevPasswordValid.current) {
+      Keyboard.dismiss();
+      setTimeout(() => {
+        scrollRef.current?.scrollToEnd({ animated: true });
+        setTimeout(() => confirmPasswordRef.current?.focus(), 350);
+      }, 200);
+    }
+    prevPasswordValid.current = isPasswordValid;
+  }, [isPasswordValid, step]);
 
   // 1. Password Checks
   const isLengthValid = password.length >= 8;
@@ -232,19 +260,57 @@ export default function CloudBackupScreen({ navigation }: any) {
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <TouchableOpacity style={styles.iconBtn} onPress={() => step > 0 && step < 3 ? animateToStep(step - 1) : navigation.goBack()} activeOpacity={0.7}>
-            <MaterialIcons name={step === 3 ? 'close' : 'arrow-back'} size={24} color={T.text} />
+            <MaterialIcons name={step === 3 || alreadyBacked ? 'close' : 'arrow-back'} size={24} color={T.text} />
           </TouchableOpacity>
           <Text style={[styles.logoText, { color: T.primary }]}>Cloud Backup</Text>
         </View>
-        {step < 3 && (
+        {step < 3 && !alreadyBacked && (
           <View style={[styles.stepIndicator, { backgroundColor: T.surfaceLow }]}>
             <Text style={[styles.stepText, { color: T.textMuted }]}>Step {step + 1} of 3</Text>
           </View>
         )}
       </View>
 
+      {checkingBackup ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color={T.primary} />
+        </View>
+      ) : alreadyBacked ? (
+        <ScrollView contentContainerStyle={[styles.scroll, { alignItems: 'center', paddingTop: 40 }]} showsVerticalScrollIndicator={false}>
+          <View style={[styles.iconCircle, { backgroundColor: T.success + '18', width: 96, height: 96, borderRadius: 48, marginBottom: 24 }]}>
+            <Feather name="check-circle" size={48} color={T.success} />
+          </View>
+          <Text style={[styles.title, { color: T.text, textAlign: 'center' }]}>Already Backed Up</Text>
+          <Text style={[styles.subtitle, { color: T.textMuted, textAlign: 'center', marginHorizontal: 20, marginBottom: 32 }]}>
+            Your wallet is already securely backed up in the cloud. You can restore it anytime using your email and backup password.
+          </Text>
+          <View style={[{ width: '100%', borderRadius: 20, padding: 20, marginBottom: 28, borderWidth: 1 }, { backgroundColor: T.surface, borderColor: T.border }]}>
+            {[
+              { icon: 'shield', label: 'End-to-end encrypted', color: T.success },
+              { icon: 'cloud', label: 'Stored in your private vault', color: T.primary },
+              { icon: 'refresh-cw', label: 'Restorable on any device', color: T.textDim },
+            ].map(item => (
+              <View key={item.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: item.color + '15', alignItems: 'center', justifyContent: 'center' }}>
+                  <Feather name={item.icon as any} size={15} color={item.color} />
+                </View>
+                <Text style={{ color: T.text, fontSize: 14, fontFamily: Fonts.bold }}>{item.label}</Text>
+              </View>
+            ))}
+          </View>
+          <TouchableOpacity style={[styles.primaryBtn, { width: '100%', marginBottom: 14 }]} onPress={() => { setAlreadyBacked(false); setStep(0); }} activeOpacity={0.8}>
+            <LinearGradient colors={[T.primary, '#D32F2F']} style={styles.primaryBtnGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+              <Text style={styles.primaryBtnText}>Update Backup</Text>
+              <Feather name="refresh-cw" size={16} color="#FFF" />
+            </LinearGradient>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7}>
+            <Text style={{ color: T.textMuted, fontSize: 14, fontFamily: Fonts.bold }}>Go Back</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      ) : (
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
 
             {step === 0 && (
@@ -469,6 +535,7 @@ export default function CloudBackupScreen({ navigation }: any) {
                     <Text style={[styles.label, { color: T.textMuted, marginBottom: 8 }]}>Confirm Password</Text>
                     <View style={[styles.passwordWrapper, { borderColor: getConfirmPasswordBorderColor() }]}>
                       <TextInput
+                        ref={confirmPasswordRef}
                         style={[styles.passwordInput, { color: T.text }]}
                         placeholder="Repeat your password"
                         placeholderTextColor={T.textDim}
@@ -573,6 +640,7 @@ export default function CloudBackupScreen({ navigation }: any) {
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
+      )}
     </View>
   );
 }

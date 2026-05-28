@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useWallet } from '../store/WalletContext';
 import { cardVariantService, VCCCardVariant } from '../services/supabaseService';
 
@@ -48,7 +49,7 @@ export default function VCCVariantScreen({ navigation }: any) {
       {loading ? (
         <View style={s.center}>
           <ActivityIndicator size="large" color={T.primary} />
-          <Text style={[s.loadingText, { color: T.textMuted }]}>Loading card options...</Text>
+          <Text style={[s.loadingText, { color: T.textMuted }]}>Syncing card tier catalog...</Text>
         </View>
       ) : error ? (
         <View style={s.center}>
@@ -60,10 +61,18 @@ export default function VCCVariantScreen({ navigation }: any) {
         </View>
       ) : (
         <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-          <Text style={[s.subtitle, { color: T.textMuted }]}>Select the card that fits your needs. All data is live from our system.</Text>
+          <Text style={[s.subtitle, { color: T.textMuted }]}>
+            Select the cryptocurrency smart debit card that matches your transaction profile. Changes are live and sync instantly with our backend.
+          </Text>
 
           {variants.map(v => {
             const isSelected = selected?.id === v.id;
+            
+            // Build dynamic colors for gradient card background
+            const colors = v.gradient_colors && v.gradient_colors.length >= 2
+              ? v.gradient_colors
+              : [v.card_color_hex || v.color_hex || T.primary, v.color_hex || T.primary];
+
             return (
               <TouchableOpacity
                 key={v.id}
@@ -78,24 +87,44 @@ export default function VCCVariantScreen({ navigation }: any) {
                 onPress={() => setSelected(v)}
                 activeOpacity={0.85}
               >
-                {/* Card header */}
-                <View style={[s.cardHeader, { backgroundColor: v.card_color_hex || T.primary }]}>
-                  <View>
+                {/* Dynamic Gradient Header */}
+                <LinearGradient
+                  colors={colors}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={s.cardHeader}
+                >
+                  <View style={s.cardInfoContainer}>
                     <Text style={s.cardVariantName}>{v.variant_name}</Text>
                     <Text style={s.cardNetwork}>{v.network}</Text>
                   </View>
                   <View style={s.networkBadge}>
                     <Feather name="credit-card" size={20} color="#FFF" />
                   </View>
-                </View>
+                </LinearGradient>
 
                 {/* Card body */}
                 <View style={s.cardBody}>
+                  {/* Channels Indicator */}
+                  <View style={s.channelContainer}>
+                    {v.is_physical && (
+                      <View style={[s.channelBadge, { backgroundColor: T.success + '15', borderColor: T.success }]}>
+                        <Text style={[s.channelText, { color: T.success }]}>PHYSICAL</Text>
+                      </View>
+                    )}
+                    {v.is_virtual && (
+                      <View style={[s.channelBadge, { backgroundColor: T.primary + '15', borderColor: T.primary }]}>
+                        <Text style={[s.channelText, { color: T.primary }]}>VIRTUAL</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* 3-Column Fees and Limits Row */}
                   <View style={s.feeRow}>
                     <View style={s.feeItem}>
                       <Text style={[s.feeLabel, { color: T.textDim }]}>Annual Fee</Text>
                       <Text style={[s.feeValue, { color: T.text }]}>
-                        {v.annual_fee_usd === 0 ? 'Free' : `$${v.annual_fee_usd.toFixed(2)}/yr`}
+                        {v.annual_fee_usd === 0 ? 'Free' : `$${v.annual_fee_usd.toFixed(2)}`}
                       </Text>
                     </View>
                     <View style={[s.feeDivider, { backgroundColor: T.border }]} />
@@ -103,8 +132,26 @@ export default function VCCVariantScreen({ navigation }: any) {
                       <Text style={[s.feeLabel, { color: T.textDim }]}>Tx Limit</Text>
                       <Text style={[s.feeValue, { color: T.text }]}>${v.transaction_limit_usd.toLocaleString()}</Text>
                     </View>
+                    <View style={[s.feeDivider, { backgroundColor: T.border }]} />
+                    <View style={s.feeItem}>
+                      <Text style={[s.feeLabel, { color: T.textDim }]}>Tx Fee</Text>
+                      <Text style={[s.feeValue, { color: T.text }]}>{(v.fee_rate ?? 1.50).toFixed(2)}%</Text>
+                    </View>
                   </View>
 
+                  {/* Settlement Currencies list */}
+                  <View style={[s.currenciesRow, { borderBottomColor: T.border + '15' }]}>
+                    <Text style={[s.feeLabel, { color: T.textDim }]}>SETTLEMENT</Text>
+                    <View style={s.currencyPillContainer}>
+                      {(v.currency_support || ['BTC', 'ETH', 'USDT', 'USDC']).map(coin => (
+                        <View key={coin} style={[s.currencyPill, { backgroundColor: T.border + '10', borderColor: T.border }]}>
+                          <Text style={[s.currencyText, { color: T.text }]}>{coin}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+
+                  {/* Features list */}
                   <View style={s.featuresList}>
                     {v.features.map((f, i) => (
                       <View key={i} style={s.featureRow}>
@@ -149,15 +196,15 @@ const s = StyleSheet.create({
   backBtn: { width: 40, height: 40, justifyContent: 'center' },
   headerTitle: { fontSize: 18, fontWeight: '900', letterSpacing: -0.5 },
   scroll: { paddingHorizontal: 24, paddingBottom: 60, paddingTop: 20 },
-  subtitle: { fontSize: 14, marginBottom: 24, lineHeight: 20, fontWeight: '500' },
+  subtitle: { fontSize: 13, marginBottom: 24, lineHeight: 18, fontWeight: '500' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16, paddingHorizontal: 32 },
-  loadingText: { fontSize: 14, fontWeight: '600' },
+  loadingText: { fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   errorText: { fontSize: 14, textAlign: 'center', fontWeight: '700' },
   retryBtn: { height: 52, paddingHorizontal: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   retryBtnText: { color: '#FFF', fontSize: 15, fontWeight: '800' },
   card: {
     borderRadius: 24, 
-    marginBottom: 16, 
+    marginBottom: 20, 
     overflow: 'hidden', 
     position: 'relative',
     shadowColor: '#000',
@@ -167,27 +214,35 @@ const s = StyleSheet.create({
     elevation: 3,
   },
   cardHeader: { padding: 24, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cardVariantName: { fontSize: 22, fontWeight: '900', color: '#FFF', letterSpacing: -0.5 },
-  cardNetwork: { fontSize: 12, color: 'rgba(255,255,255,0.8)', fontWeight: '800', marginTop: 2, textTransform: 'uppercase', letterSpacing: 1 },
-  networkBadge: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
+  cardInfoContainer: { flex: 1, paddingRight: 10 },
+  cardVariantName: { fontSize: 20, fontWeight: '900', color: '#FFF', letterSpacing: -0.5 },
+  cardNetwork: { fontSize: 11, color: 'rgba(255,255,255,0.85)', fontWeight: '800', marginTop: 3, textTransform: 'uppercase', letterSpacing: 1 },
+  networkBadge: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
   cardBody: { padding: 20 },
-  feeRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
+  channelContainer: { flexDirection: 'row', gap: 6, marginBottom: 16 },
+  channelBadge: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 },
+  channelText: { fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
+  feeRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)', paddingBottom: 16 },
   feeItem: { flex: 1, alignItems: 'center' },
-  feeLabel: { fontSize: 10, fontWeight: '800', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
-  feeValue: { fontSize: 18, fontWeight: '900' },
-  feeDivider: { width: 1, height: 32 },
+  feeLabel: { fontSize: 9, fontWeight: '800', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
+  feeValue: { fontSize: 16, fontWeight: '900' },
+  feeDivider: { width: 1, height: 28, opacity: 0.5 },
+  currenciesRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)', paddingBottom: 16 },
+  currencyPillContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, flex: 1, justifyContent: 'flex-end' },
+  currencyPill: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1.5 },
+  currencyText: { fontSize: 9, fontWeight: '800' },
   featuresList: { gap: 10 },
   featureRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  featureText: { fontSize: 14, fontWeight: '600' },
+  featureText: { fontSize: 13, fontWeight: '600' },
   selectedBadge: { position: 'absolute', top: 12, right: 12, width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   continueBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 12, height: 64, borderRadius: 20, marginTop: 12,
+    gap: 12, height: 60, borderRadius: 20, marginTop: 12,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.25,
     shadowRadius: 12,
     elevation: 6,
   },
-  continueBtnText: { color: '#FFF', fontSize: 17, fontWeight: '900' },
+  continueBtnText: { color: '#FFF', fontSize: 16, fontWeight: '900' },
 });
 
