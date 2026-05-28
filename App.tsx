@@ -10,7 +10,6 @@ import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_7
 const { useMemo, useCallback } = React;
 
 import { Theme, Fonts } from './constants';
-import LogoLoader from './components/LogoLoader';
 
 const navigationRef = createNavigationContainerRef<any>();
 
@@ -45,7 +44,7 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {error:
 import { WalletProvider, useWallet } from './store/WalletContext';
 import { PinSetupContext } from './store/PinSetupContext';
 import { notificationService } from './services/notificationService';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import HomeScreen         from './screens/HomeScreen';
 import SendScreen         from './screens/SendScreen';
@@ -122,8 +121,8 @@ function TabIcon({ name, color, focused }: { name: any; color: string; focused: 
 function CustomTabBar({ state, descriptors, navigation: nav }: any) {
   const { isDarkMode, accountType } = useWallet();
   const TC = isDarkMode ? Theme.colors : Theme.lightColors;
-  const { useSafeAreaInsets } = require('react-native-safe-area-context');
-  const insets = useSafeAreaInsets();
+  let insets = { bottom: 0, top: 0, left: 0, right: 0 };
+  try { insets = useSafeAreaInsets(); } catch (_e) {}
 
   const personalTabs = [
     { name: 'Home',    icon: 'layers',    label: 'Wallet'  },
@@ -618,7 +617,7 @@ function MobileNavigator() {
   }, [pinState]);
 
   if (isLoadingWallet || pinState === 'checking' || !accountTypeChecked) {
-    return <LogoLoader visible={true} />;
+    return <View style={{ flex: 1, backgroundColor: '#101114' }} />;
   }
 
   // Show AccountTypeScreen if the user hasn't set their preferences (Account Type / Country)
@@ -714,12 +713,14 @@ function MobileNavigator() {
 
 function GlobalLoadingOverlay() {
   const wallet = useWallet();
-  // Safe check if WalletContext is loaded
   if (!wallet) return null;
-  const { isGlobalLoading, globalLoadingMessage } = wallet as any;
+  const { isGlobalLoading } = wallet as any;
   if (!isGlobalLoading) return null;
-
-  return <LogoLoader visible={true} message={globalLoadingMessage || 'LOADING'} />;
+  return (
+    <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(10,10,10,0.85)', zIndex: 9999, justifyContent: 'center', alignItems: 'center' }}>
+      <ActivityIndicator size="large" color={Theme.colors.primary} />
+    </View>
+  );
 }
 
 function WebApp() {
@@ -794,7 +795,7 @@ function WebApp() {
   };
 
   if (isLoadingWallet) {
-    return <LogoLoader visible={true} />;
+    return <View style={{ flex: 1, backgroundColor: T.background }} />;
   }
 
   if (!hasWallet) {
@@ -829,47 +830,61 @@ export default function App() {
     Inter_800ExtraBold,
   });
 
-  // Fallback: if fonts don't load in 3s, proceed anyway
+  // Fallback: if fonts don't load in 1.5s, proceed anyway
   const [fontTimeout, setFontTimeout] = React.useState(false);
   React.useEffect(() => {
-    const t = setTimeout(() => setFontTimeout(true), 3000);
+    const t = setTimeout(() => setFontTimeout(true), 1500);
     return () => clearTimeout(t);
   }, []);
 
   const fontsReady = fontsLoaded || fontTimeout;
 
   React.useEffect(() => {
-    const timeout = setTimeout(() => setShowOnboarding(false), 2000);
-    shouldShowOnboarding().then(show => { clearTimeout(timeout); setShowOnboarding(show); });
-    notificationService.requestPermissions();
+    const timeout = setTimeout(() => setShowOnboarding(false), 1500);
+    shouldShowOnboarding()
+      .then(show => { clearTimeout(timeout); setShowOnboarding(show); })
+      .catch(() => { clearTimeout(timeout); setShowOnboarding(false); });
+    notificationService.requestPermissions().catch(() => {});
   }, []);
 
   if (showOnboarding === null || !fontsReady) {
     return (
-      <GestureHandlerRootView style={{ flex: 1, backgroundColor: Theme.colors.background }}>
-        <LogoLoader visible={true} />
+      <ErrorBoundary>
+      <SafeAreaProvider>
+      <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#000000' }}>
+        <SplashScreen onFinish={() => {}} />
       </GestureHandlerRootView>
+      </SafeAreaProvider>
+      </ErrorBoundary>
     );
   }
 
   if (Platform.OS === 'web' && isDesktop) {
     return (
+      <ErrorBoundary>
+      <SafeAreaProvider>
       <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#101114' }}>
         <WalletProvider>
           <WebApp />
           <GlobalLoadingOverlay />
         </WalletProvider>
       </GestureHandlerRootView>
+      </SafeAreaProvider>
+      </ErrorBoundary>
     );
   }
 
   if (showOnboarding) {
     return (
+      <ErrorBoundary>
+      <SafeAreaProvider>
       <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#101114' }}>
         <WalletProvider>
           <OnboardingScreen onFinish={() => setShowOnboarding(false)} />
         </WalletProvider>
       </GestureHandlerRootView>
+      </SafeAreaProvider>
+      </ErrorBoundary>
     );
   }
 

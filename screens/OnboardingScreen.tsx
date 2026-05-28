@@ -22,8 +22,12 @@ const { width: W, height: H } = Dimensions.get('window');
 const ONBOARDING_KEY = 'cw_onboarding_done';
 
 export async function shouldShowOnboarding(): Promise<boolean> {
-  const done = await AsyncStorage.getItem(ONBOARDING_KEY);
-  return !done;
+  try {
+    const done = await AsyncStorage.getItem(ONBOARDING_KEY);
+    return !done;
+  } catch (_e) {
+    return false;
+  }
 }
 
 export async function markOnboardingDone(): Promise<void> {
