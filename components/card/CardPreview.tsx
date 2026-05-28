@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '../../utils/haptics';
 import { getDesign } from './CardDesigns';
 
 type Props = {
@@ -53,7 +53,7 @@ export default function CardPreview({ cardNumber, holderName, expiry, cvv = '•
 
   const handleToggle = () => {
     if (authenticating) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.selection();
     if (!showDetails) {
       setAuthenticating(true);
       setTimeout(() => { setAuthenticating(false); setShowDetails(true); }, 600);

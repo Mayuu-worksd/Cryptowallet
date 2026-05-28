@@ -6,7 +6,7 @@ import {
   TextInput, Platform, ActivityIndicator, StatusBar, Dimensions, RefreshControl,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '../utils/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { useWallet, useMarket } from '../store/WalletContext';
@@ -169,7 +169,7 @@ export default function CardScreen({ navigation, route }: any) {
 
   const handleToggleDetails = () => {
     if (revealingDetails) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.selection();
     if (!showDetails) {
       setRevealingDetails(true);
       setTimeout(() => {
