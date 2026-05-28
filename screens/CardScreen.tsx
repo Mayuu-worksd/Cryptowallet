@@ -6,6 +6,7 @@ import {
   TextInput, Platform, ActivityIndicator, StatusBar, Dimensions, RefreshControl,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { useWallet, useMarket } from '../store/WalletContext';
@@ -168,6 +169,7 @@ export default function CardScreen({ navigation, route }: any) {
 
   const handleToggleDetails = () => {
     if (revealingDetails) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     if (!showDetails) {
       setRevealingDetails(true);
       setTimeout(() => {
@@ -187,10 +189,8 @@ export default function CardScreen({ navigation, route }: any) {
   const formattedCardNumber = useMemo(() => {
     if (!cardCreated) return '•••• •••• •••• ••••';
     const num = cardDetails.number.replace(/\s/g, '');
-    if (showDetails) {
-      return num.replace(/(\d{4})(?=\d)/g, '$1  ');
-    }
-    return `••••   ••••   ••••   ${num.slice(-4)}`;
+    if (showDetails) return num.replace(/(.{4})(?=.)/g, '$1 ');
+    return `•••• •••• •••• ${num.slice(-4)}`;
   }, [cardDetails.number, showDetails, cardCreated]);
 
   // Skin configurations for virtual
@@ -774,7 +774,17 @@ export default function CardScreen({ navigation, route }: any) {
               >
                 <Text style={[styles.detailLabel, { color: T.textDim }]}>CARD NUMBER</Text>
                 <View style={styles.detailValueRow}>
-                  <Text style={[styles.detailValueMono, { color: T.text }]}>{formattedCardNumber}</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'center', flex: 1 }}>
+                    {formattedCardNumber.split('').map((ch, i) => (
+                      <Text
+                        key={i}
+                        style={[styles.detailDigit, { color: T.text, width: ch === ' ' ? 10 : 12 }]}
+                        allowFontScaling={false}
+                      >
+                        {ch === ' ' ? '' : ch}
+                      </Text>
+                    ))}
+                  </View>
                   {showDetails && <Feather name="copy" size={13} color={T.primary} />}
                 </View>
               </TouchableOpacity>
@@ -1223,10 +1233,9 @@ const styles = StyleSheet.create({
   brandRotatedText: {
     color: '#FFFFFF',
     fontSize: 11,
-    fontWeight: '300', 
-    letterSpacing: 4,  
+    fontFamily: 'Inter_400Regular',
+    letterSpacing: 4,
     opacity: 0.85,
-    fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif-light',
   },
   cardFaceHolderWrap: {
     position: 'absolute',
@@ -1244,9 +1253,8 @@ const styles = StyleSheet.create({
   cardFaceHolderName: {
     fontSize: 12,
     color: '#FFFFFF',
-    fontWeight: '700',
+    fontFamily: 'Inter_700Bold',
     letterSpacing: 1,
-    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
   },
   visaRotatedContainer: {
     position: 'absolute',
@@ -1415,9 +1423,14 @@ const styles = StyleSheet.create({
   },
   detailValueMono: {
     fontSize: 17,
-    fontWeight: '700',
-    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    letterSpacing: 1.5,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 1,
+  },
+  detailDigit: {
+    fontSize: 17,
+    fontFamily: 'Inter_700Bold',
+    textAlign: 'center',
+    includeFontPadding: false,
   },
   detailGrid: {
     flexDirection: 'row',

@@ -27,7 +27,7 @@ export const SUPPORTED_FIAT_CURRENCIES: Record<string, FiatCurrency> = {
   RUB: { code: 'RUB', symbol: '₽', name: 'Russian Ruble', rate: 90.0, locale: 'ru-RU', format: 'ru-RU' },
   BHD: { code: 'BHD', symbol: 'د.ب', name: 'Bahraini Dinar', rate: 0.38, locale: 'ar-BH', format: 'ar-BH' },
   VND: { code: 'VND', symbol: '₫', name: 'Vietnamese Dong', rate: 25400.0, locale: 'vi-VN', format: 'vi-VN' },
-  SAR: { code: 'SAR', symbol: 'SR', name: 'Saudi Riyal', rate: 3.75, locale: 'ar-SA', format: 'ar-SA' },
+  SAR: { code: 'SAR', symbol: '﷼', name: 'Saudi Riyal', rate: 3.75, locale: 'ar-SA', format: 'ar-SA' },
   KWD: { code: 'KWD', symbol: 'KD', name: 'Kuwaiti Dinar', rate: 0.31, locale: 'ar-KW', format: 'ar-KW' },
   THB: { code: 'THB', symbol: '฿', name: 'Thai Baht', rate: 36.5, locale: 'th-TH', format: 'th-TH' },
 };
@@ -94,7 +94,7 @@ export const SUPPORTED_TOKENS: Record<string, TokenConfig> = {
     name: 'Toncoin',
     coingeckoId: 'the-open-network',
     color: '#0088CC',
-    iconUrl: 'https://coin-images.coingecko.com/coins/images/17980/large/toncoin_symbol.png',
+    iconUrl: 'https://assets.coingecko.com/coins/images/17980/large/ton_symbol.png',
     decimals: 9,
   },
   TRX: {
@@ -102,7 +102,7 @@ export const SUPPORTED_TOKENS: Record<string, TokenConfig> = {
     name: 'TRON',
     coingeckoId: 'tron',
     color: '#EF0027',
-    iconUrl: 'https://coin-images.coingecko.com/coins/images/1094/large/tron-logo.png',
+    iconUrl: 'https://assets.coingecko.com/coins/images/1094/large/tron-logo.png',
     decimals: 6,
   },
   SUI: {
@@ -110,7 +110,7 @@ export const SUPPORTED_TOKENS: Record<string, TokenConfig> = {
     name: 'Sui',
     coingeckoId: 'sui',
     color: '#6FBCF0',
-    iconUrl: 'https://coin-images.coingecko.com/coins/images/26375/large/sui_asset.png',
+    iconUrl: 'https://assets.coingecko.com/coins/images/26375/large/sui_asset.jpeg',
     decimals: 9,
   },
 };
