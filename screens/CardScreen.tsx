@@ -774,18 +774,15 @@ export default function CardScreen({ navigation, route }: any) {
               >
                 <Text style={[styles.detailLabel, { color: T.textDim }]}>CARD NUMBER</Text>
                 <View style={styles.detailValueRow}>
-                  <View style={{ flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'center', flex: 1 }}>
-                    {formattedCardNumber.split('').map((ch, i) => (
-                      <Text
-                        key={i}
-                        style={[styles.detailDigit, { color: T.text, width: ch === ' ' ? 10 : 12 }]}
-                        allowFontScaling={false}
-                      >
-                        {ch === ' ' ? '' : ch}
-                      </Text>
-                    ))}
-                  </View>
-                  {showDetails && <Feather name="copy" size={13} color={T.primary} />}
+                  <Text
+                    style={[styles.detailValueMono, { color: T.text }]}
+                    allowFontScaling={false}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                  >
+                    {formattedCardNumber}
+                  </Text>
+                  {showDetails && <Feather name="copy" size={13} color={T.primary} style={{ marginLeft: 8 }} />}
                 </View>
               </TouchableOpacity>
 
@@ -1422,9 +1419,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   detailValueMono: {
-    fontSize: 17,
+    fontSize: 18,
     fontFamily: 'Inter_700Bold',
-    letterSpacing: 1,
+    letterSpacing: 2,
+    flex: 1,
   },
   detailDigit: {
     fontSize: 17,
