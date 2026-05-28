@@ -15,6 +15,8 @@ const COUNTRIES = ['United States','United Kingdom','India','UAE','Singapore','G
 
 const TOKEN_COLORS: Record<string, string> = {
   ETH: '#627EEA', USDC: '#2775CA', USDT: '#26A17B', DAI: '#F5AC37',
+  BTC: '#F7931A', SOL: '#9945FF', BNB: '#F3BA2F', XRP: '#346AA9',
+  TON: '#0088CC', TRX: '#EF0027', SUI: '#6FBCF0',
 };
 
 const TOKEN_LOGOS: Record<string, string> = {
@@ -22,6 +24,13 @@ const TOKEN_LOGOS: Record<string, string> = {
   USDC: 'https://assets.coingecko.com/coins/images/6319/large/USD_Coin_icon.png',
   USDT: 'https://assets.coingecko.com/coins/images/325/large/Tether.png',
   DAI:  'https://assets.coingecko.com/coins/images/9956/large/4943.png',
+  BTC:  'https://assets.coingecko.com/coins/images/1/large/bitcoin.png',
+  SOL:  'https://assets.coingecko.com/coins/images/4128/large/solana.png',
+  BNB:  'https://assets.coingecko.com/coins/images/825/large/bnb-icon2_2x.png',
+  XRP:  'https://assets.coingecko.com/coins/images/44/large/xrp-symbol-white-128.png',
+  TON:  'https://assets.coingecko.com/coins/images/17980/large/ton_symbol.png',
+  TRX:  'https://assets.coingecko.com/coins/images/1094/large/tron-logo.png',
+  SUI:  'https://assets.coingecko.com/coins/images/26375/large/sui_asset.jpeg',
 };
 
 function TokenSymbolIcon({ token, size = 44 }: { token: string; size?: number }) {
