@@ -7,6 +7,8 @@ import { supabase } from '@/lib/supabase';
 import {
   CreditCard, RefreshCw, Search, Eye, CheckCircle,
   XCircle, Loader2, Package, Truck, X, MapPin, DollarSign,
+  Plus, Trash2, Edit, Check, Settings, ToggleLeft, ToggleRight,
+  Info, AlertTriangle, Shield, Coins, Sparkles, Layers
 } from 'lucide-react';
 
 interface CardRequest {
@@ -21,20 +23,67 @@ interface CardRequest {
   updated_at?: string;
 }
 
+interface CardVariant {
+  id: string;
+  name: string;
+  variant_name: string;
+  network: 'Visa' | 'Mastercard';
+  features: string[];
+  price: number;
+  annual_fee_usd: number;
+  transaction_limit_usd: number;
+  design_url: string;
+  color_hex: string;
+  card_color_hex: string;
+  is_active: boolean;
+  is_physical?: boolean;
+  is_virtual?: boolean;
+  gradient_colors?: string[];
+  currency_support?: string[];
+  fee_rate?: number;
+}
+
 function safeParseFloat(value: string | number | null | undefined): number {
   const n = parseFloat(String(value ?? 0));
   return isNaN(n) ? 0 : n;
 }
 
 export default function CardsPage() {
+  const [activeTab, setActiveTab] = useState<'requests' | 'variants'>('requests');
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRequest, setSelectedRequest] = useState<CardRequest | null>(null);
+  
+  // Variants search/state
+  const [variantSearch, setVariantSearch] = useState('');
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingVariant, setEditingVariant] = useState<CardVariant | null>(null);
+  
+  // Form State
+  const [formId, setFormId] = useState('');
+  const [formName, setFormName] = useState('');
+  const [formVariantName, setFormVariantName] = useState('');
+  const [formNetwork, setFormNetwork] = useState<'Visa' | 'Mastercard'>('Visa');
+  const [formPrice, setFormPrice] = useState('0');
+  const [formAnnualFee, setFormAnnualFee] = useState('0');
+  const [formLimit, setFormLimit] = useState('5000');
+  const [formColorHex, setFormColorHex] = useState('#2A2B31');
+  const [formCardColorHex, setFormCardColorHex] = useState('#2A2B31');
+  const [formDesignUrl, setFormDesignUrl] = useState('');
+  const [formIsActive, setFormIsActive] = useState(true);
+  const [formIsPhysical, setFormIsPhysical] = useState(true);
+  const [formIsVirtual, setFormIsVirtual] = useState(true);
+  const [formFeeRate, setFormFeeRate] = useState('1.5');
+  const [formFeaturesText, setFormFeaturesText] = useState('');
+  const [formCurrenciesText, setFormCurrenciesText] = useState('BTC, ETH, USDT, USDC');
+  const [formGradientsText, setFormGradientsText] = useState('#2B2B30, #18181A, #0D0D0E');
+
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [mutateError, setMutateError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
-  const { data: requests, isLoading, error: queryError, refetch, isRefetching } = useQuery({
+  // ─── Query Requests ──────────────────────────────────────────────────────────
+  const { data: requests, isLoading: isRequestsLoading, error: queryError, refetch: refetchRequests, isRefetching: isRefetchingRequests } = useQuery({
     queryKey: ['admin-card-requests', statusFilter],
     queryFn: async () => {
       let query = supabase
@@ -47,6 +96,21 @@ export default function CardsPage() {
       return (data || []) as CardRequest[];
     },
     refetchInterval: 20000,
+    enabled: activeTab === 'requests',
+  });
+
+  // ─── Query Variants ──────────────────────────────────────────────────────────
+  const { data: variants, isLoading: isVariantsLoading, error: variantsError, refetch: refetchVariants, isRefetching: isRefetchingVariants } = useQuery({
+    queryKey: ['admin-card-variants'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('card_variants')
+        .select('*')
+        .order('annual_fee_usd', { ascending: true });
+      if (error) throw error;
+      return (data || []) as CardVariant[];
+    },
+    enabled: activeTab === 'variants',
   });
 
   React.useEffect(() => {
@@ -55,6 +119,13 @@ export default function CardsPage() {
     }
   }, [queryError]);
 
+  React.useEffect(() => {
+    if (variantsError) {
+      setFetchError((variantsError as Error).message || 'Failed to load card variants.');
+    }
+  }, [variantsError]);
+
+  // ─── Mutations Requests ───────────────────────────────────────────────────────
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
       const { error } = await supabase
@@ -74,6 +145,71 @@ export default function CardsPage() {
     },
   });
 
+  // ─── Mutations Variants ───────────────────────────────────────────────────────
+  const saveVariant = useMutation({
+    mutationFn: async (variantData: any) => {
+      const isEdit = !!editingVariant;
+      if (isEdit) {
+        const { error } = await supabase
+          .from('card_variants')
+          .update(variantData)
+          .eq('id', editingVariant.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('card_variants')
+          .insert([variantData]);
+        if (error) throw error;
+      }
+      return variantData;
+    },
+    onSuccess: () => {
+      setMutateError(null);
+      queryClient.invalidateQueries({ queryKey: ['admin-card-variants'] });
+      setIsFormOpen(false);
+      setEditingVariant(null);
+    },
+    onError: (err) => {
+      setMutateError((err as Error).message || 'Failed to save card variant. Verify DB column sync.');
+    },
+  });
+
+  const deleteVariant = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('card_variants')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+      return id;
+    },
+    onSuccess: () => {
+      setMutateError(null);
+      queryClient.invalidateQueries({ queryKey: ['admin-card-variants'] });
+    },
+    onError: (err) => {
+      setMutateError((err as Error).message || 'Failed to delete variant.');
+    },
+  });
+
+  const toggleVariantStatus = useMutation({
+    mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
+      const { error } = await supabase
+        .from('card_variants')
+        .update({ is_active })
+        .eq('id', id);
+      if (error) throw error;
+      return { id, is_active };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-card-variants'] });
+    },
+    onError: (err) => {
+      setMutateError((err as Error).message || 'Failed to toggle status.');
+    },
+  });
+
+  // ─── Event Handlers ──────────────────────────────────────────────────────────
   const handleStatusChange = (id: string, status: string) => {
     const labels: Record<string, string> = { approved: 'APPROVE', rejected: 'REJECT', shipped: 'mark as SHIPPED' };
     const label = labels[status] ?? status.toUpperCase();
@@ -82,12 +218,107 @@ export default function CardsPage() {
     updateStatus.mutate({ id, status });
   };
 
-  const filtered = (requests || []).filter((r: CardRequest) => {
+  const handleOpenCreateForm = () => {
+    setEditingVariant(null);
+    setFormId('');
+    setFormName('');
+    setFormVariantName('');
+    setFormNetwork('Visa');
+    setFormPrice('0');
+    setFormAnnualFee('0');
+    setFormLimit('5000');
+    setFormColorHex('#2A2B31');
+    setFormCardColorHex('#2A2B31');
+    setFormDesignUrl('');
+    setFormIsActive(true);
+    setFormIsPhysical(true);
+    setFormIsVirtual(true);
+    setFormFeeRate('1.5');
+    setFormFeaturesText('Virtual & Physical payments, Priority service desk');
+    setFormCurrenciesText('BTC, ETH, USDT, USDC');
+    setFormGradientsText('#2B2B30, #18181A, #0D0D0E');
+    setIsFormOpen(true);
+  };
+
+  const handleOpenEditForm = (v: CardVariant) => {
+    setEditingVariant(v);
+    setFormId(v.id);
+    setFormName(v.name);
+    setFormVariantName(v.variant_name);
+    setFormNetwork(v.network);
+    setFormPrice(String(v.price));
+    setFormAnnualFee(String(v.annual_fee_usd));
+    setFormLimit(String(v.transaction_limit_usd));
+    setFormColorHex(v.color_hex);
+    setFormCardColorHex(v.card_color_hex);
+    setFormDesignUrl(v.design_url);
+    setFormIsActive(v.is_active);
+    setFormIsPhysical(v.is_physical ?? true);
+    setFormIsVirtual(v.is_virtual ?? true);
+    setFormFeeRate(String(v.fee_rate ?? 1.5));
+    setFormFeaturesText(v.features.join(', '));
+    setFormCurrenciesText((v.currency_support || ['BTC', 'ETH', 'USDT', 'USDC']).join(', '));
+    setFormGradientsText((v.gradient_colors || [v.card_color_hex]).join(', '));
+    setIsFormOpen(true);
+  };
+
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formId.trim()) { alert('ID is required'); return; }
+    if (!formName.trim()) { alert('Name is required'); return; }
+
+    const features = formFeaturesText.split(',').map(s => s.trim()).filter(Boolean);
+    const currency_support = formCurrenciesText.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+    const gradient_colors = formGradientsText.split(',').map(s => s.trim()).filter(Boolean);
+
+    const payload = {
+      id: formId.trim().toLowerCase(),
+      name: formName.trim(),
+      variant_name: formVariantName.trim() || formName.trim(),
+      network: formNetwork,
+      price: safeParseFloat(formPrice),
+      annual_fee_usd: safeParseFloat(formAnnualFee),
+      transaction_limit_usd: safeParseFloat(formLimit),
+      color_hex: formColorHex.trim() || '#2A2B31',
+      card_color_hex: gradient_colors[0] || formCardColorHex.trim() || '#2A2B31',
+      design_url: formDesignUrl.trim(),
+      is_active: formIsActive,
+      features,
+      is_physical: formIsPhysical,
+      is_virtual: formIsVirtual,
+      fee_rate: safeParseFloat(formFeeRate),
+      currency_support,
+      gradient_colors,
+    };
+
+    saveVariant.mutate(payload);
+  };
+
+  const handleDeleteVariant = (id: string) => {
+    if (!confirm('Are you sure you want to permanently delete this card variant? Users holding this variant will fall back to default card states.')) return;
+    deleteVariant.mutate(id);
+  };
+
+  const handleToggleActive = (id: string, currentStatus: boolean) => {
+    toggleVariantStatus.mutate({ id, is_active: !currentStatus });
+  };
+
+  // ─── Filter Functions ────────────────────────────────────────────────────────
+  const filteredRequests = (requests || []).filter((r: CardRequest) => {
     const term = searchTerm.toLowerCase();
     return (
       r.wallet_address?.toLowerCase().includes(term) ||
       r.card_type?.toLowerCase().includes(term) ||
       r.country?.toLowerCase().includes(term)
+    );
+  });
+
+  const filteredVariants = (variants || []).filter((v: CardVariant) => {
+    const term = variantSearch.toLowerCase();
+    return (
+      v.name?.toLowerCase().includes(term) ||
+      v.variant_name?.toLowerCase().includes(term) ||
+      v.network?.toLowerCase().includes(term)
     );
   });
 
@@ -121,234 +352,703 @@ export default function CardsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-3 border-[#1a1a1a] pb-6 bg-[#ffcc00] p-6 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] border-3">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-[#1a1a1a] font-display uppercase leading-none">Physical Card Requests</h1>
-          <p className="text-xs text-[#1a1a1a] font-bold mt-2 font-mono uppercase tracking-wider">Review, approve, and dispatch physical smartcard orders from verified wallets</p>
+          <h1 className="text-3xl font-extrabold tracking-tight text-[#1a1a1a] font-display uppercase leading-none">
+            {activeTab === 'requests' ? 'Physical Card Requests' : 'Card Variant Architecture'}
+          </h1>
+          <p className="text-xs text-[#1a1a1a] font-bold mt-2 font-mono uppercase tracking-wider">
+            {activeTab === 'requests'
+              ? 'Review, approve, and dispatch physical smartcard orders from verified wallets'
+              : 'Admin panel to create, configure, theme and control cryptocurrency debit card designs'}
+          </p>
         </div>
         <button
-          onClick={() => refetch()}
-          disabled={isLoading || isRefetching}
+          onClick={() => activeTab === 'requests' ? refetchRequests() : refetchVariants()}
+          disabled={isRequestsLoading || isVariantsLoading || isRefetchingRequests || isRefetchingVariants}
           className="self-start brutalist-button px-4 py-2 flex items-center gap-2 shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]"
         >
-          <RefreshCw className={`h-4 w-4 ${isRefetching ? 'animate-spin' : ''}`} />
-          <span>Sync Requests</span>
+          <RefreshCw className={`h-4 w-4 ${(isRefetchingRequests || isRefetchingVariants) ? 'animate-spin' : ''}`} />
+          <span>Sync Ledger</span>
         </button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { label: 'Total Requests', value: (requests || []).length, color: '' },
-          { label: 'Pending Review', value: countByStatus('pending'), color: '!bg-[#ffcc00]/10' },
-          { label: 'Approved / Shipped', value: countByStatus('approved') + countByStatus('shipped'), color: '!bg-[#0055ff]/10' },
-          { label: 'Rejected', value: countByStatus('rejected'), color: '!bg-[#e63b2e]/10' },
-        ].map(s => (
-          <div key={s.label} className={`brutalist-card p-4 ${s.color}`}>
-            <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider font-mono">{s.label}</p>
-            <h4 className="text-2xl font-extrabold text-[#1a1a1a] mt-1.5 font-mono">
-              {isLoading ? '...' : s.value}
-            </h4>
-          </div>
-        ))}
+      {/* Tab Interface */}
+      <div className="flex border-b-3 border-[#1a1a1a] bg-[#f5f0e8] p-1 gap-1 border-3 shadow-[3px_3px_0px_0px_rgba(26,26,26,1)]">
+        <button
+          onClick={() => setActiveTab('requests')}
+          className={`flex-1 sm:flex-none px-6 py-3.5 text-xs font-extrabold uppercase font-display tracking-wider border-2 border-transparent transition-all flex items-center justify-center gap-2 ${
+            activeTab === 'requests'
+              ? 'bg-[#1a1a1a] border-[#1a1a1a] text-white'
+              : 'text-[#1a1a1a] hover:bg-[#ffcc00]/20 hover:border-[#1a1a1a]'
+          }`}
+        >
+          <CreditCard className="h-4 w-4" />
+          <span>Card Orders ({requests?.length || 0})</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('variants')}
+          className={`flex-1 sm:flex-none px-6 py-3.5 text-xs font-extrabold uppercase font-display tracking-wider border-2 border-transparent transition-all flex items-center justify-center gap-2 ${
+            activeTab === 'variants'
+              ? 'bg-[#1a1a1a] border-[#1a1a1a] text-white'
+              : 'text-[#1a1a1a] hover:bg-[#ffcc00]/20 hover:border-[#1a1a1a]'
+          }`}
+        >
+          <Layers className="h-4 w-4" />
+          <span>Variants Manager ({variants?.length || 0})</span>
+        </button>
       </div>
 
-      {/* Table */}
-      <div className="brutalist-card">
-        {/* Filter bar */}
-        <div className="p-4 border-b-3 border-[#1a1a1a] flex flex-col md:flex-row gap-4 items-center justify-between bg-[#f5f0e8]">
-          <div className="flex flex-wrap items-center gap-1.5 p-1 border-2 border-[#1a1a1a] bg-white">
-            {['all', 'pending', 'approved', 'shipped', 'rejected'].map(f => (
-              <button
-                key={f}
-                onClick={() => setStatusFilter(f)}
-                className={`px-3 py-1 text-xs font-bold uppercase font-display tracking-wider transition-all ${
-                  statusFilter === f ? 'text-white bg-[#1a1a1a]' : 'text-[#1a1a1a] hover:bg-[#ffcc00]/20'
-                }`}
-              >
-                {f}
-              </button>
+      {/* ────────────────── VIEW TAB 1: PHYSICAL REQUESTS ────────────────── */}
+      {activeTab === 'requests' && (
+        <>
+          {/* Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[
+              { label: 'Total Requests', value: (requests || []).length, color: '' },
+              { label: 'Pending Review', value: countByStatus('pending'), color: '!bg-[#ffcc00]/10' },
+              { label: 'Approved / Shipped', value: countByStatus('approved') + countByStatus('shipped'), color: '!bg-[#0055ff]/10' },
+              { label: 'Rejected', value: countByStatus('rejected'), color: '!bg-[#e63b2e]/10' },
+            ].map(s => (
+              <div key={s.label} className={`brutalist-card p-4 ${s.color}`}>
+                <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider font-mono">{s.label}</p>
+                <h4 className="text-2xl font-extrabold text-[#1a1a1a] mt-1.5 font-mono">
+                  {isRequestsLoading ? '...' : s.value}
+                </h4>
+              </div>
             ))}
           </div>
-          <div className="relative w-full md:max-w-xs">
-            <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="h-4 w-4 text-[#1a1a1a]" />
-            </span>
-            <input
-              type="text"
-              placeholder="Search wallet, card type, country..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="w-full brutalist-input !pl-9 focus:ring-0"
-            />
-          </div>
-        </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-left text-xs">
-            <thead>
-              <tr className="bg-[#f5f0e8] border-b-2 border-[#1a1a1a] text-[10px] font-bold uppercase tracking-wider text-[#1a1a1a]">
-                <th className="py-3.5 px-6 border-r border-[#1a1a1a] font-display">Wallet Address</th>
-                <th className="py-3.5 px-4 border-r border-[#1a1a1a] font-display">Card Type</th>
-                <th className="py-3.5 px-4 border-r border-[#1a1a1a] font-display">Country</th>
-                <th className="py-3.5 px-4 border-r border-[#1a1a1a] font-display text-right">Total Cost</th>
-                <th className="py-3.5 px-4 border-r border-[#1a1a1a] font-display">Submitted</th>
-                <th className="py-3.5 px-4 border-r border-[#1a1a1a] font-display">Status</th>
-                <th className="py-3.5 px-6 text-right font-display">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#1a1a1a]/10 font-mono text-[#1a1a1a]">
-              {isLoading ? (
-                <tr>
-                  <td colSpan={7} className="py-16 text-center text-gray-500">
-                    <div className="flex flex-col items-center gap-2">
-                      <Loader2 className="h-6 w-6 animate-spin text-[#1a1a1a]" />
-                      <span className="font-bold font-display uppercase text-xs">Loading card requests...</span>
-                    </div>
-                  </td>
-                </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="py-16 text-center text-[#1a1a1a] font-bold uppercase font-display">
-                    No card requests found.
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((r: any) => (
-                  <tr key={r.id} className="hover:bg-[#ffcc00]/5 transition-colors">
-                    <td className="py-4 px-6 border-r border-[#1a1a1a]/10 font-bold">
-                      <div className="flex items-center gap-2">
-                        <div className="h-8 w-8 border-2 border-[#1a1a1a] bg-[#ffcc00] flex items-center justify-center text-[#1a1a1a]">
-                          <CreditCard className="h-4 w-4" />
-                        </div>
-                        <span className="text-[10px] truncate max-w-[160px]">{r.wallet_address}</span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-4 border-r border-[#1a1a1a]/10 font-bold uppercase">{r.card_type}</td>
-                    <td className="py-4 px-4 border-r border-[#1a1a1a]/10">
-                      <div className="flex items-center gap-1.5">
-                        <MapPin className="h-3 w-3 text-gray-500" />
-                        <span className="font-bold">{r.country}</span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-4 border-r border-[#1a1a1a]/10 text-right font-bold">
-                      ${safeParseFloat(r.total_cost).toFixed(2)}
-                    </td>
-                    <td className="py-4 px-4 border-r border-[#1a1a1a]/10 text-gray-500">
-                      {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </td>
-                    <td className="py-4 px-4 border-r border-[#1a1a1a]/10">
-                      <span className={`px-2.5 py-0.5 border-2 border-[#1a1a1a] text-[9px] font-extrabold uppercase ${STATUS_STYLES[r.status] ?? 'bg-white text-[#1a1a1a]'}`}>
-                        {r.status}
-                      </span>
-                    </td>
-                    <td className="py-4 px-6 text-right">
-                      <button
-                        onClick={() => setSelectedRequest(r)}
-                        className="px-3 py-1.5 brutalist-button text-xs shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]"
-                      >
-                        <Eye className="h-3.5 w-3.5 inline mr-1" />
-                        <span>Review</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Slideout Drawer */}
-      {selectedRequest && (
-        <div className="fixed inset-0 z-50 flex justify-end">
-          <div className="fixed inset-0 bg-[#1a1a1a]/60 backdrop-blur-xs" onClick={() => setSelectedRequest(null)} />
-          <div className="relative w-full max-w-lg h-full bg-white border-l-3 border-[#1a1a1a] shadow-2xl p-6 flex flex-col justify-between overflow-y-auto animate-slide-in-right z-50">
-            <div>
-              {/* Header */}
-              <div className="flex items-center justify-between pb-5 border-b-3 border-[#1a1a1a] mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 border-2 border-[#1a1a1a] bg-[#ffcc00] flex items-center justify-center text-[#1a1a1a] shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]">
-                    <Package className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-extrabold text-[#1a1a1a] font-display uppercase leading-tight">Card Order Review</h2>
-                    <p className="text-xs text-gray-500 font-mono mt-0.5">ID: {selectedRequest.id}</p>
-                  </div>
-                </div>
-                <button onClick={() => setSelectedRequest(null)} className="p-1.5 border-2 border-[#1a1a1a] hover:bg-[#f5f0e8] text-[#1a1a1a]">
-                  <X className="h-5 w-5" />
-                </button>
+          {/* Table */}
+          <div className="brutalist-card">
+            {/* Filter bar */}
+            <div className="p-4 border-b-3 border-[#1a1a1a] flex flex-col md:flex-row gap-4 items-center justify-between bg-[#f5f0e8]">
+              <div className="flex flex-wrap items-center gap-1.5 p-1 border-2 border-[#1a1a1a] bg-white">
+                {['all', 'pending', 'approved', 'shipped', 'rejected'].map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setStatusFilter(f)}
+                    className={`px-3 py-1 text-xs font-bold uppercase font-display tracking-wider transition-all ${
+                      statusFilter === f ? 'text-white bg-[#1a1a1a]' : 'text-[#1a1a1a] hover:bg-[#ffcc00]/20'
+                    }`}
+                  >
+                    {f}
+                  </button>
+                ))}
               </div>
-
-              <div className="space-y-4 font-mono">
-                {/* Details grid */}
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { label: 'Card Type', value: selectedRequest.card_type },
-                    { label: 'Country', value: selectedRequest.country },
-                    { label: 'Shipping Fee', value: `$${safeParseFloat(selectedRequest.shipping_fee).toFixed(2)}` },
-                    { label: 'Total Cost', value: `$${safeParseFloat(selectedRequest.total_cost).toFixed(2)}` },
-                    { label: 'Submitted', value: new Date(selectedRequest.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) },
-                    { label: 'Current Status', value: selectedRequest.status?.toUpperCase() },
-                  ].map(row => (
-                    <div key={row.label} className="p-3 border-2 border-[#1a1a1a] bg-[#f5f0e8]">
-                      <p className="text-[9px] text-gray-500 uppercase font-bold tracking-wider mb-1">{row.label}</p>
-                      <p className="text-xs font-bold text-[#1a1a1a] uppercase">{row.value}</p>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Wallet address */}
-                <div className="p-3 border-2 border-[#1a1a1a] bg-[#f5f0e8]">
-                  <p className="text-[9px] text-gray-500 uppercase font-bold tracking-wider mb-1">Wallet Address</p>
-                  <p className="text-xs font-bold text-[#0055ff] break-all">{selectedRequest.wallet_address}</p>
-                </div>
-
-                {/* Current status badge */}
-                <div className="flex items-center gap-3 p-3 border-2 border-[#1a1a1a] bg-white">
-                  <span className={`px-3 py-1 border-2 border-[#1a1a1a] text-[10px] font-extrabold uppercase ${STATUS_STYLES[selectedRequest.status] ?? 'bg-white text-[#1a1a1a]'}`}>
-                    {selectedRequest.status}
-                  </span>
-                  <p className="text-xs text-gray-500 font-mono">Current order status</p>
-                </div>
+              <div className="relative w-full md:max-w-xs">
+                <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search className="h-4 w-4 text-[#1a1a1a]" />
+                </span>
+                <input
+                  type="text"
+                  placeholder="Search wallet, card type, country..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  className="w-full brutalist-input !pl-9 focus:ring-0"
+                />
               </div>
             </div>
 
-            {/* Action footer */}
-            <div className="mt-8 pt-4 border-t-3 border-[#1a1a1a] space-y-3">
-              {selectedRequest.status === 'pending' && (
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => handleStatusChange(selectedRequest.id, 'rejected')}
-                    disabled={updateStatus.isPending}
-                    className="flex-1 brutalist-button py-3 !bg-[#e63b2e] !text-white text-xs disabled:opacity-50"
-                  >
-                    {updateStatus.isPending ? <Loader2 className="h-4 w-4 animate-spin inline mr-1" /> : <XCircle className="h-4 w-4 inline mr-1" />}
-                    Reject Order
-                  </button>
-                  <button
-                    onClick={() => handleStatusChange(selectedRequest.id, 'approved')}
-                    disabled={updateStatus.isPending}
-                    className="flex-1 brutalist-button-blue py-3 text-xs disabled:opacity-50"
-                  >
-                    {updateStatus.isPending ? <Loader2 className="h-4 w-4 animate-spin inline mr-1" /> : <CheckCircle className="h-4 w-4 inline mr-1" />}
-                    Approve Order
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-left text-xs">
+                <thead>
+                  <tr className="bg-[#f5f0e8] border-b-2 border-[#1a1a1a] text-[10px] font-bold uppercase tracking-wider text-[#1a1a1a]">
+                    <th className="py-3.5 px-6 border-r border-[#1a1a1a] font-display">Wallet Address</th>
+                    <th className="py-3.5 px-4 border-r border-[#1a1a1a] font-display">Card Specification</th>
+                    <th className="py-3.5 px-4 border-r border-[#1a1a1a] font-display">Country</th>
+                    <th className="py-3.5 px-4 border-r border-[#1a1a1a] font-display text-right">Total Invoice</th>
+                    <th className="py-3.5 px-4 border-r border-[#1a1a1a] font-display">Submitted</th>
+                    <th className="py-3.5 px-4 border-r border-[#1a1a1a] font-display">Status</th>
+                    <th className="py-3.5 px-6 text-right font-display">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#1a1a1a]/10 font-mono text-[#1a1a1a]">
+                  {isRequestsLoading ? (
+                    <tr>
+                      <td colSpan={7} className="py-16 text-center text-gray-500">
+                        <div className="flex flex-col items-center gap-2">
+                          <Loader2 className="h-6 w-6 animate-spin text-[#1a1a1a]" />
+                          <span className="font-bold font-display uppercase text-xs">Loading ledger queue...</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : filteredRequests.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-16 text-center text-[#1a1a1a] font-bold uppercase font-display">
+                        No invoices registered in this partition.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredRequests.map((r: any) => (
+                      <tr key={r.id} className="hover:bg-[#ffcc00]/5 transition-colors">
+                        <td className="py-4 px-6 border-r border-[#1a1a1a]/10 font-bold">
+                          <div className="flex items-center gap-2">
+                            <div className="h-8 w-8 border-2 border-[#1a1a1a] bg-[#ffcc00] flex items-center justify-center text-[#1a1a1a]">
+                              <CreditCard className="h-4 w-4" />
+                            </div>
+                            <span className="text-[10px] truncate max-w-[160px]">{r.wallet_address}</span>
+                          </div>
+                        </td>
+                        <td className="py-4 px-4 border-r border-[#1a1a1a]/10 font-bold uppercase">{r.card_type}</td>
+                        <td className="py-4 px-4 border-r border-[#1a1a1a]/10">
+                          <div className="flex items-center gap-1.5">
+                            <MapPin className="h-3 w-3 text-gray-500" />
+                            <span className="font-bold">{r.country}</span>
+                          </div>
+                        </td>
+                        <td className="py-4 px-4 border-r border-[#1a1a1a]/10 text-right font-bold">
+                          ${safeParseFloat(r.total_cost).toFixed(2)}
+                        </td>
+                        <td className="py-4 px-4 border-r border-[#1a1a1a]/10 text-gray-500">
+                          {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </td>
+                        <td className="py-4 px-4 border-r border-[#1a1a1a]/10">
+                          <span className={`px-2.5 py-0.5 border-2 border-[#1a1a1a] text-[9px] font-extrabold uppercase ${STATUS_STYLES[r.status] ?? 'bg-white text-[#1a1a1a]'}`}>
+                            {r.status}
+                          </span>
+                        </td>
+                        <td className="py-4 px-6 text-right">
+                          <button
+                            onClick={() => setSelectedRequest(r)}
+                            className="px-3 py-1.5 brutalist-button text-xs shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]"
+                          >
+                            <Eye className="h-3.5 w-3.5 inline mr-1" />
+                            <span>Review</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Slideout Drawer (Request details) */}
+          {selectedRequest && (
+            <div className="fixed inset-0 z-50 flex justify-end">
+              <div className="fixed inset-0 bg-[#1a1a1a]/60 backdrop-blur-xs" onClick={() => setSelectedRequest(null)} />
+              <div className="relative w-full max-w-lg h-full bg-white border-l-3 border-[#1a1a1a] shadow-2xl p-6 flex flex-col justify-between overflow-y-auto animate-slide-in-right z-50">
+                <div>
+                  {/* Drawer Header */}
+                  <div className="flex items-center justify-between pb-5 border-b-3 border-[#1a1a1a] mb-6">
+                    <div className="flex items-center gap-3">
+                      <div className="h-12 w-12 border-2 border-[#1a1a1a] bg-[#ffcc00] flex items-center justify-center text-[#1a1a1a] shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]">
+                        <Package className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-extrabold text-[#1a1a1a] font-display uppercase leading-tight">Card Order Review</h2>
+                        <p className="text-xs text-gray-500 font-mono mt-0.5">ID: {selectedRequest.id}</p>
+                      </div>
+                    </div>
+                    <button onClick={() => setSelectedRequest(null)} className="p-1.5 border-2 border-[#1a1a1a] hover:bg-[#f5f0e8] text-[#1a1a1a]">
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-4 font-mono">
+                    {/* Details grid */}
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { label: 'Card Specification', value: selectedRequest.card_type },
+                        { label: 'Destination Country', value: selectedRequest.country },
+                        { label: 'Express Shipping', value: `$${safeParseFloat(selectedRequest.shipping_fee).toFixed(2)}` },
+                        { label: 'Total Cost Invoice', value: `$${safeParseFloat(selectedRequest.total_cost).toFixed(2)}` },
+                        { label: 'Timestamp', value: new Date(selectedRequest.created_at).toLocaleString() },
+                        { label: 'Current State', value: selectedRequest.status?.toUpperCase() },
+                      ].map(row => (
+                        <div key={row.label} className="p-3 border-2 border-[#1a1a1a] bg-[#f5f0e8]">
+                          <p className="text-[9px] text-gray-500 uppercase font-bold tracking-wider mb-1">{row.label}</p>
+                          <p className="text-xs font-bold text-[#1a1a1a] uppercase">{row.value}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Wallet address */}
+                    <div className="p-3 border-2 border-[#1a1a1a] bg-[#f5f0e8]">
+                      <p className="text-[9px] text-gray-500 uppercase font-bold tracking-wider mb-1">Wallet Public Address</p>
+                      <p className="text-xs font-bold text-[#0055ff] break-all">{selectedRequest.wallet_address}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Drawer Footer Actions */}
+                <div className="mt-8 pt-4 border-t-3 border-[#1a1a1a] space-y-3">
+                  {selectedRequest.status === 'pending' && (
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => handleStatusChange(selectedRequest.id, 'rejected')}
+                        disabled={updateStatus.isPending}
+                        className="flex-1 brutalist-button py-3 !bg-[#e63b2e] !text-white text-xs disabled:opacity-50"
+                      >
+                        {updateStatus.isPending ? <Loader2 className="h-4 w-4 animate-spin inline mr-1" /> : <XCircle className="h-4 w-4 inline mr-1" />}
+                        Reject Order
+                      </button>
+                      <button
+                        onClick={() => handleStatusChange(selectedRequest.id, 'approved')}
+                        disabled={updateStatus.isPending}
+                        className="flex-1 brutalist-button-blue py-3 text-xs disabled:opacity-50"
+                      >
+                        {updateStatus.isPending ? <Loader2 className="h-4 w-4 animate-spin inline mr-1" /> : <CheckCircle className="h-4 w-4 inline mr-1" />}
+                        Approve Order
+                      </button>
+                    </div>
+                  )}
+                  {selectedRequest.status === 'approved' && (
+                    <button
+                      onClick={() => handleStatusChange(selectedRequest.id, 'shipped')}
+                      disabled={updateStatus.isPending}
+                      className="w-full brutalist-button-blue py-3 text-xs disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {updateStatus.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
+                      Mark as Shipped
+                    </button>
+                  )}
+                  <button onClick={() => setSelectedRequest(null)} className="w-full brutalist-button-white py-2.5 text-xs">
+                    Close Sheet
                   </button>
                 </div>
-              )}
-              {selectedRequest.status === 'approved' && (
-                <button
-                  onClick={() => handleStatusChange(selectedRequest.id, 'shipped')}
-                  disabled={updateStatus.isPending}
-                  className="w-full brutalist-button-blue py-3 text-xs disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {updateStatus.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
-                  Mark as Shipped
-                </button>
-              )}
-              <button onClick={() => setSelectedRequest(null)} className="w-full brutalist-button-white py-2.5 text-xs">
-                Close
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ────────────────── VIEW TAB 2: VARIANTS MANAGER ────────────────── */}
+      {activeTab === 'variants' && (
+        <div className="space-y-6">
+          {/* Subheader Toolbar */}
+          <div className="flex flex-col sm:flex-row gap-4 items-center justify-between p-4 border-3 border-[#1a1a1a] bg-[#f5f0e8] shadow-[3px_3px_0px_0px_rgba(26,26,26,1)]">
+            <div className="relative w-full sm:max-w-xs">
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-4 w-4 text-[#1a1a1a]" />
+              </span>
+              <input
+                type="text"
+                placeholder="Search variant name or brand..."
+                value={variantSearch}
+                onChange={e => setVariantSearch(e.target.value)}
+                className="w-full brutalist-input !pl-9 focus:ring-0 text-xs"
+              />
+            </div>
+            
+            <button
+              onClick={handleOpenCreateForm}
+              className="w-full sm:w-auto brutalist-button !bg-[#ffcc00] px-5 py-2.5 flex items-center justify-center gap-2 text-xs"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Create Card Variant</span>
+            </button>
+          </div>
+
+          {/* Grid Layout of Cards */}
+          {isVariantsLoading ? (
+            <div className="py-24 text-center">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto text-[#1a1a1a] mb-2" />
+              <p className="font-bold font-mono text-xs uppercase tracking-wider">Syncing Dynamic Card Variant Index...</p>
+            </div>
+          ) : filteredVariants.length === 0 ? (
+            <div className="p-16 border-3 border-dashed border-[#1a1a1a] text-center bg-white">
+              <AlertTriangle className="h-8 w-8 text-[#ffcc00] mx-auto mb-3" />
+              <h3 className="text-sm font-black uppercase font-display">No Card Variants Found</h3>
+              <p className="text-xs font-mono text-gray-500 mt-2 max-w-sm mx-auto">
+                Database lookup yielded empty set. Click &quot;Create Card Variant&quot; to seed or declare your first product tier.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {filteredVariants.map((v) => {
+                const colors = v.gradient_colors && v.gradient_colors.length >= 2
+                  ? v.gradient_colors
+                  : [v.card_color_hex || v.color_hex || '#2A2B31', v.color_hex || '#1a1a1a'];
+                
+                return (
+                  <div key={v.id} className="brutalist-card flex flex-col justify-between overflow-hidden !p-0">
+                    {/* Miniature Credit Card Shell */}
+                    <div 
+                      className="p-5 relative text-white flex flex-col justify-between h-[180px]"
+                      style={{ 
+                        background: colors.length >= 2 
+                          ? `linear-gradient(135deg, ${colors.join(', ')})`
+                          : colors[0]
+                      }}
+                    >
+                      {/* Glossy Overlay */}
+                      <div className="absolute inset-0 bg-white/5 pointer-events-none" />
+                      
+                      <div className="flex justify-between items-start z-10">
+                        <div>
+                          <span className="text-[10px] font-extrabold font-mono tracking-widest bg-black/30 px-2 py-0.5 uppercase">
+                            {v.id}
+                          </span>
+                          <h4 className="text-lg font-black tracking-tight mt-1 font-display leading-tight">{v.variant_name}</h4>
+                          <span className="text-[9px] font-mono opacity-80 uppercase tracking-widest">{v.name} Edition</span>
+                        </div>
+                        <div className="h-7 px-3 border border-white/20 bg-white/10 flex items-center justify-center text-[10px] font-extrabold uppercase">
+                          {v.network}
+                        </div>
+                      </div>
+
+                      {/* Chip & availability */}
+                      <div className="flex justify-between items-end z-10">
+                        <div className="flex items-center gap-1.5 bg-black/45 px-2 py-1 border border-white/10">
+                          <Coins className="h-3.5 w-3.5 text-[#ffcc00]" />
+                          <span className="text-[9px] font-bold font-mono">LIMIT: ${v.transaction_limit_usd.toLocaleString()}</span>
+                        </div>
+
+                        <div className="flex gap-1">
+                          {v.is_physical && (
+                            <span className="text-[8px] font-mono font-black bg-emerald-600 px-1.5 py-0.5 border border-white/15">PHY</span>
+                          )}
+                          {v.is_virtual && (
+                            <span className="text-[8px] font-mono font-black bg-cyan-600 px-1.5 py-0.5 border border-white/15">VIR</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Meta stats list */}
+                    <div className="p-4 border-t-2 border-[#1a1a1a] bg-[#f5f0e8] font-mono text-xs text-[#1a1a1a] space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 font-bold uppercase text-[9px]">Mint Fee (Cost):</span>
+                        <span className="font-bold">${v.price.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 font-bold uppercase text-[9px]">Annual Fee:</span>
+                        <span className="font-bold">${v.annual_fee_usd.toFixed(2)}/yr</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 font-bold uppercase text-[9px]">Tx Commission:</span>
+                        <span className="font-bold text-amber-600">{(v.fee_rate ?? 1.50).toFixed(2)}%</span>
+                      </div>
+                      <div className="flex justify-between items-center pt-1 border-t border-[#1a1a1a]/10">
+                        <span className="text-gray-500 font-bold uppercase text-[9px]">Ledger Sync Status:</span>
+                        <button
+                          onClick={() => handleToggleActive(v.id, v.is_active)}
+                          disabled={toggleVariantStatus.isPending}
+                          className={`px-2 py-0.5 text-[9px] font-black border-2 border-[#1a1a1a] uppercase shadow-[1px_1px_0px_0px_rgba(26,26,26,1)] active:translate-y-[1px] ${
+                            v.is_active 
+                              ? 'bg-emerald-400 text-black' 
+                              : 'bg-[#e63b2e] text-white'
+                          }`}
+                        >
+                          {v.is_active ? 'ACTIVE' : 'DISABLED'}
+                        </button>
+                      </div>
+
+                      {/* Coins supported */}
+                      <div className="pt-2 border-t border-[#1a1a1a]/10">
+                        <p className="text-gray-500 font-bold uppercase text-[8px] mb-1">Supported Settlement Assets:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {(v.currency_support || ['BTC', 'ETH', 'USDT', 'USDC']).map(coin => (
+                            <span key={coin} className="text-[9px] font-black bg-white px-1.5 py-0.5 border border-[#1a1a1a]">
+                              {coin}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Features */}
+                      <div className="pt-2">
+                        <p className="text-gray-500 font-bold uppercase text-[8px] mb-1">Privileges:</p>
+                        <ul className="text-[10px] space-y-1 list-none font-sans font-semibold">
+                          {v.features.slice(0, 3).map((f, i) => (
+                            <li key={i} className="truncate flex items-center gap-1">
+                              <span className="h-1.5 w-1.5 bg-[#1a1a1a] shrink-0" />
+                              <span>{f}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+
+                    {/* Card Actions toolbar */}
+                    <div className="p-3 border-t-3 border-[#1a1a1a] flex gap-2 bg-white">
+                      <button
+                        onClick={() => handleOpenEditForm(v)}
+                        className="flex-1 brutalist-button py-2 flex items-center justify-center gap-1.5 text-xs shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]"
+                      >
+                        <Edit className="h-3.5 w-3.5" />
+                        <span>Config</span>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteVariant(v.id)}
+                        disabled={deleteVariant.isPending}
+                        className="brutalist-button py-2 px-3 !bg-[#e63b2e] !text-white flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] disabled:opacity-50"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ────────────────── POPUP DIALOG: CREATE/EDIT VARIANT ────────────────── */}
+      {isFormOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-[#1a1a1a]/60 backdrop-blur-xs" onClick={() => setIsFormOpen(false)} />
+          
+          <div className="relative w-full max-w-2xl bg-white border-3 border-[#1a1a1a] shadow-[6px_6px_0px_0px_rgba(26,26,26,1)] max-h-[90vh] flex flex-col justify-between overflow-hidden animate-zoom-in z-50">
+            {/* Modal Header */}
+            <div className="p-5 border-b-3 border-[#1a1a1a] bg-[#ffcc00] flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-[#1a1a1a]" />
+                <h3 className="text-lg font-black uppercase font-display leading-none">
+                  {editingVariant ? 'Modify Card Specification' : 'Declare New Card Variant'}
+                </h3>
+              </div>
+              <button 
+                onClick={() => setIsFormOpen(false)}
+                className="p-1 border-2 border-[#1a1a1a] bg-white hover:bg-gray-100 text-[#1a1a1a]"
+              >
+                <X className="h-4.5 w-4.5" />
               </button>
             </div>
+
+            {/* Modal Body (Form scroll) */}
+            <form onSubmit={handleFormSubmit} className="flex-1 overflow-y-auto p-6 space-y-5 font-mono text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* ID Field */}
+                <div>
+                  <label className="block font-bold uppercase text-[9px] text-gray-500 mb-1.5">Unique ID (lowercase, no spaces) *</label>
+                  <input
+                    type="text"
+                    disabled={!!editingVariant}
+                    placeholder="e.g., stellar_black"
+                    value={formId}
+                    onChange={e => setFormId(e.target.value)}
+                    className="w-full brutalist-input text-xs"
+                    required
+                  />
+                  <p className="text-[9px] text-gray-400 mt-1">Cannot be modified after creation.</p>
+                </div>
+
+                {/* Name */}
+                <div>
+                  <label className="block font-bold uppercase text-[9px] text-gray-500 mb-1.5">Tier Name *</label>
+                  <input
+                    type="text"
+                    placeholder="e.g., Platinum, Titanium"
+                    value={formName}
+                    onChange={e => setFormName(e.target.value)}
+                    className="w-full brutalist-input text-xs"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Variant Name Accent */}
+                <div>
+                  <label className="block font-bold uppercase text-[9px] text-gray-500 mb-1.5">Card Variant Label Accent</label>
+                  <input
+                    type="text"
+                    placeholder="e.g., Titanium Centurion"
+                    value={formVariantName}
+                    onChange={e => setFormVariantName(e.target.value)}
+                    className="w-full brutalist-input text-xs"
+                  />
+                </div>
+
+                {/* Card Network */}
+                <div>
+                  <label className="block font-bold uppercase text-[9px] text-gray-500 mb-1.5">Card Settlement Network *</label>
+                  <select
+                    value={formNetwork}
+                    onChange={e => setFormNetwork(e.target.value as any)}
+                    className="w-full brutalist-input text-xs"
+                  >
+                    <option value="Visa">Visa Network</option>
+                    <option value="Mastercard">Mastercard Network</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Theme Gradients */}
+              <div>
+                <label className="block font-bold uppercase text-[9px] text-gray-500 mb-1.5">
+                  Visual Themes (Comma-separated Hex values for background gradient)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g., #E5A93C, #996515, #4A3B18"
+                  value={formGradientsText}
+                  onChange={e => setFormGradientsText(e.target.value)}
+                  className="w-full brutalist-input text-xs"
+                />
+                <p className="text-[8px] text-gray-400 mt-1">Specify 1 Hex color for flat card theme, or 2 to 3 Hex values to render gorgeous gradients.</p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                {/* Cost/Price */}
+                <div>
+                  <label className="block font-bold uppercase text-[9px] text-gray-500 mb-1.5">Minting Cost (USD)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formPrice}
+                    onChange={e => setFormPrice(e.target.value)}
+                    className="w-full brutalist-input text-xs"
+                  />
+                </div>
+
+                {/* Annual fee */}
+                <div>
+                  <label className="block font-bold uppercase text-[9px] text-gray-500 mb-1.5">Annual Fee (USD)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formAnnualFee}
+                    onChange={e => setFormAnnualFee(e.target.value)}
+                    className="w-full brutalist-input text-xs"
+                  />
+                </div>
+
+                {/* Daily limit */}
+                <div>
+                  <label className="block font-bold uppercase text-[9px] text-gray-500 mb-1.5">Transaction Limit (USD)</label>
+                  <input
+                    type="number"
+                    step="1"
+                    min="0"
+                    value={formLimit}
+                    onChange={e => setFormLimit(e.target.value)}
+                    className="w-full brutalist-input text-xs"
+                  />
+                </div>
+
+                {/* Tx commission fee */}
+                <div>
+                  <label className="block font-bold uppercase text-[9px] text-gray-500 mb-1.5">Tx Commission Fee (%)</label>
+                  <input
+                    type="number"
+                    step="0.05"
+                    min="0"
+                    max="100"
+                    value={formFeeRate}
+                    onChange={e => setFormFeeRate(e.target.value)}
+                    className="w-full brutalist-input text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Supported Currencies */}
+              <div>
+                <label className="block font-bold uppercase text-[9px] text-gray-500 mb-1.5">Supported Settlement Currencies (Comma-separated)</label>
+                <input
+                  type="text"
+                  placeholder="BTC, ETH, USDT, USDC, SOL"
+                  value={formCurrenciesText}
+                  onChange={e => setFormCurrenciesText(e.target.value)}
+                  className="w-full brutalist-input text-xs"
+                />
+              </div>
+
+              {/* Card features */}
+              <div>
+                <label className="block font-bold uppercase text-[9px] text-gray-500 mb-1.5">Features & Privileges (Comma-separated)</label>
+                <textarea
+                  placeholder="e.g., 2% retail cashback, Complimentary global lounge access, 24/7 dedicated concierge"
+                  value={formFeaturesText}
+                  onChange={e => setFormFeaturesText(e.target.value)}
+                  className="w-full brutalist-input text-xs h-20"
+                />
+              </div>
+
+              {/* Flags and availability toggles */}
+              <div className="p-4 border-2 border-[#1a1a1a] bg-[#f5f0e8] grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <p className="font-bold uppercase text-[9px] text-gray-500 border-b border-[#1a1a1a]/15 pb-1">Availability Channels</p>
+                  <div className="flex gap-5">
+                    <label className="flex items-center gap-2 font-bold cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formIsPhysical}
+                        onChange={e => setFormIsPhysical(e.target.checked)}
+                        className="h-4 w-4 accent-amber-500"
+                      />
+                      <span>Physical Card Support</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 font-bold cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formIsVirtual}
+                        onChange={e => setFormIsVirtual(e.target.checked)}
+                        className="h-4 w-4 accent-amber-500"
+                      />
+                      <span>Virtual Card Support</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <p className="font-bold uppercase text-[9px] text-gray-500 border-b border-[#1a1a1a]/15 pb-1">Ledger Status</p>
+                  <div className="flex gap-5">
+                    <label className="flex items-center gap-2 font-bold cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formIsActive}
+                        onChange={e => setFormIsActive(e.target.checked)}
+                        className="h-4 w-4 accent-amber-500"
+                      />
+                      <span>Publish Instantly (Active)</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Extra styling fallbacks */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-bold uppercase text-[9px] text-gray-500 mb-1.5">Primary Branding Hex Color</label>
+                  <input
+                    type="text"
+                    value={formColorHex}
+                    onChange={e => setFormColorHex(e.target.value)}
+                    className="w-full brutalist-input text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold uppercase text-[9px] text-gray-500 mb-1.5">Design Resource URL (External Skin Image)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g., https://storage.resource/skin.png"
+                    value={formDesignUrl}
+                    onChange={e => setFormDesignUrl(e.target.value)}
+                    className="w-full brutalist-input text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Form Actions Footer */}
+              <div className="pt-4 border-t-2 border-[#1a1a1a] flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsFormOpen(false)}
+                  className="flex-1 brutalist-button-white py-3 text-xs"
+                >
+                  Discard Changes
+                </button>
+                <button
+                  type="submit"
+                  disabled={saveVariant.isPending}
+                  className="flex-1 brutalist-button py-3 text-xs !bg-[#ffcc00] font-black"
+                >
+                  {saveVariant.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin inline mr-1" />
+                  ) : (
+                    <Check className="h-4 w-4 inline mr-1" />
+                  )}
+                  Save Configuration
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
