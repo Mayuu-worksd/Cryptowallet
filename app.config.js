@@ -7,13 +7,16 @@ module.exports = {
     icon: "./assets/icon.png",
     userInterfaceStyle: "dark",
     sdkVersion: "54.0.0",
-    jsEngine: "jsc",
+    jsEngine: "hermes",
     fastRefresh: true,
     updates: {
       url: "https://u.expo.dev/cde8eb79-39ce-4b25-83f1-3b3410e7bcb4",
       enabled: true,
       fallbackToCacheTimeout: 0,
       checkAutomatically: "ON_LOAD",
+    },
+    runtimeVersion: {
+      policy: "appVersion",
     },
     splash: {
       image: "./assets/splash-icon.png",
