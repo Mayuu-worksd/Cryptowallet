@@ -12,6 +12,7 @@ import { Feather } from '@expo/vector-icons';
 import { useWallet, useMarket } from '../store/WalletContext';
 import Toast from '../components/Toast';
 import CreateCardFlow from '../components/card/CreateCardFlow';
+import { CardCredentialsWidget } from '../components/card/CardNumberDisplay';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CRIMSON = '#EC2629';
@@ -76,9 +77,6 @@ export default function CardScreen({ navigation, route }: any) {
   const [showSpend, setShowSpend] = useState(false);
   const [showTopup, setShowTopup] = useState(false);
   const [balanceHidden, setBalanceHidden] = useState(false);
-  
-  const [showDetails, setShowDetails] = useState(false);
-  const [revealingDetails, setRevealingDetails] = useState(false);
 
   const [merchant, setMerchant] = useState<CustomMerchant>({ name: '', amount: '', icon: '🛍️' });
   const [topupToken, setTopupToken] = useState<typeof COINS[number]>('ETH');
@@ -167,20 +165,6 @@ export default function CardScreen({ navigation, route }: any) {
     } else showToast('Payment failed. Try again.', 'error');
   };
 
-  const handleToggleDetails = () => {
-    if (revealingDetails) return;
-    haptics.selection();
-    if (!showDetails) {
-      setRevealingDetails(true);
-      setTimeout(() => {
-        setRevealingDetails(false);
-        setShowDetails(true);
-      }, 700);
-    } else {
-      setShowDetails(false);
-    }
-  };
-
   const copyToClipboard = async (text: string, label: string) => {
     await Clipboard.setStringAsync(text);
     showToast(`${label} copied to clipboard`, 'success');
@@ -189,9 +173,8 @@ export default function CardScreen({ navigation, route }: any) {
   const formattedCardNumber = useMemo(() => {
     if (!cardCreated) return '•••• •••• •••• ••••';
     const num = cardDetails.number.replace(/\s/g, '');
-    if (showDetails) return num.replace(/(.{4})(?=.)/g, '$1 ');
     return `•••• •••• •••• ${num.slice(-4)}`;
-  }, [cardDetails.number, showDetails, cardCreated]);
+  }, [cardDetails.number, cardCreated]);
 
   // Skin configurations for virtual
   const skinStyles = useMemo(() => {
@@ -740,81 +723,18 @@ export default function CardScreen({ navigation, route }: any) {
               ))}
             </View>
 
-            {/* Secure Credentials Info — Premium Translucent Cards */}
-            <View style={[styles.premiumWidget, { backgroundColor: T.surface, borderColor: T.border }, styles.shadowWrapper]}>
-              <View style={styles.premiumWidgetHeader}>
-                <View style={styles.premiumTitleWrap}>
-                  <View style={[styles.premiumIconBadge, { backgroundColor: 'rgba(236,38,41,0.08)' }]}>
-                    <Feather name="shield" size={14} color={CRIMSON} />
-                  </View>
-                  <Text style={[styles.premiumWidgetTitle, { color: T.textMuted }]}>Card Credentials</Text>
-                </View>
-                <TouchableOpacity
-                  onPress={handleToggleDetails}
-                  style={[styles.revealBtn, { backgroundColor: T.surfaceLow }]}
-                  activeOpacity={0.7}
-                >
-                  {revealingDetails ? (
-                    <ActivityIndicator size="small" color={T.text} />
-                  ) : (
-                    <Feather name={showDetails ? 'eye' : 'eye-off'} size={14} color={T.text} />
-                  )}
-                  <Text style={[styles.revealBtnText, { color: T.text }]}>
-                    {showDetails ? 'Mask' : 'Reveal'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Number Row */}
-              <TouchableOpacity
-                onPress={() => showDetails && copyToClipboard(cardDetails.number, 'Card number')}
-                style={[styles.detailRow, { borderBottomColor: T.border }]}
-                disabled={!showDetails}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.detailLabel, { color: T.textDim }]}>CARD NUMBER</Text>
-                <View style={styles.detailValueRow}>
-                  <Text
-                    style={[styles.detailValueMono, { color: T.text }]}
-                    allowFontScaling={false}
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                  >
-                    {formattedCardNumber}
-                  </Text>
-                  {showDetails && <Feather name="copy" size={13} color={T.primary} style={{ marginLeft: 8 }} />}
-                </View>
-              </TouchableOpacity>
-
-              {/* Expiry and CVV layout */}
-              <View style={styles.detailGrid}>
-                <TouchableOpacity
-                  onPress={() => showDetails && copyToClipboard(cardDetails.expiry, 'Expiry date')}
-                  style={styles.gridColumn}
-                  disabled={!showDetails}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.detailLabel, { color: T.textDim }]}>EXPIRY</Text>
-                  <View style={styles.detailValueRow}>
-                    <Text style={[styles.detailValue, { color: T.text }]}>{showDetails ? cardDetails.expiry : '•• / ••'}</Text>
-                    {showDetails && <Feather name="copy" size={11} color={T.primary} />}
-                  </View>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={() => showDetails && copyToClipboard(cardDetails.cvv, 'CVV')}
-                  style={styles.gridColumn}
-                  disabled={!showDetails}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.detailLabel, { color: T.textDim }]}>CVV / CVC</Text>
-                  <View style={styles.detailValueRow}>
-                    <Text style={[styles.detailValue, { color: T.text }]}>{showDetails ? cardDetails.cvv : '•••'}</Text>
-                    {showDetails && <Feather name="copy" size={11} color={T.primary} />}
-                  </View>
-                </TouchableOpacity>
-              </View>
-            </View>
+            {/* Secure Credentials — Production CardCredentialsWidget */}
+            <CardCredentialsWidget
+              cardNumber={cardCreated ? cardDetails.number : '0000000000000000'}
+              expiry={cardDetails.expiry}
+              cvv={cardDetails.cvv}
+              holderName={cardDetails.holderName || 'CARD HOLDER'}
+              textColor={T.text}
+              accentColor={T.primary}
+              mutedColor={T.textDim}
+              widgetBg={T.surface}
+              widgetBorder={T.border}
+            />
 
             {/* Premium Ledger Balance Widget */}
             <View style={[styles.premiumWidget, { backgroundColor: T.surface, borderColor: T.border }, styles.shadowWrapper]}>
