@@ -8,7 +8,7 @@ import {
   CreditCard, RefreshCw, Search, Eye, CheckCircle,
   XCircle, Loader2, Package, Truck, X, MapPin, DollarSign,
   Plus, Trash2, Edit, Check, Settings, ToggleLeft, ToggleRight,
-  Info, AlertTriangle, Shield, Coins, Sparkles, Layers
+  Info, AlertTriangle, Shield, Coins, Sparkles, Layers, Globe, Landmark
 } from 'lucide-react';
 
 interface CardRequest {
@@ -31,6 +31,7 @@ interface CardVariant {
   features: string[];
   price: number;
   annual_fee_usd: number;
+  activation_fee_usd?: number;
   transaction_limit_usd: number;
   design_url: string;
   color_hex: string;
@@ -43,13 +44,29 @@ interface CardVariant {
   fee_rate?: number;
 }
 
+interface ShippingFee {
+  id: string;
+  country_name: string;
+  country_code: string;
+  fee_usd: number;
+}
+
+interface FiatCurrency {
+  code: string;
+  symbol: string;
+  name: string;
+  rate: number;
+  locale?: string;
+  format?: string;
+}
+
 function safeParseFloat(value: string | number | null | undefined): number {
   const n = parseFloat(String(value ?? 0));
   return isNaN(n) ? 0 : n;
 }
 
 export default function CardsPage() {
-  const [activeTab, setActiveTab] = useState<'requests' | 'variants'>('requests');
+  const [activeTab, setActiveTab] = useState<'requests' | 'variants' | 'pricing'>('requests');
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRequest, setSelectedRequest] = useState<CardRequest | null>(null);
@@ -59,13 +76,14 @@ export default function CardsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingVariant, setEditingVariant] = useState<CardVariant | null>(null);
   
-  // Form State
+  // Form State for Variant
   const [formId, setFormId] = useState('');
   const [formName, setFormName] = useState('');
   const [formVariantName, setFormVariantName] = useState('');
   const [formNetwork, setFormNetwork] = useState<'Visa' | 'Mastercard'>('Visa');
   const [formPrice, setFormPrice] = useState('0');
   const [formAnnualFee, setFormAnnualFee] = useState('0');
+  const [formActivationFee, setFormActivationFee] = useState('0');
   const [formLimit, setFormLimit] = useState('5000');
   const [formColorHex, setFormColorHex] = useState('#2A2B31');
   const [formCardColorHex, setFormCardColorHex] = useState('#2A2B31');
@@ -77,6 +95,20 @@ export default function CardsPage() {
   const [formFeaturesText, setFormFeaturesText] = useState('');
   const [formCurrenciesText, setFormCurrenciesText] = useState('BTC, ETH, USDT, USDC');
   const [formGradientsText, setFormGradientsText] = useState('#2B2B30, #18181A, #0D0D0E');
+
+  // Form State for Shipping
+  const [shippingCountry, setShippingCountry] = useState('');
+  const [shippingCode, setShippingCode] = useState('');
+  const [shippingCost, setShippingCost] = useState('9.99');
+  const [editingShippingId, setEditingShippingId] = useState<string | null>(null);
+
+  // Form State for Currency
+  const [fiatCode, setFiatCode] = useState('');
+  const [fiatSymbol, setFiatSymbol] = useState('');
+  const [fiatName, setFiatName] = useState('');
+  const [fiatRate, setFiatRate] = useState('1.0');
+  const [fiatLocale, setFiatLocale] = useState('');
+  const [editingFiatCode, setEditingFiatCode] = useState<string | null>(null);
 
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [mutateError, setMutateError] = useState<string | null>(null);
@@ -110,20 +142,52 @@ export default function CardsPage() {
       if (error) throw error;
       return (data || []) as CardVariant[];
     },
-    enabled: activeTab === 'variants',
+    enabled: activeTab === 'variants' || activeTab === 'pricing',
+  });
+
+  // ─── Query Shipping Fees ──────────────────────────────────────────────────────
+  const { data: shippingFees, isLoading: isShippingLoading, error: shippingError, refetch: refetchShipping } = useQuery({
+    queryKey: ['admin-shipping-fees'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('shipping_fees')
+        .select('*')
+        .order('country_name', { ascending: true });
+      if (error) throw error;
+      return (data || []) as ShippingFee[];
+    },
+    enabled: activeTab === 'pricing',
+  });
+
+  // ─── Query Fiat Currencies ────────────────────────────────────────────────────
+  const { data: fiatCurrencies, isLoading: isFiatLoading, error: fiatError, refetch: refetchFiat } = useQuery({
+    queryKey: ['admin-fiat-currencies'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('fiat_currencies')
+        .select('*')
+        .order('code', { ascending: true });
+      if (error) throw error;
+      return (data || []) as FiatCurrency[];
+    },
+    enabled: activeTab === 'pricing',
   });
 
   React.useEffect(() => {
-    if (queryError) {
-      setFetchError((queryError as Error).message || 'Failed to load card requests.');
-    }
+    if (queryError) setFetchError((queryError as Error).message || 'Failed to load card requests.');
   }, [queryError]);
 
   React.useEffect(() => {
-    if (variantsError) {
-      setFetchError((variantsError as Error).message || 'Failed to load card variants.');
-    }
+    if (variantsError) setFetchError((variantsError as Error).message || 'Failed to load card variants.');
   }, [variantsError]);
+
+  React.useEffect(() => {
+    if (shippingError) setFetchError((shippingError as Error).message || 'Failed to load shipping fees.');
+  }, [shippingError]);
+
+  React.useEffect(() => {
+    if (fiatError) setFetchError((fiatError as Error).message || 'Failed to load fiat currencies.');
+  }, [fiatError]);
 
   // ─── Mutations Requests ───────────────────────────────────────────────────────
   const updateStatus = useMutation({
@@ -209,6 +273,86 @@ export default function CardsPage() {
     },
   });
 
+  // ─── Mutations Shipping ──────────────────────────────────────────────────────
+  const saveShipping = useMutation({
+    mutationFn: async (shippingData: any) => {
+      const { error } = await supabase
+        .from('shipping_fees')
+        .upsert(shippingData, { onConflict: 'country_name' });
+      if (error) throw error;
+      return shippingData;
+    },
+    onSuccess: () => {
+      setMutateError(null);
+      queryClient.invalidateQueries({ queryKey: ['admin-shipping-fees'] });
+      setShippingCountry('');
+      setShippingCode('');
+      setShippingCost('9.99');
+      setEditingShippingId(null);
+    },
+    onError: (err) => {
+      setMutateError((err as Error).message || 'Failed to save shipping fee.');
+    },
+  });
+
+  const deleteShipping = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('shipping_fees')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+      return id;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-shipping-fees'] });
+    },
+    onError: (err) => {
+      setMutateError((err as Error).message || 'Failed to delete shipping fee.');
+    },
+  });
+
+  // ─── Mutations Currency ─────────────────────────────────────────────────────
+  const saveCurrency = useMutation({
+    mutationFn: async (currencyData: any) => {
+      const { error } = await supabase
+        .from('fiat_currencies')
+        .upsert(currencyData, { onConflict: 'code' });
+      if (error) throw error;
+      return currencyData;
+    },
+    onSuccess: () => {
+      setMutateError(null);
+      queryClient.invalidateQueries({ queryKey: ['admin-fiat-currencies'] });
+      setFiatCode('');
+      setFiatSymbol('');
+      setFiatName('');
+      setFiatRate('1.0');
+      setFiatLocale('');
+      setEditingFiatCode(null);
+    },
+    onError: (err) => {
+      setMutateError((err as Error).message || 'Failed to save fiat currency.');
+    },
+  });
+
+  const deleteCurrency = useMutation({
+    mutationFn: async (code: string) => {
+      const { error } = await supabase
+        .from('fiat_currencies')
+        .delete()
+        .eq('code', code);
+      if (error) throw error;
+      return code;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-fiat-currencies'] });
+    },
+    onError: (err) => {
+      setMutateError((err as Error).message || 'Failed to delete fiat currency.');
+    },
+  });
+
   // ─── Event Handlers ──────────────────────────────────────────────────────────
   const handleStatusChange = (id: string, status: string) => {
     const labels: Record<string, string> = { approved: 'APPROVE', rejected: 'REJECT', shipped: 'mark as SHIPPED' };
@@ -226,6 +370,7 @@ export default function CardsPage() {
     setFormNetwork('Visa');
     setFormPrice('0');
     setFormAnnualFee('0');
+    setFormActivationFee('0');
     setFormLimit('5000');
     setFormColorHex('#2A2B31');
     setFormCardColorHex('#2A2B31');
@@ -248,6 +393,7 @@ export default function CardsPage() {
     setFormNetwork(v.network);
     setFormPrice(String(v.price));
     setFormAnnualFee(String(v.annual_fee_usd));
+    setFormActivationFee(String(v.activation_fee_usd ?? 0));
     setFormLimit(String(v.transaction_limit_usd));
     setFormColorHex(v.color_hex);
     setFormCardColorHex(v.card_color_hex);
@@ -278,6 +424,7 @@ export default function CardsPage() {
       network: formNetwork,
       price: safeParseFloat(formPrice),
       annual_fee_usd: safeParseFloat(formAnnualFee),
+      activation_fee_usd: safeParseFloat(formActivationFee),
       transaction_limit_usd: safeParseFloat(formLimit),
       color_hex: formColorHex.trim() || '#2A2B31',
       card_color_hex: gradient_colors[0] || formCardColorHex.trim() || '#2A2B31',
@@ -353,20 +500,26 @@ export default function CardsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-3 border-[#1a1a1a] pb-6 bg-[#ffcc00] p-6 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] border-3">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight text-[#1a1a1a] font-display uppercase leading-none">
-            {activeTab === 'requests' ? 'Physical Card Requests' : 'Card Variant Architecture'}
+            {activeTab === 'requests' ? 'Physical Card Requests' : activeTab === 'variants' ? 'Card Variant Architecture' : 'Card Pricing & Currencies'}
           </h1>
           <p className="text-xs text-[#1a1a1a] font-bold mt-2 font-mono uppercase tracking-wider">
             {activeTab === 'requests'
               ? 'Review, approve, and dispatch physical smartcard orders from verified wallets'
-              : 'Admin panel to create, configure, theme and control cryptocurrency debit card designs'}
+              : activeTab === 'variants'
+              ? 'Admin panel to create, configure, theme and control cryptocurrency debit card designs'
+              : 'Configure currency exchange rates, custom activation fees, shipping costs, and card ledger rates'}
           </p>
         </div>
         <button
-          onClick={() => activeTab === 'requests' ? refetchRequests() : refetchVariants()}
+          onClick={() => {
+            if (activeTab === 'requests') refetchRequests();
+            else if (activeTab === 'variants') refetchVariants();
+            else { refetchShipping(); refetchFiat(); }
+          }}
           disabled={isRequestsLoading || isVariantsLoading || isRefetchingRequests || isRefetchingVariants}
           className="self-start brutalist-button px-4 py-2 flex items-center gap-2 shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]"
         >
-          <RefreshCw className={`h-4 w-4 ${(isRefetchingRequests || isRefetchingVariants) ? 'animate-spin' : ''}`} />
+          <RefreshCw className="h-4 w-4" />
           <span>Sync Ledger</span>
         </button>
       </div>
@@ -395,6 +548,17 @@ export default function CardsPage() {
           <Layers className="h-4 w-4" />
           <span>Variants Manager ({variants?.length || 0})</span>
         </button>
+        <button
+          onClick={() => setActiveTab('pricing')}
+          className={`flex-1 sm:flex-none px-6 py-3.5 text-xs font-extrabold uppercase font-display tracking-wider border-2 border-transparent transition-all flex items-center justify-center gap-2 ${
+            activeTab === 'pricing'
+              ? 'bg-[#1a1a1a] border-[#1a1a1a] text-white'
+              : 'text-[#1a1a1a] hover:bg-[#ffcc00]/20 hover:border-[#1a1a1a]'
+          }`}
+        >
+          <Globe className="h-4 w-4" />
+          <span>Pricing & Currencies</span>
+        </button>
       </div>
 
       {/* ────────────────── VIEW TAB 1: PHYSICAL REQUESTS ────────────────── */}
@@ -419,7 +583,6 @@ export default function CardsPage() {
 
           {/* Table */}
           <div className="brutalist-card">
-            {/* Filter bar */}
             <div className="p-4 border-b-3 border-[#1a1a1a] flex flex-col md:flex-row gap-4 items-center justify-between bg-[#f5f0e8]">
               <div className="flex flex-wrap items-center gap-1.5 p-1 border-2 border-[#1a1a1a] bg-white">
                 {['all', 'pending', 'approved', 'shipped', 'rejected'].map(f => (
@@ -523,13 +686,12 @@ export default function CardsPage() {
             </div>
           </div>
 
-          {/* Slideout Drawer (Request details) */}
+          {/* Drawer Details */}
           {selectedRequest && (
             <div className="fixed inset-0 z-50 flex justify-end">
               <div className="fixed inset-0 bg-[#1a1a1a]/60 backdrop-blur-xs" onClick={() => setSelectedRequest(null)} />
               <div className="relative w-full max-w-lg h-full bg-white border-l-3 border-[#1a1a1a] shadow-2xl p-6 flex flex-col justify-between overflow-y-auto animate-slide-in-right z-50">
                 <div>
-                  {/* Drawer Header */}
                   <div className="flex items-center justify-between pb-5 border-b-3 border-[#1a1a1a] mb-6">
                     <div className="flex items-center gap-3">
                       <div className="h-12 w-12 border-2 border-[#1a1a1a] bg-[#ffcc00] flex items-center justify-center text-[#1a1a1a] shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]">
@@ -546,7 +708,6 @@ export default function CardsPage() {
                   </div>
 
                   <div className="space-y-4 font-mono">
-                    {/* Details grid */}
                     <div className="grid grid-cols-2 gap-3">
                       {[
                         { label: 'Card Specification', value: selectedRequest.card_type },
@@ -563,7 +724,6 @@ export default function CardsPage() {
                       ))}
                     </div>
 
-                    {/* Wallet address */}
                     <div className="p-3 border-2 border-[#1a1a1a] bg-[#f5f0e8]">
                       <p className="text-[9px] text-gray-500 uppercase font-bold tracking-wider mb-1">Wallet Public Address</p>
                       <p className="text-xs font-bold text-[#0055ff] break-all">{selectedRequest.wallet_address}</p>
@@ -571,7 +731,6 @@ export default function CardsPage() {
                   </div>
                 </div>
 
-                {/* Drawer Footer Actions */}
                 <div className="mt-8 pt-4 border-t-3 border-[#1a1a1a] space-y-3">
                   {selectedRequest.status === 'pending' && (
                     <div className="flex gap-3">
@@ -580,7 +739,7 @@ export default function CardsPage() {
                         disabled={updateStatus.isPending}
                         className="flex-1 brutalist-button py-3 !bg-[#e63b2e] !text-white text-xs disabled:opacity-50"
                       >
-                        {updateStatus.isPending ? <Loader2 className="h-4 w-4 animate-spin inline mr-1" /> : <XCircle className="h-4 w-4 inline mr-1" />}
+                        <XCircle className="h-4 w-4 inline mr-1" />
                         Reject Order
                       </button>
                       <button
@@ -588,7 +747,7 @@ export default function CardsPage() {
                         disabled={updateStatus.isPending}
                         className="flex-1 brutalist-button-blue py-3 text-xs disabled:opacity-50"
                       >
-                        {updateStatus.isPending ? <Loader2 className="h-4 w-4 animate-spin inline mr-1" /> : <CheckCircle className="h-4 w-4 inline mr-1" />}
+                        <CheckCircle className="h-4 w-4 inline mr-1" />
                         Approve Order
                       </button>
                     </div>
@@ -599,7 +758,7 @@ export default function CardsPage() {
                       disabled={updateStatus.isPending}
                       className="w-full brutalist-button-blue py-3 text-xs disabled:opacity-50 flex items-center justify-center gap-2"
                     >
-                      {updateStatus.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
+                      <Truck className="h-4 w-4" />
                       Mark as Shipped
                     </button>
                   )}
@@ -616,7 +775,6 @@ export default function CardsPage() {
       {/* ────────────────── VIEW TAB 2: VARIANTS MANAGER ────────────────── */}
       {activeTab === 'variants' && (
         <div className="space-y-6">
-          {/* Subheader Toolbar */}
           <div className="flex flex-col sm:flex-row gap-4 items-center justify-between p-4 border-3 border-[#1a1a1a] bg-[#f5f0e8] shadow-[3px_3px_0px_0px_rgba(26,26,26,1)]">
             <div className="relative w-full sm:max-w-xs">
               <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -640,7 +798,6 @@ export default function CardsPage() {
             </button>
           </div>
 
-          {/* Grid Layout of Cards */}
           {isVariantsLoading ? (
             <div className="py-24 text-center">
               <Loader2 className="h-8 w-8 animate-spin mx-auto text-[#1a1a1a] mb-2" />
@@ -650,9 +807,6 @@ export default function CardsPage() {
             <div className="p-16 border-3 border-dashed border-[#1a1a1a] text-center bg-white">
               <AlertTriangle className="h-8 w-8 text-[#ffcc00] mx-auto mb-3" />
               <h3 className="text-sm font-black uppercase font-display">No Card Variants Found</h3>
-              <p className="text-xs font-mono text-gray-500 mt-2 max-w-sm mx-auto">
-                Database lookup yielded empty set. Click &quot;Create Card Variant&quot; to seed or declare your first product tier.
-              </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -663,7 +817,6 @@ export default function CardsPage() {
                 
                 return (
                   <div key={v.id} className="brutalist-card flex flex-col justify-between overflow-hidden !p-0">
-                    {/* Miniature Credit Card Shell */}
                     <div 
                       className="p-5 relative text-white flex flex-col justify-between h-[180px]"
                       style={{ 
@@ -672,7 +825,6 @@ export default function CardsPage() {
                           : colors[0]
                       }}
                     >
-                      {/* Glossy Overlay */}
                       <div className="absolute inset-0 bg-white/5 pointer-events-none" />
                       
                       <div className="flex justify-between items-start z-10">
@@ -688,7 +840,6 @@ export default function CardsPage() {
                         </div>
                       </div>
 
-                      {/* Chip & availability */}
                       <div className="flex justify-between items-end z-10">
                         <div className="flex items-center gap-1.5 bg-black/45 px-2 py-1 border border-white/10">
                           <Coins className="h-3.5 w-3.5 text-[#ffcc00]" />
@@ -706,11 +857,14 @@ export default function CardsPage() {
                       </div>
                     </div>
 
-                    {/* Meta stats list */}
                     <div className="p-4 border-t-2 border-[#1a1a1a] bg-[#f5f0e8] font-mono text-xs text-[#1a1a1a] space-y-2">
                       <div className="flex justify-between">
                         <span className="text-gray-500 font-bold uppercase text-[9px]">Mint Fee (Cost):</span>
                         <span className="font-bold">${v.price.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 font-bold uppercase text-[9px]">Activation Fee:</span>
+                        <span className="font-bold text-[#e63b2e]">${(v.activation_fee_usd ?? 0).toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-500 font-bold uppercase text-[9px]">Annual Fee:</span>
@@ -735,7 +889,6 @@ export default function CardsPage() {
                         </button>
                       </div>
 
-                      {/* Coins supported */}
                       <div className="pt-2 border-t border-[#1a1a1a]/10">
                         <p className="text-gray-500 font-bold uppercase text-[8px] mb-1">Supported Settlement Assets:</p>
                         <div className="flex flex-wrap gap-1">
@@ -747,7 +900,6 @@ export default function CardsPage() {
                         </div>
                       </div>
 
-                      {/* Features */}
                       <div className="pt-2">
                         <p className="text-gray-500 font-bold uppercase text-[8px] mb-1">Privileges:</p>
                         <ul className="text-[10px] space-y-1 list-none font-sans font-semibold">
@@ -761,7 +913,6 @@ export default function CardsPage() {
                       </div>
                     </div>
 
-                    {/* Card Actions toolbar */}
                     <div className="p-3 border-t-3 border-[#1a1a1a] flex gap-2 bg-white">
                       <button
                         onClick={() => handleOpenEditForm(v)}
@@ -783,6 +934,360 @@ export default function CardsPage() {
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ────────────────── VIEW TAB 3: PRICING & CURRENCIES ────────────────── */}
+      {activeTab === 'pricing' && (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+          
+          {/* Section A: Shipping Fees */}
+          <div className="space-y-6">
+            <div className="brutalist-card bg-[#f5f0e8] border-3 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
+              <h3 className="text-lg font-black uppercase font-display border-b-3 border-[#1a1a1a] pb-3 mb-4 flex items-center gap-2 text-[#1a1a1a]">
+                <MapPin className="h-5 w-5" />
+                <span>Shipping Fees Manager</span>
+              </h3>
+
+              {/* Add/Edit Form */}
+              <form 
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!shippingCountry.trim()) { alert('Country name is required'); return; }
+                  saveShipping.mutate({
+                    id: editingShippingId || undefined,
+                    country_name: shippingCountry.trim(),
+                    country_code: shippingCode.trim().toUpperCase(),
+                    fee_usd: safeParseFloat(shippingCost),
+                  });
+                }}
+                className="p-4 border-2 border-[#1a1a1a] bg-white space-y-4 mb-6 font-mono text-xs"
+              >
+                <h4 className="font-extrabold uppercase text-[10px] text-amber-600 flex items-center gap-1">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  <span>{editingShippingId ? 'Modify Shipping Fee Rules' : 'Declare New Shipping Fee Rule'}</span>
+                </h4>
+                
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2">
+                    <label className="block font-bold uppercase text-[8px] text-gray-500 mb-1">Country Name *</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Switzerland"
+                      value={shippingCountry}
+                      onChange={e => setShippingCountry(e.target.value)}
+                      className="w-full brutalist-input text-xs"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold uppercase text-[8px] text-gray-500 mb-1">ISO Code</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. CH"
+                      maxLength={3}
+                      value={shippingCode}
+                      onChange={e => setShippingCode(e.target.value)}
+                      className="w-full brutalist-input text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3 items-end">
+                  <div className="col-span-2">
+                    <label className="block font-bold uppercase text-[8px] text-gray-500 mb-1">Shipping Fee (USD) *</label>
+                    <div className="relative">
+                      <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500 font-bold">$</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="19.99"
+                        value={shippingCost}
+                        onChange={e => setShippingCost(e.target.value)}
+                        className="w-full brutalist-input !pl-7 text-xs"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-1.5">
+                    {editingShippingId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShippingCountry('');
+                          setShippingCode('');
+                          setShippingCost('9.99');
+                          setEditingShippingId(null);
+                        }}
+                        className="brutalist-button-white px-3 py-2.5 text-[10px]"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                    <button
+                      type="submit"
+                      disabled={saveShipping.isPending}
+                      className="flex-1 brutalist-button px-3 py-2.5 text-[10px] !bg-[#ffcc00]"
+                    >
+                      {saveShipping.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
+                </div>
+              </form>
+
+              {/* Table list */}
+              {isShippingLoading ? (
+                <div className="text-center py-10 font-mono text-xs uppercase">Loading Shipping Invoices...</div>
+              ) : (
+                <div className="max-h-[360px] overflow-y-auto border-2 border-[#1a1a1a] bg-white divide-y divide-[#1a1a1a]">
+                  {(shippingFees || []).map((fee) => (
+                    <div key={fee.id} className="p-3 flex items-center justify-between font-mono text-xs hover:bg-[#ffcc00]/5 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded border border-[#1a1a1a] bg-[#f5f0e8] flex items-center justify-center font-bold text-[#1a1a1a] text-[10px]">
+                          {fee.country_code || 'XX'}
+                        </div>
+                        <div>
+                          <p className="font-extrabold text-[#1a1a1a]">{fee.country_name}</p>
+                          <p className="text-[9px] text-gray-400">Ruleset ID: {fee.id.slice(0, 8)}...</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-black text-[#e63b2e]">${fee.fee_usd.toFixed(2)}</span>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => {
+                              setShippingCountry(fee.country_name);
+                              setShippingCode(fee.country_code);
+                              setShippingCost(String(fee.fee_usd));
+                              setEditingShippingId(fee.id);
+                            }}
+                            className="p-1.5 border border-[#1a1a1a] bg-white hover:bg-amber-100"
+                          >
+                            <Edit className="h-3.5 w-3.5 text-[#1a1a1a]" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm(`Delete shipping rule for ${fee.country_name}?`)) {
+                                deleteShipping.mutate(fee.id);
+                              }
+                            }}
+                            className="p-1.5 border border-[#1a1a1a] bg-white hover:bg-red-100"
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-[#e63b2e]" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Section B: Currency pricing & exchange rates */}
+          <div className="space-y-6">
+            <div className="brutalist-card bg-[#f5f0e8] border-3 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
+              <h3 className="text-lg font-black uppercase font-display border-b-3 border-[#1a1a1a] pb-3 mb-4 flex items-center gap-2 text-[#1a1a1a]">
+                <Globe className="h-5 w-5" />
+                <span>Fiat Currencies & Pricing Rates</span>
+              </h3>
+
+              {/* Add/Edit Form */}
+              <form 
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!fiatCode.trim()) { alert('Currency code is required'); return; }
+                  saveCurrency.mutate({
+                    code: fiatCode.trim().toUpperCase(),
+                    symbol: fiatSymbol.trim(),
+                    name: fiatName.trim(),
+                    rate: safeParseFloat(fiatRate),
+                    locale: fiatLocale.trim() || undefined,
+                    format: fiatLocale.trim() || undefined,
+                  });
+                }}
+                className="p-4 border-2 border-[#1a1a1a] bg-white space-y-4 mb-6 font-mono text-xs"
+              >
+                <h4 className="font-extrabold uppercase text-[10px] text-amber-600 flex items-center gap-1">
+                  <Landmark className="h-3.5 w-3.5" />
+                  <span>{editingFiatCode ? `Modify Exchange Rate for ${editingFiatCode}` : 'Declare New Fiat Support & Rate'}</span>
+                </h4>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block font-bold uppercase text-[8px] text-gray-500 mb-1">Currency Code *</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. CHF"
+                      maxLength={3}
+                      disabled={!!editingFiatCode}
+                      value={fiatCode}
+                      onChange={e => setFiatCode(e.target.value)}
+                      className="w-full brutalist-input text-xs uppercase"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold uppercase text-[8px] text-gray-500 mb-1">Symbol *</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Fr."
+                      value={fiatSymbol}
+                      onChange={e => setFiatSymbol(e.target.value)}
+                      className="w-full brutalist-input text-xs"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold uppercase text-[8px] text-gray-500 mb-1">Rate (vs 1 USD) *</label>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      min="0.0001"
+                      value={fiatRate}
+                      onChange={e => setFiatRate(e.target.value)}
+                      className="w-full brutalist-input text-xs"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3 items-end">
+                  <div className="col-span-2">
+                    <label className="block font-bold uppercase text-[8px] text-gray-500 mb-1">Full Name & Locale</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        placeholder="Swiss Franc"
+                        value={fiatName}
+                        onChange={e => setFiatName(e.target.value)}
+                        className="w-full brutalist-input text-xs"
+                      />
+                      <input
+                        type="text"
+                        placeholder="fr-CH"
+                        value={fiatLocale}
+                        onChange={e => setFiatLocale(e.target.value)}
+                        className="w-full brutalist-input text-xs"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-1.5">
+                    {editingFiatCode && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFiatCode('');
+                          setFiatSymbol('');
+                          setFiatName('');
+                          setFiatRate('1.0');
+                          setFiatLocale('');
+                          setEditingFiatCode(null);
+                        }}
+                        className="brutalist-button-white px-3 py-2.5 text-[10px]"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                    <button
+                      type="submit"
+                      disabled={saveCurrency.isPending}
+                      className="flex-1 brutalist-button px-3 py-2.5 text-[10px] !bg-[#ffcc00]"
+                    >
+                      {saveCurrency.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
+                </div>
+              </form>
+
+              {/* Table list */}
+              {isFiatLoading ? (
+                <div className="text-center py-10 font-mono text-xs uppercase">Syncing Exchange Rates...</div>
+              ) : (
+                <div className="max-h-[360px] overflow-y-auto border-2 border-[#1a1a1a] bg-white divide-y divide-[#1a1a1a]">
+                  {(fiatCurrencies || []).map((cur) => (
+                    <div key={cur.code} className="p-3 flex items-center justify-between font-mono text-xs hover:bg-[#ffcc00]/5 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full border-2 border-[#1a1a1a] bg-[#ffcc00] flex items-center justify-center font-black text-[#1a1a1a] text-xs">
+                          {cur.symbol}
+                        </div>
+                        <div>
+                          <p className="font-extrabold text-[#1a1a1a]">{cur.code} - {cur.name}</p>
+                          <p className="text-[9px] text-gray-400">1 USD = {cur.rate.toFixed(4)} {cur.code}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-black text-amber-600">{cur.rate.toFixed(2)}x</span>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => {
+                              setFiatCode(cur.code);
+                              setFiatSymbol(cur.symbol);
+                              setFiatName(cur.name);
+                              setFiatRate(String(cur.rate));
+                              setFiatLocale(cur.locale || '');
+                              setEditingFiatCode(cur.code);
+                            }}
+                            className="p-1.5 border border-[#1a1a1a] bg-white hover:bg-amber-100"
+                          >
+                            <Edit className="h-3.5 w-3.5 text-[#1a1a1a]" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (cur.code === 'USD') { alert('USD is the system base currency and cannot be deleted.'); return; }
+                              if (confirm(`Remove fiat currency support for ${cur.code}?`)) {
+                                deleteCurrency.mutate(cur.code);
+                              }
+                            }}
+                            className="p-1.5 border border-[#1a1a1a] bg-white hover:bg-red-100"
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-[#e63b2e]" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Dynamic Card Pricing Preview Panel */}
+            <div className="brutalist-card bg-white border-3 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
+              <h3 className="text-md font-black uppercase font-display border-b-2 border-[#1a1a1a] pb-2 mb-3 flex items-center gap-1.5 text-gray-700">
+                <Info className="h-4.5 w-4.5 text-[#0055ff]" />
+                <span>Dynamic Currency Conversion Sandbox</span>
+              </h3>
+              <p className="text-[10px] font-mono text-gray-500 mb-4 uppercase">
+                Displays physical card fees dynamically inside the mobile wallet context using current database rates.
+              </p>
+
+              <div className="space-y-3 font-mono text-xs">
+                {(variants || []).map((v) => (
+                  <div key={v.id} className="p-3 border border-[#1a1a1a] bg-[#f5f0e8]/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <span className="font-extrabold text-[#1a1a1a] uppercase">{v.variant_name || v.name}</span>
+                    <div className="flex flex-wrap gap-2">
+                      {(fiatCurrencies || []).slice(0, 5).map((cur) => {
+                        const localPrice = v.price * cur.rate;
+                        const localAct = (v.activation_fee_usd ?? 0) * cur.rate;
+                        const localAnn = v.annual_fee_usd * cur.rate;
+                        return (
+                          <div key={cur.code} className="px-2 py-1 bg-white border border-[#1a1a1a] text-[9px] flex flex-col">
+                            <span className="font-black text-amber-600">{cur.code}</span>
+                            <span>Mint: {cur.symbol}{localPrice.toFixed(2)}</span>
+                            <span>Act: {cur.symbol}{localAct.toFixed(2)}</span>
+                            <span>Yearly: {cur.symbol}{localAnn.toFixed(2)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+          </div>
+
         </div>
       )}
 
@@ -882,10 +1387,10 @@ export default function CardsPage() {
                 <p className="text-[8px] text-gray-400 mt-1">Specify 1 Hex color for flat card theme, or 2 to 3 Hex values to render gorgeous gradients.</p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                {/* Cost/Price */}
+              <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
+                {/* Price */}
                 <div>
-                  <label className="block font-bold uppercase text-[9px] text-gray-500 mb-1.5">Minting Cost (USD)</label>
+                  <label className="block font-bold uppercase text-[8px] text-gray-500 mb-1.5">Mint Cost (USD)</label>
                   <input
                     type="number"
                     step="0.01"
@@ -896,9 +1401,22 @@ export default function CardsPage() {
                   />
                 </div>
 
+                {/* Activation fee */}
+                <div>
+                  <label className="block font-bold uppercase text-[8px] text-gray-500 mb-1.5">Act Fee (USD)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formActivationFee}
+                    onChange={e => setFormActivationFee(e.target.value)}
+                    className="w-full brutalist-input text-xs"
+                  />
+                </div>
+
                 {/* Annual fee */}
                 <div>
-                  <label className="block font-bold uppercase text-[9px] text-gray-500 mb-1.5">Annual Fee (USD)</label>
+                  <label className="block font-bold uppercase text-[8px] text-gray-500 mb-1.5">Annual (USD)</label>
                   <input
                     type="number"
                     step="0.01"
@@ -911,7 +1429,7 @@ export default function CardsPage() {
 
                 {/* Daily limit */}
                 <div>
-                  <label className="block font-bold uppercase text-[9px] text-gray-500 mb-1.5">Transaction Limit (USD)</label>
+                  <label className="block font-bold uppercase text-[8px] text-gray-500 mb-1.5">Limit (USD)</label>
                   <input
                     type="number"
                     step="1"
@@ -924,7 +1442,7 @@ export default function CardsPage() {
 
                 {/* Tx commission fee */}
                 <div>
-                  <label className="block font-bold uppercase text-[9px] text-gray-500 mb-1.5">Tx Commission Fee (%)</label>
+                  <label className="block font-bold uppercase text-[8px] text-gray-500 mb-1.5">Tx Comm (%)</label>
                   <input
                     type="number"
                     step="0.05"
