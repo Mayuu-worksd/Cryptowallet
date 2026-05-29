@@ -8,11 +8,6 @@ module.exports = {
     userInterfaceStyle: "dark",
     sdkVersion: "54.0.0",
     jsEngine: "hermes",
-    extra: {
-      eas: {
-        projectId: "cde8eb79-39ce-4b25-83f1-3b3410e7bcb4",
-      },
-    },
     splash: {
       image: "./assets/splash-icon.png",
       resizeMode: "contain",
@@ -66,10 +61,5 @@ module.exports = {
       ],
     ],
     owner: "work234",
-    extra: {
-      eas: {
-        projectId: "cde8eb79-39ce-4b25-83f1-3b3410e7bcb4",
-      },
-    },
   },
 };
