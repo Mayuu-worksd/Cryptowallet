@@ -78,6 +78,7 @@ export default function BusinessKYCResultScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
 
   const [status,  setStatus]  = useState<BusinessKYCStatus>(null);
+  const [record,  setRecord]  = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   const pollRef   = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -91,6 +92,7 @@ export default function BusinessKYCResultScreen({ navigation }: any) {
       const s = r?.status ?? null;
       statusRef.current = s;
       setStatus(s);
+      setRecord(r);
       if (s === 'approved' || s === 'rejected') {
         if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
       }
@@ -124,29 +126,36 @@ export default function BusinessKYCResultScreen({ navigation }: any) {
     );
   }
 
-  const isReviewing = status === 'pending' || status === 'under_review';
+  const hasDoc = !!record?.document_url;
+  const isIncomplete = status === 'pending' && !hasDoc;
+  const isReviewing = (status === 'pending' && hasDoc) || status === 'under_review';
   const isApproved  = status === 'approved';
   const isRejected  = status === 'rejected';
 
   const accentColor =
     isApproved  ? '#10B981' :
     isRejected  ? T.error   :
+    isIncomplete ? '#EF4444' :
     '#F59E0B'; // Amber orange for review/pending
 
   const statusLabel =
     isApproved  ? 'APPROVED' :
     isRejected  ? 'REJECTED' :
+    isIncomplete ? 'INCOMPLETE SETUP' :
     status === 'under_review' ? 'UNDER REVIEW' : 'SUBMITTED';
 
   const heroTitle =
     isApproved  ? 'Business Identity Verified' :
     isRejected  ? 'Verification Rejected' :
+    isIncomplete ? 'Complete Your Setup' :
     status === 'under_review' ? 'Business Details In Review' : 'Documents Queueing';
 
   const heroSub =
     isApproved  ? 'Your business registration details have been verified. All enterprise merchant privileges are unlocked.'
     : isRejected
     ? 'We could not authenticate your business files. Please address compliance details and try again.'
+    : isIncomplete
+    ? 'Your company details are saved, but your setup is incomplete. Please finish uploading the required documents.'
     : status === 'under_review'
     ? 'Our compliance desk is currently validating your business ledger. Review takes 1-2 business days.'
     : 'Your documents are securely received and logged in our system. You will receive an alert once complete.';
@@ -184,7 +193,7 @@ export default function BusinessKYCResultScreen({ navigation }: any) {
           />
 
           <View style={st.iconWrap}>
-            {isReviewing && (
+            {(isReviewing || isIncomplete) && (
               <PulsingRing color={accentColor} />
             )}
             <LinearGradient
@@ -192,7 +201,7 @@ export default function BusinessKYCResultScreen({ navigation }: any) {
               style={[st.iconCircle, { borderColor: accentColor + '2A' }]}
             >
               <Feather
-                name={isApproved ? 'briefcase' : isRejected ? 'alert-triangle' : 'clock'}
+                name={isApproved ? 'briefcase' : isRejected ? 'alert-triangle' : isIncomplete ? 'upload-cloud' : 'clock'}
                 size={40}
                 color={accentColor}
               />
@@ -216,13 +225,14 @@ export default function BusinessKYCResultScreen({ navigation }: any) {
         </View>
 
         {/* Progress steps timeline */}
-        {isReviewing && (
+        {(isReviewing || isIncomplete) && (
           <View style={[st.card, { backgroundColor: T.surface, borderColor: T.border }]}>
             <Text style={[st.cardLabel, { color: T.textDim, marginBottom: 18 }]}>COMPLIANCE SCHEDULE</Text>
             {[
-              { icon: 'upload-cloud', label: 'Company Files Logged', sub: 'Business licenses & proof of status', done: true,  active: false },
-              { icon: 'search',       label: 'Operational Audit',    sub: 'Director background validation checks', done: false, active: true  },
-              { icon: 'shield',       label: 'Authorized Status',    sub: 'Minting merchant signing keys',         done: false, active: false },
+              { icon: 'briefcase',    label: 'Corporate Info Saved', sub: 'Business name, registry & director details', done: true,          active: false },
+              { icon: 'upload-cloud', label: 'Upload Documents',     sub: 'Business licenses & proof of status',         done: hasDoc,        active: !hasDoc },
+              { icon: 'search',       label: 'Operational Audit',    sub: 'Director background validation checks',       done: false,         active: hasDoc },
+              { icon: 'shield',       label: 'Authorized Status',    sub: 'Minting merchant signing keys',               done: false,         active: false },
             ].map((step, i, arr) => (
               <StepRow key={i} {...step} T={T} isDarkMode={isDarkMode} accentColor={accentColor} />
             ))}
@@ -299,6 +309,15 @@ export default function BusinessKYCResultScreen({ navigation }: any) {
               <LinearGradient colors={['#10B981', '#059669']} style={st.primaryBtnGrad}>
                 <Feather name="briefcase" size={18} color="#FFF" />
                 <Text style={st.primaryBtnText}>Merchant Dashboard</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          )}
+
+          {isIncomplete && (
+            <TouchableOpacity style={st.primaryBtn} onPress={() => navigation.replace('BusinessKYCForm')} activeOpacity={0.85}>
+              <LinearGradient colors={[T.primary, '#93000d']} style={st.primaryBtnGrad}>
+                <Feather name="upload-cloud" size={18} color="#FFF" />
+                <Text style={st.primaryBtnText}>Resume & Upload Documents</Text>
               </LinearGradient>
             </TouchableOpacity>
           )}

@@ -93,6 +93,22 @@ function timeAgo(dateStr?: string): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+function formatDateTime(dateStr?: string): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const month = months[d.getMonth()];
+  const day = d.getDate();
+  let hr = d.getHours();
+  const min = String(d.getMinutes()).padStart(2, '0');
+  const ampm = hr >= 12 ? 'PM' : 'AM';
+  hr = hr % 12;
+  hr = hr ? hr : 12; // if 0, make it 12
+  const formattedHr = String(hr).padStart(2, '0');
+  return `${month} ${day}, ${formattedHr}:${min} ${ampm}`;
+}
+
 function OrderCard({ order, onPress, T, walletAddress }: { order: P2POrder; onPress: () => void; T: any; walletAddress: string }) {
   const isMine   = order.seller_wallet.toLowerCase() === walletAddress.toLowerCase();
   const isBuying = order.buyer_wallet?.toLowerCase() === walletAddress.toLowerCase();
@@ -138,6 +154,11 @@ function OrderCard({ order, onPress, T, walletAddress }: { order: P2POrder; onPr
           <Text style={[s.sellerAddr, { color: T.textMuted }]}>
             Seller: {order.seller_wallet.slice(0, 6)}…{order.seller_wallet.slice(-4)}
           </Text>
+          {order.created_at && (
+            <Text style={{ fontSize: 10, color: T.textDim, fontWeight: '700', marginTop: 3 }}>
+              🕒 {formatDateTime(order.created_at)}
+            </Text>
+          )}
         </View>
         <View style={[s.statusPill, { backgroundColor: statusColor + '15' }]}>
           <Text style={[s.statusLabel, { color: statusColor }]}>{statusLabel}</Text>
@@ -151,7 +172,7 @@ function OrderCard({ order, onPress, T, walletAddress }: { order: P2POrder; onPr
         </View>
         <View style={s.statLine}>
           <Text style={[s.statLabel, { color: T.textMuted }]}>Total Price</Text>
-          <Text style={[s.statValueBig, { color: T.primary }]}>{order.fiat_total.toFixed(2)} {order.fiat_currency}</Text>
+          <Text style={[s.statValueBig, { color: T.primary }]}>{Number(order.fiat_total || 0).toFixed(2)} {order.fiat_currency}</Text>
         </View>
       </View>
 
@@ -163,7 +184,7 @@ function OrderCard({ order, onPress, T, walletAddress }: { order: P2POrder; onPr
         {order.created_at && (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <Feather name="clock" size={12} color={T.textDim} />
-            <Text style={{ fontSize: 11, color: T.textDim, fontWeight: '600' }}>{timeAgo(order.created_at)}</Text>
+            <Text style={{ fontSize: 11, color: T.textDim, fontWeight: '600' }}>{timeAgo(order.created_at)} ({formatDateTime(order.created_at)})</Text>
           </View>
         )}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -632,6 +653,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
     if (walletAddress) hasFetchedOnce.current = false;
   }, [walletAddress]);
   const [filterFiat, setFilterFiat] = useState<string>('ALL');
+  const [filterToken, setFilterToken] = useState<string>('ALL');
   const [showSellModal, setShowSellModal] = useState(false);
 
   const [sellToken,   setSellToken]   = useState('ETH');
@@ -698,7 +720,14 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
       if (tab === 'buy') {
         const all = await p2pService.getOpenOrders(walletAddress);
         const visible = all.filter(o => o.seller_wallet.toLowerCase() !== walletAddress.toLowerCase());
-        setOrders(filterFiat === 'ALL' ? visible : visible.filter(o => o.fiat_currency === filterFiat));
+        let filtered = visible;
+        if (filterFiat !== 'ALL') {
+          filtered = filtered.filter(o => o.fiat_currency === filterFiat);
+        }
+        if (filterToken !== 'ALL') {
+          filtered = filtered.filter(o => o.token === filterToken);
+        }
+        setOrders(filtered);
       } else {
         const myOrders = await p2pService.getMyOrders(walletAddress);
         setOrders(myOrders);
@@ -710,7 +739,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [tab, filterFiat, walletAddress, isBusiness]);
+  }, [tab, filterFiat, filterToken, walletAddress, isBusiness]);
 
   // Auto-switch to My Orders if buyer has active in-progress orders (runs once on mount)
   useEffect(() => {
@@ -733,7 +762,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
   useFocusEffect(useCallback(() => {
     if (hasFetchedOnce.current) loadOrders(true);
     healLockedBalance();
-  }, [tab, filterFiat, walletAddress, isBusiness]));
+  }, [tab, filterFiat, filterToken, walletAddress, isBusiness]));
 
   // Fetch real 7-day price history from CoinGecko
   useEffect(() => {
@@ -795,7 +824,22 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
   // Get real available balance for any token (ETH lives in ethBalance, not balances)
   // Only subtract tokens locked in ACTIVE sell orders (open/escrow_locked/payment_pending/payment_verification/crypto_released)
   const getAvailableBalance = (token: string) => {
-    const raw = token === 'ETH' ? (parseFloat(ethBalance) || 0) : (balances[token] ?? 0);
+    let raw = 0;
+    if (token === 'ETH') {
+      raw = parseFloat(ethBalance) || 0;
+    } else if (token === 'TRX') {
+      raw = balances['TRX'] ?? 0;
+    } else if (token === 'USDT') {
+      raw = ['TRON', 'TRON Nile'].includes(network)
+        ? (balances['USDT_TRC20'] ?? balances['USDT'] ?? 0)
+        : (balances['USDT_ERC20'] ?? balances['USDT'] ?? 0);
+    } else if (token === 'USDC') {
+      raw = ['TRON', 'TRON Nile'].includes(network)
+        ? (balances['USDC_TRC20'] ?? balances['USDC'] ?? 0)
+        : (balances['USDC_ERC20'] ?? balances['USDC'] ?? 0);
+    } else {
+      raw = balances[token] ?? 0;
+    }
     const locked = lockedBalance[token] ?? 0;
     return Math.max(0, raw - locked);
   };
@@ -805,6 +849,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
     const rate = parseFloat(sellRate);
     if (!amt || amt <= 0)   { Alert.alert('Invalid Amount', 'Enter a valid amount.'); return; }
     if (!rate || rate <= 0) { Alert.alert('Invalid Rate',   'Enter a valid rate.');   return; }
+    if (!sellPaymentDetails.trim()) { Alert.alert('Invalid Details', 'Payment details are required.'); return; }
     const available = getAvailableBalance(sellToken);
     if (amt > available) { Alert.alert('Insufficient Balance', 'You do not have enough balance.'); return; }
 
@@ -820,7 +865,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
         payment_method: sellMethod,
         country:        sellCountry,
         is_merchant:    isBusiness,
-        seller_payment_details: sellPaymentDetails.trim() || (sellMethod === 'UPI' ? `${walletAddress.slice(0, 8)}@upi` : `Bank: CryptoWallet Bank\nAccount: 100987654321\nIFSC: CWBK0001\nName: Seller Account`),
+        seller_payment_details: sellPaymentDetails.trim(),
       }, network);
       lockBalance(sellToken, amt);
       setShowSellModal(false);
@@ -842,13 +887,15 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
     setSellCountry(p2pCountry || 'United States');
     setSellFiat(p2pCurrency || 'USD');
     setSellPaymentDetails('');
+    const isTron = ['TRON', 'TRON Nile'].includes(network);
+    setSellToken(isTron ? 'TRX' : 'ETH');
   };
 
   const STEPS = ['Token', 'Amount', 'Details', 'Review'];
 
   const canNextStep0 = !!sellToken;
   const canNextStep1 = parseFloat(sellAmount) > 0 && parseFloat(sellRate) > 0 && parseFloat(sellAmount) <= getAvailableBalance(sellToken);
-  const canNextStep2 = !!sellMethod && !!sellCountry && !!sellFiat;
+  const canNextStep2 = !!sellMethod && !!sellCountry && !!sellFiat && !!sellPaymentDetails.trim();
 
   const PickerModal = ({ visible, title, items, selected, onSelect, onClose }: any) => (
     <Modal visible={visible} animationType="slide" transparent>
@@ -912,7 +959,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
               {sellStep === 0 && (
                 <View style={{ gap: 12, marginTop: 8 }}>
                   <Text style={[s.stepHint, { color: T.textDim }]}>Which crypto do you want to sell?</Text>
-                  {TOKENS.map(t => {
+                  {TOKENS.filter(t => (['TRON', 'TRON Nile'].includes(network) ? t !== 'ETH' : t !== 'TRX')).map(t => {
                     const active = sellToken === t;
                     const bal = getAvailableBalance(t);
                     const color = TOKEN_COLORS[t];
@@ -1054,7 +1101,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
                   {/* Payment Details Input */}
                   <View style={{ marginTop: 6 }}>
                     <Text style={{ fontSize: 11, fontWeight: '800', color: T.textMuted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                      Receiving Account / Payment Details
+                      Receiving Account / Payment Details <Text style={{ color: T.primary }}>*</Text>
                     </Text>
                     <View style={{
                       backgroundColor: T.surfaceLow,
@@ -1227,27 +1274,52 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
         </TouchableOpacity>
       </View>
 
-      {/* Fiat filter chips */}
+      {/* Fiat & Token Filter Bars */}
       {tab === 'buy' && (
-        <View style={[s.filterBar, { borderBottomColor: T.border }]}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingHorizontal: 16, paddingVertical: 14 }}>
+        <View style={{ borderBottomColor: T.border, borderBottomWidth: 1, backgroundColor: T.surfaceLow }}>
+          {/* Fiat chips */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 6 }}>
             {['ALL', ...FIAT_CURRENCIES].map(f => (
               <TouchableOpacity key={f}
-                style={[s.chip, { backgroundColor: filterFiat === f ? T.primary : T.surfaceLow, borderColor: filterFiat === f ? T.primary : T.border }]}
+                style={[s.chip, { backgroundColor: filterFiat === f ? T.primary : T.surface, borderColor: filterFiat === f ? T.primary : T.border, paddingHorizontal: 14, paddingVertical: 6 }]}
                 onPress={() => setFilterFiat(f)}>
                 <Text style={[s.chipText, { color: filterFiat === f ? '#FFF' : T.text }]}>{f}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
+          
+          {/* Token chips */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingHorizontal: 16, paddingTop: 6, paddingBottom: 12 }}>
+            {['ALL', ...TOKENS].map(t => {
+              const active = filterToken === t;
+              return (
+                <TouchableOpacity key={t}
+                  style={[s.chip, { 
+                    backgroundColor: active ? T.primary : T.surface, 
+                    borderColor: active ? T.primary : T.border,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    paddingLeft: t === 'ALL' ? 14 : 8,
+                    paddingRight: 14,
+                    paddingVertical: 6
+                  }]}
+                  onPress={() => setFilterToken(t)}>
+                  {t !== 'ALL' && <TokenSymbolIcon token={t} size={16} />}
+                  <Text style={[s.chipText, { color: active ? '#FFF' : T.text, fontWeight: active ? '800' : '700' }]}>{t}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
         </View>
       )}
 
       {/* Escrow network notice */}
-      {tab === 'sell' && network !== 'Sepolia' && (
+      {tab === 'sell' && network !== 'Sepolia' && network !== 'TRON' && network !== 'TRON Nile' && (
         <View style={{ marginHorizontal: 16, marginTop: 10, padding: 12, borderRadius: 14, backgroundColor: T.error + '15', borderWidth: 1, borderColor: T.error + '40', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Feather name="alert-circle" size={14} color={T.error} />
           <Text style={{ color: T.error, fontSize: 12, fontWeight: '700', flex: 1 }}>
-            P2P trading requires Sepolia testnet. Switch network in Settings to create orders.
+            P2P trading requires Sepolia testnet or TRON network. Switch network in Settings to create orders.
           </Text>
         </View>
       )}

@@ -94,7 +94,7 @@ type WalletContextType = {
   refreshPinEnabled: () => Promise<void>;
   generateMnemonic: () => string;
   createWallet: () => Promise<{ mnemonic: string; address: string }>;
-  importWallet: (mnemonic: string, isNew?: boolean) => Promise<void>;
+  importWallet: (mnemonic: string, isNew?: boolean, preferredNetwork?: string) => Promise<void>;
   deleteWallet: () => Promise<void>;
   enterReadOnlyMode: () => Promise<void>;
   refreshBalance: () => Promise<void>;
@@ -271,7 +271,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             setTronAddress(tron.address);
             storageService.saveTronAddress(tron.address).catch(() => {});
             // Persist TRON address to Supabase
-            if (address) profileService.upsert(address, { tron_address: tron.address }).catch(() => {});
+            if (walletAddress) profileService.upsert(walletAddress, { tron_address: tron.address }).catch(() => {});
           } else {
             setIsLoadingBalance(false);
             return;
@@ -279,18 +279,39 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         }
       }
       const onChain = await getWalletBalances(fetchAddr, net, balancesRef.current);
-      setEthBalance(onChain.ETH.toFixed(6));
-      ethBalanceRef.current = onChain.ETH.toFixed(6);
-      setBalances(onChain);
-      balancesRef.current = onChain;
-      await AsyncStorage.setItem('cw_token_balances', JSON.stringify(onChain));
+      // Only preserve cross-chain balances (BTC, SOL, BNB, XRP, TON, SUI) — never bleed EVM/TRON chain values
+      const crossChain = { BTC: balancesRef.current.BTC ?? 0, SOL: balancesRef.current.SOL ?? 0, BNB: balancesRef.current.BNB ?? 0, XRP: balancesRef.current.XRP ?? 0, TON: balancesRef.current.TON ?? 0, SUI: balancesRef.current.SUI ?? 0 };
+      // onChain returns 0 for cross-chain tokens — preserve local values for those
+      const merged = {
+        ...onChain,
+        BTC: onChain.BTC > 0 ? onChain.BTC : crossChain.BTC,
+        SOL: onChain.SOL > 0 ? onChain.SOL : crossChain.SOL,
+        BNB: onChain.BNB > 0 ? onChain.BNB : crossChain.BNB,
+        XRP: onChain.XRP > 0 ? onChain.XRP : crossChain.XRP,
+        TON: onChain.TON > 0 ? onChain.TON : crossChain.TON,
+        SUI: onChain.SUI > 0 ? onChain.SUI : crossChain.SUI,
+      };
+      if (isTronNet) {
+        if ((balancesRef.current?.ETH ?? 0) > 0 && merged.ETH === 0) merged.ETH = balancesRef.current.ETH;
+        if ((balancesRef.current?.USDT_ERC20 ?? 0) > 0 && merged.USDT_ERC20 === 0) merged.USDT_ERC20 = balancesRef.current.USDT_ERC20;
+        if ((balancesRef.current?.USDC_ERC20 ?? 0) > 0 && merged.USDC_ERC20 === 0) merged.USDC_ERC20 = balancesRef.current.USDC_ERC20;
+      } else {
+        if ((balancesRef.current?.TRX ?? 0) > 0 && merged.TRX === 0) merged.TRX = balancesRef.current.TRX;
+        if ((balancesRef.current?.USDT_TRC20 ?? 0) > 0 && merged.USDT_TRC20 === 0) merged.USDT_TRC20 = balancesRef.current.USDT_TRC20;
+        if ((balancesRef.current?.USDC_TRC20 ?? 0) > 0 && merged.USDC_TRC20 === 0) merged.USDC_TRC20 = balancesRef.current.USDC_TRC20;
+      }
+      setEthBalance(Number(merged.ETH || 0).toFixed(6));
+      ethBalanceRef.current = Number(merged.ETH || 0).toFixed(6);
+      setBalances(merged);
+      balancesRef.current = merged;
+      await AsyncStorage.setItem('cw_token_balances', JSON.stringify(merged));
       // Persist balances to Supabase
-      if (address) profileService.upsert(address, { token_balances: onChain }).catch(() => {});
+      if (walletAddress) profileService.upsert(walletAddress, { token_balances: merged }).catch(() => {});
     } catch (e) {
     } finally {
       setIsLoadingBalance(false);
     }
-  }, [tronAddress]);
+  }, [tronAddress, walletAddress]);
 
   const creditP2PBalance = useCallback((token: string, amount: number) => {
     const isTestnet = NETWORK_INFO[network]?.type === 'Testnet';
@@ -531,9 +552,19 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           }
           setCardFrozen(savedFrozen);
           if (savedTokenBals) {
-            const parsed = JSON.parse(savedTokenBals);
-            setBalances(parsed);
-            balancesRef.current = parsed;
+            let parsed = JSON.parse(savedTokenBals);
+            if (typeof parsed === 'string') {
+              try { parsed = JSON.parse(parsed); } catch { parsed = null; }
+            }
+            if (parsed && typeof parsed === 'object') {
+              setBalances(parsed);
+              balancesRef.current = parsed;
+              if (parsed.ETH !== undefined) {
+                const formattedEth = Number(parsed.ETH).toFixed(6);
+                setEthBalance(formattedEth);
+                ethBalanceRef.current = formattedEth;
+              }
+            }
           }
 
           // ── Step 2: Supabase sync — AWAITED so card/txs restore before UI renders ──
@@ -569,17 +600,28 @@ export function WalletProvider({ children }: { children: ReactNode }) {
                 setTronAddress(profileForStartup.tron_address);
                 storageService.saveTronAddress(profileForStartup.tron_address).catch(() => {});
               }
-              if (profileForStartup.token_balances && Object.keys(profileForStartup.token_balances).length > 0) {
-                const tb = profileForStartup.token_balances;
-                setBalances(tb);
-                balancesRef.current = tb;
-                setEthBalance((tb.ETH ?? 0).toFixed(6));
-                ethBalanceRef.current = (tb.ETH ?? 0).toFixed(6);
-                AsyncStorage.setItem('cw_token_balances', JSON.stringify(tb)).catch(() => {});
+              if (profileForStartup.token_balances) {
+                let tb = profileForStartup.token_balances;
+                if (typeof tb === 'string') {
+                  try { tb = JSON.parse(tb); } catch { tb = {}; }
+                }
+                if (tb && typeof tb === 'object' && Object.keys(tb).length > 0) {
+                  setBalances(tb);
+                  balancesRef.current = tb;
+                  setEthBalance(Number(tb.ETH ?? 0).toFixed(6));
+                  ethBalanceRef.current = Number(tb.ETH ?? 0).toFixed(6);
+                  AsyncStorage.setItem('cw_token_balances', JSON.stringify(tb)).catch(() => {});
+                }
               }
-              if (profileForStartup.locked_balances && Object.keys(profileForStartup.locked_balances).length > 0) {
-                setLockedBalance(profileForStartup.locked_balances);
-                AsyncStorage.setItem('cw_locked_balance', JSON.stringify(profileForStartup.locked_balances)).catch(() => {});
+              if (profileForStartup.locked_balances) {
+                let lb = profileForStartup.locked_balances;
+                if (typeof lb === 'string') {
+                  try { lb = JSON.parse(lb); } catch { lb = {}; }
+                }
+                if (lb && typeof lb === 'object' && Object.keys(lb).length > 0) {
+                  setLockedBalance(lb);
+                  AsyncStorage.setItem('cw_locked_balance', JSON.stringify(lb)).catch(() => {});
+                }
               }
             }
             // Helper: generate a Luhn-valid 16-digit number + CVV and save to Supabase
@@ -957,11 +999,48 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [walletAddress]);
 
+  const switchNetwork = useCallback(async (n: string) => {
+    setNetworkState(n);
+    // Persist network to AsyncStorage + Supabase
+    await AsyncStorage.setItem('cw_network', n).catch(() => {});
+    if (walletAddress) profileService.upsert(walletAddress, { network: n }).catch(() => {});
+    if (!walletAddress) return;
+    // Reset chain-specific balances so stale values from previous network don't show
+    const resetBalances = { 
+      ...balancesRef.current, // preserve cross-chain (SOL, BTC, BNB, XRP, TON, SUI)
+      ETH: 0, USDT: 0, USDC: 0, USDT_ERC20: 0, USDC_ERC20: 0, TRX: 0, USDT_TRC20: 0, USDC_TRC20: 0 
+    };
+    setBalances(resetBalances);
+    setEthBalance('0.0');
+    balancesRef.current = resetBalances;
+    ethBalanceRef.current = '0.0';
+    const isTronNet = n === 'TRON' || n === 'TRON Nile';
+    if (isTronNet) {
+      let tronAddr = await storageService.getTronAddress();
+      if (!tronAddr) {
+        const mnemonic = await storageService.getMnemonic();
+        if (mnemonic) {
+          const { deriveTronAddress } = await import('../services/tronService');
+          const tron = await deriveTronAddress(mnemonic);
+          tronAddr = tron.address;
+          setTronAddress(tron.address);
+          storageService.saveTronAddress(tron.address).catch(() => {});
+          profileService.upsert(walletAddress, { tron_address: tron.address }).catch(() => {});
+        }
+      } else {
+        setTronAddress(tronAddr);
+      }
+      if (tronAddr) fetchBalance(tronAddr, n);
+    } else {
+      fetchBalance(walletAddress, n);
+    }
+  }, [walletAddress, fetchBalance]);
+
   const createWallet = useCallback(async (): Promise<{ mnemonic: string; address: string }> => {
     return walletService.generateWalletPreview();
   }, []);
 
-  const importWallet = useCallback(async (mnemonic: string, isNew: boolean = false) => {
+  const importWallet = useCallback(async (mnemonic: string, isNew: boolean = false, preferredNetwork?: string) => {
     try {
       setIsLoadingWallet(true);
 
@@ -1033,6 +1112,29 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             if (profile.p2p_currency) {
               setP2PCurrencyState(profile.p2p_currency);
               await AsyncStorage.setItem('cw_p2p_currency', profile.p2p_currency);
+            }
+            if (profile.token_balances) {
+              let tb = profile.token_balances;
+              if (typeof tb === 'string') {
+                try { tb = JSON.parse(tb); } catch { tb = {}; }
+              }
+              if (tb && typeof tb === 'object' && Object.keys(tb).length > 0) {
+                setBalances(tb);
+                balancesRef.current = tb;
+                setEthBalance(Number(tb.ETH ?? 0).toFixed(6));
+                ethBalanceRef.current = Number(tb.ETH ?? 0).toFixed(6);
+                await AsyncStorage.setItem('cw_token_balances', JSON.stringify(tb));
+              }
+            }
+            if (profile.locked_balances) {
+              let lb = profile.locked_balances;
+              if (typeof lb === 'string') {
+                try { lb = JSON.parse(lb); } catch { lb = {}; }
+              }
+              if (lb && typeof lb === 'object' && Object.keys(lb).length > 0) {
+                setLockedBalance(lb);
+                await AsyncStorage.setItem('cw_locked_balance', JSON.stringify(lb));
+              }
             }
           } else {
             const defaultName = `Wallet ${data.address.slice(-4).toUpperCase()}`;
@@ -1157,10 +1259,21 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       transactionService.lastSyncTime = 0;
       transactionService.isLockedOut = false;
       // Fetch on-chain balance + new txs in background
+      // Apply preferred network from AsyncStorage (set during NetworkPreferenceScreen)
       ;(async () => {
         try {
-          await fetchBalance(data.address, network);
-          const newTxs = await transactionService.syncIncoming(data.address, network, prices.ETH?.usd ?? 3500, true);
+          // Use preferredNetwork param first, then AsyncStorage, then current network
+          const targetNetwork = preferredNetwork || await AsyncStorage.getItem('cw_network').catch(() => null) || network;
+          if (targetNetwork && targetNetwork !== network) {
+            // switchNetwork handles TRON address derivation + balance fetch
+            await switchNetwork(targetNetwork);
+          } else {
+            await fetchBalance(data.address, network);
+          }
+          const activeNet = targetNetwork || network;
+          const isTronNet = activeNet === 'TRON' || activeNet === 'TRON Nile';
+          const syncAddr  = isTronNet ? (data as any).tronAddress || data.address : data.address;
+          const newTxs = await transactionService.syncIncoming(syncAddr, activeNet, prices.ETH?.usd ?? 3500, true);
           if (Array.isArray(newTxs) && newTxs.length > 0) {
             setTransactions(prev => {
               const existingHashes = new Set(prev.map(t => t.txHash).filter(Boolean));
@@ -1174,7 +1287,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setIsLoadingWallet(false);
       throw new Error(e.message || 'Invalid seed phrase.');
     }
-  }, [walletAddress, network, prices, fetchBalance]);
+  }, [walletAddress, network, prices, fetchBalance, switchNetwork]);
 
   const deleteWallet = useCallback(async (): Promise<void> => {
     // LOGOUT — clears keys + address + read-only flag.
@@ -1532,36 +1645,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       return updated;
     });
   }, []);
-
-  const switchNetwork = useCallback(async (n: string) => {
-    setNetworkState(n);
-    // Persist network to Supabase
-    if (walletAddress) profileService.upsert(walletAddress, { network: n }).catch(() => {});
-    if (!walletAddress) return;
-    // Clear cached data when switching networks
-    setEthBalance('0.0');
-    setBalances({ USDT: 0, USDC: 0, ETH: 0, BTC: 0, SOL: 0, BNB: 0, XRP: 0, TON: 0, TRX: 0, SUI: 0 });
-    const isTronNet = n === 'TRON' || n === 'TRON Nile';
-    if (isTronNet) {
-      let tronAddr = await storageService.getTronAddress();
-      if (!tronAddr) {
-        const mnemonic = await storageService.getMnemonic();
-        if (mnemonic) {
-          const { deriveTronAddress } = await import('../services/tronService');
-          const tron = await deriveTronAddress(mnemonic);
-          tronAddr = tron.address;
-          setTronAddress(tron.address);
-          storageService.saveTronAddress(tron.address).catch(() => {});
-          profileService.upsert(walletAddress, { tron_address: tron.address }).catch(() => {});
-        }
-      } else {
-        setTronAddress(tronAddr);
-      }
-      if (tronAddr) fetchBalance(tronAddr, n);
-    } else {
-      fetchBalance(walletAddress, n);
-    }
-  }, [walletAddress, fetchBalance]);
 
   const setFiatCurrency = useCallback(async (currency: string) => {
     if (SUPPORTED_FIAT_CURRENCIES[currency]) {

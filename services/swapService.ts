@@ -174,7 +174,58 @@ function buildSimulatedQuote(
   };
 }
 
-// ─── Layer 1: 0x API v2 (mainnet) ────────────────────────────────────────────
+const SUNSWAP_ROUTER = 'TKzxdSv2FZKQrEqkKVgp5DcwEXBEKMg2Ax'; // SunSwap V2 Router mainnet
+const SUNSWAP_API = 'https://rot.endjgfsv.link/swap/router'; // SunSwap routing API
+const ALLOWED_SUNSWAP_HOSTS = ['rot.endjgfsv.link'];
+
+const TRON_TOKEN_ADDRESSES: Record<string, Record<string, string>> = {
+  TRON: {
+    TRX:  'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb', // wrapped TRX (WTRX) for routing
+    USDT: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+    USDC: 'TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8',
+  },
+};
+
+async function trySunSwapQuote(
+  from: string, to: string, amount: string, network: string
+): Promise<SwapQuote | null> {
+  if (network !== 'TRON') return null;
+  const tokens = TRON_TOKEN_ADDRESSES.TRON;
+  if (!tokens[from] || !tokens[to]) return null;
+  try {
+    const fromDecimals = from === 'TRX' ? 6 : (TOKEN_DECIMALS[from] ?? 6);
+    const toDecimals   = to   === 'TRX' ? 6 : (TOKEN_DECIMALS[to]   ?? 6);
+    const amountSun    = Math.floor(parseFloat(amount) * Math.pow(10, fromDecimals)).toString();
+    const url = `${SUNSWAP_API}?fromToken=${tokens[from]}&toToken=${tokens[to]}&amountIn=${amountSun}&typeList=PSM,CURVE,WTRX`;
+    if (!isSafeUrl(url, ALLOWED_SUNSWAP_HOSTS)) return null;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(url, { headers: { Accept: 'application/json' }, signal: controller.signal }).finally(() => clearTimeout(timer));
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data?.amountOut) return null;
+    const buyAmt = parseFloat(data.amountOut) / Math.pow(10, toDecimals);
+    const rate   = buyAmt / parseFloat(amount);
+    return {
+      buyAmount:       buyAmt.toFixed(6),
+      sellAmount:      amount,
+      price:           rate.toFixed(6),
+      estimatedGas:    '1',  // ~1 TRX bandwidth fee
+      isSimulated:     false,
+      source:          '0x' as const, // reuse type
+      fromToken:       from,
+      toToken:         to,
+      slippage:        '1',
+      minimumReceived: (buyAmt * 0.99).toFixed(6),
+      toAmount:        buyAmt.toFixed(6),
+      rate:            rate.toFixed(6),
+      txData:          data, // store full routing data for execution
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function try0xQuote(
   from: string, to: string, amount: string, network: string, walletAddress?: string
 ): Promise<SwapQuote | null> {
@@ -324,6 +375,17 @@ export async function getSwapQuote(
   const normalizedAmount = amount ? amount.replace(',', '.') : '0';
   if (!normalizedAmount || parseAmount(normalizedAmount) <= 0) return tryCachedQuote(from, to, '0');
 
+  // TRON: try SunSwap first, fall back to simulated
+  if (network === 'TRON' || network === 'TRON Nile') {
+    if (network === 'TRON') {
+      const q = await trySunSwapQuote(from, to, normalizedAmount, network);
+      if (q) return q;
+    }
+    const cg = await tryCoinGeckoQuote(from, to, normalizedAmount);
+    if (cg) return cg;
+    return tryCachedQuote(from, to, normalizedAmount);
+  }
+
   // Mainnet: try 0x first, fall back to simulated
   if (network !== 'Sepolia') {
     const q = await try0xQuote(from, to, normalizedAmount, network, walletAddress);
@@ -385,14 +447,24 @@ async function _execute0x(
     }
   }
 
-  onStatus?.('Broadcasting swap...');
-  const txReq: any = {
-    to:       data.transaction.to,
-    data:     data.transaction.data,
-    value:    BigInt(data.transaction.value ?? '0'),
-    gasLimit: BigInt(data.transaction.gas ?? '400000'),
-  };
-  if (data.transaction.gasPrice) txReq.gasPrice = BigInt(data.transaction.gasPrice);
+   onStatus?.('Broadcasting swap...');
+   
+   // Safely convert transaction fields to BigInt
+   const toStringValue = (val: any): string => {
+     if (typeof val === 'string') return val;
+     if (typeof val === 'number') return val.toString();
+     if (typeof val === 'bigint') return val.toString();
+     if (val && typeof val === 'object' && '_hex' in val) return val._hex; // ethers.js BigNumber
+     return '0';
+   };
+   
+   const txReq: any = {
+     to:       data.transaction.to,
+     data:     data.transaction.data,
+     value:    BigInt(toStringValue(data.transaction.value) || '0'),
+     gasLimit: BigInt(toStringValue(data.transaction.gas) || '400000'),
+   };
+   if (data.transaction.gasPrice) txReq.gasPrice = BigInt(toStringValue(data.transaction.gasPrice));
 
   const tx      = await wallet.sendTransaction(txReq);
   onStatus?.(`Submitted! ${tx.hash.slice(0, 12)}...`);
@@ -446,6 +518,105 @@ async function _executeUniswapSepolia(
 
   onStatus?.('Swap complete!');
   return { success: true, hash: receipt!.transactionHash, explorerUrl: `https://sepolia.etherscan.io/tx/${receipt!.transactionHash}` };
+}
+
+// ─── Execute SunSwap swap (TRON mainnet) ────────────────────────────────────
+async function _executeSunSwap(
+  quote: SwapQuote, privateKey: string, walletAddress: string,
+  onStatus?: (msg: string) => void
+): Promise<SwapResult> {
+  try {
+    const { tronService, tronAddressToHex } = await import('./tronService');
+    const base     = tronService.getBaseUrl('TRON');
+    const tokens   = TRON_TOKEN_ADDRESSES.TRON;
+    const fromDec  = quote.fromToken === 'TRX' ? 6 : (TOKEN_DECIMALS[quote.fromToken] ?? 6);
+    const toDec    = quote.toToken   === 'TRX' ? 6 : (TOKEN_DECIMALS[quote.toToken]   ?? 6);
+    const amtIn    = Math.floor(parseFloat(quote.sellAmount)      * Math.pow(10, fromDec));
+    const minOut   = Math.floor(parseFloat(quote.minimumReceived) * Math.pow(10, toDec));
+    const ownerHex = tronAddressToHex(walletAddress);
+    const deadline = Math.floor(Date.now() / 1000) + 300;
+    const isTRXIn  = quote.fromToken === 'TRX';
+
+    // TRC20 → approve router first
+    if (!isTRXIn) {
+      onStatus?.(`Approving ${quote.fromToken}...`);
+      const approveRes = await fetch(`${base}/wallet/triggersmartcontract`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          owner_address:     ownerHex,
+          contract_address:  tronAddressToHex(tokens[quote.fromToken]),
+          function_selector: 'approve(address,uint256)',
+          parameter:         tronAddressToHex(SUNSWAP_ROUTER).slice(2).padStart(64, '0') + 'f'.repeat(64),
+          fee_limit:         100_000_000,
+        }),
+      });
+      const approveTxData = await approveRes.json();
+      if (approveTxData?.transaction) {
+        const signedApprove = _signTron(approveTxData.transaction, privateKey);
+        await fetch(`${base}/wallet/broadcasttransaction`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(signedApprove),
+        });
+        await new Promise(r => setTimeout(r, 3000));
+      }
+    }
+
+    onStatus?.('Broadcasting swap...');
+    const path    = [tokens[quote.fromToken], tokens[quote.toToken]];
+    const selector = isTRXIn
+      ? 'swapExactTRXForTokens(uint256,address[],address,uint256)'
+      : 'swapExactTokensForTokens(uint256,uint256,address[],address,uint256)';
+    const pad = (n: number | bigint, len = 64) => BigInt(n).toString(16).padStart(len, '0');
+    const pathOffset = (isTRXIn ? 3 : 4) * 32;
+    const params: string[] = [];
+    if (!isTRXIn) params.push(pad(amtIn));
+    params.push(pad(minOut));
+    params.push(pad(pathOffset));
+    params.push(tronAddressToHex(walletAddress).slice(2).padStart(64, '0'));
+    params.push(pad(deadline));
+    params.push(pad(path.length));
+    for (const addr of path) params.push(tronAddressToHex(addr).slice(2).padStart(64, '0'));
+
+    const swapRes = await fetch(`${base}/wallet/triggersmartcontract`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        owner_address:     ownerHex,
+        contract_address:  tronAddressToHex(SUNSWAP_ROUTER),
+        function_selector: selector,
+        call_value:        isTRXIn ? amtIn : 0,
+        parameter:         params.join(''),
+        fee_limit:         100_000_000,
+      }),
+    });
+    const swapTxData = await swapRes.json();
+    if (!swapTxData?.transaction) throw new Error(swapTxData?.result?.message ?? 'Failed to build swap tx');
+
+    const signed = _signTron(swapTxData.transaction, privateKey);
+    const broadcastRes = await fetch(`${base}/wallet/broadcasttransaction`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(signed),
+    });
+    const broadcastResult = await broadcastRes.json();
+    if (!broadcastResult.result) throw new Error(broadcastResult.message ?? 'Broadcast failed');
+
+    onStatus?.('Swap complete!');
+    return { success: true, hash: swapTxData.transaction.txID, explorerUrl: `https://tronscan.org/#/transaction/${swapTxData.transaction.txID}` };
+  } catch (e: any) {
+    return { success: false, error: e?.message ?? 'SunSwap failed' };
+  }
+}
+
+function _signTron(tx: any, privateKey: string): any {
+  const wallet     = new ethers.Wallet(privateKey);
+  const msgBytes   = Uint8Array.from(Buffer.from(tx.txID, 'hex'));
+  const signingKey = typeof (wallet as any)._signingKey === 'function'
+    ? (wallet as any)._signingKey()
+    : (wallet as any).signingKey;
+  const sig = signingKey.signDigest ? signingKey.signDigest(msgBytes) : signingKey.sign(msgBytes);
+  const r = sig.r.slice(2).padStart(64, '0');
+  const s = sig.s.slice(2).padStart(64, '0');
+  const v = sig.v === 27 ? '00' : '01';
+  return { ...tx, signature: [r + s + v] };
 }
 
 // ─── Execute simulated swap ───────────────────────────────────────────────────
@@ -503,8 +674,15 @@ async function _doExecuteSwap(
   onStatus?: (msg: string) => void
 ): Promise<SwapResult> {
   try {
+    // TRON mainnet: use SunSwap
+    if (network === 'TRON' && !quote.isSimulated) {
+      const result = await _executeSunSwap(quote, privateKey, walletAddress, onStatus);
+      if (result.success && result.hash) await _saveSwapHistory({ ...quote, txHash: result.hash, isSimulated: false });
+      return result;
+    }
+
     // MAINNET SAFETY: Block simulated swaps on real mainnet only
-    const isRealMainnet = network === 'Ethereum' || network === 'Polygon' || network === 'Arbitrum';
+    const isRealMainnet = network === 'Ethereum' || network === 'Polygon' || network === 'Arbitrum' || network === 'TRON';
     if (quote.isSimulated && isRealMainnet) {
       return { success: false, error: 'Live quote required for mainnet swaps. Please wait for a real quote or try again.' };
     }
@@ -541,7 +719,7 @@ async function _doExecuteSwap(
 // ─── Shim ─────────────────────────────────────────────────────────────────────
 export const swapService = {
   isNetworkSupported: (network: string) =>
-    network === 'Sepolia' || network === 'TRON' || network === 'TRON Nile' || !!ZRX_APIS[network],
+    network === 'Sepolia' || network === 'TRON' || network === 'TRON Nile' || network === 'Solana' || network === 'Solana Devnet' || !!ZRX_APIS[network],
   getQuote: (from: string, to: string, amount: string, network: string, rpcUrl?: string, walletAddress?: string) =>
     getSwapQuote(from, to, amount, network, rpcUrl, walletAddress),
   executeSwap: (quote: SwapQuote, privateKey: string, rpcUrl: string, walletAddress: string, network: string, onStatus?: (msg: string) => void) =>

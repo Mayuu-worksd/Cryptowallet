@@ -678,7 +678,23 @@ export const profileService = {
       p_wallet: walletAddress.toLowerCase(),
     });
     if (error) throw error;
-    return data as WalletProfile | null;
+    if (!data) return null;
+    const profile = { ...data };
+    if (typeof profile.token_balances === 'string') {
+      try {
+        profile.token_balances = JSON.parse(profile.token_balances);
+      } catch {
+        profile.token_balances = null;
+      }
+    }
+    if (typeof profile.locked_balances === 'string') {
+      try {
+        profile.locked_balances = JSON.parse(profile.locked_balances);
+      } catch {
+        profile.locked_balances = null;
+      }
+    }
+    return profile as WalletProfile;
   },
 
   async upsert(
@@ -694,8 +710,8 @@ export const profileService = {
       p_tron_address:    patch.tron_address    ?? null,
       p_network:         patch.network         ?? null,
       p_is_dark_mode:    patch.is_dark_mode    ?? null,
-      p_token_balances:  patch.token_balances  ? JSON.stringify(patch.token_balances)  : null,
-      p_locked_balances: patch.locked_balances ? JSON.stringify(patch.locked_balances) : null,
+      p_token_balances:  patch.token_balances  ?? null,
+      p_locked_balances: patch.locked_balances ?? null,
     });
     if (error) throw error;
   },

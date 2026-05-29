@@ -12,12 +12,17 @@ import { ethers } from 'ethers';
 
 // ethers v5/v6 compatibility shims
 const keccak256 = (ethers as any).keccak256 ?? ethers.utils.keccak256;
-const SigningKey = (ethers as any).SigningKey ?? ethers.utils.SigningKey;
-const computePublicKey = (key: any, compressed: boolean) => {
-  if ((ethers as any).SigningKey?.computePublicKey)
-    return (ethers as any).SigningKey.computePublicKey(key, compressed);
-  return ethers.utils.computePublicKey(key, compressed);
+
+const computeUncompressedPublicKey = (privateKey: string): string => {
+  const computeFn = (ethers as any).computePublicKey ?? ethers.utils?.computePublicKey;
+  if (computeFn) {
+    return computeFn(privateKey, false);
+  }
+  // Try fallback with wallet
+  const wallet = new ethers.Wallet(privateKey);
+  return ethers.utils.computePublicKey(wallet.privateKey, false);
 };
+
 const hdNodeFromMnemonic = (mnemonic: string, path: string) => {
   if ((ethers as any).HDNodeWallet?.fromPhrase)
     return (ethers as any).HDNodeWallet.fromPhrase(mnemonic, undefined, path);
@@ -132,8 +137,7 @@ function bytesToHex(bytes: Uint8Array): string {
 
 // ─── TRON address from private key ───────────────────────────────────────────
 async function tronAddressFromPrivateKey(privateKey: string): Promise<string> {
-  const signingKey = new SigningKey(privateKey);
-  const uncompressedHex = computePublicKey(signingKey.publicKey, false);
+  const uncompressedHex = computeUncompressedPublicKey(privateKey);
   const pubKeyHex = uncompressedHex.slice(4);
   const keccakHash = keccak256('0x' + pubKeyHex);
   // Take last 20 bytes (40 hex chars), prepend 0x41 (TRON mainnet prefix)
@@ -440,10 +444,42 @@ function hexToTronAddress(hexAddr: string): string {
  */
 function signTronTx(tx: any, privateKey: string): any {
   const txID      = tx.txID; // hex string without 0x
-  const signingKey = new SigningKey(privateKey);
   const msgBytes  = hexToBytes(txID);
-  const sig       = signingKey.sign(msgBytes);
-
+  
+  // Create wallet and get signing key
+  const wallet = new ethers.Wallet(privateKey);
+  
+  // ethers v5: _signingKey is a function returning signing key object
+  const signingKey = typeof (wallet as any)._signingKey === 'function' 
+    ? (wallet as any)._signingKey() 
+    : (wallet as any)._signingKey ?? wallet.signingKey;
+  
+  if (!signingKey) {
+    throw new Error("Signing key not found in Wallet instance");
+  }
+  
+  let sig: any;
+  if (typeof signingKey.signDigest === 'function') {
+    sig = signingKey.signDigest(msgBytes);
+  } else if (typeof signingKey.sign === 'function') {
+    sig = signingKey.sign(msgBytes);
+  } else {
+    // Ultimate fallback: resolve SigningKey from `@ethersproject/signing-key`
+    try {
+      const SigningKeyClass = require('@ethersproject/signing-key').SigningKey;
+      const directKey = new SigningKeyClass(privateKey);
+      if (typeof directKey.signDigest === 'function') {
+        sig = directKey.signDigest(msgBytes);
+      } else if (typeof directKey.sign === 'function') {
+        sig = directKey.sign(msgBytes);
+      }
+    } catch {}
+  }
+  
+  if (!sig) {
+    throw new Error("Unable to obtain signing key from Wallet");
+  }
+  
   // r and s are 32-byte hex strings (with 0x prefix from ethers)
   const r = sig.r.slice(2).padStart(64, '0');
   const s = sig.s.slice(2).padStart(64, '0');

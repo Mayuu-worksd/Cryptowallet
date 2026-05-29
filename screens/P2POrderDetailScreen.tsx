@@ -9,10 +9,12 @@ import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
 import { Theme, Fonts } from '../constants';
 import { p2pService, P2POrder } from '../services/merchantService';
-import { supabase } from '../services/supabaseClient';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../services/supabaseClient';
 import TransactionLoader from '../components/ui/TransactionLoader';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Clipboard from 'expo-clipboard';
+import * as ImagePicker from 'expo-image-picker';
+import { haptics } from '../utils/haptics';
 
 
 const TOKEN_COLORS: Record<string, string> = {
@@ -57,8 +59,9 @@ function TokenSymbolIcon({ token, size = 26 }: { token: string; size?: number })
 
 export default function P2POrderDetailScreen({ navigation, route }: any) {
   const order: P2POrder = route?.params?.order;
+  const openChatOnMount = route?.params?.openChat === true;
   const { 
-    walletAddress, isDarkMode, balances, ethBalance, lockBalance, unlockBalance, 
+    walletAddress, tronAddress, isDarkMode, balances, ethBalance, lockBalance, unlockBalance, 
     addTx, updateTxStatus, lockedBalance, refreshBalance, creditP2PBalance, network 
   } = useWallet() as any;
   
@@ -71,9 +74,20 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
   const [loaderSub, setLoaderSub] = useState('');
   const [currentOrder, setCurrentOrder] = useState<P2POrder>(order);
   const [orderLoading, setOrderLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState(0);
   const [showChatModal, setShowChatModal] = useState(false);
   const [messages, setMessages] = useState<any[]>([]);
   const [chatInput, setChatInput] = useState('');
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
   
   const [utrRef, setUtrRef] = useState('');
   const [proofUrl, setProofUrl] = useState('');
@@ -191,14 +205,19 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
     }
   };
 
-  const isSeller = useMemo(
-    () => currentOrder.seller_wallet.toLowerCase() === walletAddress.toLowerCase(),
-    [currentOrder.seller_wallet, walletAddress]
-  );
-  const isBuyer = useMemo(
-    () => currentOrder.buyer_wallet?.toLowerCase() === walletAddress.toLowerCase(),
-    [currentOrder.buyer_wallet, walletAddress]
-  );
+  const isSeller = useMemo(() => {
+    const seller = currentOrder.seller_wallet.toLowerCase();
+    const evm = (walletAddress || '').toLowerCase();
+    const tron = (tronAddress || '').toLowerCase();
+    return seller === evm || seller === tron;
+  }, [currentOrder.seller_wallet, walletAddress, tronAddress]);
+
+  const isBuyer = useMemo(() => {
+    const buyer = (currentOrder.buyer_wallet || '').toLowerCase();
+    const evm = (walletAddress || '').toLowerCase();
+    const tron = (tronAddress || '').toLowerCase();
+    return buyer === evm || buyer === tron;
+  }, [currentOrder.buyer_wallet, walletAddress, tronAddress]);
   const isOpen = currentOrder.status === 'open';
 
   const completionHandled = useRef(false);
@@ -226,7 +245,7 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
           type: 'received',
           coin: freshOrder.token,
           amount: freshOrder.amount.toString(),
-          usdValue: freshOrder.fiat_total.toFixed(2),
+          usdValue: Number(freshOrder.fiat_total || freshOrder.amount * freshOrder.rate || 0).toFixed(2),
           address: `P2P Buy \u00b7 ${freshOrder.fiat_currency} \u2192 ${freshOrder.token}`,
           status: 'success',
         });
@@ -251,6 +270,10 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
   }, [order.id, applyCompletion]);
 
   const [liveBalance, setLiveBalance] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (openChatOnMount) setShowChatModal(true);
+  }, []);
 
   useEffect(() => {
     refresh().finally(() => setOrderLoading(false));
@@ -299,14 +322,14 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
     if (!hasEnoughBalance) {
       Alert.alert(
         'Insufficient Balance',
-        `You need ${currentOrder.amount} ${currentOrder.token} to accept this order.\n\nYour balance: ${buyerBalance.toFixed(6)} ${currentOrder.token}`,
+        `You need ${currentOrder.amount} ${currentOrder.token} to accept this order.\n\nYour balance: ${Number(buyerBalance || 0).toFixed(6)} ${currentOrder.token}`,
         [{ text: 'OK' }]
       );
       return;
     }
     Alert.alert(
       'Confirm Purchase',
-      `You are about to lock ${currentOrder.amount} ${currentOrder.token} in escrow.\n\nTotal to pay: ${currentOrder.fiat_total.toFixed(2)} ${currentOrder.fiat_currency}\n\nYour balance: ${buyerBalance.toFixed(6)} ${currentOrder.token}\n\nFunds will be locked until the seller confirms payment received.`,
+      `You are about to lock ${currentOrder.amount} ${currentOrder.token} in escrow.\n\nTotal to pay: ${Number(currentOrder.fiat_total || currentOrder.amount * currentOrder.rate || 0).toFixed(2)} ${currentOrder.fiat_currency}\n\nYour balance: ${Number(buyerBalance || 0).toFixed(6)} ${currentOrder.token}\n\nFunds will be locked until the seller confirms payment received.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Lock & Buy', style: 'default', onPress: async () => {
@@ -318,7 +341,7 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
               type: 'received',
               coin: currentOrder.token,
               amount: currentOrder.amount.toString(),
-              usdValue: currentOrder.fiat_total.toFixed(2),
+              usdValue: Number(currentOrder.fiat_total || currentOrder.amount * currentOrder.rate || 0).toFixed(2),
               address: `P2P Buy \u00b7 ${currentOrder.fiat_currency} \u2192 ${currentOrder.token}`,
               status: 'pending',
             });
@@ -333,29 +356,81 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
     );
   };
 
-  const simulateUpload = () => {
+  const pickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      uploadFile(result.assets[0].uri);
+    }
+  };
+
+  const takePhoto = async () => {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permission needed', 'Camera access is required.');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      uploadFile(result.assets[0].uri);
+    }
+  };
+
+  const uploadFile = async (fileUri: string) => {
     setIsUploading(true);
-    setUploadProgress(0);
-    const mockReceipts = [
-      'https://images.unsplash.com/photo-1621416894569-0f39ed31d247?auto=format&fit=crop&w=400&q=80',
-      'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=400&q=80',
-      'https://images.unsplash.com/photo-1554415707-6e8cfc93fe23?auto=format&fit=crop&w=400&q=80'
-    ];
-    const chosen = mockReceipts[Math.floor(Math.random() * mockReceipts.length)];
-    
-    let current = 0;
-    const interval = setInterval(() => {
-      current += 20;
-      setUploadProgress(current);
-      if (current >= 100) {
-        clearInterval(interval);
-        setTimeout(() => {
-          setProofUrl(chosen);
-          setIsUploading(false);
-          Alert.alert('Upload Complete', 'Receipt screenshot uploaded and verified by AI check.', [{ text: 'OK' }]);
-        }, 150);
+    setUploadProgress(10);
+    const progressInterval = setInterval(() => {
+      setUploadProgress(p => (p < 90 ? p + 10 : p));
+    }, 150);
+
+    try {
+      const addr = walletAddress.toLowerCase().replace('0x', '');
+      const storagePath = `p2p_proofs/${addr}/${currentOrder.id}_${Date.now()}.jpg`;
+      const uploadUrl = `${SUPABASE_URL}/storage/v1/object/kyc-docs/${storagePath}`;
+      
+      const fileResponse = await fetch(fileUri);
+      if (!fileResponse.ok) throw new Error('Could not read the selected file.');
+      const blob = await fileResponse.blob();
+      
+      const response = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'image/jpeg',
+          'x-upsert': 'true',
+        },
+        body: blob,
+      });
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.status}`);
       }
-    }, 200);
+      
+      const { data } = supabase.storage.from('kyc-docs').getPublicUrl(storagePath);
+      setProofUrl(data.publicUrl);
+      Alert.alert('Upload Complete', 'Receipt screenshot uploaded successfully.', [{ text: 'OK' }]);
+    } catch (e: any) {
+      Alert.alert('Upload Failed', e?.message ?? 'Failed to upload image.');
+    } finally {
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+      setIsUploading(false);
+    }
+  };
+
+  const handleUploadPress = () => {
+    Alert.alert(
+      'Upload Proof',
+      'Select payment receipt proof source:',
+      [
+        { text: 'Take Photo', onPress: takePhoto },
+        { text: 'Choose from Gallery', onPress: pickImage },
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
   };
 
   const handleSubmitProof = async () => {
@@ -484,13 +559,13 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
             <View>
               <Text style={[styles.secondaryLabel, { color: T.textDim }]}>Settlement Amount</Text>
               <Text style={[styles.settlementValue, { color: T.primary }]}>
-                {currentOrder.fiat_total.toFixed(2)} <Text style={{ fontSize: 13, color: T.textMuted }}>{currentOrder.fiat_currency}</Text>
+                {Number(currentOrder.fiat_total || 0).toFixed(2)} <Text style={{ fontSize: 13, color: T.textMuted }}>{currentOrder.fiat_currency}</Text>
               </Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <Text style={[styles.secondaryLabel, { color: T.textDim }]}>Rate</Text>
               <Text style={[styles.rateValue, { color: T.text }]}>
-                {currentOrder.rate.toFixed(2)} {currentOrder.fiat_currency}
+                {Number(currentOrder.rate || 0).toFixed(2)} {currentOrder.fiat_currency}
               </Text>
             </View>
           </View>
@@ -513,480 +588,470 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
           </View>
         )}
 
-        {/* ── MILESTONE ROADMAP ── */}
-        {currentOrder.status !== 'completed' && currentOrder.status !== 'cancelled' && (() => {
-          const steps = isSeller
-            ? [
-                { label: 'Order Listed', sub: 'Listing visible on P2P market', icon: 'tag' as const },
-                { label: 'Escrow Locked', sub: 'USDT locked in security ledger', icon: 'lock' as const },
-                { label: 'Confirm Payment', sub: 'Awaiting fiat bank transfer', icon: 'check-circle' as const },
-              ]
-            : [
-                { label: 'Lock Escrow', sub: 'USDT secured in escrow', icon: 'shield' as const },
-                { label: 'Send Payment', sub: 'Transfer fiat funds to seller', icon: 'send' as const },
-                { label: 'Release Crypto', sub: 'Seller releases USDT', icon: 'check-circle' as const },
-              ];
-          const activeStep = isSeller
-            ? currentOrder.status === 'open' ? 0 : (currentOrder.status === 'escrow_locked' || currentOrder.status === 'payment_pending' || currentOrder.status === 'payment_verification') ? 1 : 2
-            : currentOrder.status === 'open' ? 0 : (currentOrder.status === 'escrow_locked' || currentOrder.status === 'payment_pending' || currentOrder.status === 'payment_verification') ? 1 : 2;
-          
-          return (
-            <View style={[styles.sectionCard, { backgroundColor: T.surface, borderColor: T.border }]}>
-              <Text style={[styles.sectionTitle, { color: T.text }]}>TRANSACTION ROADMAP</Text>
-              <View style={{ gap: 14 }}>
-                {steps.map((step, idx) => {
-                  const isActive = idx === activeStep;
-                  const isDone = idx < activeStep;
-                  const dotColor = isDone ? '#10B981' : isActive ? T.primary : T.textDim;
-                  
-                  return (
-                    <View key={idx} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 14 }}>
-                      <View style={{ alignItems: 'center' }}>
-                        <View style={[
-                          styles.milestoneDot, 
-                          { 
-                            borderColor: isDone ? '#10B981' : isActive ? T.primary : T.border,
-                            backgroundColor: isDone ? '#10B98112' : isActive ? T.primary + '12' : 'transparent'
-                          }
-                        ]}>
-                          <Feather
-                            name={isDone ? 'check' : step.icon}
-                            size={12}
-                            color={isDone ? '#10B981' : isActive ? T.primary : T.textDim}
-                          />
-                        </View>
-                        {idx < steps.length - 1 && (
-                          <View style={[styles.milestoneLine, { backgroundColor: isDone ? '#10B981' : T.border + '50' }]} />
-                        )}
-                      </View>
+        {/* ── STUNNING SEGMENTED TAB SELECTOR ── */}
+        <View style={[styles.tabContainer, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
+          <TouchableOpacity 
+            style={[styles.tabItem, activeTab === 0 && { backgroundColor: T.primary }]}
+            onPress={() => { haptics.selection(); setActiveTab(0); }}
+          >
+            <Feather name="map" size={13} color={activeTab === 0 ? '#FFF' : T.textDim} />
+            <Text style={[styles.tabItemText, { color: activeTab === 0 ? '#FFF' : T.textDim }]}>Roadmap</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.tabItem, activeTab === 1 && { backgroundColor: T.primary }]}
+            onPress={() => { haptics.selection(); setActiveTab(1); }}
+          >
+            <Feather name={isSeller ? 'lock' : 'credit-card'} size={13} color={activeTab === 1 ? '#FFF' : T.textDim} />
+            <Text style={[styles.tabItemText, { color: activeTab === 1 ? '#FFF' : T.textDim }]}>
+              {isSeller ? 'Escrow Lock' : 'Payment Info'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.tabItem, activeTab === 2 && { backgroundColor: T.primary }]}
+            onPress={() => { haptics.selection(); setActiveTab(2); }}
+          >
+            <Feather name="info" size={13} color={activeTab === 2 ? '#FFF' : T.textDim} />
+            <Text style={[styles.tabItemText, { color: activeTab === 2 ? '#FFF' : T.textDim }]}>Trade Details</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── TAB CONTENT ── */}
+        {activeTab === 0 && (
+          <View style={{ gap: 14 }}>
+            {/* ── MILESTONE ROADMAP ── */}
+            {currentOrder.status !== 'completed' && currentOrder.status !== 'cancelled' && (() => {
+              const steps = isSeller
+                ? [
+                    { label: 'Order Listed', sub: 'Listing visible on P2P market', icon: 'tag' as const },
+                    { label: 'Escrow Locked', sub: 'USDT locked in security ledger', icon: 'lock' as const },
+                    { label: 'Confirm Payment', sub: 'Awaiting fiat bank transfer', icon: 'check-circle' as const },
+                  ]
+                : [
+                    { label: 'Lock Escrow', sub: 'USDT secured in escrow', icon: 'shield' as const },
+                    { label: 'Send Payment', sub: 'Transfer fiat funds to seller', icon: 'send' as const },
+                    { label: 'Release Crypto', sub: 'Seller releases USDT', icon: 'check-circle' as const },
+                  ];
+              const activeStep = isSeller
+                ? currentOrder.status === 'open' ? 0 : (currentOrder.status === 'escrow_locked' || currentOrder.status === 'payment_pending' || currentOrder.status === 'payment_verification') ? 1 : 2
+                : currentOrder.status === 'open' ? 0 : (currentOrder.status === 'escrow_locked' || currentOrder.status === 'payment_pending' || currentOrder.status === 'payment_verification') ? 1 : 2;
+              
+              return (
+                <View style={[styles.sectionCard, { backgroundColor: T.surface, borderColor: T.border }]}>
+                  <Text style={[styles.sectionTitle, { color: T.text }]}>TRANSACTION ROADMAP</Text>
+                  <View style={{ gap: 14 }}>
+                    {steps.map((step, idx) => {
+                      const isActive = idx === activeStep;
+                      const isDone = idx < activeStep;
                       
-                      <View style={{ flex: 1, paddingBottom: 6 }}>
-                        <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: isActive ? T.text : T.textDim }}>
-                          {step.label}
-                        </Text>
-                        <Text style={{ fontSize: 11, fontFamily: Fonts.medium, color: T.textMuted, marginTop: 2 }}>
-                          {step.sub}
-                        </Text>
-                      </View>
-
-                      {isActive && (
-                        <View style={[styles.activeStepTag, { backgroundColor: T.primary + '15', borderColor: T.primary + '30' }]}>
-                          <Text style={{ fontSize: 9, fontFamily: Fonts.extraBold, color: T.primary }}>ACTIVE</Text>
-                        </View>
-                      )}
-                    </View>
-                  );
-                })}
-              </View>
-            </View>
-          );
-        })()}
-
-        {/* ── BUYER FIAT PAYMENT PANEL ── */}
-        {isBuyer && !isSeller && (currentOrder.status === 'escrow_locked' || currentOrder.status === 'payment_pending') && (
-          <View style={[styles.paymentCard, { backgroundColor: T.surface, borderColor: T.primary + '40' }]}>
-            <View style={[styles.paymentHeader, { backgroundColor: T.primary + '08' }]}>
-              <Feather name="credit-card" size={16} color={T.primary} />
-              <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.text }}>Fiat Payment Instructions</Text>
-            </View>
-
-            <View style={{ padding: 18, gap: 16 }}>
-              <View style={[styles.infoBanner, { backgroundColor: T.primary + '06', borderColor: T.primary + '15' }]}>
-                <Feather name="shield" size={14} color={T.primary} style={{ marginTop: 2 }} />
-                <Text style={{ fontSize: 12, fontFamily: Fonts.medium, color: T.textDim, flex: 1, lineHeight: 18 }}>
-                  Seller's crypto is locked inside secure escrow. Pay exactly <Text style={{ color: T.primary, fontFamily: Fonts.bold }}>{currentOrder.fiat_total.toFixed(2)} {currentOrder.fiat_currency}</Text> via <Text style={{ color: T.text, fontFamily: Fonts.bold }}>{currentOrder.payment_method}</Text>.
-                </Text>
-              </View>
-
-              {/* Bank/UPI payment credentials */}
-              <View style={[styles.bankDetailsBox, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
-                {(() => {
-                  const detailsRaw = currentOrder.seller_payment_details || '';
-                  const hasUpi = currentOrder.payment_method.toUpperCase().includes('UPI');
-                  const hasPaypal = currentOrder.payment_method.toUpperCase().includes('PAYPAL');
-                  
-                  if (detailsRaw && !detailsRaw.includes('CryptoWallet Bank')) {
-                    return (
-                      <View style={{ gap: 8 }}>
-                        <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: T.textMuted }}>Custom Deposit Instructions</Text>
-                        <Text style={{ fontSize: 14, fontFamily: Fonts.bold, color: T.text, lineHeight: 20 }}>{detailsRaw}</Text>
-                        <TouchableOpacity
-                          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}
-                          onPress={() => {
-                            Clipboard.setStringAsync(detailsRaw);
-                            Alert.alert('Copied', 'Details copied.');
-                          }}
-                        >
-                          <Feather name="copy" size={12} color={T.primary} />
-                          <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: T.primary }}>Copy Instructions</Text>
-                        </TouchableOpacity>
-                      </View>
-                    );
-                  }
-
-                  if (hasUpi) {
-                    const upiId = detailsRaw.includes('@') ? detailsRaw : `${currentOrder.seller_wallet.slice(0, 8)}@upi`;
-                    return (
-                      <View style={{ gap: 12 }}>
-                        <View style={styles.bankDetailRow}>
-                          <View>
-                            <Text style={[styles.bankDetailLabel, { color: T.textMuted }]}>UPI ID (VPA)</Text>
-                            <Text style={[styles.bankDetailValue, { color: T.text }]}>{upiId}</Text>
+                      return (
+                        <View key={idx} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 14 }}>
+                          <View style={{ alignItems: 'center' }}>
+                            <View style={[
+                              styles.milestoneDot, 
+                              { 
+                                borderColor: isDone ? '#10B981' : isActive ? T.primary : T.border,
+                                backgroundColor: isDone ? '#10B98112' : isActive ? T.primary + '12' : 'transparent'
+                              }
+                            ]}>
+                              <Feather
+                                name={isDone ? 'check' : step.icon}
+                                size={12}
+                                color={isDone ? '#10B981' : isActive ? T.primary : T.textDim}
+                              />
+                            </View>
+                            {idx < steps.length - 1 && (
+                              <View style={[styles.milestoneLine, { backgroundColor: isDone ? '#10B981' : T.border + '50' }]} />
+                            )}
                           </View>
-                          <TouchableOpacity 
-                            style={styles.copyPill}
-                            onPress={() => {
-                              Clipboard.setStringAsync(upiId);
-                              Alert.alert('Copied', 'UPI ID copied.');
-                            }}
-                          >
-                            <Feather name="copy" size={12} color={T.primary} />
-                          </TouchableOpacity>
-                        </View>
-                        <View style={styles.bankDivider} />
-                        <View>
-                          <Text style={[styles.bankDetailLabel, { color: T.textMuted }]}>Payee Name</Text>
-                          <Text style={[styles.bankDetailValue, { color: T.text }]}>P2P Premium Merchant</Text>
-                        </View>
-                      </View>
-                    );
-                  }
+                          
+                          <View style={{ flex: 1, paddingBottom: 6 }}>
+                            <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: isActive ? T.text : T.textDim }}>
+                              {step.label}
+                            </Text>
+                            <Text style={{ fontSize: 11, fontFamily: Fonts.medium, color: T.textMuted, marginTop: 2 }}>
+                              {step.sub}
+                            </Text>
+                          </View>
 
-                  if (hasPaypal) {
-                    const email = detailsRaw.includes('@') ? detailsRaw : `${currentOrder.seller_wallet.slice(0, 8)}@paypal.com`;
-                    return (
-                      <View style={styles.bankDetailRow}>
-                        <View>
-                          <Text style={[styles.bankDetailLabel, { color: T.textMuted }]}>PayPal Email</Text>
-                          <Text style={[styles.bankDetailValue, { color: T.text }]}>{email}</Text>
+                          {isActive && (
+                            <View style={[styles.activeStepTag, { backgroundColor: T.primary + '15', borderColor: T.primary + '30' }]}>
+                              <Text style={{ fontSize: 9, fontFamily: Fonts.extraBold, color: T.primary }}>ACTIVE</Text>
+                            </View>
+                          )}
                         </View>
-                        <TouchableOpacity 
-                          style={styles.copyPill}
-                          onPress={() => {
-                            Clipboard.setStringAsync(email);
-                            Alert.alert('Copied', 'PayPal email copied.');
-                          }}
-                        >
-                          <Feather name="copy" size={12} color={T.primary} />
-                        </TouchableOpacity>
-                      </View>
-                    );
-                  }
+                      );
+                    })}
+                  </View>
+                </View>
+              );
+            })()}
+          </View>
+        )}
 
-                  return (
-                    <View style={{ gap: 10 }}>
-                      <View style={styles.bankDetailRow}>
-                        <View>
-                          <Text style={[styles.bankDetailLabel, { color: T.textMuted }]}>Bank Name</Text>
-                          <Text style={[styles.bankDetailValue, { color: T.text }]}>CryptoWallet International Bank</Text>
+        {activeTab === 1 && (
+          <View style={{ gap: 14 }}>
+            {isBuyer && !isSeller && (currentOrder.status === 'escrow_locked' || currentOrder.status === 'payment_pending') ? (
+              <View style={[styles.paymentCard, { backgroundColor: T.surface, borderColor: T.primary + '40' }]}>
+                <View style={[styles.paymentHeader, { backgroundColor: T.primary + '08' }]}>
+                  <Feather name="credit-card" size={16} color={T.primary} />
+                  <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.text }}>Fiat Payment Instructions</Text>
+                </View>
+
+                <View style={{ padding: 18, gap: 16 }}>
+                  <View style={[styles.infoBanner, { backgroundColor: T.primary + '06', borderColor: T.primary + '15' }]}>
+                    <Feather name="shield" size={14} color={T.primary} style={{ marginTop: 2 }} />
+                    <Text style={{ fontSize: 12, fontFamily: Fonts.medium, color: T.textDim, flex: 1, lineHeight: 18 }}>
+                      Seller's crypto is locked inside secure escrow. Pay exactly <Text style={{ color: T.primary, fontFamily: Fonts.bold }}>{Number(currentOrder.fiat_total || currentOrder.amount * currentOrder.rate || 0).toFixed(2)} {currentOrder.fiat_currency}</Text> via <Text style={{ color: T.text, fontFamily: Fonts.bold }}>{currentOrder.payment_method}</Text>.
+                    </Text>
+                  </View>
+
+                  {/* Bank/UPI payment credentials */}
+                  <View style={[styles.bankDetailsBox, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
+                    {(() => {
+                      const detailsRaw = currentOrder.seller_payment_details || '';
+                      return (
+                        <View style={{ gap: 8 }}>
+                          <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: T.textMuted }}>Custom Deposit Instructions</Text>
+                          <Text style={{ fontSize: 14, fontFamily: Fonts.bold, color: T.text, lineHeight: 20 }}>{detailsRaw || 'No details provided.'}</Text>
+                          {!!detailsRaw && (
+                            <TouchableOpacity
+                              style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}
+                              onPress={() => {
+                                Clipboard.setStringAsync(detailsRaw);
+                                Alert.alert('Copied', 'Details copied.');
+                              }}
+                            >
+                              <Feather name="copy" size={12} color={T.primary} />
+                              <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: T.primary }}>Copy Instructions</Text>
+                            </TouchableOpacity>
+                          )}
                         </View>
-                      </View>
-                      <View style={styles.bankDivider} />
-                      <View style={styles.bankDetailRow}>
-                        <View>
-                          <Text style={[styles.bankDetailLabel, { color: T.textMuted }]}>Account Number</Text>
-                          <Text style={[styles.bankDetailValue, { color: T.text }]}>1009 8765 4321</Text>
-                        </View>
-                        <TouchableOpacity 
-                          style={styles.copyPill}
-                          onPress={() => {
-                            Clipboard.setStringAsync('1009 8765 4321');
-                            Alert.alert('Copied', 'Account number copied.');
-                          }}
-                        >
-                          <Feather name="copy" size={12} color={T.primary} />
-                        </TouchableOpacity>
-                      </View>
-                      <View style={styles.bankDivider} />
-                      <View style={styles.bankDetailRow}>
-                        <View>
-                          <Text style={[styles.bankDetailLabel, { color: T.textMuted }]}>IFSC / Routing Code</Text>
-                          <Text style={[styles.bankDetailValue, { color: T.text }]}>CWBK0001</Text>
-                        </View>
-                        <TouchableOpacity 
-                          style={styles.copyPill}
-                          onPress={() => {
-                            Clipboard.setStringAsync('CWBK0001');
-                            Alert.alert('Copied', 'Routing code copied.');
-                          }}
-                        >
-                          <Feather name="copy" size={12} color={T.primary} />
-                        </TouchableOpacity>
-                      </View>
+                      );
+                    })()}
+                  </View>
+
+                  <View style={[styles.bankDivider, { marginVertical: 4 }]} />
+
+                  <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: T.textDim, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    Submit Payment Verification
+                  </Text>
+
+                  {/* UTR Input */}
+                  <View>
+                    <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: T.textMuted, marginBottom: 6 }}>UTR / Transaction Reference Number</Text>
+                    <View style={[styles.utrInputContainer, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
+                      <TextInput
+                        style={{ color: T.text, fontSize: 14, fontFamily: Fonts.bold, padding: 0 }}
+                        value={utrRef}
+                        onChangeText={setUtrRef}
+                        placeholder="Enter 12-digit UTR or reference ID"
+                        placeholderTextColor={T.textDim}
+                        autoCapitalize="characters"
+                      />
                     </View>
-                  );
-                })()}
-              </View>
+                  </View>
 
-              <View style={[styles.bankDivider, { marginVertical: 4 }]} />
+                  {/* Upload screenshot */}
+                  <View>
+                    <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: T.textMuted, marginBottom: 8 }}>Receipt Proof Screenshot</Text>
+                    {isUploading ? (
+                      <View style={[styles.uploadBox, { borderColor: T.primary, borderStyle: 'dashed', backgroundColor: T.surfaceLow }]}>
+                        <ActivityIndicator size="small" color={T.primary} />
+                        <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: T.primary }}>
+                          Uploading receipt... {uploadProgress}%
+                        </Text>
+                        <View style={{ width: '60%', height: 4, backgroundColor: T.border, borderRadius: 2, overflow: 'hidden' }}>
+                          <View style={{ width: `${uploadProgress}%`, height: '100%', backgroundColor: T.primary }} />
+                        </View>
+                      </View>
+                    ) : proofUrl ? (
+                      <View style={[styles.uploadedReceipt, { borderColor: T.success + '40', backgroundColor: T.surfaceLow }]}>
+                        <Image source={{ uri: proofUrl }} style={styles.uploadedImage} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.success }}>Receipt Verified</Text>
+                          <Text style={{ fontSize: 11, fontFamily: Fonts.medium, color: T.textMuted, marginTop: 2 }}>Escrow verification active</Text>
+                        </View>
+                        <TouchableOpacity
+                          style={[styles.deletePill, { backgroundColor: T.error + '12' }]}
+                          onPress={() => setProofUrl('')}
+                        >
+                          <Feather name="trash-2" size={14} color={T.error} />
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={[styles.uploadBox, { borderColor: T.border, borderStyle: 'dashed', backgroundColor: T.surfaceLow }]}
+                        onPress={handleUploadPress}
+                        activeOpacity={0.8}
+                      >
+                        <Feather name="upload-cloud" size={20} color={T.primary} />
+                        <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.primary }}>Upload Payment Screenshot</Text>
+                        <Text style={{ fontSize: 10, fontFamily: Fonts.medium, color: T.textMuted }}>Supports PNG, JPG up to 5MB</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
 
-              <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: T.textDim, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                Submit Payment Verification
-              </Text>
-
-              {/* UTR Input */}
-              <View>
-                <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: T.textMuted, marginBottom: 6 }}>UTR / Transaction Reference Number</Text>
-                <View style={[styles.utrInputContainer, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
-                  <TextInput
-                    style={{ color: T.text, fontSize: 14, fontFamily: Fonts.bold, padding: 0 }}
-                    value={utrRef}
-                    onChangeText={setUtrRef}
-                    placeholder="Enter 12-digit UTR or reference ID"
-                    placeholderTextColor={T.textDim}
-                    autoCapitalize="characters"
-                  />
+                  <TouchableOpacity
+                    style={[
+                      styles.submitProofBtn, 
+                      { backgroundColor: (utrRef.trim().length >= 6 && proofUrl) ? T.primary : T.textDim }
+                    ]}
+                    disabled={loading || !utrRef.trim() || !proofUrl}
+                    onPress={handleSubmitProof}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#FFF" />
+                    ) : (
+                      <Text style={{ color: '#FFF', fontSize: 14, fontFamily: Fonts.extraBold, letterSpacing: 0.5 }}>
+                        SUBMIT PROOF & MARK PAID
+                      </Text>
+                    )}
+                  </TouchableOpacity>
                 </View>
               </View>
+            ) : (
+              <View style={[styles.sectionCard, { backgroundColor: T.surface, borderColor: T.border, padding: 20 }]}>
+                {isSeller ? (
+                  <View style={{ gap: 14 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                      <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: T.primary + '15', alignItems: 'center', justifyContent: 'center' }}>
+                        <Feather name="shield" size={20} color={T.primary} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 15, fontFamily: Fonts.bold, color: T.text }}>Escrow Protection Protocol</Text>
+                        <Text style={{ fontSize: 12, fontFamily: Fonts.medium, color: T.textMuted }}>Locked smart ledger verification</Text>
+                      </View>
+                    </View>
 
-              {/* Upload screenshot */}
-              <View>
-                <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: T.textMuted, marginBottom: 8 }}>Receipt Proof Screenshot</Text>
-                {isUploading ? (
-                  <View style={[styles.uploadBox, { borderColor: T.primary, borderStyle: 'dashed', backgroundColor: T.surfaceLow }]}>
-                    <ActivityIndicator size="small" color={T.primary} />
-                    <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: T.primary }}>
-                      Uploading receipt... {uploadProgress}%
+                    <View style={[styles.bankDivider, { backgroundColor: T.border + '20', marginVertical: 6 }]} />
+
+                    <Text style={{ fontSize: 13, fontFamily: Fonts.medium, color: T.textDim, lineHeight: 20 }}>
+                      Your <Text style={{ fontFamily: Fonts.bold, color: T.text }}>{currentOrder.amount} {currentOrder.token}</Text> is currently locked inside the secure escrow. 
+                      {currentOrder.status === 'open' && ' Funds will be locked in smart ledger once a buyer accepts this order.'}
+                      {(currentOrder.status === 'escrow_locked' || currentOrder.status === 'payment_pending' || currentOrder.status === 'payment_verification') && ' Awaiting payment proof/reference from the buyer.'}
+                      {currentOrder.status === 'completed' && ' Escrow successfully settled and released to the buyer.'}
                     </Text>
-                    <View style={{ width: '60%', height: 4, backgroundColor: T.border, borderRadius: 2, overflow: 'hidden' }}>
-                      <View style={{ width: `${uploadProgress}%`, height: '100%', backgroundColor: T.primary }} />
-                    </View>
-                  </View>
-                ) : proofUrl ? (
-                  <View style={[styles.uploadedReceipt, { borderColor: T.success + '40', backgroundColor: T.surfaceLow }]}>
-                    <Image source={{ uri: proofUrl }} style={styles.uploadedImage} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.success }}>Receipt Verified</Text>
-                      <Text style={{ fontSize: 11, fontFamily: Fonts.medium, color: T.textMuted, marginTop: 2 }}>Escrow verification active</Text>
-                    </View>
-                    <TouchableOpacity
-                      style={[styles.deletePill, { backgroundColor: T.error + '12' }]}
-                      onPress={() => setProofUrl('')}
-                    >
-                      <Feather name="trash-2" size={14} color={T.error} />
-                    </TouchableOpacity>
+
+                    {currentOrder.seller_payment_details ? (
+                      <View style={{ marginTop: 8, padding: 12, borderRadius: 10, backgroundColor: T.surfaceLow, borderWidth: 1, borderColor: T.border }}>
+                        <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: T.textMuted, marginBottom: 4 }}>Your Listed Payment Details</Text>
+                        <Text style={{ fontSize: 13, fontFamily: Fonts.medium, color: T.text, lineHeight: 18 }}>{currentOrder.seller_payment_details}</Text>
+                      </View>
+                    ) : null}
                   </View>
                 ) : (
-                  <TouchableOpacity
-                    style={[styles.uploadBox, { borderColor: T.border, borderStyle: 'dashed', backgroundColor: T.surfaceLow }]}
-                    onPress={simulateUpload}
-                    activeOpacity={0.8}
-                  >
-                    <Feather name="upload-cloud" size={20} color={T.primary} />
-                    <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.primary }}>Upload Payment Screenshot</Text>
-                    <Text style={{ fontSize: 10, fontFamily: Fonts.medium, color: T.textMuted }}>Supports PNG, JPG up to 5MB</Text>
-                  </TouchableOpacity>
+                  <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 32 }}>
+                    <Feather name="check-circle" size={44} color="#10B981" />
+                    <Text style={{ fontSize: 16, fontFamily: Fonts.bold, color: T.text, marginTop: 16 }}>Payment Resolved</Text>
+                    <Text style={{ fontSize: 12, fontFamily: Fonts.medium, color: T.textMuted, textAlign: 'center', paddingHorizontal: 20, marginTop: 6, lineHeight: 18 }}>
+                      This trade has been settled successfully. Escrow released {currentOrder.amount} {currentOrder.token} to your wallet.
+                    </Text>
+                  </View>
                 )}
               </View>
+            )}
+          </View>
+        )}
 
-              <TouchableOpacity
-                style={[
-                  styles.submitProofBtn, 
-                  { backgroundColor: (utrRef.trim().length >= 6 && proofUrl) ? T.primary : T.textDim }
-                ]}
-                disabled={loading || !utrRef.trim() || !proofUrl}
-                onPress={handleSubmitProof}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#FFF" />
-                ) : (
-                  <Text style={{ color: '#FFF', fontSize: 14, fontFamily: Fonts.extraBold, letterSpacing: 0.5 }}>
-                    SUBMIT PROOF & MARK PAID
+        {/* Status Infobars are now beautifully integrated into Tab 0 (Roadmap tracker) */}
+        {activeTab === 0 && (
+          <View style={{ gap: 14, marginTop: 14 }}>
+            {isSeller && currentOrder.status === 'escrow_locked' && (
+              <View style={[styles.statusBannerRow, { borderColor: T.primary + '30', backgroundColor: T.surface }]}>
+                <View style={[styles.statusIconCircle, { backgroundColor: T.primary + '12' }]}>
+                  <Feather name="clock" size={16} color={T.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 10, fontFamily: Fonts.extraBold, color: T.textMuted, textTransform: 'uppercase' }}>Awaiting Payment</Text>
+                  <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.text, marginTop: 2 }}>Buyer is currently transferring fiat funds</Text>
+                </View>
+                <View style={[styles.liveDot, { backgroundColor: T.primary }]} />
+              </View>
+            )}
+
+            {isBuyer && !isSeller && (currentOrder.status === 'payment_pending' || currentOrder.status === 'payment_verification') && (
+              <View style={[styles.statusBannerRow, { borderColor: '#F59E0B' + '40', backgroundColor: T.surface }]}>
+                <View style={[styles.statusIconCircle, { backgroundColor: '#F59E0B' + '12' }]}>
+                  <Feather name="clock" size={16} color="#F59E0B" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 10, fontFamily: Fonts.extraBold, color: T.textMuted, textTransform: 'uppercase' }}>Payment Sent</Text>
+                  <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.text, marginTop: 2 }}>Waiting for seller to verify bank transfer</Text>
+                </View>
+                <View style={[styles.liveDot, { backgroundColor: '#F59E0B' }]} />
+              </View>
+            )}
+
+            {currentOrder.status === 'completed' && (
+              <View style={[styles.completedCard, { borderColor: '#10B98140', backgroundColor: T.surface }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#10B98115', alignItems: 'center', justifyContent: 'center' }}>
+                    <Feather name="check-circle" size={18} color="#10B981" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontFamily: Fonts.bold, color: '#10B981' }}>Trade Settled Successfully</Text>
+                    <Text style={{ fontSize: 11, fontFamily: Fonts.medium, color: T.textMuted, marginTop: 2 }}>Escrow assets released to the buyer</Text>
+                  </View>
+                  <TokenSymbolIcon token={currentOrder.token} size={30} />
+                </View>
+                
+                <View style={[styles.bankDivider, { backgroundColor: T.border + '30', marginBottom: 12 }]} />
+
+                <View style={{ gap: 10 }}>
+                  <View style={styles.flexRowBetween}>
+                    <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: T.textDim }}>You {isSeller ? 'Sold' : 'Bought'}</Text>
+                    <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.text }}>{currentOrder.amount} {currentOrder.token}</Text>
+                  </View>
+                  <View style={styles.flexRowBetween}>
+                    <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: T.textDim }}>Fiat Settlement</Text>
+                    <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.primary }}>{Number(currentOrder.fiat_total || 0).toFixed(2)} {currentOrder.fiat_currency}</Text>
+                  </View>
+                  <View style={styles.flexRowBetween}>
+                    <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: T.textDim }}>Rate</Text>
+                    <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.text }}>{Number(currentOrder.rate || 0).toFixed(2)} {currentOrder.fiat_currency}</Text>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {currentOrder.status === 'cancelled' && (
+              <View style={[styles.statusBannerRow, { borderColor: T.border, backgroundColor: T.surface }]}>
+                <View style={[styles.statusIconCircle, { backgroundColor: T.border + '50' }]}>
+                  <Feather name="x-circle" size={16} color={T.textDim} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 10, fontFamily: Fonts.extraBold, color: T.textMuted, textTransform: 'uppercase' }}>Trade Cancelled</Text>
+                  <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.text, marginTop: 2 }}>Escrow assets released back to seller's wallet</Text>
+                </View>
+              </View>
+            )}
+
+            {currentOrder.status === 'disputed' && (
+              <View style={[styles.statusBannerRow, { borderColor: T.primary + '30', backgroundColor: T.surface }]}>
+                <View style={[styles.statusIconCircle, { backgroundColor: T.primary + '12' }]}>
+                  <Feather name="alert-triangle" size={16} color={T.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 10, fontFamily: Fonts.extraBold, color: T.textMuted, textTransform: 'uppercase' }}>Order Under Dispute</Text>
+                  <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.text, marginTop: 2 }}>Support team is currently reviewing escrow protection</Text>
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Trade specifications, escrow protection details, reference IDs are under activeTab === 2 */}
+        {activeTab === 2 && (
+          <View style={{ gap: 14 }}>
+            {/* ── TRADE SPECIFICATIONS ── */}
+            <View style={[styles.sectionCard, { backgroundColor: T.surface, borderColor: T.border }]}>
+              <Text style={[styles.sectionTitle, { color: T.text }]}>TRADE PARAMETERS</Text>
+              
+              <View style={{ gap: 12 }}>
+                <View style={styles.flexRowBetween}>
+                  <Text style={[styles.detailsLabel, { color: T.textMuted }]}>Asset</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <TokenSymbolIcon token={currentOrder.token} size={18} />
+                    <Text style={[styles.detailsValue, { color: T.text }]}>{currentOrder.token}</Text>
+                  </View>
+                </View>
+                
+                <View style={[styles.bankDivider, { backgroundColor: T.border + '20' }]} />
+                
+                <View style={styles.flexRowBetween}>
+                  <Text style={[styles.detailsLabel, { color: T.textMuted }]}>Exchange Amount</Text>
+                  <Text style={[styles.detailsValue, { color: T.text }]}>{currentOrder.amount} {currentOrder.token}</Text>
+                </View>
+
+                <View style={[styles.bankDivider, { backgroundColor: T.border + '20' }]} />
+
+                <View style={styles.flexRowBetween}>
+                  <Text style={[styles.detailsLabel, { color: T.textMuted }]}>Payment Type</Text>
+                  <Text style={[styles.detailsValue, { color: T.text }]}>{currentOrder.payment_method}</Text>
+                </View>
+
+                <View style={[styles.bankDivider, { backgroundColor: T.border + '20' }]} />
+
+                <View style={styles.flexRowBetween}>
+                  <Text style={[styles.detailsLabel, { color: T.textMuted }]}>Active Blockchain</Text>
+                  <Text style={[styles.detailsValue, { color: T.text }]}>{network} Network</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* ── SECURITY PROTOCOL INFOBAR ── */}
+            <View style={[styles.securityRow, { backgroundColor: T.surface, borderColor: T.border }]}>
+              <View style={styles.flexRowBetween}>
+                <View style={{ flex: 1, marginRight: 16 }}>
+                  <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: T.text }}>Escrow Protection Active</Text>
+                  <Text style={{ fontSize: 10, fontFamily: Fonts.medium, color: T.textMuted, marginTop: 2 }}>
+                    Escrow locks crypto safely inside on-chain smart ledgers.
                   </Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* ── STATUS INFOBARS ── */}
-        {isSeller && currentOrder.status === 'escrow_locked' && (
-          <View style={[styles.statusBannerRow, { borderColor: T.primary + '30', backgroundColor: T.surface }]}>
-            <View style={[styles.statusIconCircle, { backgroundColor: T.primary + '12' }]}>
-              <Feather name="clock" size={16} color={T.primary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 10, fontFamily: Fonts.extraBold, color: T.textMuted, textTransform: 'uppercase' }}>Awaiting Payment</Text>
-              <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.text, marginTop: 2 }}>Buyer is currently transferring fiat funds</Text>
-            </View>
-            <View style={[styles.liveDot, { backgroundColor: T.primary }]} />
-          </View>
-        )}
-
-        {isBuyer && !isSeller && (currentOrder.status === 'payment_pending' || currentOrder.status === 'payment_verification') && (
-          <View style={[styles.statusBannerRow, { borderColor: '#F59E0B' + '40', backgroundColor: T.surface }]}>
-            <View style={[styles.statusIconCircle, { backgroundColor: '#F59E0B' + '12' }]}>
-              <Feather name="clock" size={16} color="#F59E0B" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 10, fontFamily: Fonts.extraBold, color: T.textMuted, textTransform: 'uppercase' }}>Payment Sent</Text>
-              <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.text, marginTop: 2 }}>Waiting for seller to verify bank transfer</Text>
-            </View>
-            <View style={[styles.liveDot, { backgroundColor: '#F59E0B' }]} />
-          </View>
-        )}
-
-        {currentOrder.status === 'completed' && (
-          <View style={[styles.completedCard, { borderColor: '#10B98140', backgroundColor: T.surface }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#10B98115', alignItems: 'center', justifyContent: 'center' }}>
-                <Feather name="check-circle" size={18} color="#10B981" />
+                </View>
+                <View style={[styles.securityBadge, { backgroundColor: '#10B98115', borderColor: '#10B98130' }]}>
+                  <Feather name="shield" size={11} color="#10B981" />
+                  <Text style={{ fontSize: 9, fontFamily: Fonts.extraBold, color: '#10B981' }}>100% SECURE</Text>
+                </View>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 15, fontFamily: Fonts.bold, color: '#10B981' }}>Trade Settled Successfully</Text>
-                <Text style={{ fontSize: 11, fontFamily: Fonts.medium, color: T.textMuted, marginTop: 2 }}>Escrow assets released to the buyer</Text>
-              </View>
-              <TokenSymbolIcon token={currentOrder.token} size={30} />
             </View>
-            
-            <View style={[styles.bankDivider, { backgroundColor: T.border + '30', marginBottom: 12 }]} />
 
-            <View style={{ gap: 10 }}>
+            {/* ── DISPUTE & ID PANEL ── */}
+            <View style={[styles.sectionCard, { backgroundColor: T.surface, borderColor: T.border }]}>
               <View style={styles.flexRowBetween}>
-                <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: T.textDim }}>You {isSeller ? 'Sold' : 'Bought'}</Text>
-                <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.text }}>{currentOrder.amount} {currentOrder.token}</Text>
-              </View>
-              <View style={styles.flexRowBetween}>
-                <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: T.textDim }}>Fiat Settlement</Text>
-                <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.primary }}>{currentOrder.fiat_total.toFixed(2)} {currentOrder.fiat_currency}</Text>
-              </View>
-              <View style={styles.flexRowBetween}>
-                <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: T.textDim }}>Rate</Text>
-                <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.text }}>{currentOrder.rate.toFixed(2)} {currentOrder.fiat_currency}</Text>
-              </View>
-            </View>
-          </View>
-        )}
-
-        {currentOrder.status === 'cancelled' && (
-          <View style={[styles.statusBannerRow, { borderColor: T.border, backgroundColor: T.surface }]}>
-            <View style={[styles.statusIconCircle, { backgroundColor: T.border + '50' }]}>
-              <Feather name="x-circle" size={16} color={T.textDim} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 10, fontFamily: Fonts.extraBold, color: T.textMuted, textTransform: 'uppercase' }}>Trade Cancelled</Text>
-              <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.text, marginTop: 2 }}>Escrow assets released back to seller's wallet</Text>
-            </View>
-          </View>
-        )}
-
-        {currentOrder.status === 'disputed' && (
-          <View style={[styles.statusBannerRow, { borderColor: T.primary + '30', backgroundColor: T.surface }]}>
-            <View style={[styles.statusIconCircle, { backgroundColor: T.primary + '12' }]}>
-              <Feather name="alert-triangle" size={16} color={T.primary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 10, fontFamily: Fonts.extraBold, color: T.textMuted, textTransform: 'uppercase' }}>Order Under Dispute</Text>
-              <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.text, marginTop: 2 }}>Support team is currently reviewing escrow protection</Text>
-            </View>
-          </View>
-        )}
-
-        {/* ── TRADE SPECIFICATIONS ── */}
-        <View style={[styles.sectionCard, { backgroundColor: T.surface, borderColor: T.border }]}>
-          <Text style={[styles.sectionTitle, { color: T.text }]}>TRADE PARAMETERS</Text>
-          
-          <View style={{ gap: 12 }}>
-            <View style={styles.flexRowBetween}>
-              <Text style={[styles.detailsLabel, { color: T.textMuted }]}>Asset</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <TokenSymbolIcon token={currentOrder.token} size={18} />
-                <Text style={[styles.detailsValue, { color: T.text }]}>{currentOrder.token}</Text>
-              </View>
-            </View>
-            
-            <View style={[styles.bankDivider, { backgroundColor: T.border + '20' }]} />
-            
-            <View style={styles.flexRowBetween}>
-              <Text style={[styles.detailsLabel, { color: T.textMuted }]}>Exchange Amount</Text>
-              <Text style={[styles.detailsValue, { color: T.text }]}>{currentOrder.amount} {currentOrder.token}</Text>
-            </View>
-
-            <View style={[styles.bankDivider, { backgroundColor: T.border + '20' }]} />
-
-            <View style={styles.flexRowBetween}>
-              <Text style={[styles.detailsLabel, { color: T.textMuted }]}>Payment Type</Text>
-              <Text style={[styles.detailsValue, { color: T.text }]}>{currentOrder.payment_method}</Text>
-            </View>
-
-            <View style={[styles.bankDivider, { backgroundColor: T.border + '20' }]} />
-
-            <View style={styles.flexRowBetween}>
-              <Text style={[styles.detailsLabel, { color: T.textMuted }]}>Active Blockchain</Text>
-              <Text style={[styles.detailsValue, { color: T.text }]}>{network} Network</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* ── SECURITY PROTOCOL INFOBAR ── */}
-        <View style={[styles.securityRow, { backgroundColor: T.surface, borderColor: T.border }]}>
-          <View style={styles.flexRowBetween}>
-            <View style={{ flex: 1, marginRight: 16 }}>
-              <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: T.text }}>Escrow Protection Active</Text>
-              <Text style={{ fontSize: 10, fontFamily: Fonts.medium, color: T.textMuted, marginTop: 2 }}>
-                Escrow locks crypto safely inside on-chain smart ledgers.
-              </Text>
-            </View>
-            <View style={[styles.securityBadge, { backgroundColor: '#10B98115', borderColor: '#10B98130' }]}>
-              <Feather name="shield" size={11} color="#10B981" />
-              <Text style={{ fontSize: 9, fontFamily: Fonts.extraBold, color: '#10B981' }}>100% SECURE</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* ── DISPUTE & ID PANEL ── */}
-        <View style={[styles.sectionCard, { backgroundColor: T.surface, borderColor: T.border }]}>
-          <View style={styles.flexRowBetween}>
-            <View>
-              <Text style={{ fontSize: 10, fontFamily: Fonts.bold, color: T.textMuted }}>Transaction Reference ID</Text>
-              <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: T.text, marginTop: 4 }}>{currentOrder.id || '—'}</Text>
-            </View>
-            <TouchableOpacity 
-              style={[styles.copyIconBtn, { backgroundColor: T.surfaceLow, borderColor: T.border }]}
-              onPress={() => {
-                Clipboard.setStringAsync(currentOrder.id || '');
-                Alert.alert('Copied', 'Order ID copied.');
-              }}
-            >
-              <Feather name="copy" size={13} color={T.primary} />
-            </TouchableOpacity>
-          </View>
-
-          {(currentOrder.status === 'escrow_locked' || currentOrder.status === 'payment_pending' || currentOrder.status === 'payment_verification') && (
-            <>
-              <View style={[styles.bankDivider, { backgroundColor: T.border + '20', marginVertical: 12 }]} />
-              <View style={styles.flexRowBetween}>
-                <View style={{ flex: 1, marginRight: 12 }}>
-                  <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: T.text }}>Having an issue with the trade?</Text>
-                  <Text style={{ fontSize: 10, fontFamily: Fonts.medium, color: T.textMuted, marginTop: 2 }}>You can raise a dispute to freeze escrow lock.</Text>
+                <View>
+                  <Text style={{ fontSize: 10, fontFamily: Fonts.bold, color: T.textMuted }}>Transaction Reference ID</Text>
+                  <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: T.text, marginTop: 4 }}>{currentOrder.id || '—'}</Text>
                 </View>
                 <TouchableOpacity 
-                  style={[styles.disputeBtn, { borderColor: T.primary }]}
-                  onPress={() => Alert.alert(
-                    'Raise Dispute',
-                    'This will freeze the escrow and notify our support team. Only raise a dispute if there is a genuine issue.',
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      { text: 'Raise Dispute', style: 'destructive', onPress: async () => {
-                        setLoading(true);
-                        try {
-                          await p2pService.raiseDispute(currentOrder.id!, network);
-                          setShowChatModal(true);
-                          await refresh();
-                          await fetchMessages();
-                        } catch (e: any) {
-                          Alert.alert('Error', e?.message ?? 'Failed.');
-                        } finally { setLoading(false); }
-                      }},
-                    ]
-                  )}
+                  style={[styles.copyIconBtn, { backgroundColor: T.surfaceLow, borderColor: T.border }]}
+                  onPress={() => {
+                    Clipboard.setStringAsync(currentOrder.id || '');
+                    Alert.alert('Copied', 'Order ID copied.');
+                  }}
                 >
-                  <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: T.primary }}>Raise Dispute</Text>
+                  <Feather name="copy" size={13} color={T.primary} />
                 </TouchableOpacity>
               </View>
-            </>
-          )}
-        </View>
+
+              {(currentOrder.status === 'escrow_locked' || currentOrder.status === 'payment_pending' || currentOrder.status === 'payment_verification') && (
+                <>
+                  <View style={[styles.bankDivider, { backgroundColor: T.border + '20', marginVertical: 12 }]} />
+                  <View style={styles.flexRowBetween}>
+                    <View style={{ flex: 1, marginRight: 12 }}>
+                      <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: T.text }}>Having an issue with the trade?</Text>
+                      <Text style={{ fontSize: 10, fontFamily: Fonts.medium, color: T.textMuted, marginTop: 2 }}>You can raise a dispute to freeze escrow lock.</Text>
+                    </View>
+                    <TouchableOpacity 
+                      style={[styles.disputeBtn, { borderColor: T.primary }]}
+                      onPress={() => Alert.alert(
+                        'Raise Dispute',
+                        'This will freeze the escrow and notify our support team. Only raise a dispute if there is a genuine issue.',
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          { text: 'Raise Dispute', style: 'destructive', onPress: async () => {
+                            setLoading(true);
+                            try {
+                              await p2pService.raiseDispute(currentOrder.id!, network);
+                              setShowChatModal(true);
+                              await refresh();
+                              await fetchMessages();
+                            } catch (e: any) {
+                              Alert.alert('Error', e?.message ?? 'Failed.');
+                            } finally { setLoading(false); }
+                          }},
+                        ]
+                      )}
+                    >
+                      <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: T.primary }}>Raise Dispute</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+            </View>
+          </View>
+        )}
 
       </ScrollView>
 
@@ -1058,7 +1123,7 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
                           type: 'sent',
                           coin: currentOrder.token,
                           amount: currentOrder.amount.toString(),
-                          usdValue: currentOrder.fiat_total.toFixed(2),
+                          usdValue: Number(currentOrder.fiat_total || 0).toFixed(2),
                           address: `P2P Sale · ${currentOrder.token} → ${currentOrder.fiat_currency}`,
                           status: 'success',
                         });
@@ -1110,49 +1175,78 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
         );
       })()}
 
-      {/* ── WHATSAPP STYLE CHAT MODAL ── */}
-      <Modal visible={showChatModal} animationType="slide" transparent>
-        <KeyboardAvoidingView
-          style={[styles.chatModal, { backgroundColor: T.background }]}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={0}
-        >
+      {/* ── HIGH-END FINTECH CHAT OVERLAY ── */}
+      {showChatModal && (
+        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: T.background, zIndex: 9999 }]}>
+          <View style={{ flex: 1, backgroundColor: T.background }}>
+            {/* Premium cyber-fintech faded logo and concentric ring background design */}
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+              <Image 
+                source={require('../assets/logo.png')} 
+                style={{ width: 240, height: 240, opacity: isDarkMode ? 0.07 : 0.11, tintColor: T.primary }} 
+                resizeMode="contain" 
+              />
+              {/* Concentric Cyber Rings (Top Right) */}
+              <View style={{ position: 'absolute', top: -30, right: -50, width: 220, height: 220, borderRadius: 110, borderWidth: 1.5, borderColor: T.primary + '18', backgroundColor: 'transparent' }} />
+              <View style={{ position: 'absolute', top: -60, right: -80, width: 280, height: 280, borderRadius: 140, borderWidth: 1, borderColor: T.primary + '08', backgroundColor: 'transparent' }} />
+              
+              {/* Concentric Cyber Rings (Bottom Left) */}
+              <View style={{ position: 'absolute', bottom: -40, left: -60, width: 260, height: 260, borderRadius: 130, borderWidth: 1.5, borderColor: T.primary + '15', backgroundColor: 'transparent' }} />
+              <View style={{ position: 'absolute', bottom: -80, left: -100, width: 340, height: 340, borderRadius: 170, borderWidth: 1, borderColor: T.primary + '06', backgroundColor: 'transparent' }} />
+            </View>
+
+            <KeyboardAvoidingView
+              style={[styles.chatModal, { backgroundColor: 'transparent' }]}
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
+            >
           {/* Chat Header */}
-          <View style={[styles.chatHeader, { backgroundColor: T.surface, borderBottomColor: T.border, paddingTop: insets.top + 12 }]}>
+          <View style={[styles.chatHeader, { backgroundColor: T.surface, borderBottomColor: T.border, paddingTop: insets.top + 12, borderBottomWidth: 1 }]}>
             <TouchableOpacity onPress={() => setShowChatModal(false)} style={styles.chatHeaderBackBtn}>
               <Feather name="chevron-left" size={26} color={T.text} />
             </TouchableOpacity>
 
-            <View style={[styles.chatAvatar, { backgroundColor: T.primary + '20' }]}>
-              <Feather name={currentOrder.is_merchant ? 'briefcase' : 'user'} size={16} color={T.primary} />
+            <View style={[styles.chatAvatar, { backgroundColor: T.primary + '15' }]}>
+              <Text style={{ fontSize: 13, fontFamily: Fonts.extraBold, color: T.primary }}>
+                {(isSeller ? (currentOrder.buyer_wallet || '') : currentOrder.seller_wallet).slice(0, 2).toUpperCase()}
+              </Text>
             </View>
             
             <View style={{ flex: 1 }}>
-              <Text style={[styles.chatCounterpartyName, { color: T.text }]}>
-                {isSeller
-                  ? formatAddress(currentOrder.buyer_wallet || '')
-                  : formatAddress(currentOrder.seller_wallet)}
-              </Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={[styles.chatCounterpartyName, { color: T.text }]}>
+                  {isSeller
+                    ? formatAddress(currentOrder.buyer_wallet || '')
+                    : formatAddress(currentOrder.seller_wallet)}
+                </Text>
+                <View style={{ backgroundColor: (isSeller ? T.primary : '#F59E0B') + '15', paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 6, borderWidth: 0.5, borderColor: (isSeller ? T.primary : '#F59E0B') + '30' }}>
+                  <Text style={{ fontSize: 9, fontFamily: Fonts.extraBold, color: isSeller ? T.primary : '#F59E0B' }}>
+                    {isSeller ? 'BUYER' : 'SELLER'}
+                  </Text>
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 }}>
                 <View style={[styles.onlineDot, { backgroundColor: T.success }]} />
                 <Text style={[styles.chatHeaderStatusText, { color: T.textMuted }]}>
-                  {currentOrder.is_merchant ? 'Merchant' : 'Personal'} · Escrow Secured
+                  {isSeller ? 'Personal User' : (currentOrder.is_merchant ? 'Merchant Account' : 'Personal User')} · Secured
                 </Text>
               </View>
             </View>
 
-            <View style={[styles.chatHeaderOrderPill, { backgroundColor: T.surfaceHigh }]}>
-              <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: T.text }}>
+            <View style={[styles.chatHeaderOrderPill, { backgroundColor: T.surfaceHigh, borderColor: T.border, borderWidth: 1 }]}>
+              <Text style={{ fontSize: 10, fontFamily: Fonts.extraBold, color: T.text }}>
                 {currentOrder.amount} {currentOrder.token}
               </Text>
             </View>
           </View>
 
           {/* Chat Escrow Banner */}
-          <View style={[styles.chatEscrowBanner, { backgroundColor: T.success + '08', borderBottomColor: T.border + '50' }]}>
-            <Feather name="shield" size={11} color={T.success} />
-            <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: T.success, flex: 1 }}>
-              Safe Trade Guarantee active. Never pay outside order instructions.
+          <View style={[styles.chatEscrowBanner, { backgroundColor: T.success + '08', borderBottomColor: T.border + '40', borderBottomWidth: 1, paddingVertical: 10 }]}>
+            <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: T.success + '15', alignItems: 'center', justifyContent: 'center' }}>
+              <Feather name="shield" size={12} color={T.success} />
+            </View>
+            <Text style={{ fontSize: 11, fontFamily: Fonts.bold, color: T.success, flex: 1, marginLeft: 4 }}>
+              Safe Trade Protection: Funds are locked in smart escrow. Never accept off-chain requests.
             </Text>
           </View>
 
@@ -1160,18 +1254,94 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <ScrollView
               ref={chatScrollRef}
-              style={{ flex: 1, backgroundColor: T.background }}
-              contentContainerStyle={styles.chatMessages}
+              style={{ flex: 1, backgroundColor: 'transparent' }}
+              contentContainerStyle={[styles.chatMessages, { paddingBottom: 24 }]}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
             >
-              {messages.length === 0 ? (
-                <View style={styles.chatEmpty}>
-                  <View style={[styles.emptyIconRing, { borderColor: T.border }]}>
-                    <Feather name="lock" size={24} color={T.textDim} />
+              {/* Institutional Redesign Header Cards */}
+              <View style={{ gap: 10, marginBottom: 14 }}>
+                <View style={[styles.institutionalCard, { backgroundColor: T.surfaceLow, borderColor: T.primary + '30', borderWidth: 1, borderRadius: 16, padding: 14 }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: T.primary + '15', alignItems: 'center', justifyContent: 'center' }}>
+                      <Feather name="shield" size={11} color={T.primary} />
+                    </View>
+                    <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: T.text }}>
+                      Funds Protected by Smart Contract Escrow
+                    </Text>
                   </View>
-                  <Text style={{ color: T.textDim, fontSize: 13, fontFamily: Fonts.bold, marginTop: 12, textAlign: 'center', lineHeight: 18 }}>
-                    Chat is secured and end-to-end encrypted.{`\n`}Only members can view order updates.
+                  <Text style={{ fontSize: 11, fontFamily: Fonts.medium, color: T.textMuted, lineHeight: 16 }}>
+                    Secured Amount: <Text style={{ color: T.text, fontFamily: Fonts.bold }}>{currentOrder.amount} {currentOrder.token}</Text>{'\n'}
+                    Assets have been successfully secured from the seller's wallet and locked on-chain.
+                  </Text>
+                </View>
+
+                <View style={[styles.institutionalCard, { backgroundColor: T.surfaceLow, borderColor: T.border, borderWidth: 1, borderRadius: 16, padding: 14 }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#F59E0B15', alignItems: 'center', justifyContent: 'center' }}>
+                      <Feather name="credit-card" size={11} color="#F59E0B" />
+                    </View>
+                    <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: T.text }}>
+                      Settlement Action Required
+                    </Text>
+                  </View>
+
+                  <View style={{ gap: 6, marginBottom: 10 }}>
+                    <View style={styles.flexRowBetween}>
+                      <Text style={{ fontSize: 10, fontFamily: Fonts.medium, color: T.textMuted }}>Method</Text>
+                      <Text style={{ fontSize: 10, fontFamily: Fonts.bold, color: T.text }}>{currentOrder.payment_method}</Text>
+                    </View>
+                    <View style={styles.flexRowBetween}>
+                      <Text style={{ fontSize: 10, fontFamily: Fonts.medium, color: T.textMuted }}>Beneficiary</Text>
+                      <Text style={{ fontSize: 10, fontFamily: Fonts.bold, color: T.text }}>
+                        {isSeller ? 'You (Escrow locked)' : formatAddress(currentOrder.seller_wallet)}
+                      </Text>
+                    </View>
+                    <View style={styles.flexRowBetween}>
+                      <Text style={{ fontSize: 10, fontFamily: Fonts.medium, color: T.textMuted }}>Fiat Amount</Text>
+                      <Text style={{ fontSize: 10, fontFamily: Fonts.bold, color: '#F59E0B' }}>
+                        {Number(currentOrder.fiat_total || 0).toFixed(2)} {currentOrder.fiat_currency}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {!isSeller && (
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <TouchableOpacity 
+                        style={[styles.instBtn, { backgroundColor: T.surfaceHigh, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, flex: 1, height: 32, borderRadius: 8 }]}
+                        onPress={() => {
+                          Clipboard.setStringAsync(currentOrder.payment_details || '');
+                          Alert.alert('Copied', 'Bank specs copied.');
+                        }}
+                      >
+                        <Feather name="copy" size={10} color={T.text} />
+                        <Text style={{ fontSize: 9, fontFamily: Fonts.bold, color: T.text }}>COPY BANK INFO</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={[styles.instBtn, { backgroundColor: T.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, flex: 1, height: 32, borderRadius: 8 }]}
+                        onPress={() => {
+                          setShowChatModal(false);
+                          setActiveTab(1);
+                        }}
+                      >
+                        <Feather name="upload" size={10} color="#FFF" />
+                        <Text style={{ fontSize: 9, fontFamily: Fonts.bold, color: '#FFF' }}>SEND RECEIPT</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              </View>
+
+              {messages.length === 0 ? (
+                <View style={[styles.chatEmpty, { paddingTop: 40 }]}>
+                  <View style={[styles.emptyIconRing, { borderColor: T.primary + '20', backgroundColor: T.primary + '05' }]}>
+                    <Feather name="lock" size={20} color={T.primary} />
+                  </View>
+                  <Text style={{ color: T.text, fontSize: 14, fontFamily: Fonts.bold, marginTop: 12, textAlign: 'center' }}>
+                    Secured Channel Active
+                  </Text>
+                  <Text style={{ color: T.textDim, fontSize: 11, fontFamily: Fonts.medium, marginTop: 4, textAlign: 'center', lineHeight: 16, paddingHorizontal: 20 }}>
+                    This end-to-end audit log is protected by decentralized ledgers. Use shortcut tags below for speedy responses.
                   </Text>
                 </View>
               ) : messages.map((m, i) => {
@@ -1195,9 +1365,12 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
                   return (
                     <React.Fragment key={m.id ?? i}>
                       {showDate && <View style={styles.dateSep}><Text style={[styles.dateText, { color: T.textDim }]}>{msgDate.toLocaleDateString()}</Text></View>}
-                      <View style={[styles.systemMsg, { backgroundColor: T.primary + '10', borderColor: T.primary + '25' }]}>
-                        <Feather name="alert-triangle" size={12} color={T.primary} />
-                        <Text style={{ color: T.text, fontSize: 11, fontFamily: Fonts.medium, flex: 1 }}>{m.message}</Text>
+                      <View style={[styles.systemMsg, { backgroundColor: T.surfaceLow, borderColor: T.primary + '30', borderLeftWidth: 3, borderLeftColor: T.primary }]}>
+                        <Feather name="info" size={13} color={T.primary} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ color: T.text, fontSize: 11, fontFamily: Fonts.bold, textTransform: 'uppercase', letterSpacing: 0.5 }}>System Notification</Text>
+                          <Text style={{ color: T.textDim, fontSize: 11, fontFamily: Fonts.medium, marginTop: 2 }}>{m.message}</Text>
+                        </View>
                       </View>
                     </React.Fragment>
                   );
@@ -1226,10 +1399,17 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
                         },
                       ]}
                     >
-                      <View style={[styles.bubble, isMe ? { backgroundColor: T.primary } : { backgroundColor: T.surface, borderColor: T.border }]}>
+                      <View style={[
+                        styles.bubble, 
+                        isMe 
+                          ? { backgroundColor: T.primary, borderTopLeftRadius: 16, borderTopRightRadius: 16, borderBottomLeftRadius: 16, borderBottomRightRadius: 4, borderWidth: 0 } 
+                          : isSupport
+                            ? { backgroundColor: T.primary + '10', borderColor: T.primary + '30', borderTopLeftRadius: 16, borderTopRightRadius: 16, borderBottomLeftRadius: 4, borderBottomRightRadius: 16 }
+                            : { backgroundColor: T.surfaceLow, borderColor: T.border + '50', borderTopLeftRadius: 16, borderTopRightRadius: 16, borderBottomLeftRadius: 4, borderBottomRightRadius: 16 }
+                      ]}>
                         {!isMe && isFirstInGroup && (
                           <Text style={[styles.senderLabel, { color: isSupport ? T.primary : T.primary }]}>
-                            {isSupport ? 'Customer Support' : 'Counterparty'}
+                            {isSupport ? '🛡️ Customer Support' : `Counterparty (${isSeller ? 'Buyer' : 'Seller'})`}
                           </Text>
                         )}
                         <Text style={[styles.messageText, { color: isMe ? '#FFF' : T.text }]}>{m.message}</Text>
@@ -1245,11 +1425,82 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
             </ScrollView>
           </TouchableWithoutFeedback>
 
+          {/* Institutional Shortcut Tag Pills Bar */}
+          <View style={{ backgroundColor: T.surface, borderTopWidth: 1, borderTopColor: T.border + '30' }}>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false} 
+              contentContainerStyle={{ paddingHorizontal: 12, gap: 8, paddingVertical: 8, flexDirection: 'row', alignItems: 'center' }}
+            >
+              <TouchableOpacity 
+                style={[styles.chatShortcutTag, { backgroundColor: T.surfaceLow, borderColor: T.border, borderWidth: 1, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }]}
+                onPress={() => {
+                  if (currentOrder.payment_details) {
+                    setChatInput(`Banking specs:\nMethod: ${currentOrder.payment_method}\nSpecs: ${currentOrder.payment_details}`);
+                  } else {
+                    Alert.alert('Details Unavailable', 'Please configure bank settings.');
+                  }
+                }}
+              >
+                <Feather name="home" size={11} color={T.primary} />
+                <Text style={{ fontSize: 10, fontFamily: Fonts.bold, color: T.text }}>Send Bank Details</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.chatShortcutTag, { backgroundColor: T.surfaceLow, borderColor: T.border, borderWidth: 1, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }]}
+                onPress={() => {
+                  setShowChatModal(false);
+                  setActiveTab(1);
+                  Alert.alert('Upload Receipt', 'Tap "Upload Receipt / Payment Proof" below in the Payment Info section.');
+                }}
+              >
+                <Feather name="camera" size={11} color={T.primary} />
+                <Text style={{ fontSize: 10, fontFamily: Fonts.bold, color: T.text }}>Send Payment Proof</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.chatShortcutTag, { backgroundColor: T.surfaceLow, borderColor: T.border, borderWidth: 1, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }]}
+                onPress={() => {
+                  Alert.alert(
+                    'Raise Dispute',
+                    'Would you like to alert our dispute specialists?',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Raise Dispute', style: 'destructive', onPress: () => {
+                        setShowChatModal(false);
+                        setActiveTab(2);
+                      }}
+                    ]
+                  );
+                }}
+              >
+                <Feather name="shield" size={11} color={T.primary} />
+                <Text style={{ fontSize: 10, fontFamily: Fonts.bold, color: T.text }}>Flag Audit Intervene</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+
           {/* Chat Input Bar */}
-          <View style={[styles.chatInputBar, { backgroundColor: T.surface, borderTopColor: T.border, paddingBottom: Platform.OS === 'ios' ? insets.bottom : 8 }]}>
-            <View style={[styles.chatInputWrap, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
+          <View style={[styles.chatInputBar, { backgroundColor: T.surface, borderTopColor: T.border, paddingTop: 12, paddingBottom: Platform.OS === 'ios' ? (keyboardVisible ? 12 : insets.bottom + 8) : (keyboardVisible ? 12 : 20), borderTopWidth: 1 }]}>
+            <View style={[styles.chatInputWrap, { backgroundColor: T.surfaceLow, borderColor: T.border, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, gap: 8 }]}>
+              <TouchableOpacity 
+                style={{ padding: 4 }}
+                onPress={() => {
+                  if (isSeller) {
+                    Alert.alert('Seller Mode', 'Use "Send Bank Details" tag above to share bank info, or wait for the buyer to upload proof.');
+                  } else {
+                    setShowChatModal(false);
+                    setActiveTab(1);
+                    Alert.alert('Upload Receipt', 'Tap "Upload Receipt / Payment Proof" in the Payment section to complete payment.');
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <Feather name="plus" size={20} color={T.primary} />
+              </TouchableOpacity>
+              
               <TextInput
-                style={[styles.chatTextInput, { color: T.text }]}
+                style={[styles.chatTextInput, { color: T.text, flex: 1 }]}
                 value={chatInput}
                 onChangeText={setChatInput}
                 placeholder="Type a message..."
@@ -1264,11 +1515,13 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
               disabled={!chatInput.trim()}
               activeOpacity={0.8}
             >
-              <Feather name="send" size={16} color={chatInput.trim() ? '#FFF' : T.textDim} />
+              <Feather name="send" size={15} color={chatInput.trim() ? '#FFF' : T.textDim} />
             </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
+            </KeyboardAvoidingView>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -1794,5 +2047,52 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginVertical: 14,
+  },
+  tabItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  tabItemText: {
+    fontSize: 11,
+    fontFamily: Fonts.bold,
+  },
+  institutionalCard: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+  },
+  flexRowBetween: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  instBtn: {
+    flex: 1,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chatShortcutTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
   },
 });

@@ -52,6 +52,17 @@ const TokenSelector = memo(({ sym, url, onPress, styles, T }: any) => (
   </TouchableOpacity>
 ));
 
+const NETWORK_TOKENS: Record<string, string[]> = {
+  Ethereum:           ['ETH', 'USDT', 'USDC'],
+  Polygon:            ['ETH', 'USDT', 'USDC'],
+  Arbitrum:           ['ETH', 'USDT', 'USDC'],
+  Sepolia:            ['ETH', 'USDT', 'USDC'],
+  TRON:               ['TRX', 'USDT', 'USDC'],
+  'TRON Nile':        ['TRX', 'USDT', 'USDC'],
+  Solana:             ['SOL', 'USDT', 'USDC'],
+  'Solana Devnet':    ['SOL', 'USDT', 'USDC'],
+};
+
 export default function SwapScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const { balances, ethBalance, isDarkMode, network, refreshBalance, walletAddress, applySwapBalances, addTx, formatFiat } = useWallet();
@@ -83,6 +94,8 @@ export default function SwapScreen({ navigation }: any) {
 
   const [customTokens, setCustomTokens] = useState<Record<string, { name: string, iconUrl: string, price: number }>>({});
 
+  const CLEAN_TOKENS = NETWORK_TOKENS[network] ?? ['ETH', 'USDT', 'USDC'];
+
   const isSupported = swapService.isNetworkSupported(network);
   const isTronNetwork = network === 'TRON' || network === 'TRON Nile';
   
@@ -101,7 +114,7 @@ export default function SwapScreen({ navigation }: any) {
   const isSimulated = quote?.isSimulated === true;
   const isMainnet = network === 'Ethereum' || network === 'Polygon' || network === 'Arbitrum' || network === 'TRON';
   const isSimulatedOnMainnet = isSimulated && isMainnet;
-  const hasInsufficientBalance = isMainnet && sellAmtNum > sellBalance;
+  const hasInsufficientBalance = sellAmtNum > sellBalance;
   const canSwap =
     sellAmtNum > 0 &&
     !!quote &&
@@ -120,8 +133,17 @@ export default function SwapScreen({ navigation }: any) {
   const customTokensRef = useRef(customTokens);
   customTokensRef.current = customTokens;
 
-  // Filter out CUSTOM token from standard lists to align with clean design
-  const CLEAN_TOKENS = SUPPORTED_TOKENS.filter(t => t !== 'CUSTOM');
+  // Reset tokens when network changes to avoid invalid pairs
+  useEffect(() => {
+    const available = NETWORK_TOKENS[network] ?? ['ETH', 'USDT', 'USDC'];
+    const nativeSell = available[0];
+    const nativeBuy  = available[1] ?? available[0];
+    setSellToken(nativeSell);
+    setBuyToken(nativeBuy);
+    setSellAmount('');
+    setQuote(null);
+  }, [network]);
+
 
   useEffect(() => {
     const normalizedAmt = sellAmount.replace(',', '.');
@@ -346,11 +368,19 @@ export default function SwapScreen({ navigation }: any) {
             </Text>
           </View>
         )}
-        {isTronNetwork && (
+        {isTronNetwork && network === 'TRON Nile' && (
           <View style={[styles.warnBanner, { backgroundColor: '#EF002712', borderColor: '#EF002730' }]}>
             <Feather name="info" size={14} color="#EF0027" />
             <Text style={[styles.warnText, { color: '#EF0027' }]}>
-              TRON network: TRX swaps use simulated live market rates.
+              TRON Nile testnet: swaps use simulated rates.
+            </Text>
+          </View>
+        )}
+        {network.startsWith('Solana') && (
+          <View style={[styles.warnBanner, { backgroundColor: '#9945FF12', borderColor: '#9945FF30' }]}>
+            <Feather name="info" size={14} color="#9945FF" />
+            <Text style={[styles.warnText, { color: '#9945FF' }]}>
+              Solana network: SOL swaps use simulated live market rates.
             </Text>
           </View>
         )}
@@ -441,7 +471,7 @@ export default function SwapScreen({ navigation }: any) {
             </Text>
           </View>
         )}
-        {isSimulated && !isMainnet && (
+        {isSimulated && !isMainnet && network !== 'TRON' && network !== 'TRON Nile' && (
           <View style={[styles.warnBanner, { backgroundColor: T.primary + '12', borderColor: T.primary + '30', marginBottom: 16 }]}>
             <Feather name="info" size={14} color={T.primary} />
             <Text style={[styles.warnText, { color: T.primary }]}>

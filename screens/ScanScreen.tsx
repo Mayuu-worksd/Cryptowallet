@@ -98,6 +98,60 @@ export default function ScanScreen({ navigation }: any) {
     setScanned(true);
     Vibration.vibrate(80);
 
+    const trimmed = data.trim();
+
+    // Check specific token URI schemes
+    if (trimmed.toLowerCase().startsWith('bitcoin:')) {
+      const addr = trimmed.slice(8).split('?')[0];
+      setLastScan(addr);
+      setTimeout(() => navigation.navigate('Send', {
+        scannedAddress: addr,
+        scannedNetwork: 'Bitcoin Network',
+        symbol: 'BTC'
+      }), 600);
+      return;
+    }
+    if (trimmed.toLowerCase().startsWith('solana:')) {
+      const addr = trimmed.slice(7).split('?')[0];
+      setLastScan(addr);
+      setTimeout(() => navigation.navigate('Send', {
+        scannedAddress: addr,
+        scannedNetwork: 'Solana Network',
+        symbol: 'SOL'
+      }), 600);
+      return;
+    }
+    if (trimmed.toLowerCase().startsWith('tron:')) {
+      const addr = trimmed.slice(5).split('?')[0];
+      setLastScan(addr);
+      setTimeout(() => navigation.navigate('Send', {
+        scannedAddress: addr,
+        scannedNetwork: 'TRON Nile',
+        symbol: 'TRX'
+      }), 600);
+      return;
+    }
+    if (trimmed.toLowerCase().startsWith('usdt:')) {
+      const addr = trimmed.slice(5).split('?')[0];
+      setLastScan(addr);
+      setTimeout(() => navigation.navigate('Send', {
+        scannedAddress: addr,
+        scannedNetwork: 'Ethereum',
+        symbol: 'USDT'
+      }), 600);
+      return;
+    }
+    if (trimmed.toLowerCase().startsWith('usdc:')) {
+      const addr = trimmed.slice(5).split('?')[0];
+      setLastScan(addr);
+      setTimeout(() => navigation.navigate('Send', {
+        scannedAddress: addr,
+        scannedNetwork: 'Ethereum',
+        symbol: 'USDC'
+      }), 600);
+      return;
+    }
+
     if (data.startsWith('ethereum:')) {
       try {
         const [addrPart, queryPart] = data.slice(9).split('?');
@@ -117,8 +171,68 @@ export default function ScanScreen({ navigation }: any) {
       return;
     }
 
-    if (/^0x[0-9a-fA-F]{40}$/.test(data.trim())) {
-      processQRData(JSON.stringify({ address: data.trim(), network: 'Ethereum' }));
+    // Direct plain address detection with correct network and token preselection
+    if (/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(trimmed)) {
+      setLastScan(trimmed);
+      setTimeout(() => navigation.navigate('Send', {
+        scannedAddress: trimmed,
+        scannedNetwork: 'TRON Nile',
+        symbol: 'TRX'
+      }), 600);
+      return;
+    }
+    if (/^(1|3|bc1)[a-zA-HJ-NP-Z0-9]{25,62}$/.test(trimmed)) {
+      setLastScan(trimmed);
+      setTimeout(() => navigation.navigate('Send', {
+        scannedAddress: trimmed,
+        scannedNetwork: 'Bitcoin Network',
+        symbol: 'BTC'
+      }), 600);
+      return;
+    }
+    if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(trimmed)) {
+      setLastScan(trimmed);
+      setTimeout(() => navigation.navigate('Send', {
+        scannedAddress: trimmed,
+        scannedNetwork: 'Solana Network',
+        symbol: 'SOL'
+      }), 600);
+      return;
+    }
+    if (/^[a-zA-Z0-9_-]{48}$/.test(trimmed)) {
+      setLastScan(trimmed);
+      setTimeout(() => navigation.navigate('Send', {
+        scannedAddress: trimmed,
+        scannedNetwork: 'TON Network',
+        symbol: 'TON'
+      }), 600);
+      return;
+    }
+    if (/^0x[0-9a-fA-F]{64}$/.test(trimmed)) {
+      setLastScan(trimmed);
+      setTimeout(() => navigation.navigate('Send', {
+        scannedAddress: trimmed,
+        scannedNetwork: 'Sui Network',
+        symbol: 'SUI'
+      }), 600);
+      return;
+    }
+    if (/^r[0-9a-zA-Z]{24,34}$/.test(trimmed)) {
+      setLastScan(trimmed);
+      setTimeout(() => navigation.navigate('Send', {
+        scannedAddress: trimmed,
+        scannedNetwork: 'Ripple Ledger',
+        symbol: 'XRP'
+      }), 600);
+      return;
+    }
+    if (/^0x[0-9a-fA-F]{40}$/.test(trimmed)) {
+      setLastScan(trimmed);
+      setTimeout(() => navigation.navigate('Send', {
+        scannedAddress: trimmed,
+        scannedNetwork: 'Ethereum',
+        symbol: 'ETH'
+      }), 600);
       return;
     }
 
@@ -134,6 +248,7 @@ export default function ScanScreen({ navigation }: any) {
       setTimeout(() => navigation.navigate('Send', {
         scannedAddress: result.address,
         scannedNetwork: result.network,
+        symbol: result.symbol,
       }), 800);
     } catch {
       setScanInfo('Invalid QR format');

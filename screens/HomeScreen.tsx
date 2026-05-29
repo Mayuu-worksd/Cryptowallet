@@ -486,8 +486,8 @@ export default function HomeScreen({ navigation }: any) {
     return {
       ETH:  isTron ? 0 : (parseFloat(ethBalance) || 0),
       TRX:  isTron ? (balances.TRX ?? 0) : 0,
-      USDC: balances.USDC ?? 0,
-      USDT: balances.USDT ?? 0,
+      USDC: isTron ? (balances.USDC_TRC20 ?? balances.USDC ?? 0) : (balances.USDC_ERC20 ?? balances.USDC ?? 0),
+      USDT: isTron ? (balances.USDT_TRC20 ?? balances.USDT ?? 0) : (balances.USDT_ERC20 ?? balances.USDT ?? 0),
       BTC: balances.BTC ?? 0,
       SOL: balances.SOL ?? 0,
       BNB: balances.BNB ?? 0,
@@ -753,12 +753,15 @@ export default function HomeScreen({ navigation }: any) {
             <ChangePill assetsList={assetsList} T={T} />
           )}
           {/* Locked balance badge */}
-          {Object.entries(lockedBalance ?? {}).some(([, v]) => (v as number) > 0) && (
+          {Object.entries(lockedBalance ?? {}).some(([, v]) => typeof v === 'number' && isFinite(v) && v > 0) && (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 }}>
               <View style={[styles.changePill, { backgroundColor: T.primary + '20' }]}>
                 <Feather name="lock" size={11} color={T.primary} />
                 <Text style={{ fontSize: 12, fontWeight: '700', color: T.primary }}>
-                  {Object.entries(lockedBalance).filter(([,v]) => (v as number) > 0).map(([k,v]) => `${(v as number).toFixed(4)} ${k}`).join(' · ')} locked in P2P
+                  {Object.entries(lockedBalance ?? {})
+                    .filter(([, v]) => typeof v === 'number' && isFinite(v) && v > 0)
+                    .map(([k, v]) => `${Number(v).toFixed(4)} ${k}`)
+                    .join(' · ')} locked in P2P
                 </Text>
               </View>
             </View>

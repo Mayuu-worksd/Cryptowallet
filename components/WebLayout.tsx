@@ -20,15 +20,16 @@ const D = {
 };
 
 const NAV_ITEMS = [
-  { name: 'Home',    screen: 'Home'        },
-  { name: 'Card',    screen: 'Card'        },
-  { name: 'Send',    screen: 'Send'        },
-  { name: 'Receive', screen: 'Receive'     },
-  { name: 'Swap',    screen: 'Swap'        },
-  { name: 'Assets',  screen: 'Assets'      },
-  { name: 'History', screen: 'History'     },
-  { name: 'Profile', screen: 'Profile'     },
-  { name: 'Admin',   screen: 'Admin'       },
+  { name: 'Home',      screen: 'Home'           },
+  { name: 'Card',      screen: 'Card'           },
+  { name: 'Send',      screen: 'Send'           },
+  { name: 'Receive',   screen: 'Receive'        },
+  { name: 'Swap',      screen: 'Swap'           },
+  { name: 'P2P',       screen: 'P2PMarketplace' },
+  { name: 'Messages',  screen: 'Messages'       },
+  { name: 'Assets',    screen: 'Assets'         },
+  { name: 'History',   screen: 'History'        },
+  { name: 'Profile',   screen: 'Profile'        },
 ];
 
 function NavItem({ item, isActive, onPress }: { item: typeof NAV_ITEMS[0]; isActive: boolean; onPress: () => void }) {

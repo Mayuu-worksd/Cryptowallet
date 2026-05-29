@@ -68,9 +68,13 @@ BEGIN
 
   IF FOUND THEN
     -- Block re-submission for active/approved records
-    IF v_existing.status IN ('pending', 'under_review', 'approved') THEN
+    IF v_existing.status IN ('under_review', 'approved') THEN
       RAISE EXCEPTION 'ALREADY_SUBMITTED:%', v_existing.status;
     END IF;
+    IF v_existing.status = 'pending' AND v_existing.document_url IS NOT NULL THEN
+      RAISE EXCEPTION 'ALREADY_SUBMITTED:pending';
+    END IF;
+
 
     -- Rejected → allow re-submission: reset status + clear old document
     UPDATE business_kyc SET

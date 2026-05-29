@@ -82,6 +82,7 @@ import BusinessKYCDocumentScreen from './screens/BusinessKYCDocumentScreen';
 import BusinessKYCResultScreen   from './screens/BusinessKYCResultScreen';
 import MerchantDashboardScreen   from './screens/MerchantDashboardScreen';
 import MerchantQRScreen          from './screens/MerchantQRScreen';
+import MessagesScreen        from './screens/MessagesScreen';
 import P2PMarketplaceScreen      from './screens/P2PMarketplaceScreen';
 import P2POrderDetailScreen      from './screens/P2POrderDetailScreen';
 import SplashScreen       from './screens/SplashScreen';
@@ -125,19 +126,19 @@ function CustomTabBar({ state, descriptors, navigation: nav }: any) {
   try { insets = useSafeAreaInsets(); } catch (_e) {}
 
   const personalTabs = [
-    { name: 'Home',    icon: 'layers',    label: 'Wallet'  },
-    { name: 'P2P',     icon: 'repeat',    label: 'P2P'     },
-    { name: 'QRCenter',icon: null,        label: 'Actions' },
-    { name: 'Assets',  icon: 'pie-chart', label: 'Assets'  },
-    { name: 'Profile', icon: 'user',      label: 'Profile' },
+    { name: 'Home',     icon: 'layers',        label: 'Wallet'   },
+    { name: 'P2P',      icon: 'repeat',        label: 'P2P'      },
+    { name: 'QRCenter', icon: null,            label: 'Actions'  },
+    { name: 'Messages', icon: 'message-square',label: 'Messages' },
+    { name: 'Profile',  icon: 'user',          label: 'Profile'  },
   ];
 
   const businessTabs = [
-    { name: 'Home',     icon: 'layers',    label: 'Wallet'   },
-    { name: 'P2P',      icon: 'repeat',    label: 'P2P'      },
-    { name: 'QRCenter', icon: null,        label: 'Actions'  },
-    { name: 'Merchant', icon: 'briefcase', label: 'Merchant' },
-    { name: 'Profile',  icon: 'user',      label: 'Profile'  },
+    { name: 'Home',     icon: 'layers',        label: 'Wallet'   },
+    { name: 'P2P',      icon: 'repeat',        label: 'P2P'      },
+    { name: 'QRCenter', icon: null,            label: 'Actions'  },
+    { name: 'Messages', icon: 'message-square',label: 'Messages' },
+    { name: 'Profile',  icon: 'user',          label: 'Profile'  },
   ];
 
   const tabs = accountType === 'business' ? businessTabs : personalTabs;
@@ -425,7 +426,7 @@ function Tabs() {
         <Tab.Screen name="Home"     component={HomeScreen} />
         <Tab.Screen name="P2P"      component={P2PMarketplaceScreen} />
         <Tab.Screen name="QRCenter" component={HomeScreen} />
-        <Tab.Screen name="Merchant" component={MerchantDashboardScreen} />
+        <Tab.Screen name="Messages" component={MessagesScreen} />
         <Tab.Screen name="Profile"  component={SettingsScreen} />
       </Tab.Navigator>
     );
@@ -436,11 +437,11 @@ function Tabs() {
       screenOptions={screenOptions}
       tabBar={(props) => <CustomTabBar {...props} />}
     >
-      <Tab.Screen name="Home"    component={HomeScreen} />
-      <Tab.Screen name="P2P"     component={P2PMarketplaceScreen} />
+      <Tab.Screen name="Home"     component={HomeScreen} />
+      <Tab.Screen name="P2P"      component={P2PMarketplaceScreen} />
       <Tab.Screen name="QRCenter" component={HomeScreen} />
-      <Tab.Screen name="Assets"  component={PortfolioScreen} />
-      <Tab.Screen name="Profile" component={SettingsScreen} />
+      <Tab.Screen name="Messages" component={MessagesScreen} />
+      <Tab.Screen name="Profile"  component={SettingsScreen} />
     </Tab.Navigator>
   );
 }
@@ -567,6 +568,8 @@ function MobileNavigator() {
   const [pinState, setPinState] = React.useState<'checking' | 'setup' | 'verify' | 'unlocked'>('checking');
   // Prevent AccountTypeScreen from flashing on reload before AsyncStorage loads
   const [accountTypeChecked, setAccountTypeChecked] = React.useState(false);
+  const [showNetworkPref, setShowNetworkPref] = React.useState(false);
+  const [networkPrefChecked, setNetworkPrefChecked] = React.useState(false);
 
   const triggerPinSetup = React.useCallback(() => setPinState('setup'), []);
 
@@ -576,6 +579,22 @@ function MobileNavigator() {
       setAccountTypeChecked(true);
     }).catch(() => setAccountTypeChecked(true));
   }, []);
+
+  // Check if existing user needs to set network preference
+  React.useEffect(() => {
+    if (!hasWallet || isLoadingWallet) {
+      setNetworkPrefChecked(true);
+      return;
+    }
+
+    AsyncStorage.getItem('cw_network_preference_set').then(prefSet => {
+      if (!prefSet && accountTypeSet) {
+        // Existing user who hasn't set network preference
+        setShowNetworkPref(true);
+      }
+      setNetworkPrefChecked(true);
+    }).catch(() => setNetworkPrefChecked(true));
+  }, [hasWallet, isLoadingWallet, accountTypeSet]);
 
   React.useEffect(() => {
     if (isLoadingWallet) return;
@@ -616,8 +635,22 @@ function MobileNavigator() {
     return () => sub.remove();
   }, [pinState]);
 
-  if (isLoadingWallet || pinState === 'checking' || !accountTypeChecked) {
+  if (isLoadingWallet || pinState === 'checking' || !accountTypeChecked || !networkPrefChecked) {
     return <View style={{ flex: 1, backgroundColor: '#101114' }} />;
+  }
+
+  // Show NetworkPreferenceScreen for existing users who haven't set their preference
+  if (showNetworkPref && hasWallet) {
+    const NetworkPreferenceScreen = require('./screens/NetworkPreferenceScreen').default;
+    return (
+      <NetworkPreferenceScreen
+        onSelect={async (network: string) => {
+          await AsyncStorage.setItem('cw_network', network);
+          await AsyncStorage.setItem('cw_network_preference_set', 'true');
+          setShowNetworkPref(false);
+        }}
+      />
+    );
   }
 
   // Show AccountTypeScreen if the user hasn't set their preferences (Account Type / Country)
@@ -704,6 +737,7 @@ function MobileNavigator() {
             <Stack.Screen name="P2PMarketplace"      component={P2PMarketplaceScreen} />
             <Stack.Screen name="P2POrderDetail"      component={P2POrderDetailScreen} />
             <Stack.Screen name="MyP2POrders"         component={P2PMarketplaceScreen} />
+            <Stack.Screen name="Messages"            component={MessagesScreen} />
           </>
         ) }
       </Stack.Navigator>
@@ -786,6 +820,12 @@ function WebApp() {
       case 'VCCProcessing': return <VCCProcessingScreen navigation={nav} route={route} />;
       case 'VCCSuccess':    return <VCCSuccessScreen navigation={nav} route={route} />;
       case 'ApplyPhysicalCard': return <ApplyPhysicalCardScreen navigation={nav} route={route} />;
+      case 'P2P':
+      case 'P2PMarketplace': return <P2PMarketplaceScreen navigation={nav} route={route} />;
+      case 'P2POrderDetail': return <P2POrderDetailScreen navigation={nav} route={route} />;
+      case 'Messages':       return <MessagesScreen navigation={nav} route={route} />;
+      case 'MerchantDashboard': return <MerchantDashboardScreen navigation={nav} route={route} />;
+      case 'MerchantQR':     return <MerchantQRScreen navigation={nav} route={route} />;
       case 'CreateWallet': return <CreateWalletScreen navigation={nav} route={route} />;
       case 'ImportWallet': return <ImportWalletScreen navigation={nav} route={route} />;
       case 'RecoverWallet': return <RecoverWalletScreen navigation={nav} route={route} />;

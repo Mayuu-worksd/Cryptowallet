@@ -72,23 +72,108 @@ function makeProvider(network: string) {
   return new JsonRpcProvider(rpcUrl, { chainId: netCfg.chainId, name: netCfg.name }, { staticNetwork: true });
 }
 
+function deriveSolanaAddress(evmAddress: string): string {
+  if (!evmAddress) return '';
+  const cleanHex = evmAddress.toLowerCase().replace('0x', '');
+  const b58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+  let res = '';
+  for (let i = 0; i < cleanHex.length; i += 2) {
+    const byte = parseInt(cleanHex.slice(i, i + 2), 16) || 0;
+    res += b58[byte % 58];
+  }
+  return (res + res).padEnd(44, 'x').slice(0, 44);
+}
+
 export async function getWalletBalances(
   walletAddress: string,
   network: string,
   localBalances?: Partial<WalletBalances>
 ): Promise<WalletBalances> {
-  const local = localBalances ?? {};
+  // 1. Always load from AsyncStorage first to make sure we don't lose cross-chain cache
+  let local: Partial<WalletBalances> = localBalances ?? {};
+  try {
+    const cachedStr = await AsyncStorage.getItem('cw_token_balances');
+    if (cachedStr) {
+      const cached = JSON.parse(cachedStr);
+      local = { ...cached, ...local };
+    }
+  } catch {}
+
+  const isTronNet = network === 'TRON' || network === 'TRON Nile';
+
+  // Solana networks — use JSON-RPC getBalance
+  if (network === 'Solana' || network === 'Solana Devnet') {
+    try {
+      const solAddress = deriveSolanaAddress(walletAddress);
+      const rpcUrl = RPC_URLS[network] ?? 'https://api.mainnet-beta.solana.com';
+      const response = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'getBalance',
+          params: [solAddress]
+        })
+      });
+      const json = await response.json();
+      const lamports = json?.result?.value ?? 0;
+      const solBalance = lamports / 1_000_000_000;
+      const balances: WalletBalances = {
+        USDT_TRC20: local.USDT_TRC20 ?? 0,
+        USDC_TRC20: local.USDC_TRC20 ?? 0,
+        USDT_ERC20: local.USDT_ERC20 ?? 0,
+        USDC_ERC20: local.USDC_ERC20 ?? 0,
+        USDT: local.USDT ?? 0,
+        USDC: local.USDC ?? 0,
+        ETH: local.ETH ?? 0,
+        TRX: local.TRX ?? 0,
+        BTC: local.BTC ?? 0,
+        SOL: solBalance,
+        BNB: local.BNB ?? 0,
+        XRP: local.XRP ?? 0,
+        TON: local.TON ?? 0,
+        SUI: local.SUI ?? 0,
+      };
+      await AsyncStorage.setItem('cw_token_balances', JSON.stringify(balances)).catch(() => {});
+      return balances;
+    } catch {
+      return {
+        USDT_TRC20: local.USDT_TRC20 ?? 0,
+        USDC_TRC20: local.USDC_TRC20 ?? 0,
+        USDT_ERC20: local.USDT_ERC20 ?? 0,
+        USDC_ERC20: local.USDC_ERC20 ?? 0,
+        USDT: local.USDT ?? 0,
+        USDC: local.USDC ?? 0,
+        ETH: local.ETH ?? 0,
+        TRX: local.TRX ?? 0,
+        BTC: local.BTC ?? 0,
+        SOL: local.SOL ?? 0,
+        BNB: local.BNB ?? 0,
+        XRP: local.XRP ?? 0,
+        TON: local.TON ?? 0,
+        SUI: local.SUI ?? 0,
+      };
+    }
+  }
 
   // TRON networks — use TronGrid REST API + tronService for full token balances
-  if (network === 'TRON' || network === 'TRON Nile') {
+  if (isTronNet) {
     try {
       const { tronService } = await import('./tronService');
       const tronBals = await tronService.getAllBalances(walletAddress, network);
+      const resolvedTRX = tronBals.TRX !== undefined ? tronBals.TRX : (local.TRX ?? 0);
+      const resolvedUSDT = tronBals.USDT !== undefined ? tronBals.USDT : (local.USDT ?? local.USDT_TRC20 ?? 0);
+      const resolvedUSDC = tronBals.USDC !== undefined ? tronBals.USDC : (local.USDC ?? local.USDC_TRC20 ?? 0);
       const balances: WalletBalances = {
-        USDT: tronBals.USDT,
-        USDC: tronBals.USDC,
-        ETH: 0,
-        TRX: tronBals.TRX,
+        USDT_TRC20: resolvedUSDT,
+        USDC_TRC20: resolvedUSDC,
+        USDT_ERC20: local.USDT_ERC20 ?? 0,
+        USDC_ERC20: local.USDC_ERC20 ?? 0,
+        USDT: resolvedUSDT,
+        USDC: resolvedUSDC,
+        ETH: local.ETH ?? 0,
+        TRX: resolvedTRX,
         BTC: local.BTC ?? 0,
         SOL: local.SOL ?? 0,
         BNB: local.BNB ?? 0,
@@ -100,9 +185,13 @@ export async function getWalletBalances(
       return balances;
     } catch {
       return {
-        USDT: local.USDT ?? 0,
-        USDC: local.USDC ?? 0,
-        ETH: 0,
+        USDT_TRC20: local.USDT_TRC20 ?? 0,
+        USDC_TRC20: local.USDC_TRC20 ?? 0,
+        USDT_ERC20: local.USDT_ERC20 ?? 0,
+        USDC_ERC20: local.USDC_ERC20 ?? 0,
+        USDT: local.USDT_TRC20 ?? 0,
+        USDC: local.USDC_TRC20 ?? 0,
+        ETH: local.ETH ?? 0,
         TRX: local.TRX ?? 0,
         BTC: local.BTC ?? 0,
         SOL: local.SOL ?? 0,
@@ -115,7 +204,6 @@ export async function getWalletBalances(
   }
 
   const provider  = makeProvider(network);
-  const isTestnet = network === 'Sepolia';
 
   const [ethRaw, usdcRaw, usdtRaw] = await Promise.allSettled([
     provider.getBalance(walletAddress),
@@ -127,21 +215,30 @@ export async function getWalletBalances(
   const chainUSDC   = usdcRaw.status   === 'fulfilled' ? usdcRaw.value : null;
   const chainUSDT   = usdtRaw.status   === 'fulfilled' ? usdtRaw.value : null;
 
+  // Use live chain value directly — fall back to cache only if RPC call failed
+  const resolvedUSDT = chainUSDT !== null ? chainUSDT : (local.USDT_ERC20 ?? local.USDT ?? 0);
+  const resolvedUSDC = chainUSDC !== null ? chainUSDC : (local.USDC_ERC20 ?? local.USDC ?? 0);
+  const resolvedETH  = chainETH  !== null ? chainETH  : (local.ETH ?? 0);
+
   const balances: WalletBalances = {
-    USDT: isTestnet ? Math.max(chainUSDT ?? 0, local.USDT ?? 0) : (chainUSDT !== null ? chainUSDT : (local.USDT ?? 0)),
-    USDC: isTestnet ? Math.max(chainUSDC ?? 0, local.USDC ?? 0) : (chainUSDC !== null ? chainUSDC : (local.USDC ?? 0)),
-    ETH: chainETH !== null ? chainETH : (local.ETH ?? 0),
+    USDT_ERC20: resolvedUSDT,
+    USDC_ERC20: resolvedUSDC,
+    USDT_TRC20: local.USDT_TRC20 ?? 0,
+    USDC_TRC20: local.USDC_TRC20 ?? 0,
+    USDT: resolvedUSDT,
+    USDC: resolvedUSDC,
+    ETH: resolvedETH,
+    TRX: local.TRX ?? 0,
     BTC: local.BTC ?? 0,
     SOL: local.SOL ?? 0,
     BNB: local.BNB ?? 0,
     XRP: local.XRP ?? 0,
     TON: local.TON ?? 0,
-    TRX: 0,
     SUI: local.SUI ?? 0,
   };
 
   const hasAnyBalance = Object.values(balances).some(v => v > 0);
-  if (hasAnyBalance || !isTestnet) {
+  if (hasAnyBalance || network !== 'Sepolia') {
     await AsyncStorage.setItem('cw_token_balances', JSON.stringify(balances)).catch(() => {});
   }
 

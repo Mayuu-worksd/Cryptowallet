@@ -24,4 +24,6 @@ export const RPC_URLS: Record<string, string> = {
   'Optimism Sepolia': optimismSepoliaRpc,
   TRON:               'https://api.trongrid.io',
   'TRON Nile':        'https://nile.trongrid.io',
+  Solana:             'https://api.mainnet-beta.solana.com',
+  'Solana Devnet':    'https://api.devnet.solana.com',
 };

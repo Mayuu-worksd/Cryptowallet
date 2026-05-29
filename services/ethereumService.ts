@@ -95,21 +95,30 @@ export const ethereumService = {
     to: string,
     amount: string,
     network?: string
-  ): Promise<{ gasCostEth: string; gasPrice: bigint; gasLimit: bigint }> {
-    const defaultGasPrice = parseUnits('20', 'gwei');
-    const defaultGasLimit = 21000n;
+  ): Promise<{ gasCostEth: string; gasPrice: string; gasLimit: string }> {
+    const defaultGasPrice = '20000000000'; // 20 gwei in wei as string
+    const defaultGasLimit = '21000';
     const fallback = {
-      gasCostEth: formatEther(defaultGasLimit * defaultGasPrice),
+      gasCostEth: '0.00042',
       gasPrice:   defaultGasPrice,
       gasLimit:   defaultGasLimit,
     };
     if (!from || !to || !amount || parseFloat(amount) <= 0) return fallback;
     try {
       const p        = getProvider(network);
-      const gasLimit = await p.estimateGas({ from, to, value: parseEther(amount) });
+      const gasLimitRaw = await p.estimateGas({ from, to, value: parseEther(amount) });
       const feeData  = await p.getFeeData();
-      const gasPrice = feeData.maxFeePerGas ?? feeData.gasPrice ?? defaultGasPrice;
-      return { gasCostEth: formatEther(gasLimit * gasPrice), gasPrice, gasLimit };
+      const gasPriceRaw = feeData.maxFeePerGas ?? feeData.gasPrice ?? parseUnits('20', 'gwei');
+      
+      // Convert to strings to handle both ethers.js BigNumber and native bigint
+      const gasLimitStr = typeof gasLimitRaw === 'bigint' ? gasLimitRaw.toString() : gasLimitRaw?.toString?.() ?? defaultGasLimit;
+      const gasPriceStr = typeof gasPriceRaw === 'bigint' ? gasPriceRaw.toString() : gasPriceRaw?.toString?.() ?? defaultGasPrice;
+      
+      // Calculate cost
+      const costWei = BigInt(gasLimitStr) * BigInt(gasPriceStr);
+      const gasCostEth = formatEther(costWei);
+      
+      return { gasCostEth, gasPrice: gasPriceStr, gasLimit: gasLimitStr };
     } catch {
       return fallback;
     }
@@ -135,7 +144,11 @@ export const ethereumService = {
       const balance     = await p.getBalance(wallet.address);
       const sendAmount  = parseEther(amount);
       const { gasPrice, gasLimit, gasCostEth } = await ethereumService.estimateGas(wallet.address, toAddress, amount, network);
-      const totalNeeded = sendAmount + gasLimit * gasPrice;
+      
+      // Convert string gas values to BigInt for calculation
+      const gasPriceBig = BigInt(gasPrice);
+      const gasLimitBig = BigInt(gasLimit);
+      const totalNeeded = sendAmount + gasLimitBig * gasPriceBig;
 
       if (balance < totalNeeded) {
         const balEth = parseFloat(formatEther(balance)).toFixed(6);
@@ -143,7 +156,12 @@ export const ethereumService = {
         return { hash: '', success: false, error: `Insufficient balance. You need ${amount} ETH + ${gasEth} ETH gas. Available: ${balEth} ETH` };
       }
 
-      const tx = await wallet.sendTransaction({ to: toAddress, value: sendAmount, gasPrice, gasLimit });
+      const tx = await wallet.sendTransaction({ 
+        to: toAddress, 
+        value: sendAmount, 
+        gasPrice,
+        gasLimit
+      });
       await tx.wait(1);
       return { hash: tx.hash, success: true, gasCostEth };
     } catch (e: any) {

@@ -623,21 +623,13 @@ export default function SettingsScreen({ navigation }: any) {
                 navigation.navigate('BusinessKYCForm');
                 return;
               }
-              // Always fetch fresh status — never trust stale context value
               try {
                 const { kycService } = await import('../services/supabaseService');
                 const record = await kycService.getStatus(walletAddress);
                 if (!record) {
                   navigation.navigate('KYCIntro');
-                } else if (
-                  record.status === 'verified' ||
-                  record.status === 'under_review' ||
-                  (record.status === 'pending' && !!record.document_url)
-                ) {
-                  navigation.navigate('KYCResult');
                 } else {
-                  // pending with no doc or rejected — go to form
-                  navigation.navigate('KYCForm');
+                  navigation.navigate('KYCResult');
                 }
               } catch {
                 navigation.navigate('KYCIntro');

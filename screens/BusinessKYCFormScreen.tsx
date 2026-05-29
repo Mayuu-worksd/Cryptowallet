@@ -106,7 +106,33 @@ export default function BusinessKYCFormScreen({ navigation }: any) {
   useEffect(() => {
     businessKYCService.getStatus(walletAddress)
       .then(r => {
-        if (r?.status && r.status !== 'rejected') {
+        if (r?.status) {
+          if (r.status === 'rejected') {
+            setChecking(false);
+            return;
+          }
+          // If pending but documents are missing, prefill the text form from the DB so they can continue to documents!
+          if (r.status === 'pending' && (!r.document_url || !r.director_id_url)) {
+            setForm({
+              business_name:       r.business_name ?? '',
+              business_type:       r.business_type ?? '',
+              registration_number: r.registration_number ?? '',
+              vat_tax_id:          r.vat_tax_id ?? '',
+              business_address:    r.business_address ?? '',
+              country:             r.country ?? '',
+              website:             r.website ?? '',
+              incorporation_date:  r.incorporation_date ?? '',
+              director_name:       r.director_name ?? '',
+              director_nationality: r.director_nationality ?? '',
+              director_id_type:    r.director_id_type ?? '',
+              director_dob:        r.director_dob ?? '',
+              director_address:    r.director_address ?? '',
+              ubo_name:            r.ubo_name ?? '',
+              ubo_ownership:       r.ubo_ownership ?? '',
+            });
+            setChecking(false);
+            return;
+          }
           navigation.replace('BusinessKYCResult');
           return;
         }

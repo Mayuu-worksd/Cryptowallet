@@ -7,6 +7,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useWallet } from '../store/WalletContext';
 import Toast from '../components/Toast';
 
@@ -174,7 +175,11 @@ export default function ImportWalletScreen({ navigation }: any) {
       try {
         console.log('[ImportScreen] Starting wallet import...');
         const t0 = Date.now();
-        await importWallet(trimmed);
+        
+        // Get preferred network from AsyncStorage (set during AccountTypeScreen flow)
+        const preferredNetwork = await AsyncStorage.getItem('cw_network').catch(() => null);
+        
+        await importWallet(trimmed, false, preferredNetwork || undefined);
         console.log(`[ImportScreen] importWallet() completed in ${Date.now() - t0}ms`);
         setImportDone(true); // triggers success step in overlay
       } catch (e: any) {

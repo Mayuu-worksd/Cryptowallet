@@ -7,6 +7,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons, Feather } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useWallet } from '../store/WalletContext';
 import Toast from '../components/Toast';
 import { usePreventScreenCapture } from 'expo-screen-capture';
@@ -150,9 +151,12 @@ export default function CreateWalletScreen({ navigation }: any) {
     // Step-by-step execution to keep UI responsive
     setTimeout(async () => {
       try {
+        // Get preferred network from AsyncStorage (set during AccountTypeScreen flow)
+        const preferredNetwork = await AsyncStorage.getItem('cw_network').catch(() => null);
+        
         // The heavy part: Deriving the wallet from mnemonic
         // This is the "Encrypting keys..." part
-        await importWallet(mnemonic, true);
+        await importWallet(mnemonic, true, preferredNetwork || undefined);
         
         // If we reach here, it means it's done (but hasWallet is already true)
         // However, we want to show the "success" state before unmounting.

@@ -26,6 +26,8 @@ export const NETWORK_INFO: Record<string, { name: string; type: string; color: s
   'Optimism Sepolia': { name: 'Optimism Sepolia',  type: 'Testnet', color: '#FF0420', symbol: 'ETH' },
   TRON:               { name: 'TRON',              type: 'Mainnet', color: '#EF0027', symbol: 'TRX' },
   'TRON Nile':        { name: 'TRON Nile',         type: 'Testnet', color: '#FF6B6B', symbol: 'TRX' },
+  Solana:             { name: 'Solana',            type: 'Mainnet', color: '#9945FF', symbol: 'SOL' },
+  'Solana Devnet':    { name: 'Solana Devnet',     type: 'Testnet', color: '#14F195', symbol: 'SOL' },
 };
 
 import { SUPPORTED_TOKENS } from './currencyConfig';

@@ -79,7 +79,37 @@ export default function MerchantDashboardScreen({ navigation }: any) {
     );
   }
 
-  if (business && (business.status === 'pending' || business.status === 'under_review')) {
+  if (business && business.status === 'pending' && !business.document_url) {
+    return (
+      <View style={[s.root, { backgroundColor: T.background }]}>
+        <View style={[s.header, { borderBottomColor: T.border, paddingTop: insets.top + 12 }]}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={[s.iconBtn, { backgroundColor: T.surfaceLow }]}>
+            <Feather name="arrow-left" size={22} color={T.text} />
+          </TouchableOpacity>
+          <Text style={[s.headerTitle, { color: T.text }]}>Merchant Dashboard</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
+          <View style={[s.emptyIcon, { backgroundColor: T.primary + '15', borderColor: T.primary + '30' }]}>
+            <Feather name="alert-circle" size={40} color={T.primary} />
+          </View>
+          <Text style={[s.emptyTitle, { color: T.text }]}>Setup Incomplete</Text>
+          <Text style={[s.emptySub, { color: T.textDim }]}>
+            You have successfully filled in your company and director details, but you have not uploaded the required registration documents yet.
+          </Text>
+          <TouchableOpacity style={[s.startBtn, { backgroundColor: T.primary }]} onPress={() => navigation.navigate('BusinessKYCResult')}>
+            <Feather name="upload-cloud" size={18} color="#FFF" />
+            <Text style={s.startBtnText}>Resume & Upload Documents</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[s.ghostBtn, { backgroundColor: T.surfaceLow, marginTop: 12 }]} onPress={() => navigation.goBack()}>
+            <Text style={[s.ghostBtnText, { color: T.text }]}>Back</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  if (business && ((business.status === 'pending' && !!business.document_url) || business.status === 'under_review')) {
     return (
       <View style={[s.root, { backgroundColor: T.background }]}>
         <View style={[s.header, { borderBottomColor: T.border, paddingTop: insets.top + 12 }]}>

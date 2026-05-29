@@ -35,15 +35,14 @@ export default function TransactionLoader({ visible, title, subtitle, isDarkMode
   const step3   = useRef(new Animated.Value(0)).current;
   const barAnim = useRef(new Animated.Value(0)).current;
 
+  // Spin & Pulse loops
   useEffect(() => {
     if (!visible) return;
 
-    // Spin ring
     Animated.loop(
       Animated.timing(spin, { toValue: 1, duration: 1200, easing: Easing.linear, useNativeDriver: true })
     ).start();
 
-    // Pulse glow
     Animated.loop(
       Animated.sequence([
         Animated.timing(pulse, { toValue: 1.18, duration: 700, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
@@ -51,24 +50,69 @@ export default function TransactionLoader({ visible, title, subtitle, isDarkMode
       ])
     ).start();
 
-    // Step indicators cascade
-    Animated.sequence([
-      Animated.timing(step1, { toValue: 1, duration: 300, useNativeDriver: true }),
-      Animated.delay(600),
-      Animated.timing(step2, { toValue: 1, duration: 300, useNativeDriver: true }),
-      Animated.delay(600),
-      Animated.timing(step3, { toValue: 1, duration: 300, useNativeDriver: true }),
-    ]).start();
-
-    // Progress bar
-    Animated.timing(barAnim, { toValue: 1, duration: 2400, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
-
     return () => {
-      spin.setValue(0); pulse.setValue(1);
-      step1.setValue(0); step2.setValue(0); step3.setValue(0);
-      barAnim.setValue(0);
+      spin.setValue(0);
+      pulse.setValue(1);
     };
   }, [visible]);
+
+  // Synchronise steps and progress with subtitle status text
+  useEffect(() => {
+    if (!visible) {
+      step1.setValue(0);
+      step2.setValue(0);
+      step3.setValue(0);
+      barAnim.setValue(0);
+      return;
+    }
+
+    let stepTarget = 0;
+    const sub = (subtitle ?? '').toLowerCase();
+
+    if (type === 'send') {
+      if (sub.includes('broadcast') || sub.includes('send')) {
+        stepTarget = 1;
+      } else if (sub.includes('confirm') || sub.includes('wait') || sub.includes('success')) {
+        stepTarget = 2;
+      }
+    } else if (type === 'swap') {
+      if (sub.includes('execut') || sub.includes('swap')) {
+        stepTarget = 1;
+      } else if (sub.includes('final') || sub.includes('complet') || sub.includes('success')) {
+        stepTarget = 2;
+      }
+    } else if (type === 'p2p') {
+      if (sub.includes('verify') || sub.includes('fund')) {
+        stepTarget = 1;
+      } else if (sub.includes('place') || sub.includes('success')) {
+        stepTarget = 2;
+      }
+    } else {
+      if (sub.includes('process') || sub.includes('run')) {
+        stepTarget = 1;
+      } else if (sub.includes('complet') || sub.includes('finish') || sub.includes('success')) {
+        stepTarget = 2;
+      }
+    }
+
+    const animations = [];
+
+    // Smoothly step transitions
+    animations.push(Animated.timing(step1, { toValue: stepTarget >= 0 ? 1 : 0, duration: 400, useNativeDriver: false }));
+    animations.push(Animated.timing(step2, { toValue: stepTarget >= 1 ? 1 : 0, duration: 400, useNativeDriver: false }));
+    animations.push(Animated.timing(step3, { toValue: stepTarget >= 2 ? 1 : 0, duration: 400, useNativeDriver: false }));
+
+    // Target width of progress fill
+    const targetWidth = stepTarget === 0 ? 0.33 : stepTarget === 1 ? 0.66 : 1.0;
+    animations.push(Animated.timing(barAnim, {
+      toValue: targetWidth,
+      duration: 600,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false
+    }));
+
+    Animated.parallel(animations).start();
+  }, [visible, subtitle, type]);
 
   const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
   const icons  = STEP_ICONS[type];
@@ -96,20 +140,33 @@ export default function TransactionLoader({ visible, title, subtitle, isDarkMode
           <View style={[s.barTrack, { backgroundColor: T.surfaceHigh }]}>
             <Animated.View style={[s.barFill, {
               backgroundColor: T.primary,
-              width: barAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '92%'] }),
+              width: barAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
             }]} />
           </View>
 
           {/* Step indicators */}
           <View style={s.steps}>
-            {steps.map((anim, i) => (
-              <Animated.View key={i} style={[s.stepRow, { opacity: anim, transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] }]}>
-                <View style={[s.stepDot, { backgroundColor: T.primary + '20', borderColor: T.primary + '50' }]}>
-                  <Feather name={icons[i] as any} size={12} color={T.primary} />
-                </View>
-                <Text style={[s.stepLabel, { color: T.textMuted }]}>{labels[i]}</Text>
-              </Animated.View>
-            ))}
+            {steps.map((anim, i) => {
+              const opacity = anim.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1.0] });
+              const scale = anim.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.0] });
+              const bg = anim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [T.surfaceHigh, T.primary + '18']
+              });
+              const border = anim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [T.border, T.primary]
+              });
+
+              return (
+                <Animated.View key={i} style={[s.stepRow, { opacity, transform: [{ scale }] }]}>
+                  <Animated.View style={[s.stepDot, { backgroundColor: bg, borderColor: border }]}>
+                    <Feather name={icons[i] as any} size={12} color={T.primary} />
+                  </Animated.View>
+                  <Text style={[s.stepLabel, { color: T.text }]}>{labels[i]}</Text>
+                </Animated.View>
+              );
+            })}
           </View>
 
         </View>

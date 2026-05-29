@@ -5,9 +5,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useWallet } from '../store/WalletContext';
 import { Theme } from '../constants';
 import { LinearGradient } from 'expo-linear-gradient';
+import NetworkPreferenceScreen from './NetworkPreferenceScreen';
 
 const { width } = Dimensions.get('window');
 
@@ -110,7 +112,7 @@ const CountryModal = ({ visible, onClose, onSelect, selectedCountry, T, isDarkMo
 
 
 export default function AccountTypeScreen({ onSelect }: any) {
-  const { setP2PPreferences, isDarkMode } = useWallet();
+  const { setP2PPreferences, isDarkMode, switchNetwork } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const insets = useSafeAreaInsets();
   
@@ -118,11 +120,23 @@ export default function AccountTypeScreen({ onSelect }: any) {
   const [country, setCountry] = useState(COUNTRIES[0]);
   const [currency, setCurrency] = useState(CURRENCIES[0]);
   const [showCountryModal, setShowCountryModal] = useState(false);
+  const [showNetworkPref, setShowNetworkPref] = useState(false);
 
   const handleContinue = async () => {
     await setP2PPreferences(country.name, currency.code);
+    setShowNetworkPref(true);
+  };
+
+  const handleNetworkSelected = async (network: string) => {
+    // Set network preference and mark as complete
+    await AsyncStorage.setItem('cw_network', network);
+    await AsyncStorage.setItem('cw_network_preference_set', 'true');
     onSelect(selectedType);
   };
+
+  if (showNetworkPref) {
+    return <NetworkPreferenceScreen onSelect={handleNetworkSelected} />;
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: T.background }]}>
