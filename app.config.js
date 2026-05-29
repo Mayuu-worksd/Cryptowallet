@@ -61,5 +61,10 @@ module.exports = {
       ],
     ],
     owner: "work234",
+    extra: {
+      eas: {
+        projectId: "8c882003-2f5c-42f8-963a-9bd47b068eab",
+      },
+    },
   },
 };
