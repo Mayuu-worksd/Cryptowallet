@@ -8,6 +8,15 @@ module.exports = {
     userInterfaceStyle: "dark",
     sdkVersion: "54.0.0",
     jsEngine: "hermes",
+    updates: {
+      url: "https://u.expo.dev/8c882003-2f5c-42f8-963a-9bd47b068eab",
+      enabled: true,
+      fallbackToCacheTimeout: 0,
+      checkAutomatically: "ON_LOAD",
+    },
+    runtimeVersion: {
+      policy: "appVersion",
+    },
     splash: {
       image: "./assets/splash-icon.png",
       resizeMode: "contain",
@@ -41,6 +50,7 @@ module.exports = {
     },
     plugins: [
       ["expo-system-ui", { backgroundColor: "#101114" }],
+      "expo-updates",
       "expo-secure-store",
       "expo-font",
       [
