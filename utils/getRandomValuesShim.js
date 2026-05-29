@@ -1,15 +1,16 @@
 // Safe crypto.getRandomValues polyfill for SDK 54
+import 'react-native-get-random-values';
+
 if (typeof global.crypto !== 'object') {
   global.crypto = {};
 }
 
 if (typeof global.crypto.getRandomValues !== 'function') {
-  global.crypto.getRandomValues = function(array) {
+  // Fallback only if native module didn't load
+  global.crypto.getRandomValues = function(array: any) {
     for (let i = 0; i < array.length; i++) {
       array[i] = Math.floor(Math.random() * 256);
     }
     return array;
   };
 }
-
-console.log('[Shim] crypto.getRandomValues polyfill loaded OK');

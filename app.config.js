@@ -8,15 +8,10 @@ module.exports = {
     userInterfaceStyle: "dark",
     sdkVersion: "54.0.0",
     jsEngine: "hermes",
-    fastRefresh: true,
-    updates: {
-      url: "https://u.expo.dev/cde8eb79-39ce-4b25-83f1-3b3410e7bcb4",
-      enabled: true,
-      fallbackToCacheTimeout: 0,
-      checkAutomatically: "ON_LOAD",
-    },
-    runtimeVersion: {
-      policy: "appVersion",
+    extra: {
+      eas: {
+        projectId: "cde8eb79-39ce-4b25-83f1-3b3410e7bcb4",
+      },
     },
     splash: {
       image: "./assets/splash-icon.png",
@@ -50,7 +45,6 @@ module.exports = {
       favicon: "./assets/favicon.png",
     },
     plugins: [
-      "expo-updates",
       ["expo-system-ui", { backgroundColor: "#101114" }],
       "expo-secure-store",
       "expo-font",
@@ -71,7 +65,7 @@ module.exports = {
         },
       ],
     ],
-    owner: "safnah03",
+    owner: "work234",
     extra: {
       eas: {
         projectId: "cde8eb79-39ce-4b25-83f1-3b3410e7bcb4",
