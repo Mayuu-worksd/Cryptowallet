@@ -3,10 +3,9 @@ import { Theme, Fonts } from '../constants';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Platform, Image, Animated, RefreshControl, StatusBar, Modal, Pressable
+  Platform, Image, Animated, RefreshControl, StatusBar, Modal, Pressable, ActivityIndicator
 } from 'react-native';
 import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useWallet, useMarket } from '../store/WalletContext';
 import { COIN_META, COIN_COLORS } from '../constants';
 import Toast from '../components/Toast';
@@ -44,24 +43,30 @@ const CoinIcon = memo(({ symbol, size = 40 }: { symbol: string; size?: number })
   );
 });
 
-const FiatIcon = memo(({ symbol, gradientColors, size = 40 }: { symbol: string; gradientColors: string[]; size?: number }) => {
+const FIAT_META: Record<string, { flag: string; color: string }> = {
+  USD: { flag: '🇺🇸', color: '#2E7D32' },
+  EUR: { flag: '🇪🇺', color: '#1A237E' },
+  INR: { flag: '🇮🇳', color: '#E65100' },
+  GBP: { flag: '🇬🇧', color: '#1565C0' },
+  AED: { flag: '🇦🇪', color: '#006064' },
+  SGD: { flag: '🇸🇬', color: '#C62828' },
+  JPY: { flag: '🇯🇵', color: '#B71C1C' },
+  CAD: { flag: '🇨🇦', color: '#BF360C' },
+  AUD: { flag: '🇦🇺', color: '#0D47A1' },
+  BRL: { flag: '🇧🇷', color: '#1B5E20' },
+};
+
+const FiatIcon = memo(({ code, size = 40 }: { code: string; size?: number }) => {
+  const meta = FIAT_META[code] ?? { flag: '💵', color: '#37474F' };
   return (
-    <LinearGradient
-      colors={gradientColors as any}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.15)'
-      }}
-    >
-      <Text style={{ color: '#FFFFFF', fontSize: size * 0.45, fontFamily: Fonts.extraBold }}>{symbol}</Text>
-    </LinearGradient>
+    <View style={{
+      width: size, height: size, borderRadius: size / 2,
+      backgroundColor: meta.color + '20',
+      borderWidth: 1.5, borderColor: meta.color + '40',
+      alignItems: 'center', justifyContent: 'center',
+    }}>
+      <Text style={{ fontSize: size * 0.52 }}>{meta.flag}</Text>
+    </View>
   );
 });
 
@@ -135,7 +140,7 @@ const FiatAssetRow = memo(({ item, T, balanceVisible, onPress }: any) => {
     >
       <Animated.View style={[{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flex: 1 }, { transform: [{ scale }] }]}>
         <View style={styles.assetLeft}>
-          <FiatIcon symbol={item.symbol} gradientColors={item.gradient} size={42} />
+          <FiatIcon code={item.code} size={42} />
           <View style={styles.assetInfo}>
             <Text style={[styles.assetSymbol, { color: T.text }]}>{item.code} Wallet</Text>
             <Text style={[styles.assetName, { color: T.textDim }]}>{item.name}</Text>
@@ -171,8 +176,37 @@ export default function PortfolioScreen({ navigation }: any) {
   const [activeTab, setActiveTab] = useState<'crypto' | 'fiat'>('crypto');
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
   const [fiatDepositModal, setFiatDepositModal] = useState<any>(null);
+  const [bankDetails, setBankDetails] = useState<any[]>([]);
+  const [loadingBanks, setLoadingBanks] = useState(false);
 
   const { refreshBalance } = useWallet();
+
+  // Fetch active Bank Accounts for Fiat Deposit
+  useEffect(() => {
+    if (!fiatDepositModal) {
+      setBankDetails([]);
+      return;
+    }
+    
+    const fetchBanks = async () => {
+      setLoadingBanks(true);
+      try {
+        const { data } = await supabase
+          .from('admin_bank_accounts')
+          .select('*')
+          .eq('is_active', true)
+          .eq('currency', fiatDepositModal.code);
+          
+        if (data) setBankDetails(data);
+      } catch (e) {
+        console.log('Error fetching banks', e);
+      } finally {
+        setLoadingBanks(false);
+      }
+    };
+    
+    fetchBanks();
+  }, [fiatDepositModal]);
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setToast({ visible: true, message, type });
@@ -234,41 +268,11 @@ export default function PortfolioScreen({ navigation }: any) {
   // Mock fiat wallets with a gorgeous setup
   const fiatWalletsList = useMemo(() => {
     return [
-      {
-        code: 'USD',
-        symbol: '$',
-        name: 'US Dollar Wallet',
-        gradient: ['#2E7D32', '#1B5E20'],
-        formattedBalance: balanceVisible ? `$0.00` : '••••'
-      },
-      {
-        code: 'EUR',
-        symbol: '€',
-        name: 'Euro Wallet',
-        gradient: ['#1A237E', '#0D47A1'],
-        formattedBalance: balanceVisible ? `€0.00` : '••••'
-      },
-      {
-        code: 'INR',
-        symbol: '₹',
-        name: 'Indian Rupee Wallet',
-        gradient: ['#E65100', '#F57C00'],
-        formattedBalance: balanceVisible ? `₹0.00` : '••••'
-      },
-      {
-        code: 'GBP',
-        symbol: '£',
-        name: 'British Pound Wallet',
-        gradient: ['#3E2723', '#4E342E'],
-        formattedBalance: balanceVisible ? `£0.00` : '••••'
-      },
-      {
-        code: 'AED',
-        symbol: 'د.إ',
-        name: 'UAE Dirham Wallet',
-        gradient: ['#006064', '#00838F'],
-        formattedBalance: balanceVisible ? `د.إ0.00` : '••••'
-      }
+      { code: 'USD', name: 'US Dollar Wallet',      formattedBalance: balanceVisible ? '$0.00'    : '••••' },
+      { code: 'EUR', name: 'Euro Wallet',             formattedBalance: balanceVisible ? '€0.00'    : '••••' },
+      { code: 'INR', name: 'Indian Rupee Wallet',     formattedBalance: balanceVisible ? '₹0.00'    : '••••' },
+      { code: 'GBP', name: 'British Pound Wallet',    formattedBalance: balanceVisible ? '£0.00'    : '••••' },
+      { code: 'AED', name: 'UAE Dirham Wallet',       formattedBalance: balanceVisible ? 'د.إ0.00'  : '••••' }
     ];
   }, [balanceVisible]);
 
@@ -311,20 +315,34 @@ export default function PortfolioScreen({ navigation }: any) {
               </View>
             </View>
 
-            <View style={styles.coordsBox}>
-              {[
-                { label: 'Beneficiary Name', value: 'Vault Cryptowallet Ltd' },
-                { label: 'Bank Name', value: 'Sovereign Fintech Clearing Bank' },
-                { label: 'Routing / IFSC Number', value: fiatDepositModal?.code === 'INR' ? 'SFCB0009284' : '392810482' },
-                { label: 'Virtual Account Number', value: `920384820184${fiatDepositModal?.code}` },
-                { label: 'Account Type', value: 'Business Checking' },
-              ].map((item, index) => (
-                <View key={index} style={styles.coordRow}>
-                  <Text style={[styles.coordLabel, { color: T.textDim }]}>{item.label}</Text>
-                  <Text style={[styles.coordValue, { color: T.text }]}>{item.value}</Text>
-                </View>
-              ))}
-            </View>
+            {loadingBanks ? (
+              <View style={[styles.coordsBox, { alignItems: 'center', paddingVertical: 40 }]}>
+                <ActivityIndicator size="small" color={T.primary} />
+                <Text style={{ color: T.textDim, marginTop: 12, fontFamily: Fonts.medium }}>Locating secure clearing nodes...</Text>
+              </View>
+            ) : bankDetails.length > 0 ? (
+              <View style={styles.coordsBox}>
+                {[
+                  { label: 'Beneficiary Name', value: bankDetails[0].beneficiary_name },
+                  { label: 'Bank Name', value: bankDetails[0].bank_name },
+                  { label: 'Routing / SWIFT Number', value: bankDetails[0].routing_number },
+                  { label: 'Account Number', value: bankDetails[0].account_number },
+                  { label: 'Account Type', value: bankDetails[0].account_type },
+                ].map((item, index) => (
+                  <View key={index} style={styles.coordRow}>
+                    <Text style={[styles.coordLabel, { color: T.textDim }]}>{item.label}</Text>
+                    <Text style={[styles.coordValue, { color: T.text }]}>{item.value}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <View style={[styles.coordsBox, { alignItems: 'center', paddingVertical: 40 }]}>
+                <Feather name="alert-circle" size={32} color={T.textDim} style={{ marginBottom: 12, opacity: 0.5 }} />
+                <Text style={{ color: T.textDim, fontFamily: Fonts.medium, textAlign: 'center' }}>
+                  No active fiat gateways found for {fiatDepositModal?.code}.{'\n'}Please check back later or contact support.
+                </Text>
+              </View>
+            )}
 
             <TouchableOpacity
               style={[styles.depositButton, { backgroundColor: T.primary }]}
