@@ -98,27 +98,27 @@ export default function CreditScreen({ navigation }: any) {
         {/* Premium Hero Card */}
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }}>
           <LinearGradient
-            colors={isDarkMode ? ['#1e1e24', '#151518', '#0d0d12'] : ['#2B2B30', '#18181A', '#0D0D0E']}
-            style={[styles.heroCard, isDarkMode && { borderWidth: 1, borderColor: T.border }]}
+            colors={isDarkMode ? ['#1e1e24', '#151518', '#0d0d12'] : ['#FFFFFF', '#F9FAFB', '#F3F4F6']}
+            style={[styles.heroCard, { borderColor: T.border, borderWidth: 1 }]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
           >
             <View style={styles.badgeWrap}>
-              <View style={styles.betaBadge}>
-                <Text style={styles.betaBadgeText}>COMING SOON</Text>
+              <View style={[styles.betaBadge, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.05)' }]}>
+                <Text style={[styles.betaBadgeText, { color: isDarkMode ? '#FFF' : T.text }]}>COMING SOON</Text>
               </View>
             </View>
 
-            <Text style={styles.heroSub}>
+            <Text style={[styles.heroSub, { color: T.textDim }]}>
               Borrow against crypto at
             </Text>
             <View style={styles.heroMainWrap}>
-              <Text style={styles.heroMain}>0</Text>
-              <Text style={styles.heroPct}>%</Text>
-              <Text style={styles.heroApy}>Interest</Text>
+              <Text style={[styles.heroMain, { color: T.text }]}>0</Text>
+              <Text style={[styles.heroPct, { color: T.text }]}>%</Text>
+              <Text style={[styles.heroApy, { color: T.primary }]}>Interest</Text>
             </View>
 
-            <Text style={styles.heroDesc}>
+            <Text style={[styles.heroDesc, { color: T.textDim }]}>
               Get instant cash without selling your crypto. Pay back whenever you want.
             </Text>
           </LinearGradient>
@@ -243,7 +243,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   heroSub: {
-    color: 'rgba(255,255,255,0.7)',
     fontSize: 16,
     fontFamily: Fonts.bold,
     marginBottom: -4,
@@ -254,25 +253,21 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   heroMain: {
-    color: '#FFF',
     fontSize: 56,
     fontFamily: Fonts.extraBold,
     letterSpacing: -1,
   },
   heroPct: {
-    color: '#FFF',
     fontSize: 32,
     fontFamily: Fonts.extraBold,
     marginLeft: 2,
   },
   heroApy: {
-    color: '#14F195',
     fontSize: 20,
     fontFamily: Fonts.extraBold,
     marginLeft: 8,
   },
   heroDesc: {
-    color: 'rgba(255,255,255,0.8)',
     fontSize: 14,
     fontFamily: Fonts.medium,
     lineHeight: 20,

@@ -136,10 +136,10 @@ export default function BankAccountsPage() {
   return (
     <div className="space-y-8 animate-fade-in relative min-h-screen pb-12">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-3 border-[#1a1a1a] pb-6 bg-[#1a1a1a] p-6 text-white shadow-[4px_4px_0px_0px_rgba(255,204,0,1)] border-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-3 border-[#1a1a1a] pb-6 bg-[#0055ff] p-6 text-white shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] border-3">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight font-display uppercase leading-none text-[#ffcc00]">Fiat Bank Accounts</h1>
-          <p className="text-xs font-bold font-mono uppercase tracking-wider mt-2 text-gray-300">Manage institutional deposit accounts for fiat on-ramps</p>
+          <h1 className="text-3xl font-extrabold tracking-tight font-display uppercase leading-none text-white">Fiat Bank Accounts</h1>
+          <p className="text-xs font-bold font-mono uppercase tracking-wider mt-2 text-white/80">Manage institutional deposit accounts for fiat on-ramps</p>
         </div>
         <div className="flex items-center gap-3 self-start">
           <button
