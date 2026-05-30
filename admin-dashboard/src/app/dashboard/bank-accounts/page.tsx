@@ -35,11 +35,7 @@ export default function BankAccountsPage() {
   const { data: banks, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['admin-bank-accounts'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('admin_bank_accounts')
-        .select('*')
-        .order('created_at', { ascending: false });
-
+      const { data, error } = await supabase.rpc('admin_get_bank_accounts');
       if (error) throw error;
       return data || [];
     },
@@ -49,15 +45,25 @@ export default function BankAccountsPage() {
   const saveBank = useMutation({
     mutationFn: async (payload: any) => {
       if (editingBank) {
-        const { error } = await supabase
-          .from('admin_bank_accounts')
-          .update(payload)
-          .eq('id', editingBank.id);
+        const { error } = await supabase.rpc('admin_update_bank_account', {
+          p_id: editingBank.id,
+          p_beneficiary_name: payload.beneficiary_name,
+          p_bank_name: payload.bank_name,
+          p_routing_number: payload.routing_number,
+          p_account_number: payload.account_number,
+          p_account_type: payload.account_type,
+          p_currency: payload.currency,
+        });
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from('admin_bank_accounts')
-          .insert([payload]);
+        const { error } = await supabase.rpc('admin_insert_bank_account', {
+          p_beneficiary_name: payload.beneficiary_name,
+          p_bank_name: payload.bank_name,
+          p_routing_number: payload.routing_number,
+          p_account_number: payload.account_number,
+          p_account_type: payload.account_type,
+          p_currency: payload.currency,
+        });
         if (error) throw error;
       }
     },
@@ -70,10 +76,10 @@ export default function BankAccountsPage() {
   // Toggle Active Status Mutation
   const toggleStatus = useMutation({
     mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
-      const { error } = await supabase
-        .from('admin_bank_accounts')
-        .update({ is_active: !is_active })
-        .eq('id', id);
+      const { error } = await supabase.rpc('admin_toggle_bank_account', {
+        p_id: id,
+        p_is_active: !is_active,
+      });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -84,10 +90,7 @@ export default function BankAccountsPage() {
   // Delete Bank Mutation
   const deleteBank = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('admin_bank_accounts')
-        .delete()
-        .eq('id', id);
+      const { error } = await supabase.rpc('admin_delete_bank_account', { p_id: id });
       if (error) throw error;
     },
     onSuccess: () => {
