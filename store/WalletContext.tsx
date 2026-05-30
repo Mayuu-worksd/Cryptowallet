@@ -571,13 +571,33 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           // set_wallet must complete first so RLS policies allow the queries
           try {
             await setWallet(address);
-            const [vcc, dbCard, dbTxs, variants, kycRecord] = await Promise.all([
+            const [vcc, dbCard, dbTxs, variants, kycRecord, dbNetworksRes] = await Promise.all([
               vccService.getCard(address),
               dbCardService.getCard(address),
               txService.getAll(address, 200),
               cardVariantService.getVariants(),
               kycService.getStatus(address),
+              supabase.from('admin_networks').select('*').eq('is_active', true)
             ]);
+
+            // Inject Dynamic Networks from Admin Dashboard
+            if (dbNetworksRes?.data && dbNetworksRes.data.length > 0) {
+               const { NETWORKS, NETWORK_INFO } = await import('../constants');
+               dbNetworksRes.data.forEach((n: any) => {
+                 NETWORKS[n.network_name] = n.rpc_url;
+                 if (NETWORK_INFO[n.network_name]) {
+                    NETWORK_INFO[n.network_name].type = n.is_mainnet ? 'Mainnet' : 'Testnet';
+                    NETWORK_INFO[n.network_name].symbol = n.symbol;
+                 } else {
+                    NETWORK_INFO[n.network_name] = {
+                      name: n.network_name,
+                      type: n.is_mainnet ? 'Mainnet' : 'Testnet',
+                      color: n.network_name.includes('TRON') ? '#FF0013' : (n.network_name.includes('Solana') ? '#14F195' : '#627EEA'),
+                      symbol: n.symbol
+                    };
+                 }
+               });
+            }
 
             // KYC
             setKycStatus(kycRecord?.status ?? null);
