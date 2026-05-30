@@ -23,6 +23,7 @@ import {
   Sun,
   Moon,
   CreditCard,
+  Landmark,
 } from 'lucide-react';
 
 interface SidebarItem {
@@ -118,6 +119,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'P2P & Escrow', href: '/dashboard/p2p', icon: RefreshCw },
     { name: 'Transactions', href: '/dashboard/transactions', icon: ArrowLeftRight },
     { name: 'Card Requests', href: '/dashboard/cards', icon: CreditCard },
+    { name: 'Bank Accounts', href: '/dashboard/bank-accounts', icon: Landmark },
     { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
   ];
 
