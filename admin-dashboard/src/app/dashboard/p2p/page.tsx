@@ -79,24 +79,8 @@ export default function P2PPage() {
       });
 
       if (error) {
-        console.warn('RPC admin_resolve_p2p_dispute failed, using fallback database updates:', error.message);
-        // Fallback updates:
-        // First get the escrow lock
-        const { data: locks } = await supabase.from('escrow_locks').select('*').eq('order_id', orderId).eq('status', 'locked').maybeSingle();
-        
-        if (resolution === 'release') {
-          if (locks) {
-            await supabase.from('escrow_locks').update({ status: 'released' }).eq('id', locks.id);
-          }
-          const { error: orderError } = await supabase.from('p2p_orders').update({ status: 'completed' }).eq('id', orderId);
-          if (orderError) throw orderError;
-        } else {
-          if (locks) {
-            await supabase.from('escrow_locks').update({ status: 'refunded' }).eq('id', locks.id);
-          }
-          const { error: orderError } = await supabase.from('p2p_orders').update({ status: 'cancelled' }).eq('id', orderId);
-          if (orderError) throw orderError;
-        }
+        console.error('RPC admin_resolve_p2p_dispute failed:', error.message);
+        throw new Error(error.message);
       }
     },
     onSuccess: () => {

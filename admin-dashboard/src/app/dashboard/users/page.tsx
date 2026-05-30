@@ -53,26 +53,20 @@ export default function UsersPage() {
     enabled: !!selectedUser,
     queryFn: async () => {
       const addr = selectedUser.wallet_address.toLowerCase();
-      const [
-        { data: cards },
-        { data: vccCards },
-        { data: txs },
-        { data: kyc },
-        { data: bkyc },
-      ] = await Promise.all([
-        supabase.from('cards').select('*').eq('wallet_address', addr),
-        supabase.from('vcc_cards').select('*').eq('wallet_address', addr),
-        supabase.from('transactions').select('*').eq('wallet_address', addr).order('created_at', { ascending: false }),
-        supabase.from('kyc').select('*').eq('wallet_address', addr).maybeSingle(),
-        supabase.from('business_kyc').select('*').eq('wallet_address', addr).maybeSingle(),
-      ]);
+      
+      const { data, error } = await supabase.rpc('admin_get_user_details', { p_wallet: addr });
+      
+      if (error) {
+        console.error('Failed to fetch user details:', error.message);
+        throw error;
+      }
 
       return {
-        cards: cards || [],
-        vccCards: vccCards || [],
-        transactions: txs || [],
-        kyc,
-        bkyc,
+        cards: data?.cards || [],
+        vccCards: data?.vccCards || [],
+        transactions: data?.transactions || [],
+        kyc: data?.kyc || null,
+        bkyc: data?.bkyc || null,
       };
     },
   });
