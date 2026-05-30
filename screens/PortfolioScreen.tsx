@@ -403,7 +403,7 @@ export default function PortfolioScreen({ navigation }: any) {
 
           <TouchableOpacity
             style={[styles.actionCapsule, { backgroundColor: T.surfaceLow }]}
-            onPress={() => { haptics.selection(); showToast('Earn protocols are coming soon to your region!', 'info'); }}
+            onPress={() => { haptics.selection(); navigation.navigate('Earn'); }}
             activeOpacity={0.8}
           >
             <Text style={[styles.actionCapsuleText, { color: T.text }]}>Earn</Text>
@@ -411,7 +411,7 @@ export default function PortfolioScreen({ navigation }: any) {
 
           <TouchableOpacity
             style={[styles.actionCapsule, { backgroundColor: T.surfaceLow }]}
-            onPress={() => { haptics.selection(); navigation.navigate('Card'); }}
+            onPress={() => { haptics.selection(); navigation.navigate('Credit'); }}
             activeOpacity={0.8}
           >
             <Text style={[styles.actionCapsuleText, { color: T.text }]}>Credit</Text>

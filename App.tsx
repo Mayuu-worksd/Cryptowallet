@@ -95,6 +95,9 @@ import WebLayout          from './components/WebLayout';
 import CloudBackupScreen from './screens/CloudBackupScreen';
 import RecoverySettingsScreen from './screens/RecoverySettingsScreen';
 import RecoverWalletScreen from './screens/RecoverWalletScreen';
+import EarnScreen from './screens/EarnScreen';
+import CreditScreen from './screens/CreditScreen';
+import MoreScreen from './screens/MoreScreen';
 
 const Tab   = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -738,6 +741,9 @@ function MobileNavigator() {
             <Stack.Screen name="P2POrderDetail"      component={P2POrderDetailScreen} />
             <Stack.Screen name="MyP2POrders"         component={P2PMarketplaceScreen} />
             <Stack.Screen name="Messages"            component={MessagesScreen} />
+            <Stack.Screen name="Earn"                component={EarnScreen} />
+            <Stack.Screen name="Credit"              component={CreditScreen} />
+            <Stack.Screen name="More"                component={MoreScreen} />
           </>
         ) }
       </Stack.Navigator>
@@ -829,6 +835,7 @@ function WebApp() {
       case 'CreateWallet': return <CreateWalletScreen navigation={nav} route={route} />;
       case 'ImportWallet': return <ImportWalletScreen navigation={nav} route={route} />;
       case 'RecoverWallet': return <RecoverWalletScreen navigation={nav} route={route} />;
+      case 'Earn':         return <EarnScreen navigation={nav} route={route} />;
       case 'Landing':      return <LandingScreen navigation={nav} route={route} />;
       default:             return <HomeScreen navigation={nav} route={route} />;
     }

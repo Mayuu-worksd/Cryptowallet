@@ -770,22 +770,25 @@ export default function HomeScreen({ navigation }: any) {
 
         {/* ── Quick Actions ── */}
         {accountType === 'business' ? (
-          // Business Merchant: 4 merchant-specific quick actions
+          // Business Merchant: 5 quick actions
           <View style={styles.actionsRow}>
             <ActionBtn icon="grid-on"       label="QR Gen"    onPress={() => navigation.navigate('MerchantQR')}        T={T} isDark={isDarkMode} />
             <ActionBtn icon="repeat"        label="P2P"       onPress={() => navigation.navigate('P2PMarketplace')}    T={T} isDark={isDarkMode} />
             <ActionBtn icon="list-alt"      label="Orders"    onPress={() => navigation.navigate('MyP2POrders')}       T={T} isDark={isDarkMode} />
             <ActionBtn icon="business"      label="Profile"   onPress={() => navigation.navigate('BusinessKYCForm')}   T={T} isDark={isDarkMode} />
+            <ActionBtn icon="more-horizontal" label="More"    onPress={() => navigation.navigate('More')}              T={T} isDark={isDarkMode} />
           </View>
         ) : (
-          // Personal: original 4 actions
+          // Personal: 5 quick actions
           <View style={styles.actionsRow}>
             <ActionBtn icon="add"           label="Deposit"   onPress={() => navigation.navigate('Receive')} T={T} isDark={isDarkMode} />
             <ActionBtn icon="swap-horiz"    label="Swap"      onPress={() => navigation.navigate('Swap')}    T={T} isDark={isDarkMode} />
             <ActionBtn icon="send"          label="Send"      onPress={() => navigation.navigate('Send')}    T={T} isDark={isDarkMode} />
             <ActionBtn icon="credit-card"   label="Card"      onPress={() => navigation.navigate('Card')}    T={T} isDark={isDarkMode} />
+            <ActionBtn icon="more-horizontal" label="More"    onPress={() => navigation.navigate('More')}    T={T} isDark={isDarkMode} />
           </View>
         )}
+
 
 
 
@@ -924,16 +927,37 @@ const styles = StyleSheet.create({
   },
 
 
-  cardBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    padding: 18, borderRadius: 20, borderWidth: 1,
-    marginBottom: 20,
+  compactEarnStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 16,
   },
-  cardBannerIcon: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  cardBannerTitle: { fontSize: 15, fontWeight: '700', marginBottom: 2 },
-  cardBannerSub: { fontSize: 12 },
-  openBtn: { paddingHorizontal: 18, paddingVertical: 9, borderRadius: 20 },
-  openBtnText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
+  compactEarnIconBg: {
+    width: 24,
+    height: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compactEarnText: {
+    fontSize: 12.5,
+    fontFamily: Fonts.extraBold,
+  },
+  compactEarnBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  compactEarnBadgeText: {
+    fontSize: 8,
+    fontFamily: Fonts.extraBold,
+    letterSpacing: 0.5,
+  },
 
   assetsContainer: { borderRadius: 20, padding: 14, borderWidth: 1, marginBottom: 8 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
