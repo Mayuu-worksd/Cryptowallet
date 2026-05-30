@@ -39,6 +39,9 @@ AS $$
   SELECT * FROM card_requests ORDER BY created_at DESC;
 $$;
 
+-- Add missing updated_at column if it doesn't exist
+ALTER TABLE card_requests ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now());
+
 -- 3. RPC to update a Card Request status (Approve/Reject)
 CREATE OR REPLACE FUNCTION admin_update_card_request(p_id uuid, p_status text)
 RETURNS void

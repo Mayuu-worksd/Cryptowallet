@@ -209,7 +209,7 @@ export default function CardScreen({ navigation, route }: any) {
     if (cardCreated && cardDetails?.holderName) {
       return cardDetails.holderName.toUpperCase();
     }
-    return 'KARTHICK MAYUR';
+    return 'CARD HOLDER';
   }, [cardCreated, cardDetails]);
 
   // Dynamic selector on swiping virtual cards

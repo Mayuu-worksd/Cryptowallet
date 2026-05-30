@@ -99,7 +99,29 @@ export default function UsersPage() {
       }
     },
   });
+  const updateCardName = useMutation({
+    mutationFn: async ({ id, isVcc, newName }: { id: string; isVcc: boolean; newName: string }) => {
+      const { error } = await supabase.rpc('admin_update_cardholder_name', {
+        p_card_id: id,
+        p_is_vcc: isVcc,
+        p_new_name: newName,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-user-details'] });
+    },
+    onError: (err: any) => {
+      alert(`Failed to update name: ${err.message}`);
+    }
+  });
 
+  const handleEditCardholderName = (id: string, isVcc: boolean, currentName: string) => {
+    const newName = window.prompt("Enter new cardholder name (or leave empty to fallback to CARD HOLDER):", currentName);
+    if (newName !== null) {
+      updateCardName.mutate({ id, isVcc, newName: newName.trim().toUpperCase() });
+    }
+  };
   // Filter users based on search
   const filteredUsers = (users || []).filter((u: any) => {
     const term = searchTerm.toLowerCase();
@@ -368,25 +390,37 @@ export default function UsersPage() {
                     <p className="text-xs text-gray-500 font-mono italic">No virtual credit card nodes mapped for this wallet.</p>
                   ) : (
                     <div className="space-y-2.5">
-                      {[...(userDetails.cards || []), ...(userDetails.vccCards || [])].map((c: any, cidx: number) => (
-                        <div key={cidx} className="p-3 border-2 border-[#1a1a1a] bg-[#f5f0e8] flex items-center justify-between hover:bg-[#ffcc00]/5 transition-all">
-                          <div className="flex items-center gap-3">
-                            <div className="h-8 w-14 border border-[#1a1a1a] bg-white flex items-center justify-center text-[9px] font-extrabold text-[#1a1a1a] tracking-wider uppercase font-mono">
-                              {c.card_type || c.card_variant || 'Classic'}
+                      {[...(userDetails.cards || []), ...(userDetails.vccCards || [])].map((c: any, cidx: number) => {
+                        const isVcc = !!c.card_status;
+                        const currentName = c.holder_name || c.card_holder_name || 'CARD HOLDER';
+                        return (
+                          <div key={cidx} className="p-3 border-2 border-[#1a1a1a] bg-[#f5f0e8] flex items-center justify-between hover:bg-[#ffcc00]/5 transition-all">
+                            <div className="flex items-center gap-3">
+                              <div className="h-8 w-14 border border-[#1a1a1a] bg-white flex items-center justify-center text-[9px] font-extrabold text-[#1a1a1a] tracking-wider uppercase font-mono">
+                                {c.card_type || c.card_variant || 'Classic'}
+                              </div>
+                              <div className="font-mono flex flex-col justify-center">
+                                <p className="text-xs font-bold text-[#1a1a1a]">•••• •••• •••• {c.card_last4 || '0000'}</p>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-[9px] text-gray-500 font-semibold uppercase">{currentName} | EXP: {c.expiry_month || c.expiry_mm_yy}/{c.expiry_year || ''}</p>
+                                  <button
+                                    onClick={() => handleEditCardholderName(c.id, isVcc, currentName)}
+                                    className="text-[9px] text-[#0055ff] hover:underline font-bold"
+                                  >
+                                    (EDIT NAME)
+                                  </button>
+                                </div>
+                              </div>
                             </div>
-                            <div className="font-mono">
-                              <p className="text-xs font-bold text-[#1a1a1a]">•••• •••• •••• {c.card_last4 || '0000'}</p>
-                              <p className="text-[9px] text-gray-500 font-semibold uppercase">{c.holder_name || c.card_holder_name || 'CARD HOLDER'} | EXP: {c.expiry_month || c.expiry_mm_yy}/{c.expiry_year || ''}</p>
+                            <div className="text-right font-mono">
+                              <p className="text-xs font-bold text-[#1a1a1a]">${Number(c.balance).toFixed(2)}</p>
+                              <span className="text-[8px] font-extrabold border border-[#1a1a1a] bg-white text-emerald-600 px-1.5 py-0.2 uppercase">
+                                {c.status || c.card_status || 'active'}
+                              </span>
                             </div>
                           </div>
-                          <div className="text-right font-mono">
-                            <p className="text-xs font-bold text-[#1a1a1a]">${Number(c.balance).toFixed(2)}</p>
-                            <span className="text-[8px] font-extrabold border border-[#1a1a1a] bg-white text-emerald-600 px-1.5 py-0.2 uppercase">
-                              {c.status || c.card_status || 'active'}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
