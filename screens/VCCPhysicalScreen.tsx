@@ -9,13 +9,13 @@ import { Feather } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
 import { shippingFeeService, ShippingFee, VCCCardVariant } from '../services/supabaseService';
 
-const PHYSICAL_BASE_FEE = 50;
-
 export default function VCCPhysicalScreen({ navigation, route }: any) {
   const { isDarkMode } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const insets = useSafeAreaInsets();
   const { variant, holderName, previewNumber, previewExpiry, previewCVV }: { variant: VCCCardVariant; holderName: string; previewNumber?: string; previewExpiry?: string; previewCVV?: string } = route?.params ?? {};
+
+  const PHYSICAL_BASE_FEE = variant?.price ?? 50;
 
   const [shippingFees,    setShippingFees]    = useState<ShippingFee[]>([]);
   const [selectedCountry, setSelectedCountry] = useState<ShippingFee | null>(null);
