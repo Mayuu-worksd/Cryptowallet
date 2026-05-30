@@ -37,12 +37,7 @@ export default function NetworksPage() {
   const { data: networks, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['admin-networks'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('admin_networks')
-        .select('*')
-        .order('is_mainnet', { ascending: false })
-        .order('created_at', { ascending: false });
-
+      const { data, error } = await supabase.rpc('admin_get_networks');
       if (error) throw error;
       return data || [];
     },
@@ -52,15 +47,25 @@ export default function NetworksPage() {
   const saveNetwork = useMutation({
     mutationFn: async (payload: any) => {
       if (editingNetwork) {
-        const { error } = await supabase
-          .from('admin_networks')
-          .update(payload)
-          .eq('id', editingNetwork.id);
+        const { error } = await supabase.rpc('admin_update_network', {
+          p_id: editingNetwork.id,
+          p_network_name: payload.network_name,
+          p_rpc_url: payload.rpc_url,
+          p_chain_id: payload.chain_id,
+          p_explorer_url: payload.explorer_url,
+          p_symbol: payload.symbol,
+          p_is_mainnet: payload.is_mainnet,
+        });
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from('admin_networks')
-          .insert([payload]);
+        const { error } = await supabase.rpc('admin_insert_network', {
+          p_network_name: payload.network_name,
+          p_rpc_url: payload.rpc_url,
+          p_chain_id: payload.chain_id,
+          p_explorer_url: payload.explorer_url,
+          p_symbol: payload.symbol,
+          p_is_mainnet: payload.is_mainnet,
+        });
         if (error) throw error;
       }
     },
@@ -73,10 +78,10 @@ export default function NetworksPage() {
   // Toggle Active Status Mutation
   const toggleStatus = useMutation({
     mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
-      const { error } = await supabase
-        .from('admin_networks')
-        .update({ is_active: !is_active })
-        .eq('id', id);
+      const { error } = await supabase.rpc('admin_toggle_network', {
+        p_id: id,
+        p_is_active: !is_active,
+      });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -87,10 +92,7 @@ export default function NetworksPage() {
   // Delete Network Mutation
   const deleteNetwork = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('admin_networks')
-        .delete()
-        .eq('id', id);
+      const { error } = await supabase.rpc('admin_delete_network', { p_id: id });
       if (error) throw error;
     },
     onSuccess: () => {
