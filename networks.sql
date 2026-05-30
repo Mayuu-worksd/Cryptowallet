@@ -23,13 +23,8 @@ CREATE POLICY "Enable read access for all authenticated users"
 CREATE POLICY "Enable all access for admins"
   ON admin_networks FOR ALL
   TO authenticated
-  USING (
-    auth.jwt() ->> 'email' = 'admin@admin.com' OR 
-    EXISTS (
-      SELECT 1 FROM user_roles 
-      WHERE user_id = auth.uid() AND role = 'admin'
-    )
-  );
+  USING (auth.jwt() ->> 'role' = 'admin' OR auth.jwt() ->> 'email' = 'admin@admin.com')
+  WITH CHECK (auth.jwt() ->> 'role' = 'admin' OR auth.jwt() ->> 'email' = 'admin@admin.com');
 
 -- Create a trigger for updated_at
 CREATE OR REPLACE FUNCTION update_admin_networks_updated_at()
