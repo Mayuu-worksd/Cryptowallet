@@ -118,14 +118,13 @@ export default function CardsPage() {
   const { data: requests, isLoading: isRequestsLoading, error: queryError, refetch: refetchRequests, isRefetching: isRefetchingRequests } = useQuery({
     queryKey: ['admin-card-requests', statusFilter],
     queryFn: async () => {
-      let query = supabase
-        .from('card_requests')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (statusFilter !== 'all') query = query.eq('status', statusFilter);
-      const { data, error } = await query;
+      const { data, error } = await supabase.rpc('admin_get_card_requests');
       if (error) throw error;
-      return (data || []) as CardRequest[];
+      let results = data || [];
+      if (statusFilter !== 'all') {
+        results = results.filter((r: any) => r.status === statusFilter);
+      }
+      return results as CardRequest[];
     },
     refetchInterval: 20000,
     enabled: activeTab === 'requests',
@@ -192,10 +191,10 @@ export default function CardsPage() {
   // ─── Mutations Requests ───────────────────────────────────────────────────────
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { error } = await supabase
-        .from('card_requests')
-        .update({ status, updated_at: new Date().toISOString() })
-        .eq('id', id);
+      const { error } = await supabase.rpc('admin_update_card_request', {
+        p_id: id,
+        p_status: status
+      });
       if (error) throw error;
       return status;
     },

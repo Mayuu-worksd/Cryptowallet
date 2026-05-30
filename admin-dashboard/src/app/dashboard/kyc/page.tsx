@@ -62,7 +62,7 @@ export default function KycPage() {
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['admin-kyc-stats'],
     queryFn: async () => {
-      const { data: allKyc, error } = await supabase.from('kyc').select('status');
+      const { data: allKyc, error } = await supabase.rpc('admin_get_kyc_stats');
       if (error) throw error;
       const kList = allKyc || [];
       return {

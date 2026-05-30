@@ -31,21 +31,18 @@ export default function OverviewPage() {
   const { data: stats, isLoading } = useQuery({
     queryKey: ['dashboard-overview-stats'],
     queryFn: async () => {
-      const [
-        { data: profiles },
-        { data: personalKyc },
-        { data: businessKyc },
-        { data: transactions },
-        { data: p2pOrders },
-        { data: cardRequests },
-      ] = await Promise.all([
-        supabase.from('wallet_profiles').select('*'),
-        supabase.from('kyc').select('*'),
-        supabase.from('business_kyc').select('*'),
-        supabase.from('transactions').select('*').order('created_at', { ascending: true }),
-        supabase.from('p2p_orders').select('*'),
-        supabase.from('card_requests').select('id, status'),
-      ]);
+      const { data, error } = await supabase.rpc('admin_get_dashboard_analytics');
+      if (error) {
+        console.error('RPC admin_get_dashboard_analytics failed:', error.message);
+        throw error;
+      }
+
+      const profiles = data?.wallet_profiles || [];
+      const personalKyc = data?.kyc || [];
+      const businessKyc = data?.business_kyc || [];
+      const transactions = data?.transactions || [];
+      const p2pOrders = data?.p2p_orders || [];
+      const cardRequests = data?.card_requests || [];
 
       const cardRequestsPending = (cardRequests ?? []).filter((c: any) => c.status === 'pending').length;
 
