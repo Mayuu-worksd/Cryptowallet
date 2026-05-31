@@ -235,7 +235,7 @@ function CustomTabBar({ state, descriptors, navigation: nav }: any) {
     { name: "Home", icon: "layers", label: "Wallet" },
     { name: "P2P", icon: "repeat", label: "P2P" },
     { name: "QRCenter", icon: null, label: "Actions" },
-    { name: "Card", icon: "credit-card", label: "Card" },
+    { name: "MerchantDashboard", icon: "briefcase", label: "Dashboard" },
     { name: "Profile", icon: "user", label: "Profile" },
   ];
 
@@ -750,7 +750,7 @@ function Tabs() {
         <Tab.Screen name="Home" component={HomeScreen} />
         <Tab.Screen name="P2P" component={P2PMarketplaceScreen} />
         <Tab.Screen name="QRCenter" component={HomeScreen} />
-        <Tab.Screen name="Card" component={CardScreen} />
+        <Tab.Screen name="MerchantDashboard" component={MerchantDashboardScreen} />
         <Tab.Screen name="Profile" component={SettingsScreen} />
       </Tab.Navigator>
     );
