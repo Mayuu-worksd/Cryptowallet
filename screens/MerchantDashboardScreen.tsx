@@ -34,10 +34,10 @@ export default function MerchantDashboardScreen({ navigation }: any) {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const MENU = [
-    { icon: 'grid', label: 'QR Generator',   sub: 'Create payment QR codes',     screen: 'MerchantQR',    color: T.primary },
-    { icon: 'repeat', label: 'P2P Marketplace', sub: 'Buy & sell crypto P2P',    screen: 'P2PMarketplace', color: '#10B981', badge: pending },
-    { icon: 'bar-chart-2', label: 'My Orders', sub: 'View all your P2P orders',  screen: 'MyP2POrders',   color: '#F59E0B' },
-    { icon: 'settings', label: 'Business Profile', sub: 'Edit business details', screen: 'BusinessKYCForm', color: T.primary },
+    { icon: 'qr-code', label: 'QR Generator',   sub: 'Accept crypto',     screen: 'MerchantQR',    color: '#10B981' },
+    { icon: 'user',    label: 'My Profile',     sub: 'Status & Info',     screen: 'BusinessKYCResult', color: T.primary },
+    { icon: 'repeat',  label: 'P2P Trading',    sub: 'Marketplace',       screen: 'P2PMarketplace', color: '#8B5CF6', badge: pending },
+    { icon: 'bar-chart-2', label: 'My Orders',  sub: 'P2P History',       screen: 'MyP2POrders',   color: '#F59E0B' },
   ];
 
   if (loading) return <View style={[s.root, { backgroundColor: T.background, alignItems: 'center', justifyContent: 'center' }]}><ActivityIndicator color={T.primary} /></View>;
@@ -212,31 +212,31 @@ export default function MerchantDashboardScreen({ navigation }: any) {
           ))}
         </View>
 
-        {/* Menu */}
-        <Text style={[s.sectionLabel, { color: T.textDim }]}>FEATURES</Text>
-        {MENU.map((item, i) => (
-          <TouchableOpacity
-            key={i}
-            style={[s.menuCard, { backgroundColor: T.surface, borderColor: T.border }]}
-            onPress={() => navigation.navigate(item.screen)}
-            activeOpacity={0.8}
-          >
-            <View style={[s.menuIcon, { backgroundColor: item.color + '15' }]}>
-              <Feather name={item.icon as any} size={22} color={item.color} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[s.menuLabel, { color: T.text }]}>{item.label}</Text>
-              <Text style={[s.menuSub, { color: T.textDim }]}>{item.sub}</Text>
-            </View>
-            {item.badge ? (
-              <View style={[s.notifBadge, { backgroundColor: T.primary }]}>
-                <Text style={s.notifText}>{item.badge}</Text>
+        {/* Menu Grid */}
+        <Text style={[s.sectionLabel, { color: T.textDim }]}>MERCHANT TOOLS</Text>
+        <View style={s.gridContainer}>
+          {MENU.map((item, i) => (
+            <TouchableOpacity
+              key={i}
+              style={[s.gridCard, { backgroundColor: T.surface, borderColor: T.border }]}
+              onPress={() => navigation.navigate(item.screen)}
+              activeOpacity={0.8}
+            >
+              <View style={[s.gridIcon, { backgroundColor: item.color + '15' }]}>
+                <Feather name={item.icon as any} size={24} color={item.color} />
               </View>
-            ) : (
-              <Feather name="chevron-right" size={18} color={T.textDim} />
-            )}
-          </TouchableOpacity>
-        ))}
+              <View style={s.gridTextWrap}>
+                <Text style={[s.gridLabel, { color: T.text }]}>{item.label}</Text>
+                <Text style={[s.gridSub, { color: T.textDim }]}>{item.sub}</Text>
+              </View>
+              {item.badge ? (
+                <View style={[s.notifBadge, { backgroundColor: T.primary }]}>
+                  <Text style={s.notifText}>{item.badge}</Text>
+                </View>
+              ) : null}
+            </TouchableOpacity>
+          ))}
+        </View>
       </ScrollView>
     </View>
   );
@@ -259,11 +259,13 @@ const s = StyleSheet.create({
   statValue: { fontSize: 20, fontWeight: '900', marginBottom: 4 },
   statLabel: { fontSize: 11, fontWeight: '600' },
   sectionLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 1.5, marginBottom: 12 },
-  menuCard: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 18, borderRadius: 18, borderWidth: 1, marginBottom: 10 },
-  menuIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
-  menuLabel: { fontSize: 15, fontWeight: '800', marginBottom: 2 },
-  menuSub: { fontSize: 12 },
-  notifBadge: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  gridContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  gridCard: { width: '48%', padding: 20, borderRadius: 20, borderWidth: 1, marginBottom: 12, alignItems: 'center' },
+  gridIcon: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  gridTextWrap: { alignItems: 'center' },
+  gridLabel: { fontSize: 15, fontWeight: '800', marginBottom: 4, textAlign: 'center' },
+  gridSub: { fontSize: 11, textAlign: 'center', lineHeight: 14 },
+  notifBadge: { position: 'absolute', top: 12, right: 12, width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   notifText: { color: '#FFF', fontSize: 11, fontWeight: '900' },
   emptyIcon: { width: 90, height: 90, borderRadius: 45, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
   emptyTitle: { fontSize: 22, fontWeight: '900', marginBottom: 12, textAlign: 'center' },
