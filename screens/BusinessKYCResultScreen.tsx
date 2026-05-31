@@ -275,10 +275,16 @@ export default function BusinessKYCResultScreen({ navigation }: any) {
         {/* Action Panel Buttons */}
         <View style={st.actions}>
           {isApproved && (
-            <TouchableOpacity style={[st.primaryBtn, { backgroundColor: '#10B981' }]} onPress={() => navigation.navigate('MerchantDashboard')} activeOpacity={0.85}>
-              <Feather name="briefcase" size={20} color="#FFF" />
-              <Text style={[st.primaryBtnText, { color: '#FFF' }]}>Merchant Dashboard</Text>
-            </TouchableOpacity>
+            <>
+              <TouchableOpacity style={[st.primaryBtn, { backgroundColor: '#10B981' }]} onPress={() => navigation.navigate('MerchantDashboard')} activeOpacity={0.85}>
+                <Feather name="briefcase" size={20} color="#FFF" />
+                <Text style={[st.primaryBtnText, { color: '#FFF' }]}>Merchant Dashboard</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[st.primaryBtn, { backgroundColor: T.surfaceLow, marginTop: 12 }]} onPress={() => navigation.navigate('BusinessKYCForm')} activeOpacity={0.85}>
+                <Feather name="edit-2" size={20} color={T.text} />
+                <Text style={[st.primaryBtnText, { color: T.text }]}>Edit Business Details</Text>
+              </TouchableOpacity>
+            </>
           )}
 
           {isIncomplete && (

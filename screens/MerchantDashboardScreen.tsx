@@ -35,10 +35,10 @@ export default function MerchantDashboardScreen({ navigation }: any) {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const MENU = [
-    { icon: 'qr-code', label: 'QR Generator',   sub: 'Accept crypto',     screen: 'MerchantQR',    color: '#10B981' },
-    { icon: 'user',    label: 'My Profile',     sub: 'Status & Info',     screen: 'BusinessKYCResult', color: T.primary },
-    { icon: 'repeat',  label: 'P2P Trading',    sub: 'Marketplace',       screen: 'P2PMarketplace', color: '#8B5CF6', badge: pending },
-    { icon: 'bar-chart-2', label: 'My Orders',  sub: 'P2P History',       screen: 'MyP2POrders',   color: '#F59E0B' },
+    { icon: 'aperture',    label: 'Generate QR',    sub: 'Receive instant payments', screen: 'MerchantQR',    color: '#10B981', gradient: ['#10B981', '#059669'] },
+    { icon: 'user',        label: 'Business Profile',sub: 'Manage KYC & details',    screen: 'BusinessKYCResult', color: T.primary, gradient: [T.primary, '#4F46E5'] },
+    { icon: 'repeat',      label: 'P2P Trading',    sub: 'Manage marketplace',       screen: 'P2PMarketplace', color: '#8B5CF6', gradient: ['#8B5CF6', '#6D28D9'], badge: pending },
+    { icon: 'bar-chart-2', label: 'Order History',  sub: 'Track performance',        screen: 'MyP2POrders',   color: '#F59E0B', gradient: ['#F59E0B', '#D97706'] },
   ];
 
   if (loading) return <View style={[s.root, { backgroundColor: T.background, alignItems: 'center', justifyContent: 'center' }]}><ActivityIndicator color={T.primary} /></View>;
@@ -182,25 +182,25 @@ export default function MerchantDashboardScreen({ navigation }: any) {
       </View>
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-        {/* Premium Business Hero Card */}
+        {/* Ultra Premium Business Hero Card */}
         <LinearGradient
-          colors={isDarkMode ? [T.primary + 'CC', T.primary + '55'] : [T.primary, T.primary + 'DD']}
+          colors={isDarkMode ? ['#1A1B22', '#101114'] : ['#F8FAFC', '#FFFFFF']}
           start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-          style={s.bizCard}
+          style={[s.bizCard, { borderColor: isDarkMode ? '#2A2C35' : '#E2E8F0', borderWidth: 1 }]}
         >
           <View style={s.bizTop}>
-            <View style={[s.bizIconWrap, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
-              <Feather name="briefcase" size={24} color="#FFF" />
-            </View>
-            <View style={[s.verifiedBadge, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
-              <Feather name="check-circle" size={12} color="#FFF" />
-              <Text style={s.verifiedText}>VERIFIED</Text>
+            <LinearGradient colors={[T.primary, '#4F46E5']} style={s.bizIconWrap}>
+              <Feather name="briefcase" size={22} color="#FFF" />
+            </LinearGradient>
+            <View style={[s.verifiedBadge, { backgroundColor: 'rgba(16,185,129,0.1)' }]}>
+              <Feather name="check-circle" size={12} color="#10B981" />
+              <Text style={[s.verifiedText, { color: '#10B981' }]}>VERIFIED MERCHANT</Text>
             </View>
           </View>
           
           <View style={s.bizBottom}>
-            <Text style={s.bizName}>{business?.business_name ?? 'Your Business'}</Text>
-            <Text style={s.bizType}>{business?.business_type} • {business?.country}</Text>
+            <Text style={[s.bizName, { color: T.text }]}>{business?.business_name ?? 'Your Business'}</Text>
+            <Text style={[s.bizType, { color: T.textDim }]}>{business?.business_type} • {business?.country}</Text>
           </View>
         </LinearGradient>
 
@@ -218,23 +218,25 @@ export default function MerchantDashboardScreen({ navigation }: any) {
           ))}
         </View>
 
-        {/* Menu Grid */}
-        <Text style={[s.sectionLabel, { color: T.textDim }]}>MERCHANT TOOLS</Text>
-        <View style={s.gridContainer}>
+        {/* Action List */}
+        <Text style={[s.sectionLabel, { color: T.textDim }]}>MERCHANT TERMINAL</Text>
+        <View style={{ gap: 16, marginBottom: 40 }}>
           {MENU.map((item, i) => (
             <TouchableOpacity
               key={i}
-              style={[s.gridCard, { backgroundColor: T.surface, borderColor: T.border }]}
-              onPress={() => navigation.navigate(item.screen)}
+              style={[s.actionCard, { backgroundColor: T.surface, borderColor: T.border }]}
+              onPress={() => navigation.navigate(item.screen as never)}
               activeOpacity={0.8}
             >
-              <View style={[s.gridIcon, { backgroundColor: item.color + '15' }]}>
-                <Feather name={item.icon as any} size={24} color={item.color} />
+              <LinearGradient colors={item.gradient} style={s.actionIconWrap}>
+                <Feather name={item.icon as any} size={22} color="#FFF" />
+              </LinearGradient>
+              <View style={s.actionTextWrap}>
+                <Text style={[s.actionLabel, { color: T.text }]}>{item.label}</Text>
+                <Text style={[s.actionSub, { color: T.textDim }]}>{item.sub}</Text>
               </View>
-              <View style={s.gridTextWrap}>
-                <Text style={[s.gridLabel, { color: T.text }]}>{item.label}</Text>
-                <Text style={[s.gridSub, { color: T.textDim }]}>{item.sub}</Text>
-              </View>
+              <Feather name="chevron-right" size={20} color={T.textDim} />
+              
               {item.badge ? (
                 <View style={[s.notifBadge, { backgroundColor: T.primary }]}>
                   <Text style={s.notifText}>{item.badge}</Text>
@@ -251,35 +253,36 @@ export default function MerchantDashboardScreen({ navigation }: any) {
 const s = StyleSheet.create({
   root: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
-  iconBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 17, fontWeight: '800' },
-  scroll: { paddingHorizontal: 20, paddingBottom: 80, paddingTop: 24 },
-  bizCard: { padding: 24, borderRadius: 24, marginBottom: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 12, minHeight: 160, justifyContent: 'space-between' },
-  bizTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  bizBottom: { marginTop: 20 },
-  bizIconWrap: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
-  bizName: { fontSize: 22, fontWeight: '900', color: '#FFF', marginBottom: 4 },
-  bizType: { fontSize: 14, color: 'rgba(255,255,255,0.8)', fontWeight: '600' },
-  verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
-  verifiedText: { fontSize: 10, fontWeight: '900', color: '#FFF', letterSpacing: 0.5 },
-  statsRow: { flexDirection: 'row', gap: 10, marginBottom: 28 },
-  statCard: { flex: 1, alignItems: 'center', padding: 16, borderRadius: 16, borderWidth: 1 },
-  statValue: { fontSize: 20, fontWeight: '900', marginBottom: 4 },
-  statLabel: { fontSize: 11, fontWeight: '600' },
-  sectionLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 1.5, marginBottom: 12 },
-  gridContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  gridCard: { width: '48%', padding: 20, borderRadius: 20, borderWidth: 1, marginBottom: 12, alignItems: 'center' },
-  gridIcon: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-  gridTextWrap: { alignItems: 'center' },
-  gridLabel: { fontSize: 15, fontWeight: '800', marginBottom: 4, textAlign: 'center' },
-  gridSub: { fontSize: 11, textAlign: 'center', lineHeight: 14 },
-  notifBadge: { position: 'absolute', top: 12, right: 12, width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-  notifText: { color: '#FFF', fontSize: 11, fontWeight: '900' },
-  emptyIcon: { width: 90, height: 90, borderRadius: 45, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
-  emptyTitle: { fontSize: 22, fontWeight: '900', marginBottom: 12, textAlign: 'center' },
-  emptySub: { fontSize: 14, textAlign: 'center', lineHeight: 22, marginBottom: 32 },
-  startBtn: { height: 56, width: '100%', borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
-  startBtnText: { color: '#FFF', fontSize: 16, fontWeight: '900' },
-  ghostBtn: { height: 52, width: '100%', borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  ghostBtnText: { fontSize: 15, fontWeight: '700' },
+  iconBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 18, fontWeight: '900', letterSpacing: 0.5 },
+  scroll: { paddingHorizontal: 24, paddingBottom: 80, paddingTop: 24 },
+  bizCard: { padding: 28, borderRadius: 32, marginBottom: 32, shadowColor: '#000', shadowOffset: { width: 0, height: 16 }, shadowOpacity: 0.08, shadowRadius: 32, elevation: 12, minHeight: 180, justifyContent: 'space-between' },
+  bizTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  bizBottom: { marginTop: 24 },
+  bizIconWrap: { width: 56, height: 56, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  bizName: { fontSize: 26, fontWeight: '900', marginBottom: 6, letterSpacing: -0.5 },
+  bizType: { fontSize: 15, fontWeight: '600' },
+  verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16 },
+  verifiedText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.5 },
+  statsRow: { flexDirection: 'row', gap: 12, marginBottom: 36 },
+  statCard: { flex: 1, alignItems: 'flex-start', padding: 20, borderRadius: 24, borderWidth: 1 },
+  statValue: { fontSize: 24, fontWeight: '900', marginBottom: 4, letterSpacing: -0.5 },
+  statLabel: { fontSize: 12, fontWeight: '700' },
+  sectionLabel: { fontSize: 12, fontWeight: '900', letterSpacing: 1.5, marginBottom: 16, marginLeft: 4 },
+  
+  actionCard: { flexDirection: 'row', alignItems: 'center', padding: 20, borderRadius: 24, borderWidth: 1 },
+  actionIconWrap: { width: 52, height: 52, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  actionTextWrap: { flex: 1, marginLeft: 16 },
+  actionLabel: { fontSize: 16, fontWeight: '800', marginBottom: 4 },
+  actionSub: { fontSize: 13, fontWeight: '500' },
+  notifBadge: { position: 'absolute', top: -6, right: -6, width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#101114' },
+  notifText: { color: '#FFF', fontSize: 12, fontWeight: '900' },
+
+  emptyIcon: { width: 100, height: 100, borderRadius: 50, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginBottom: 28 },
+  emptyTitle: { fontSize: 24, fontWeight: '900', marginBottom: 12, textAlign: 'center', letterSpacing: -0.5 },
+  emptySub: { fontSize: 15, textAlign: 'center', lineHeight: 24, marginBottom: 36 },
+  startBtn: { height: 60, width: '100%', borderRadius: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
+  startBtnText: { color: '#FFF', fontSize: 17, fontWeight: '900' },
+  ghostBtn: { height: 56, width: '100%', borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  ghostBtnText: { fontSize: 16, fontWeight: '800' },
 });
