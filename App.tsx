@@ -23,6 +23,7 @@ import {
 } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Feather } from "@expo/vector-icons";
+import * as Updates from "expo-updates";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   useFonts,
@@ -1398,6 +1399,22 @@ export default function App() {
         setShowOnboarding(false);
       });
     notificationService.requestPermissions().catch(() => {});
+
+    // OTA Update Check
+    async function onFetchUpdateAsync() {
+      try {
+        if (!__DEV__) {
+          const update = await Updates.checkForUpdateAsync();
+          if (update.isAvailable) {
+            await Updates.fetchUpdateAsync();
+            await Updates.reloadAsync();
+          }
+        }
+      } catch (error) {
+        console.log(`Error fetching latest Expo update: ${error}`);
+      }
+    }
+    onFetchUpdateAsync();
   }, []);
 
   if (showOnboarding === null || !fontsReady) {

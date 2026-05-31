@@ -4,27 +4,10 @@ import {
   StyleSheet, ScrollView, Image,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { NETWORK_INFO } from '../constants';
+import { NETWORK_INFO, COIN_META } from '../constants';
 import { Fonts } from '../constants';
 import { haptics } from '../utils/haptics';
 
-// Keys must match NETWORK_INFO exactly
-const TESTNETS = ['Sepolia', 'Polygon Amoy', 'Arbitrum Sepolia', 'Base Sepolia', 'Optimism Sepolia', 'TRON Nile'];
-const MAINNETS = ['Ethereum', 'Polygon', 'Arbitrum', 'TRON'];
-
-// Real chain logos from public CDNs — no hardcoded icons
-const CHAIN_LOGOS: Record<string, string> = {
-  Sepolia:            'https://coin-images.coingecko.com/coins/images/279/large/ethereum.png',
-  Ethereum:           'https://coin-images.coingecko.com/coins/images/279/large/ethereum.png',
-  Polygon:            'https://coin-images.coingecko.com/coins/images/4713/large/matic-token-icon.png',
-  'Polygon Amoy':     'https://coin-images.coingecko.com/coins/images/4713/large/matic-token-icon.png',
-  Arbitrum:           'https://coin-images.coingecko.com/coins/images/16547/large/photo_2023-03-29_21.47.00.jpeg',
-  'Arbitrum Sepolia': 'https://coin-images.coingecko.com/coins/images/16547/large/photo_2023-03-29_21.47.00.jpeg',
-  'Base Sepolia':     'https://coin-images.coingecko.com/coins/images/279/large/ethereum.png',
-  'Optimism Sepolia': 'https://coin-images.coingecko.com/coins/images/25244/large/Optimism.png',
-  TRON:               'https://coin-images.coingecko.com/coins/images/1094/large/tron-logo.png',
-  'TRON Nile':        'https://coin-images.coingecko.com/coins/images/1094/large/tron-logo.png',
-};
 
 interface Props {
   visible: boolean;
@@ -46,7 +29,7 @@ const NetworkRow = memo(({ network, active, onPress, T }: {
       activeOpacity={0.7}
     >
       <Image
-        source={{ uri: CHAIN_LOGOS[network] }}
+        source={{ uri: info.iconUrl || COIN_META[info.symbol]?.iconUrl }}
         style={[styles.logo, { borderColor: info.color + '40' }]}
       />
       <View style={styles.itemInfo}>
@@ -77,6 +60,9 @@ export const NetworkSelector = memo(({ visible, onClose, currentNetwork, onSelec
     onClose();
   };
 
+  const testnets = Object.keys(NETWORK_INFO).filter(k => NETWORK_INFO[k].type === 'Testnet');
+  const mainnets = Object.keys(NETWORK_INFO).filter(k => NETWORK_INFO[k].type === 'Mainnet');
+
   return (
     <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose}>
@@ -88,8 +74,8 @@ export const NetworkSelector = memo(({ visible, onClose, currentNetwork, onSelec
           <Text style={[styles.title, { color: T.text }]}>Select Network</Text>
 
           <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
-            <Text style={[styles.sectionLabel, { color: T.textMuted }]}>TESTNETS</Text>
-            {TESTNETS.map(n => (
+            {testnets.length > 0 && <Text style={[styles.sectionLabel, { color: T.textMuted }]}>TESTNETS</Text>}
+            {testnets.map(n => (
               <NetworkRow
                 key={n}
                 network={n}
@@ -99,8 +85,8 @@ export const NetworkSelector = memo(({ visible, onClose, currentNetwork, onSelec
               />
             ))}
 
-            <Text style={[styles.sectionLabel, { color: T.textMuted, marginTop: 20 }]}>MAINNETS</Text>
-            {MAINNETS.map(n => (
+            {mainnets.length > 0 && <Text style={[styles.sectionLabel, { color: T.textMuted, marginTop: testnets.length > 0 ? 20 : 0 }]}>MAINNETS</Text>}
+            {mainnets.map(n => (
               <NetworkRow
                 key={n}
                 network={n}

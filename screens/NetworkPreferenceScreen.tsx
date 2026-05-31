@@ -7,6 +7,7 @@ import {
   StatusBar,
   ScrollView,
   Dimensions,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -156,14 +157,13 @@ export default function NetworkPreferenceScreen({
                 <View
                   style={[
                     styles.iconWrapper,
-                    { backgroundColor: network.color + "20" },
+                    { backgroundColor: network.color + "20", overflow: 'hidden' },
                   ]}
                 >
-                  <Text
-                    style={[styles.networkIconText, { color: network.color }]}
-                  >
-                    {network.icon}
-                  </Text>
+                  <Image 
+                    source={{ uri: NETWORK_INFO[network.name]?.iconUrl }} 
+                    style={{ width: 44, height: 44 }} 
+                  />
                 </View>
 
                 <View style={styles.networkInfo}>

@@ -3,7 +3,7 @@ import { Theme } from '../constants';
 import { View, Text, StyleSheet, Animated, Platform, TouchableOpacity, StatusBar } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
-import { vccService, VCCCardVariant } from '../services/supabaseService';
+import { vccService, dbCardService, VCCCardVariant } from '../services/supabaseService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type StepState = 'waiting' | 'loading' | 'done' | 'error';
@@ -64,6 +64,18 @@ export default function VCCProcessingScreen({ navigation, route }: any) {
         holderName: result.vccCard.card_holder_name,
         design:     variant?.color_hex ?? 'dark',
       };
+
+      // Persist the encrypted card details to the cards table in Supabase so they are backed up
+      const [expMonth, expYear] = result.vccCard.expiry_mm_yy.split('/');
+      await dbCardService.saveCredentials(walletAddress, details.number, details.cvv, {
+        expiry_month: expMonth ?? '12',
+        expiry_year: expYear ?? '28',
+        card_type: variant.id,
+        balance: result.vccCard.balance,
+        status: result.vccCard.card_status === 'frozen' ? 'frozen' : 'active',
+        holder_name: result.vccCard.card_holder_name,
+        design: variant.color_hex ?? 'dark',
+      }).catch(err => console.warn('Failed to save VCC credentials to cards table:', err));
 
       await AsyncStorage.multiSet([
         ['cw_card_created', 'true'],

@@ -360,15 +360,44 @@ export const dbCardService = {
     return data;
   },
 
-  async saveCredentials(walletAddress: string, cardNumber: string, cvv: string): Promise<void> {
+  async saveCredentials(walletAddress: string, cardNumber: string, cvv: string, extra?: Partial<DBCard>): Promise<void> {
     const addr = walletAddress.toLowerCase();
     const encNumber = xorEncrypt(cardNumber.replace(/\s/g, ''), addr);
     const encCvv    = xorEncrypt(cvv, addr);
-    const { error } = await supabase
+    
+    // Check if cards table row exists
+    const { data: existing, error: checkError } = await supabase
       .from('cards')
-      .update({ card_number_encrypted: encNumber, cvv_encrypted: encCvv })
-      .eq('wallet_address', addr);
-    if (error) console.warn('[dbCardService] saveCredentials:', error.message);
+      .select('id')
+      .eq('wallet_address', addr)
+      .maybeSingle();
+
+    if (existing) {
+      const { error } = await supabase
+        .from('cards')
+        .update({ card_number_encrypted: encNumber, cvv_encrypted: encCvv })
+        .eq('wallet_address', addr);
+      if (error) console.warn('[dbCardService] saveCredentials update:', error.message);
+    } else {
+      // Insert new row
+      const last4 = cardNumber.replace(/\s/g, '').slice(-4);
+      const { error } = await supabase
+        .from('cards')
+        .insert({
+          wallet_address: addr,
+          card_last4: last4,
+          card_number_encrypted: encNumber,
+          cvv_encrypted: encCvv,
+          expiry_month: extra?.expiry_month ?? '12',
+          expiry_year: extra?.expiry_year ?? '28',
+          card_type: extra?.card_type ?? 'classic',
+          balance: extra?.balance ?? 0,
+          status: extra?.status ?? 'active',
+          holder_name: extra?.holder_name ?? 'CARD HOLDER',
+          design: extra?.design ?? 'dark',
+        });
+      if (error) console.warn('[dbCardService] saveCredentials insert:', error.message);
+    }
   },
 
   async updateStatus(walletAddress: string, status: 'active' | 'frozen'): Promise<void> {

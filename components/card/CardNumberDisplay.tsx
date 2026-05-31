@@ -27,20 +27,24 @@ interface Props {
   widgetBorder?: string;
 }
 
-function normalizeNumber(raw: string): string {
-  const digits = raw.replace(/\s/g, '').replace(/\D/g, '');
-  if (digits.length !== 16) return '';
+function normalizeNumber(raw: any): string {
+  if (!raw) return '';
+  const digits = String(raw).replace(/\s/g, '').replace(/\D/g, '');
+  if (digits.length !== 16) return String(raw);
   return `${digits.slice(0,4)} ${digits.slice(4,8)} ${digits.slice(8,12)} ${digits.slice(12,16)}`;
 }
 
 function maskNumber(normalized: string): string {
-  if (!normalized) return '•••• •••• •••• ••••';
-  const last4 = normalized.replace(/\s/g, '').slice(-4);
+  if (!normalized || normalized.includes('•')) return '•••• •••• •••• ••••';
+  const clean = normalized.replace(/\s/g, '');
+  if (clean.length < 4) return '•••• •••• •••• ••••';
+  const last4 = clean.slice(-4);
   return `•••• •••• •••• ${last4}`;
 }
 
-export function hasFullNumber(raw: string): boolean {
-  return raw.replace(/\s/g, '').replace(/\D/g, '').length === 16;
+export function hasFullNumber(raw: any): boolean {
+  if (!raw) return false;
+  return String(raw).replace(/\s/g, '').replace(/\D/g, '').length === 16;
 }
 
 export function CardCredentialsWidget({
@@ -53,8 +57,8 @@ export function CardCredentialsWidget({
 
   // Source of truth: props from WalletContext (decrypted from Supabase)
   const realNumber = normalizeNumber(cardNumber);
-  const realCvv    = /^\d{3}$/.test(cvv)    ? cvv    : '';
-  const realExpiry = /^\d{2}\/\d{2}$/.test(expiry) ? expiry : '';
+  const realCvv    = cvv ? String(cvv).trim() : '';
+  const realExpiry = expiry ? String(expiry).trim() : '';
 
   // Auto-mask on background
   useEffect(() => {
