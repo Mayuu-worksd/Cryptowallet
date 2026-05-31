@@ -116,7 +116,7 @@ export default function MerchantQRScreen({ navigation }: any) {
             <View style={s.qrWrapper}>
               <View style={[s.qrBorder, { borderColor: activeToken.color }]}>
                 {qrString ? (
-                  <QRCode value={qrString} size={width * 0.5} color={isDarkMode ? '#FFF' : '#000'} backgroundColor="transparent" />
+                  <QRCode value={qrString} size={Math.floor(width * 0.5)} color="#000" backgroundColor="transparent" />
                 ) : null}
               </View>
               <View style={[s.scanOverlay, { backgroundColor: activeToken.color + '10' }]} />
