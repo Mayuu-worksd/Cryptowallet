@@ -329,7 +329,7 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
     }
     Alert.alert(
       'Confirm Purchase',
-      `You are about to lock ${currentOrder.amount} ${currentOrder.token} in escrow.\n\nTotal to pay: ${Number(currentOrder.fiat_total || currentOrder.amount * currentOrder.rate || 0).toFixed(2)} ${currentOrder.fiat_currency}\n\nYour balance: ${Number(buyerBalance || 0).toFixed(6)} ${currentOrder.token}\n\nFunds will be locked until the seller confirms payment received.`,
+      `You are about to lock ${currentOrder.amount} ${currentOrder.token} in escrow.\n\nTotal to pay: ${Number(currentOrder.fiat_total || currentOrder.amount * currentOrder.rate || 0).toFixed(2)} ${currentOrder.fiat_currency}\n\nYour balance: ${Number(buyerBalance || 0).toFixed(6)} ${currentOrder.token}\n\nFunds will be locked until the seller confirms payment received.${!isTestnet ? '\n\n[NOTICE]: Mainnet Escrow smart contract is pending deployment. This is a simulated placeholder flow.' : ''}`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Lock & Buy', style: 'default', onPress: async () => {

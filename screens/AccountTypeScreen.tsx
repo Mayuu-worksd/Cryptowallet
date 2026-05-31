@@ -1,69 +1,98 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
-  View, Text, StyleSheet, TouchableOpacity,
-  StatusBar, ScrollView, Modal, TextInput, FlatList, Platform, Dimensions
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useWallet } from '../store/WalletContext';
-import { Theme } from '../constants';
-import { LinearGradient } from 'expo-linear-gradient';
-import NetworkPreferenceScreen from './NetworkPreferenceScreen';
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  StatusBar,
+  ScrollView,
+  Modal,
+  TextInput,
+  FlatList,
+  Platform,
+  Dimensions,
+  Animated,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Feather } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useWallet } from "../store/WalletContext";
+import { Theme, Fonts } from "../constants";
+import NetworkPreferenceScreen from "./NetworkPreferenceScreen";
 
-const { width } = Dimensions.get('window');
+const { width } = Dimensions.get("window");
 
 const COUNTRIES = [
-  { name: 'India', flag: '🇮🇳', currency: 'INR' },
-  { name: 'United States', flag: '🇺🇸', currency: 'USD' },
-  { name: 'United Kingdom', flag: '🇬🇧', currency: 'GBP' },
-  { name: 'UAE', flag: '🇦🇪', currency: 'AED' },
-  { name: 'Singapore', flag: '🇸🇬', currency: 'SGD' },
-  { name: 'European Union', flag: '🇪🇺', currency: 'EUR' },
-  { name: 'Canada', flag: '🇨🇦', currency: 'CAD' },
-  { name: 'Australia', flag: '🇦🇺', currency: 'AUD' },
-  { name: 'Japan', flag: '🇯🇵', currency: 'JPY' },
-  { name: 'Germany', flag: '🇩🇪', currency: 'EUR' },
-  { name: 'France', flag: '🇫🇷', currency: 'EUR' },
-  { name: 'Switzerland', flag: '🇨🇭', currency: 'CHF' },
+  { name: "India", flag: "🇮🇳", currency: "INR" },
+  { name: "United States", flag: "🇺🇸", currency: "USD" },
+  { name: "United Kingdom", flag: "🇬🇧", currency: "GBP" },
+  { name: "UAE", flag: "🇦🇪", currency: "AED" },
+  { name: "Singapore", flag: "🇸🇬", currency: "SGD" },
+  { name: "European Union", flag: "🇪🇺", currency: "EUR" },
+  { name: "Canada", flag: "🇨🇦", currency: "CAD" },
+  { name: "Australia", flag: "🇦🇺", currency: "AUD" },
+  { name: "Japan", flag: "🇯🇵", currency: "JPY" },
+  { name: "Germany", flag: "🇩🇪", currency: "EUR" },
+  { name: "France", flag: "🇫🇷", currency: "EUR" },
+  { name: "Switzerland", flag: "🇨🇭", currency: "CHF" },
 ];
 
 const CURRENCIES = [
-  { code: 'INR', name: 'Indian Rupee' },
-  { code: 'USD', name: 'US Dollar' },
-  { code: 'GBP', name: 'British Pound' },
-  { code: 'EUR', name: 'Euro' },
-  { code: 'AED', name: 'UAE Dirham' },
-  { code: 'SGD', name: 'Singapore Dollar' },
-  { code: 'JPY', name: 'Japanese Yen' },
-  { code: 'AUD', name: 'Australian Dollar' },
-  { code: 'CAD', name: 'Canadian Dollar' },
-  { code: 'CHF', name: 'Swiss Franc' },
+  { code: "INR", name: "Indian Rupee" },
+  { code: "USD", name: "US Dollar" },
+  { code: "GBP", name: "British Pound" },
+  { code: "EUR", name: "Euro" },
+  { code: "AED", name: "UAE Dirham" },
+  { code: "SGD", name: "Singapore Dollar" },
+  { code: "JPY", name: "Japanese Yen" },
+  { code: "AUD", name: "Australian Dollar" },
+  { code: "CAD", name: "Canadian Dollar" },
+  { code: "CHF", name: "Swiss Franc" },
 ];
 
-const CountryModal = ({ visible, onClose, onSelect, selectedCountry, T, isDarkMode }: any) => {
-  const [search, setSearch] = useState('');
-  const filtered = COUNTRIES.filter(c => 
-    c.name.toLowerCase().includes(search.toLowerCase()) || 
-    c.currency.toLowerCase().includes(search.toLowerCase())
+const CountryModal = ({
+  visible,
+  onClose,
+  onSelect,
+  selectedCountry,
+  T,
+  isDarkMode,
+}: any) => {
+  const [search, setSearch] = useState("");
+  const filtered = COUNTRIES.filter(
+    (c) =>
+      c.name.toLowerCase().includes(search.toLowerCase()) ||
+      c.currency.toLowerCase().includes(search.toLowerCase()),
   );
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
       <View style={styles.modalOverlay}>
-        <View style={[styles.modalContent, { backgroundColor: T.surface }]}>
+        <View
+          style={[
+            styles.modalContent,
+            { backgroundColor: isDarkMode ? "#121212" : "#FFFFFF" },
+          ]}
+        >
           <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, { color: T.text }]}>Select Country</Text>
-            <TouchableOpacity onPress={onClose} style={[styles.closeBtn, { backgroundColor: T.surfaceLow }]}>
+            <Text style={[styles.modalTitle, { color: T.text }]}>
+              Select Region
+            </Text>
+            <TouchableOpacity
+              onPress={onClose}
+              style={[styles.closeBtn, { backgroundColor: T.surfaceLow }]}
+            >
               <Feather name="x" size={20} color={T.textDim} />
             </TouchableOpacity>
           </View>
 
-          <View style={[styles.searchContainer, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
+          <View
+            style={[styles.searchContainer, { backgroundColor: T.surfaceLow }]}
+          >
             <Feather name="search" size={18} color={T.textDim} />
             <TextInput
               style={[styles.searchInput, { color: T.text }]}
-              placeholder="Search for a country..."
+              placeholder="Search country..."
               placeholderTextColor={T.textDim}
               value={search}
               onChangeText={setSearch}
@@ -72,7 +101,7 @@ const CountryModal = ({ visible, onClose, onSelect, selectedCountry, T, isDarkMo
 
           <FlatList
             data={filtered}
-            keyExtractor={item => item.name}
+            keyExtractor={(item) => item.name}
             showsVerticalScrollIndicator={false}
             style={styles.countryList}
             renderItem={({ item }) => {
@@ -82,17 +111,32 @@ const CountryModal = ({ visible, onClose, onSelect, selectedCountry, T, isDarkMo
                   onPress={() => onSelect(item)}
                   style={[
                     styles.countryItem,
-                    { backgroundColor: T.surfaceLow, borderColor: isSelected ? '#FF1E1E' : T.border },
-                    isSelected && { backgroundColor: '#FF1E1E10' }
+                    {
+                      backgroundColor: isSelected
+                        ? T.primary + "15"
+                        : T.surfaceLow,
+                    },
+                    isSelected && { borderColor: T.primary, borderWidth: 1 },
                   ]}
                 >
                   <Text style={styles.countryFlag}>{item.flag}</Text>
                   <View style={styles.countryInfo}>
-                    <Text style={[styles.countryName, { color: T.text }]}>{item.name}</Text>
-                    <Text style={[styles.countryCurrency, { color: T.textDim }]}>{item.currency}</Text>
+                    <Text style={[styles.countryName, { color: T.text }]}>
+                      {item.name}
+                    </Text>
+                    <Text
+                      style={[styles.countryCurrency, { color: T.textDim }]}
+                    >
+                      {item.currency}
+                    </Text>
                   </View>
                   {isSelected && (
-                    <View style={styles.countryCheck}>
+                    <View
+                      style={[
+                        styles.countryCheck,
+                        { backgroundColor: T.primary },
+                      ]}
+                    >
                       <Feather name="check" size={14} color="#FFF" />
                     </View>
                   )}
@@ -101,8 +145,13 @@ const CountryModal = ({ visible, onClose, onSelect, selectedCountry, T, isDarkMo
             }}
           />
 
-          <TouchableOpacity style={styles.saveBtn} onPress={onClose}>
-            <Text style={styles.saveBtnText}>SAVE SELECTION</Text>
+          <TouchableOpacity
+            style={[styles.saveBtn, { backgroundColor: T.text }]}
+            onPress={onClose}
+          >
+            <Text style={[styles.saveBtnText, { color: T.background }]}>
+              Confirm Selection
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -110,13 +159,14 @@ const CountryModal = ({ visible, onClose, onSelect, selectedCountry, T, isDarkMo
   );
 };
 
-
 export default function AccountTypeScreen({ onSelect }: any) {
-  const { setP2PPreferences, isDarkMode, switchNetwork } = useWallet();
+  const { setP2PPreferences, isDarkMode } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const insets = useSafeAreaInsets();
-  
-  const [selectedType, setSelectedType] = useState<'personal' | 'business'>('personal');
+
+  const [selectedType, setSelectedType] = useState<"personal" | "business">(
+    "personal",
+  );
   const [country, setCountry] = useState(COUNTRIES[0]);
   const [currency, setCurrency] = useState(CURRENCIES[0]);
   const [showCountryModal, setShowCountryModal] = useState(false);
@@ -128,9 +178,8 @@ export default function AccountTypeScreen({ onSelect }: any) {
   };
 
   const handleNetworkSelected = async (network: string) => {
-    // Set network preference and mark as complete
-    await AsyncStorage.setItem('cw_network', network);
-    await AsyncStorage.setItem('cw_network_preference_set', 'true');
+    await AsyncStorage.setItem("cw_network", network);
+    await AsyncStorage.setItem("cw_network_preference_set", "true");
     onSelect(selectedType);
   };
 
@@ -140,144 +189,165 @@ export default function AccountTypeScreen({ onSelect }: any) {
 
   return (
     <View style={[styles.container, { backgroundColor: T.background }]}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      
-      {/* Custom Header */}
-      <View style={[styles.customHeader, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity style={[styles.headerIcon, { backgroundColor: T.surfaceLow }]}>
-          <Feather name="arrow-left" size={20} color={T.text} />
+      <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} />
+
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+        <TouchableOpacity style={styles.headerIcon}>
+          <Feather name="arrow-left" size={24} color={T.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerBrand, { color: T.text }]}>CRYPTOWALLET</Text>
-        <TouchableOpacity style={[styles.headerIcon, { backgroundColor: T.surfaceLow }]}>
-          <View style={styles.userDot} />
-        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: T.text }]}>
+          Setup Account
+        </Text>
+        <View style={styles.headerIcon} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* STEP 01 */}
-        <View style={styles.section}>
-          <Text style={styles.stepLabel}>STEP 01</Text>
-          <Text style={[styles.sectionTitle, { color: T.text }]}>Choose Account</Text>
-          <Text style={[styles.sectionDesc, { color: T.textDim }]}>Select the environment tailored to your financial requirements.</Text>
-          
-          <TouchableOpacity 
-            style={[styles.accountCard, { backgroundColor: T.surface, borderColor: selectedType === 'personal' ? '#FF1E1E' : T.border }]}
-            onPress={() => setSelectedType('personal')}
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={[styles.pageTitle, { color: T.text }]}>
+          How will you use CryptoWallet?
+        </Text>
+        <Text style={[styles.pageDesc, { color: T.textDim }]}>
+          Choose your account type to personalize your experience.
+        </Text>
+
+        <View style={styles.cardsContainer}>
+          <TouchableOpacity
+            style={[
+              styles.typeCard,
+              { backgroundColor: T.surfaceLow },
+              selectedType === "personal" && {
+                backgroundColor: T.primary + "15",
+                borderColor: T.primary,
+                borderWidth: 1.5,
+              },
+            ]}
+            onPress={() => setSelectedType("personal")}
             activeOpacity={0.8}
           >
-            <View style={styles.cardTopRow}>
-              <View style={[styles.accountIcon, { backgroundColor: T.surfaceLow }]}>
-                <Feather name="user" size={20} color={selectedType === 'personal' ? '#FF1E1E' : T.textDim} />
+            <View
+              style={[
+                styles.iconBox,
+                {
+                  backgroundColor:
+                    selectedType === "personal" ? T.primary : T.surface,
+                },
+              ]}
+            >
+              <Feather
+                name="user"
+                size={24}
+                color={selectedType === "personal" ? "#FFF" : T.text}
+              />
+            </View>
+            <Text style={[styles.cardTitle, { color: T.text }]}>Personal</Text>
+            <Text style={[styles.cardDesc, { color: T.textDim }]}>
+              For everyday payments, swaps, and portfolio management.
+            </Text>
+            {selectedType === "personal" && (
+              <View style={styles.checkIcon}>
+                <Feather name="check-circle" size={20} color={T.primary} />
               </View>
-              <View style={[styles.badge, { backgroundColor: T.surfaceLow }]}>
-                <Text style={[styles.badgeText, { color: T.textDim }]}>INDIVIDUAL</Text>
-              </View>
-            </View>
-            
-            <Text style={[styles.accountName, { color: T.text }]}>Personal</Text>
-            <Text style={[styles.accountDesc, { color: T.textDim }]}>For individuals to manage, swap, and spend digital assets daily.</Text>
-            
-            <View style={[styles.divider, { backgroundColor: T.border }]} />
-            
-            <View style={styles.featureRow}>
-              <Feather name="check-circle" size={14} color="#FF1E1E" />
-              <Text style={[styles.featureText, { color: T.text }]}>Instant P2P Transfers</Text>
-            </View>
-            <View style={styles.featureRow}>
-              <Feather name="check-circle" size={14} color="#FF1E1E" />
-              <Text style={[styles.featureText, { color: T.text }]}>Virtual Debit Card</Text>
-            </View>
+            )}
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={[styles.accountCard, { backgroundColor: T.surface, borderColor: selectedType === 'business' ? '#FF1E1E' : T.border }]}
-            onPress={() => setSelectedType('business')}
+          <TouchableOpacity
+            style={[
+              styles.typeCard,
+              { backgroundColor: T.surfaceLow },
+              selectedType === "business" && {
+                backgroundColor: T.primary + "15",
+                borderColor: T.primary,
+                borderWidth: 1.5,
+              },
+            ]}
+            onPress={() => setSelectedType("business")}
             activeOpacity={0.8}
           >
-            <View style={styles.cardTopRow}>
-              <View style={[styles.accountIcon, { backgroundColor: T.surfaceLow }]}>
-                <Feather name="briefcase" size={20} color={selectedType === 'business' ? '#FF1E1E' : T.textDim} />
+            <View
+              style={[
+                styles.iconBox,
+                {
+                  backgroundColor:
+                    selectedType === "business" ? T.primary : T.surface,
+                },
+              ]}
+            >
+              <Feather
+                name="briefcase"
+                size={24}
+                color={selectedType === "business" ? "#FFF" : T.text}
+              />
+            </View>
+            <Text style={[styles.cardTitle, { color: T.text }]}>Business</Text>
+            <Text style={[styles.cardDesc, { color: T.textDim }]}>
+              For merchants, APIs, and high-volume settlement.
+            </Text>
+            {selectedType === "business" && (
+              <View style={styles.checkIcon}>
+                <Feather name="check-circle" size={20} color={T.primary} />
               </View>
-              <View style={[styles.badge, { backgroundColor: T.surfaceLow }]}>
-                <Text style={[styles.badgeText, { color: T.textDim }]}>ENTERPRISE</Text>
-              </View>
-            </View>
-            
-            <Text style={[styles.accountName, { color: T.text }]}>Business</Text>
-            <Text style={[styles.accountDesc, { color: T.textDim }]}>High-volume liquidity and corporate settlement for merchants.</Text>
-            
-            <View style={[styles.divider, { backgroundColor: T.border }]} />
-            
-            <View style={styles.featureRow}>
-              <Feather name="check-circle" size={14} color="#FF1E1E" />
-              <Text style={[styles.featureText, { color: T.text }]}>Merchant QR Integration</Text>
-            </View>
-            <View style={styles.featureRow}>
-              <Feather name="check-circle" size={14} color="#FF1E1E" />
-              <Text style={[styles.featureText, { color: T.text }]}>Multi-Currency Liquidity</Text>
-            </View>
+            )}
           </TouchableOpacity>
         </View>
 
-        {/* STEP 02 */}
-        <View style={styles.section}>
-          <Text style={styles.stepLabel}>STEP 02</Text>
-          <Text style={[styles.sectionTitle, { color: T.text }]}>Location</Text>
-          <Text style={[styles.sectionDesc, { color: T.textDim }]}>Specify your primary operating jurisdiction.</Text>
+        <View style={styles.divider} />
 
-          <TouchableOpacity 
-            style={[styles.locationCard, { backgroundColor: T.surface, borderColor: T.border }]} 
-            activeOpacity={0.7}
-            onPress={() => setShowCountryModal(true)}
-          >
-            <View style={[styles.locationIcon, { backgroundColor: T.surfaceLow }]}>
-              <Text style={styles.flagIcon}>{country.flag}</Text>
-            </View>
-            <View style={styles.locationInfo}>
-              <Text style={[styles.locationLabelSmall, { color: T.textDim }]}>REGION</Text>
-              <Text style={[styles.locationValue, { color: T.text }]}>{country.name}</Text>
-            </View>
-            <View style={styles.selectorArrows}>
-              <Feather name="chevron-up" size={12} color={T.textDim} />
-              <Feather name="chevron-down" size={12} color={T.textDim} />
-            </View>
-          </TouchableOpacity>
+        <Text style={[styles.subTitle, { color: T.text }]}>
+          Operating Region
+        </Text>
+        <Text style={[styles.subDesc, { color: T.textDim }]}>
+          This sets your default fiat currency.
+        </Text>
 
-          <TouchableOpacity 
-            style={[styles.locationCard, { backgroundColor: T.surface, borderColor: T.border }]} 
-            activeOpacity={0.7}
-            onPress={() => setShowCountryModal(true)}
-          >
-            <View style={[styles.locationIcon, { backgroundColor: T.surfaceLow }]}>
-               <Feather name="dollar-sign" size={20} color={T.text} />
+        <TouchableOpacity
+          style={[styles.regionBtn, { backgroundColor: T.surfaceLow }]}
+          activeOpacity={0.7}
+          onPress={() => setShowCountryModal(true)}
+        >
+          <View style={styles.regionLeft}>
+            <Text style={styles.flagIcon}>{country.flag}</Text>
+            <View>
+              <Text style={[styles.regionName, { color: T.text }]}>
+                {country.name}
+              </Text>
+              <Text style={[styles.currencyName, { color: T.textDim }]}>
+                {currency.code} - {currency.name}
+              </Text>
             </View>
-            <View style={styles.locationInfo}>
-              <Text style={[styles.locationLabelSmall, { color: T.textDim }]}>SETTLEMENT</Text>
-              <Text style={[styles.locationValue, { color: T.text }]}>{currency.code} - {currency.name}</Text>
-            </View>
-            <View style={styles.selectorArrows}>
-              <Feather name="chevron-up" size={12} color={T.textDim} />
-              <Feather name="chevron-down" size={12} color={T.textDim} />
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity style={styles.continueBtn} onPress={handleContinue}>
-          <Text style={styles.continueBtnText}>COMPLETE SETUP</Text>
+          </View>
+          <Feather name="chevron-down" size={20} color={T.textDim} />
         </TouchableOpacity>
 
-        <Text style={[styles.securityNotice, { color: T.textDim }]}>SECURE BANK-GRADE ENCRYPTION ENABLED</Text>
-        
         <View style={{ height: 100 }} />
       </ScrollView>
 
+      {/* Bottom Action */}
+      <View
+        style={[
+          styles.bottomArea,
+          { backgroundColor: T.background, paddingBottom: insets.bottom + 24 },
+        ]}
+      >
+        <TouchableOpacity
+          style={[styles.continueBtn, { backgroundColor: T.text }]}
+          onPress={handleContinue}
+        >
+          <Text style={[styles.continueBtnText, { color: T.background }]}>
+            Continue
+          </Text>
+          <Feather name="arrow-right" size={20} color={T.background} />
+        </TouchableOpacity>
+      </View>
 
-      <CountryModal 
+      <CountryModal
         visible={showCountryModal}
         onClose={() => setShowCountryModal(false)}
         onSelect={(c: any) => {
           setCountry(c);
-          const related = CURRENCIES.find(cur => cur.code === c.currency);
+          const related = CURRENCIES.find((cur) => cur.code === c.currency);
           if (related) setCurrency(related);
         }}
         selectedCountry={country}
@@ -289,250 +359,192 @@ export default function AccountTypeScreen({ onSelect }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  customHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 12,
+  container: { flex: 1 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingBottom: 16,
   },
   headerIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 48,
+    height: 48,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  headerBrand: {
-    fontSize: 16,
-    fontWeight: '900',
-    letterSpacing: 2,
-  },
-  userDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#FF1E1E',
+  headerTitle: {
+    fontSize: 18,
+    fontFamily: Fonts.bold,
   },
   scroll: {
     paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 40,
+    paddingTop: 16,
   },
-  section: {
-    marginBottom: 40,
-  },
-  stepLabel: {
-    color: '#FF1E1E',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.5,
-    marginBottom: 8,
-  },
-  sectionTitle: {
+  pageTitle: {
     fontSize: 32,
-    fontWeight: '900',
+    fontFamily: Fonts.extraBold,
     letterSpacing: -1,
-    marginBottom: 12,
-  },
-  sectionDesc: {
-    fontSize: 15,
-    lineHeight: 22,
-    marginBottom: 24,
-  },
-  accountCard: {
-    padding: 24,
-    borderRadius: 32,
-    borderWidth: 1.5,
-    marginBottom: 20,
-  },
-  cardTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  accountIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  badgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-  accountName: {
-    fontSize: 22,
-    fontWeight: '900',
+    lineHeight: 38,
     marginBottom: 8,
   },
-  accountDesc: {
-    fontSize: 14,
-    lineHeight: 20,
+  pageDesc: {
+    fontSize: 16,
+    fontFamily: Fonts.medium,
+    lineHeight: 24,
+    marginBottom: 32,
+  },
+  cardsContainer: {
+    gap: 16,
+  },
+  typeCard: {
+    padding: 24,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: "transparent",
+    position: "relative",
+  },
+  iconBox: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 20,
+  },
+  cardTitle: {
+    fontSize: 22,
+    fontFamily: Fonts.bold,
+    marginBottom: 8,
+  },
+  cardDesc: {
+    fontSize: 15,
+    fontFamily: Fonts.medium,
+    lineHeight: 22,
+  },
+  checkIcon: {
+    position: "absolute",
+    top: 24,
+    right: 24,
   },
   divider: {
     height: 1,
-    width: '100%',
+    width: "100%",
+    backgroundColor: "#33333330",
+    marginVertical: 32,
+  },
+  subTitle: {
+    fontSize: 20,
+    fontFamily: Fonts.bold,
+    marginBottom: 6,
+  },
+  subDesc: {
+    fontSize: 15,
+    fontFamily: Fonts.medium,
     marginBottom: 20,
   },
-  featureRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 12,
+  regionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 20,
+    borderRadius: 20,
   },
-  featureText: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  locationCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 24,
-    borderWidth: 1.5,
-    marginBottom: 12,
-  },
-  locationIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
+  regionLeft: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   flagIcon: {
-    fontSize: 20,
+    fontSize: 32,
+    marginRight: 16,
   },
-  locationInfo: {
-    flex: 1,
-  },
-  locationLabelSmall: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1,
+  regionName: {
+    fontSize: 18,
+    fontFamily: Fonts.bold,
     marginBottom: 4,
   },
-  locationValue: {
-    fontSize: 16,
-    fontWeight: '900',
+  currencyName: {
+    fontSize: 14,
+    fontFamily: Fonts.medium,
   },
-  selectorArrows: {
-    alignItems: 'center',
-    gap: 4,
+  bottomArea: {
+    position: "absolute",
+    bottom: 0,
+    width: "100%",
+    paddingHorizontal: 24,
+    paddingTop: 16,
   },
   continueBtn: {
-    backgroundColor: '#FF1E1E',
     height: 64,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 20,
+    borderRadius: 32,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
   },
   continueBtnText: {
-    color: '#FFF',
-    fontSize: 15,
-    fontWeight: '900',
-    letterSpacing: 1,
+    fontSize: 18,
+    fontFamily: Fonts.bold,
   },
-  securityNotice: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1,
-    textAlign: 'center',
-    marginTop: 24,
-  },
-  bottomNav: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    height: 84,
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingBottom: 24,
-    borderTopWidth: 1,
-  },
-  navItem: {
-    alignItems: 'center',
-    gap: 6,
-  },
-  navLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  // Modal Styles
+  // Modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    justifyContent: 'flex-end',
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "flex-end",
   },
   modalContent: {
-    borderTopLeftRadius: 40,
-    borderTopRightRadius: 40,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
     paddingTop: 24,
     paddingHorizontal: 24,
-    maxHeight: '85%',
+    maxHeight: "85%",
     paddingBottom: 40,
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 24,
   },
   modalTitle: {
     fontSize: 24,
-    fontWeight: '900',
+    fontFamily: Fonts.bold,
   },
   closeBtn: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     borderRadius: 20,
     paddingHorizontal: 16,
     height: 60,
     marginBottom: 24,
-    borderWidth: 1,
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
+    fontFamily: Fonts.medium,
     marginLeft: 12,
-    fontWeight: '700',
   },
   countryList: {
     marginBottom: 16,
   },
   countryItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     padding: 16,
     borderRadius: 20,
-    borderWidth: 1.5,
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "transparent",
   },
   countryFlag: {
-    fontSize: 24,
+    fontSize: 28,
     marginRight: 16,
   },
   countryInfo: {
@@ -540,34 +552,29 @@ const styles = StyleSheet.create({
   },
   countryName: {
     fontSize: 17,
-    fontWeight: '900',
+    fontFamily: Fonts.bold,
+    marginBottom: 4,
   },
   countryCurrency: {
-    fontSize: 12,
-    fontWeight: '700',
-    marginTop: 2,
+    fontSize: 13,
+    fontFamily: Fonts.medium,
   },
   countryCheck: {
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#FF1E1E',
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   saveBtn: {
-    backgroundColor: '#FF1E1E',
-    height: 60,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    height: 64,
+    borderRadius: 32,
+    alignItems: "center",
+    justifyContent: "center",
     marginTop: 8,
   },
   saveBtnText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '900',
-    letterSpacing: 1,
+    fontSize: 18,
+    fontFamily: Fonts.bold,
   },
 });
-

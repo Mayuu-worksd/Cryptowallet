@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Theme, Fonts } from '../constants';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Alert, ActivityIndicator, StatusBar,
+  Alert, ActivityIndicator, StatusBar, Animated
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
@@ -11,6 +11,26 @@ import Toast from '../components/Toast';
 import { supabase } from '../services/supabaseClient';
 import { haptics } from '../utils/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
+
+function GlowingOrb({ color }: { color: string }) {
+  const pulse = React.useRef(new Animated.Value(1)).current;
+
+  React.useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1.2, duration: 2000, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 2000, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+
+  return (
+    <Animated.View style={[
+      { position: 'absolute', width: 140, height: 140, borderRadius: 70 },
+      { backgroundColor: color, transform: [{ scale: pulse }] }
+    ]} />
+  );
+}
 
 export default function RecoverySettingsScreen({ navigation }: any) {
   const { isDarkMode, walletAddress } = useWallet();
@@ -138,13 +158,12 @@ export default function RecoverySettingsScreen({ navigation }: any) {
             <View style={{ gap: 20 }}>
               {/* Active State Illustration */}
               <View style={styles.vaultIllustrationContainer}>
+                <GlowingOrb color={T.success + '30'} />
                 <LinearGradient
-                  colors={isDarkMode ? ['rgba(0, 200, 83, 0.15)', 'rgba(0, 200, 83, 0.0)'] : ['rgba(0, 200, 83, 0.08)', 'rgba(0, 200, 83, 0.0)']}
-                  style={styles.glowCircle}
+                  colors={[T.success, '#059669']}
+                  style={styles.glowingIconCircle}
                 >
-                  <View style={[styles.innerCircle, { borderColor: T.success }]}>
-                    <Ionicons name="shield-checkmark" size={42} color={T.success} />
-                  </View>
+                  <Ionicons name="shield-checkmark" size={44} color="#FFF" />
                 </LinearGradient>
               </View>
 
@@ -253,13 +272,12 @@ export default function RecoverySettingsScreen({ navigation }: any) {
             <View style={{ gap: 20 }}>
               {/* Unprotected State Illustration */}
               <View style={styles.vaultIllustrationContainer}>
+                <GlowingOrb color={T.primary + '30'} />
                 <LinearGradient
-                  colors={isDarkMode ? ['rgba(236, 38, 41, 0.15)', 'rgba(236, 38, 41, 0.0)'] : ['rgba(236, 38, 41, 0.08)', 'rgba(236, 38, 41, 0.0)']}
-                  style={styles.glowCircle}
+                  colors={[T.primary, '#D32F2F']}
+                  style={styles.glowingIconCircle}
                 >
-                  <View style={[styles.innerCircle, { borderColor: T.primary }]}>
-                    <Ionicons name="shield-outline" size={42} color={T.primary} />
-                  </View>
+                  <Ionicons name="shield-outline" size={44} color="#FFF" />
                 </LinearGradient>
               </View>
 
@@ -403,13 +421,8 @@ const makeStyles = (T: any, isDarkMode: boolean) => StyleSheet.create({
   scroll: { paddingHorizontal: 20, paddingBottom: 60 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
-  vaultIllustrationContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 16, marginBottom: 12 },
-  glowCircle: { width: 120, height: 120, borderRadius: 60, alignItems: 'center', justifyContent: 'center' },
-  innerCircle: {
-    width: 84, height: 84, borderRadius: 42, borderWidth: 1.5,
-    borderStyle: 'solid', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: T.surface
-  },
+  vaultIllustrationContainer: { width: 140, height: 140, alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginTop: 24, marginBottom: 24 },
+  glowingIconCircle: { width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 10 },
 
   statusPanel: { alignItems: 'center', paddingHorizontal: 16 },
   badgeContainer: {
@@ -482,9 +495,9 @@ const makeStyles = (T: any, isDarkMode: boolean) => StyleSheet.create({
   featureTitle: { fontSize: 14, fontFamily: Fonts.bold, color: T.text },
   featureDesc: { fontSize: 12, fontFamily: Fonts.medium, color: T.textDim, marginTop: 4, lineHeight: 16 },
 
-  setupBtn: { height: 60, borderRadius: 30, overflow: 'hidden', marginTop: 12 },
+  setupBtn: { height: 64, borderRadius: 32, overflow: 'hidden', marginTop: 16 },
   setupBtnGradient: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
-  setupBtnText: { color: '#FFF', fontSize: 14, fontFamily: Fonts.extraBold, letterSpacing: 1 },
+  setupBtnText: { color: '#FFF', fontSize: 16, fontFamily: Fonts.extraBold, letterSpacing: 1 },
 
   guideCard: {
     backgroundColor: T.surface, borderRadius: 24, padding: 20,

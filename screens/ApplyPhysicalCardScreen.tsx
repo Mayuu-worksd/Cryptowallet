@@ -17,6 +17,26 @@ import { LinearGradient } from 'expo-linear-gradient';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CRIMSON = '#EC2629';
 
+function GlowingOrb({ color }: { color: string }) {
+  const pulse = React.useRef(new Animated.Value(1)).current;
+
+  React.useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1.2, duration: 2000, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 2000, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+
+  return (
+    <Animated.View style={[
+      { position: 'absolute', width: 140, height: 140, borderRadius: 70 },
+      { backgroundColor: color, transform: [{ scale: pulse }] }
+    ]} />
+  );
+}
+
 // Fallback metadata to ensure instant rendering with zero blank states
 const DEFAULT_VARIANTS: CardVariant[] = [
   {
@@ -312,19 +332,25 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
         </View>
         
         <ScrollView contentContainerStyle={[styles.scroll, { alignItems: 'center' }]} showsVerticalScrollIndicator={false}>
-          <View style={[styles.gateIconRing, { backgroundColor: statusColor + '08', marginBottom: 12 }]}>
-            <Feather name={statusIcon} size={36} color={statusColor} />
+          <View style={styles.heroWrap}>
+            <GlowingOrb color={statusColor + '30'} />
+            <LinearGradient
+              colors={[statusColor, shadeColor(statusColor, -20)]}
+              style={styles.glowingIconCircle}
+            >
+              <Feather name={statusIcon} size={44} color="#FFF" />
+            </LinearGradient>
           </View>
           
-          <View style={{ backgroundColor: statusColor + '12', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20, marginBottom: 12 }}>
-            <Text style={{ fontSize: 10, fontWeight: '800', letterSpacing: 1.2, color: statusColor }}>{statusLabel}</Text>
+          <View style={[styles.statusBadge, { backgroundColor: statusColor + '15' }]}>
+            <Text style={[styles.statusBadgeText, { color: statusColor }]}>{statusLabel}</Text>
           </View>
           
           <Text style={[styles.gateTitle, { color: T.text, marginBottom: 8 }]}>{statusTitle}</Text>
-          <Text style={[styles.gateSub, { color: T.textMuted, marginBottom: 24, textAlign: 'center' }]}>{statusSub}</Text>
+          <Text style={[styles.gateSub, { color: T.textMuted, marginBottom: 32, textAlign: 'center' }]}>{statusSub}</Text>
           
-          <View style={[styles.orderSummary, { backgroundColor: T.surface, borderColor: T.border, width: '100%' }]}>
-            <Text style={[styles.sectionTitle, { color: T.textMuted, marginBottom: 16 }]}>DISPATCH DETAILS</Text>
+          <View style={[styles.orderSummary, { backgroundColor: T.surfaceLow, width: '100%' }]}>
+            <Text style={[styles.sectionTitle, { color: T.textDim, marginBottom: 16 }]}>DISPATCH DETAILS</Text>
             {[
               { label: 'Card Specification', value: req.card_type },
               { label: 'Destination Country', value: req.country },
@@ -333,20 +359,18 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
               { label: 'Purchase Date',     value: new Date(req.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) },
             ].map((row, i, arr) => (
               <View key={row.label} style={[styles.summaryRow,
-                i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: T.border, paddingBottom: 12, marginBottom: 12 }
+                i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', paddingBottom: 16, marginBottom: 16 }
               ]}>
-                <Text style={[styles.summaryLabel, { color: T.textMuted }]}>{row.label}</Text>
-                <Text style={[styles.summaryValue, { color: T.text }]}>{row.value}</Text>
+                <Text style={[styles.summaryLabel, { color: T.textDim }]}>{row.label}</Text>
+                <Text style={[styles.summaryValue, { color: T.text, fontSize: 15 }]}>{row.value}</Text>
               </View>
             ))}
           </View>
 
           <TouchableOpacity
             style={[styles.gateBtn, {
-              backgroundColor: T.surface,
-              borderWidth: 1,
-              borderColor: T.border,
-              marginTop: 12,
+              backgroundColor: T.surfaceLow,
+              marginTop: 16,
             }]}
             onPress={() => navigation.goBack()}
             activeOpacity={0.85}
@@ -361,18 +385,29 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
   // ── Success Receipt Redesign ────────────────────────────────────────────────
   if (submitted) {
     return (
-      <View style={{ flex: 1, backgroundColor: T.background, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+      <View style={{ flex: 1, backgroundColor: T.background, paddingHorizontal: 24, paddingTop: insets.top + 32 }}>
         <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
-        <View style={[styles.successRing, { backgroundColor: 'rgba(0,200,83,0.08)' }]}>
-          <Feather name="check-circle" size={44} color="#00C853" />
-        </View>
+        <ScrollView contentContainerStyle={{ alignItems: 'center', paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+          <View style={styles.heroWrap}>
+            <GlowingOrb color={'rgba(0,200,83,0.3)'} />
+            <LinearGradient
+              colors={['#00C853', shadeColor('#00C853', -20)]}
+              style={styles.glowingIconCircle}
+            >
+              <Feather name="check" size={44} color="#FFF" />
+            </LinearGradient>
+          </View>
+          
+          <View style={[styles.statusBadge, { backgroundColor: 'rgba(0,200,83,0.15)' }]}>
+            <Text style={[styles.statusBadgeText, { color: '#00C853' }]}>COMPLETED</Text>
+          </View>
+          
+          <Text style={[styles.gateTitle, { color: T.text, marginBottom: 8 }]}>Order Placed!</Text>
+          <Text style={[styles.gateSub, { color: T.textMuted, marginBottom: 32 }]}>
+            Your custom physical metal {selectedVariant?.name} smartcard is entering our processing ledger and will arrive shortly.
+          </Text>
         
-        <Text style={[styles.successTitle, { color: T.text }]}>Order Placed Successfully!</Text>
-        <Text style={[styles.successSub, { color: T.textMuted }]}>
-          Your custom physical metal {selectedVariant?.name} smartcard is currently entering our processing ledger and will arrive shortly.
-        </Text>
-        
-        <View style={[styles.summaryBox, { backgroundColor: T.surface, borderColor: T.border, borderWidth: 1, padding: 18 }]}>
+        <View style={[styles.orderSummary, { backgroundColor: T.surfaceLow, width: '100%', marginBottom: 32 }]}>
           {[
             { label: 'Smartcard Tier', value: selectedVariant?.name ?? '' },
             { label: 'Dispatch Country', value: selectedCountry },
@@ -383,12 +418,13 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
           ].map((row, i, arr) => (
             <View
               key={row.label}
-              style={[styles.summaryRow, i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: T.border, paddingBottom: 10, marginBottom: 10 }]}
+              style={[styles.summaryRow, i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', paddingBottom: 16, marginBottom: 16 }]}
             >
-              <Text style={[styles.summaryLabel, { color: T.textMuted }]}>{row.label}</Text>
+              <Text style={[styles.summaryLabel, { color: T.textDim }]}>{row.label}</Text>
               <Text style={[styles.summaryValue, {
                 color: i === arr.length - 1 ? CRIMSON : T.text,
-                fontWeight: i === arr.length - 1 ? '900' : '600',
+                fontWeight: i === arr.length - 1 ? '900' : '700',
+                fontSize: i === arr.length - 1 ? 18 : 15,
               }]}>
                 {row.value}
               </Text>
@@ -397,12 +433,13 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
         </View>
         
         <TouchableOpacity
-          style={[styles.doneBtn, { backgroundColor: T.text }]}
-          onPress={() => navigation.goBack()}
+          style={[styles.gateBtn, { backgroundColor: T.text }]}
+          onPress={() => navigation.navigate('Main')}
           activeOpacity={0.85}
         >
-          <Text style={[styles.doneBtnText, { color: T.background }]}>Done</Text>
+          <Text style={[styles.gateBtnText, { color: T.background }]}>Done</Text>
         </TouchableOpacity>
+        </ScrollView>
       </View>
     );
   }
@@ -682,6 +719,18 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
   );
 }
 
+
+// Helper function for GlowingOrb gradient colors
+function shadeColor(hex: string, amount: number): string {
+  try {
+    const num = parseInt(hex.replace('#', ''), 16);
+    const r = Math.max(0, Math.min(255, (num >> 16) + amount));
+    const g = Math.max(0, Math.min(255, ((num >> 8) & 0xff) + amount));
+    const b = Math.max(0, Math.min(255, (num & 0xff) + amount));
+    return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+  } catch { return '#0a0a0a'; }
+}
+
 const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
@@ -702,20 +751,30 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: '800' },
   scroll: { paddingHorizontal: 24, paddingBottom: 60, paddingTop: 20 },
 
-  // Redesigned KYC gate
+  // Redesigned KYC gate & Success screens
+  heroWrap: { width: 140, height: 140, alignItems: 'center', justifyContent: 'center', marginBottom: 24, marginTop: 12 },
+  glowingIconCircle: { width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 10 },
+  statusBadge: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20, marginBottom: 16 },
+  statusBadgeText: { fontSize: 12, fontWeight: '800', letterSpacing: 1 },
+
   gateContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 16, marginTop: 40 },
   gateIconRing: { width: 90, height: 90, borderRadius: 45, alignItems: 'center', justifyContent: 'center' },
-  gateTitle: { fontSize: 22, fontWeight: '900', textAlign: 'center' },
-  gateSub: { fontSize: 14, textAlign: 'center', lineHeight: 22, paddingHorizontal: 10 },
+  gateTitle: { fontSize: 32, fontWeight: '900', textAlign: 'center', letterSpacing: -1 },
+  gateSub: { fontSize: 16, textAlign: 'center', lineHeight: 24, paddingHorizontal: 10 },
   kycStatusBox: { width: '100%', borderRadius: 18, borderWidth: 1, padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 8 },
   kycStatusLabel: { fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
   kycBadge: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 12 },
   kycBadgeText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.8 },
   gateBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, height: 56, borderRadius: 16, width: '100%',
+    gap: 8, height: 64, borderRadius: 32, width: '100%',
   },
-  gateBtnText: { fontSize: 15, fontWeight: '900' },
+  gateBtnText: { fontSize: 16, fontWeight: '800' },
+  
+  orderSummary: { borderRadius: 24, padding: 24, marginBottom: 16 },
+  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  summaryLabel: { fontSize: 14, fontWeight: '600' },
+  summaryValue: { fontSize: 14, fontWeight: '700' },
 
   verifiedBanner: {
     flexDirection: 'row',

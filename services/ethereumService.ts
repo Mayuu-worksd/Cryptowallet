@@ -42,7 +42,7 @@ const NETWORK_CONFIG: Record<string, { chainId: number; name: string }> = {
   Arbitrum: { chainId: 42161,    name: 'arbitrum'  },
 };
 
-let provider: any = null;
+const providers: Record<string, any> = {};
 let currentNetwork = 'Sepolia';
 
 export function getProvider(network: string = currentNetwork): any {
@@ -50,18 +50,16 @@ export function getProvider(network: string = currentNetwork): any {
   if (network === 'TRON' || network === 'TRON Nile') {
     throw new Error(`Cannot use EVM provider for ${network}. Use tronService instead.`);
   }
-  if (!provider || network !== currentNetwork) {
+  if (!providers[network]) {
     const rpcUrl    = NETWORKS[network]    ?? NETWORKS['Sepolia'];
     const netConfig = NETWORK_CONFIG[network] ?? NETWORK_CONFIG['Sepolia'];
-    provider = new JsonRpcProvider(rpcUrl, { chainId: netConfig.chainId, name: netConfig.name }, { staticNetwork: true });
-    currentNetwork = network;
+    providers[network] = new JsonRpcProvider(rpcUrl, { chainId: netConfig.chainId, name: netConfig.name }, { staticNetwork: true });
   }
-  return provider;
+  return providers[network];
 }
 
 export const ethereumService = {
   switchNetwork(network: string): void {
-    provider = null;
     currentNetwork = network;
   },
 

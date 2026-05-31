@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useWallet } from '../store/WalletContext';
 import { haptics } from '../utils/haptics';
 
@@ -66,6 +67,10 @@ export default function EarnScreen({ navigation }: any) {
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    AsyncStorage.getItem('cw_earn_notified').then(val => {
+      if (val === 'true') setHasNotified(true);
+    });
+
     Animated.timing(fadeAnim, {
       toValue: 1,
       duration: 800,
@@ -73,9 +78,10 @@ export default function EarnScreen({ navigation }: any) {
     }).start();
   }, []);
 
-  const handleNotify = () => {
+  const handleNotify = async () => {
     haptics.success();
     setHasNotified(true);
+    await AsyncStorage.setItem('cw_earn_notified', 'true');
   };
 
   return (

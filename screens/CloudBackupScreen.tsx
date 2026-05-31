@@ -14,6 +14,26 @@ import { storageService } from '../services/storageService';
 import { haptics } from '../utils/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 
+function GlowingOrb({ color }: { color: string }) {
+  const pulse = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1.2, duration: 2000, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 2000, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+
+  return (
+    <Animated.View style={[
+      { position: 'absolute', width: 140, height: 140, borderRadius: 70 },
+      { backgroundColor: color, transform: [{ scale: pulse }] }
+    ]} />
+  );
+}
+
 export default function CloudBackupScreen({ navigation }: any) {
   const { isDarkMode, walletAddress } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
@@ -276,36 +296,47 @@ export default function CloudBackupScreen({ navigation }: any) {
           <ActivityIndicator size="large" color={T.primary} />
         </View>
       ) : alreadyBacked ? (
-        <ScrollView contentContainerStyle={[styles.scroll, { alignItems: 'center', paddingTop: 40 }]} showsVerticalScrollIndicator={false}>
-          <View style={[styles.iconCircle, { backgroundColor: T.success + '18', width: 96, height: 96, borderRadius: 48, marginBottom: 24 }]}>
-            <Feather name="check-circle" size={48} color={T.success} />
+        <ScrollView contentContainerStyle={[styles.scroll, { alignItems: 'center', paddingTop: 60 }]} showsVerticalScrollIndicator={false}>
+          <View style={styles.heroWrap}>
+            <GlowingOrb color={T.success + '30'} />
+            <LinearGradient
+              colors={[T.success, '#059669']}
+              style={styles.glowingIconCircle}
+            >
+              <Feather name="check" size={44} color="#FFF" />
+            </LinearGradient>
+          </View>
+          
+          <View style={[styles.statusBadge, { backgroundColor: T.success + '15' }]}>
+            <Text style={[styles.statusBadgeText, { color: T.success }]}>PROTECTED</Text>
           </View>
           <Text style={[styles.title, { color: T.text, textAlign: 'center' }]}>Already Backed Up</Text>
           <Text style={[styles.subtitle, { color: T.textMuted, textAlign: 'center', marginHorizontal: 20, marginBottom: 32 }]}>
             Your wallet is already securely backed up in the cloud. You can restore it anytime using your email and backup password.
           </Text>
-          <View style={[{ width: '100%', borderRadius: 20, padding: 20, marginBottom: 28, borderWidth: 1 }, { backgroundColor: T.surface, borderColor: T.border }]}>
+          <View style={[{ width: '100%', borderRadius: 24, padding: 24, marginBottom: 28 }, { backgroundColor: T.surfaceLow }]}>
             {[
               { icon: 'shield', label: 'End-to-end encrypted', color: T.success },
               { icon: 'cloud', label: 'Stored in your private vault', color: T.primary },
               { icon: 'refresh-cw', label: 'Restorable on any device', color: T.textDim },
-            ].map(item => (
-              <View key={item.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-                <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: item.color + '15', alignItems: 'center', justifyContent: 'center' }}>
-                  <Feather name={item.icon as any} size={15} color={item.color} />
+            ].map((item, idx, arr) => (
+              <View key={item.label} style={[{ flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 14 }, idx < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
+                <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: item.color + '15', alignItems: 'center', justifyContent: 'center' }}>
+                  <Feather name={item.icon as any} size={18} color={item.color} />
                 </View>
-                <Text style={{ color: T.text, fontSize: 14, fontFamily: Fonts.bold }}>{item.label}</Text>
+                <Text style={{ color: T.text, fontSize: 15, fontFamily: Fonts.bold }}>{item.label}</Text>
               </View>
             ))}
           </View>
-          <TouchableOpacity style={[styles.primaryBtn, { width: '100%', marginBottom: 14 }]} onPress={() => { setAlreadyBacked(false); setStep(0); }} activeOpacity={0.8}>
+          
+          <TouchableOpacity style={[styles.primaryBtn, { width: '100%', marginBottom: 16, height: 64, borderRadius: 32 }]} onPress={() => { setAlreadyBacked(false); setStep(0); }} activeOpacity={0.8}>
             <LinearGradient colors={[T.primary, '#D32F2F']} style={styles.primaryBtnGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-              <Text style={styles.primaryBtnText}>Update Backup</Text>
-              <Feather name="refresh-cw" size={16} color="#FFF" />
+              <Text style={[styles.primaryBtnText, { fontSize: 18 }]}>Update Backup</Text>
+              <Feather name="refresh-cw" size={18} color="#FFF" />
             </LinearGradient>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7}>
-            <Text style={{ color: T.textMuted, fontSize: 14, fontFamily: Fonts.bold }}>Go Back</Text>
+          <TouchableOpacity style={{ height: 56, alignItems: 'center', justifyContent: 'center' }} onPress={() => navigation.goBack()} activeOpacity={0.7}>
+            <Text style={{ color: T.textDim, fontSize: 16, fontFamily: Fonts.bold }}>Return to Dashboard</Text>
           </TouchableOpacity>
         </ScrollView>
       ) : (
@@ -615,23 +646,34 @@ export default function CloudBackupScreen({ navigation }: any) {
             )}
 
             {step === 3 && (
-              <View style={{ alignItems: 'center', paddingTop: 20 }}>
-                <View style={[styles.iconCircle, { backgroundColor: T.success + '18', width: 96, height: 96, borderRadius: 48, marginBottom: 24 }]}>
-                  <Feather name="check-circle" size={48} color={T.success} />
+              <View style={{ alignItems: 'center', paddingTop: 40 }}>
+                <View style={styles.heroWrap}>
+                  <GlowingOrb color={T.success + '30'} />
+                  <LinearGradient
+                    colors={[T.success, '#059669']}
+                    style={styles.glowingIconCircle}
+                  >
+                    <Feather name="shield" size={44} color="#FFF" />
+                  </LinearGradient>
                 </View>
-                <Text style={[styles.title, { color: T.text, textAlign: 'center' }]}>Backup Complete!</Text>
+                
+                <View style={[styles.statusBadge, { backgroundColor: T.success + '15' }]}>
+                  <Text style={[styles.statusBadgeText, { color: T.success }]}>BACKUP COMPLETE</Text>
+                </View>
+
+                <Text style={[styles.title, { color: T.text, textAlign: 'center' }]}>Protected</Text>
                 <Text style={[styles.subtitle, { color: T.textMuted, textAlign: 'center', marginHorizontal: 20, marginBottom: 40 }]}>
                   Your wallet backup has been securely encrypted and stored. You can restore this wallet using your email and backup password on any device.
                 </Text>
-                <TouchableOpacity style={[styles.primaryBtn, { width: '100%' }]} onPress={() => navigation.goBack()} activeOpacity={0.8}>
+                <TouchableOpacity style={[styles.primaryBtn, { width: '100%', height: 64, borderRadius: 32 }]} onPress={() => navigation.goBack()} activeOpacity={0.8}>
                   <LinearGradient
                     colors={[T.primary, '#D32F2F']}
                     style={styles.primaryBtnGradient}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                   >
-                    <Text style={styles.primaryBtnText}>Return to Settings</Text>
-                    <Feather name="arrow-right" size={18} color="#FFF" />
+                    <Text style={[styles.primaryBtnText, { fontSize: 18 }]}>Return to Settings</Text>
+                    <Feather name="arrow-right" size={20} color="#FFF" />
                   </LinearGradient>
                 </TouchableOpacity>
               </View>
@@ -659,8 +701,14 @@ const makeStyles = (T: any, isDarkMode: boolean) => StyleSheet.create({
   scroll: { paddingTop: 100, paddingHorizontal: 24, paddingBottom: 60 },
   iconHeader: { alignItems: 'center', marginBottom: 24 },
   iconCircle: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  title: { fontSize: 28, fontFamily: Fonts.extraBold, marginBottom: 12, letterSpacing: -0.5, textAlign: 'center' },
-  subtitle: { fontSize: 13, fontFamily: Fonts.medium, lineHeight: 20, textAlign: 'center', paddingHorizontal: 12 },
+  
+  heroWrap: { width: 140, height: 140, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
+  glowingIconCircle: { width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 10 },
+  statusBadge: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20, marginBottom: 16 },
+  statusBadgeText: { fontSize: 12, fontFamily: Fonts.bold, letterSpacing: 1 },
+
+  title: { fontSize: 32, fontFamily: Fonts.extraBold, marginBottom: 12, letterSpacing: -1, textAlign: 'center' },
+  subtitle: { fontSize: 16, fontFamily: Fonts.medium, lineHeight: 24, textAlign: 'center', paddingHorizontal: 12 },
   
   inputGroup: { padding: 20, borderRadius: 24, marginBottom: 24, borderWidth: 1, borderColor: isDarkMode ? 'rgba(255,255,255,0.05)' : '#E4E7EC' },
   label: { fontSize: 11, fontFamily: Fonts.extraBold, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 },

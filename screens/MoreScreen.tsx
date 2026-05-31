@@ -1,80 +1,208 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar } from 'react-native';
-import { Theme, Fonts } from '../constants';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useWallet } from '../store/WalletContext';
-import { haptics } from '../utils/haptics';
+import React from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  StatusBar,
+} from "react-native";
+import { Theme, Fonts } from "../constants";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useWallet } from "../store/WalletContext";
+import { haptics } from "../utils/haptics";
 
 const SERVICES = [
   {
-    category: 'Finance',
+    category: "Popular",
     items: [
-      { id: 'Earn', label: 'Earn Yield', icon: 'trending-up', route: 'Earn', color: '#10B981' },
-      { id: 'Credit', label: 'Crypto Loan', icon: 'dollar-sign', route: 'Credit', color: '#3B82F6' },
-      { id: 'Card', label: 'Virtual Card', icon: 'credit-card', route: 'Card', color: '#8B5CF6' },
-    ]
+      {
+        id: "Earn",
+        label: "Earn",
+        icon: "trending-up",
+        route: "Earn",
+        color: "#FFFFFF",
+      },
+      {
+        id: "Credit",
+        label: "Credit",
+        icon: "dollar-sign",
+        route: "Credit",
+        color: "#FFFFFF",
+      },
+      {
+        id: "P2P",
+        label: "P2P",
+        icon: "repeat",
+        route: "P2PMarketplace",
+        color: "#FFFFFF",
+      },
+    ],
   },
   {
-    category: 'Wallet & Assets',
+    category: "Transaction",
     items: [
-      { id: 'Assets', label: 'My Assets', icon: 'pie-chart', route: 'Assets', color: '#F59E0B' },
-      { id: 'Phrase', label: 'Phrase Recovery', icon: 'key', route: 'RecoverySettings', color: '#EF4444' }, // Assuming RecoverySettings handles phrase backup
-    ]
+      {
+        id: "Deposit",
+        label: "Deposit",
+        icon: "plus",
+        route: "Receive",
+        color: "#FFFFFF",
+      },
+      {
+        id: "Swap",
+        label: "Swap",
+        icon: "zap",
+        route: "Swap",
+        color: "#FFFFFF",
+      },
+      {
+        id: "Send",
+        label: "Send",
+        icon: "arrow-right",
+        route: "Send",
+        color: "#FFFFFF",
+      },
+      {
+        id: "Scan",
+        label: "Scan",
+        icon: "maximize",
+        route: "Scan",
+        color: "#FFFFFF",
+      },
+      {
+        id: "History",
+        label: "History",
+        icon: "clock",
+        route: "History",
+        color: "#FFFFFF",
+      },
+    ],
   },
   {
-    category: 'Account & Security',
+    category: "Card",
     items: [
-      { id: 'KYC', label: 'Identity Verification', icon: 'shield', route: 'KYCStatus', color: '#06B6D4' },
-      { id: 'Settings', label: 'Settings', icon: 'settings', route: 'Settings', color: '#6B7280' },
-      { id: 'Support', label: 'Help & Support', icon: 'help-circle', route: 'Support', color: '#14B8A6' },
-    ]
-  }
+      {
+        id: "Card",
+        label: "Virtual Card",
+        icon: "credit-card",
+        route: "Card",
+        color: "#FFFFFF",
+      },
+    ],
+  },
+  {
+    category: "Account & Settings",
+    items: [
+      {
+        id: "Portfolio",
+        label: "Portfolio",
+        icon: "pie-chart",
+        route: "Portfolio",
+        color: "#FFFFFF",
+      },
+      {
+        id: "Settings",
+        label: "Settings",
+        icon: "settings",
+        route: "Settings",
+        color: "#FFFFFF",
+      },
+      {
+        id: "Support",
+        label: "Support",
+        icon: "help-circle",
+        route: "Support",
+        color: "#FFFFFF",
+      },
+    ],
+  },
 ];
 
 export default function MoreScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const { isDarkMode } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
+  const isDark = isDarkMode;
 
   return (
-    <View style={[styles.root, { backgroundColor: T.background }]}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+    <View
+      style={[
+        styles.root,
+        { backgroundColor: isDark ? "#000000" : T.background },
+      ]}
+    >
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity
-          onPress={() => { haptics.selection(); navigation.goBack(); }}
-          style={[styles.backBtn, { backgroundColor: T.surfaceLow, borderColor: T.border }]}
+          onPress={() => {
+            haptics.selection();
+            navigation.goBack();
+          }}
+          style={styles.backBtn}
         >
-          <Feather name="chevron-left" size={24} color={T.text} />
+          <Feather
+            name="arrow-left"
+            size={24}
+            color={isDark ? "#FFFFFF" : T.text}
+          />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: T.text }]}>Services</Text>
-        <View style={{ width: 44 }} />
+        <View style={{ flex: 1 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         {SERVICES.map((section, idx) => (
           <View key={idx} style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: T.text }]}>{section.category}</Text>
-            <View style={[styles.grid, { backgroundColor: T.surface, borderColor: T.border }]}>
+            <Text
+              style={[
+                styles.sectionTitle,
+                { color: isDark ? "#FFFFFF" : T.text },
+              ]}
+            >
+              {section.category}
+            </Text>
+            <View style={styles.grid}>
               {section.items.map((item, itemIdx) => (
                 <TouchableOpacity
                   key={item.id}
-                  style={[styles.gridItem, itemIdx < section.items.length - 1 && { borderBottomWidth: 1, borderBottomColor: T.border }]}
+                  style={styles.gridItem}
                   onPress={() => {
                     haptics.selection();
-                    navigation.navigate(item.route);
+                    // Some routes might not exist, silently ignore for now or handle gracefully
+                    if (item.route) {
+                      try {
+                        navigation.navigate(item.route);
+                      } catch (e) {}
+                    }
                   }}
                   activeOpacity={0.7}
                 >
-                  <View style={styles.itemLeft}>
-                    <View style={[styles.iconBox, { backgroundColor: item.color + '15' }]}>
-                      <Feather name={item.icon as any} size={20} color={item.color} />
-                    </View>
-                    <Text style={[styles.itemLabel, { color: T.text }]}>{item.label}</Text>
+                  <View
+                    style={[
+                      styles.iconBox,
+                      { backgroundColor: isDark ? "#1C1C1E" : "#F1F3F4" },
+                    ]}
+                  >
+                    <Feather
+                      name={item.icon as any}
+                      size={24}
+                      color={isDark ? "#FFFFFF" : "#000000"}
+                    />
                   </View>
-                  <Feather name="chevron-right" size={20} color={T.textDim} />
+                  <Text
+                    style={[
+                      styles.itemLabel,
+                      { color: isDark ? "#FFFFFF" : "#000000" },
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -90,9 +218,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 20,
     paddingBottom: 16,
   },
@@ -100,9 +228,8 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerTitle: {
     fontSize: 20,
@@ -123,30 +250,27 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   grid: {
-    borderRadius: 20,
-    borderWidth: 1,
-    overflow: 'hidden',
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginHorizontal: -8,
   },
   gridItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-  },
-  itemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
+    width: "25%", // 4 items per row
+    alignItems: "center",
+    marginBottom: 20,
+    paddingHorizontal: 8,
   },
   iconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
   },
   itemLabel: {
-    fontSize: 15,
-    fontFamily: Fonts.bold,
+    fontSize: 12,
+    fontFamily: Fonts.medium,
+    textAlign: "center",
   },
 });

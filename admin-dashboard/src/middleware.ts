@@ -1,27 +1,34 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { createHash } from 'crypto';
+
+function verifyToken(signed: string): boolean {
+  if (!signed) return false;
+  const parts = signed.split('.');
+  if (parts.length !== 2) return false;
+  const [token, sig] = parts;
+  const secret = process.env.ADMIN_SECRET || 'cw_admin_fallback_secret_change_me';
+  const expected = createHash('sha256').update(token + secret).digest('hex').slice(0, 16);
+  return sig === expected;
+}
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const adminSession = request.cookies.get('admin_session')?.value;
+  const sessionCookie = request.cookies.get('admin_session')?.value ?? '';
+  const isAuthenticated = verifyToken(sessionCookie);
 
   const isAuthPage = pathname.startsWith('/login');
   const isDashboardPage = pathname.startsWith('/dashboard') || pathname === '/';
 
-  // If trying to access dashboard/root and not logged in, redirect to login
-  if (isDashboardPage && adminSession !== 'true') {
-    const loginUrl = new URL('/login', request.url);
-    return NextResponse.redirect(loginUrl);
+  if (isDashboardPage && !isAuthenticated) {
+    return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // If already logged in and visiting login, redirect to dashboard overview
-  if (isAuthPage && adminSession === 'true') {
-    const dashboardUrl = new URL('/dashboard', request.url);
-    return NextResponse.redirect(dashboardUrl);
+  if (isAuthPage && isAuthenticated) {
+    return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
-  // If root URL and authenticated, redirect to dashboard
-  if (pathname === '/' && adminSession === 'true') {
+  if (pathname === '/' && isAuthenticated) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
@@ -29,14 +36,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
-  ],
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
 };

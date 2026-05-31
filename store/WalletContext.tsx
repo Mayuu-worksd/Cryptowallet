@@ -1088,12 +1088,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setLockedBalance({});
       }
 
-      await storageService.saveWallet(data.privateKey, data.mnemonic, data.address, (data as any).tronAddress);
+      await storageService.saveWallet(data.privateKey, data.mnemonic, data.address, data.tronAddress, data.tronPrivateKey);
       await clearPin();
       setPinEnabled(false);
       setIsReadOnly(false);
       setWalletAddress(data.address);
-      if ((data as any).tronAddress) setTronAddress((data as any).tronAddress);
+      if (data.tronAddress) setTronAddress(data.tronAddress);
       setHasWallet(true);
 
       try {

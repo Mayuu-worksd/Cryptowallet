@@ -46,7 +46,7 @@ export const walletService = {
       tronPrivateKey: tron.privateKey,
       mnemonic,
     };
-    await storageService.saveWallet(data.privateKey, data.mnemonic, data.address, data.tronAddress);
+    await storageService.saveWallet(data.privateKey, data.mnemonic, data.address, data.tronAddress, data.tronPrivateKey);
     return data;
   },
 

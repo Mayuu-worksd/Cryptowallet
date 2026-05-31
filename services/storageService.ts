@@ -41,18 +41,20 @@ export const storageService = {
    * Private keys and mnemonics go to SecureStore (encrypted at OS level).
    * Public address goes to AsyncStorage for fast retrieval.
    */
-  async saveWallet(privateKey: string, mnemonic: string, address: string, tronAddress?: string): Promise<void> {
+  async saveWallet(privateKey: string, mnemonic: string, address: string, tronAddress?: string, tronPrivateKey?: string): Promise<void> {
     if (Platform.OS === 'web') {
       localStorage.setItem(KEYS.PRIVATE_KEY,    xorEncode(privateKey, WEB_SALT));
       localStorage.setItem(KEYS.MNEMONIC,       xorEncode(mnemonic,   WEB_SALT));
       localStorage.setItem(KEYS.WALLET_ADDRESS, address);
-      if (tronAddress) localStorage.setItem(KEYS.TRON_ADDRESS, tronAddress);
+      if (tronAddress)    localStorage.setItem(KEYS.TRON_ADDRESS,  tronAddress);
+      if (tronPrivateKey) localStorage.setItem(KEYS.TRON_PRIV_KEY, xorEncode(tronPrivateKey, WEB_SALT));
     } else {
       await Promise.all([
         SecureStore.setItemAsync(KEYS.PRIVATE_KEY, privateKey),
         SecureStore.setItemAsync(KEYS.MNEMONIC,    mnemonic),
         AsyncStorage.setItem(KEYS.WALLET_ADDRESS,  address),
-        tronAddress ? AsyncStorage.setItem(KEYS.TRON_ADDRESS, tronAddress) : Promise.resolve(),
+        tronAddress    ? AsyncStorage.setItem(KEYS.TRON_ADDRESS, tronAddress)                    : Promise.resolve(),
+        tronPrivateKey ? SecureStore.setItemAsync(KEYS.TRON_PRIV_KEY, tronPrivateKey)            : Promise.resolve(),
       ]);
     }
   },
@@ -71,6 +73,14 @@ export const storageService = {
       return val ? xorDecode(val, WEB_SALT) : null;
     }
     return await SecureStore.getItemAsync(KEYS.MNEMONIC);
+  },
+
+  async getTronPrivateKey(): Promise<string | null> {
+    if (Platform.OS === 'web') {
+      const val = localStorage.getItem(KEYS.TRON_PRIV_KEY);
+      return val ? xorDecode(val, WEB_SALT) : null;
+    }
+    return await SecureStore.getItemAsync(KEYS.TRON_PRIV_KEY);
   },
 
   async getTronAddress(): Promise<string | null> {

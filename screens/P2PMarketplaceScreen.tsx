@@ -1193,6 +1193,11 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
                       <Text style={{ color: T.success, fontSize: 16, fontWeight: '900' }}>{(parseFloat(sellAmount) * parseFloat(sellRate) * 0.995).toFixed(2)} {sellFiat}</Text>
                     </View>
                   </View>
+                  {network !== 'Sepolia' && network !== 'TRON Nile' && (
+                    <Text style={{ fontSize: 11, color: T.textMuted, textAlign: 'center', marginTop: 8, fontStyle: 'italic' }}>
+                      *Mainnet Escrow smart contract is pending deployment. This is a simulated placeholder flow.
+                    </Text>
+                  )}
                 </View>
               )}
 
@@ -1314,15 +1319,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
         </View>
       )}
 
-      {/* Escrow network notice */}
-      {tab === 'sell' && network !== 'Sepolia' && network !== 'TRON' && network !== 'TRON Nile' && (
-        <View style={{ marginHorizontal: 16, marginTop: 10, padding: 12, borderRadius: 14, backgroundColor: T.error + '15', borderWidth: 1, borderColor: T.error + '40', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Feather name="alert-circle" size={14} color={T.error} />
-          <Text style={{ color: T.error, fontSize: 12, fontWeight: '700', flex: 1 }}>
-            P2P trading requires Sepolia testnet or TRON network. Switch network in Settings to create orders.
-          </Text>
-        </View>
-      )}
+
 
       {/* List */}
       {loading ? (

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Platform,
-  Animated, ActivityIndicator, StatusBar, Easing,
+  Animated, ActivityIndicator, StatusBar, Easing, Dimensions
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -11,36 +11,23 @@ import { useWallet } from '../store/WalletContext';
 import { Theme, Fonts } from '../constants';
 import { businessKYCService, BusinessKYCStatus } from '../services/merchantService';
 
-const ICON_SIZE = 90;
+const { width } = Dimensions.get('window');
+const ICON_SIZE = 100;
 
-function PulsingRing({ color }: { color: string }) {
-  const s1 = useRef(new Animated.Value(1)).current;
-  const s2 = useRef(new Animated.Value(1)).current;
-  const o1 = useRef(new Animated.Value(0.4)).current;
-  const o2 = useRef(new Animated.Value(0.2)).current;
+function GlowingOrb({ color }: { color: string }) {
+  const pulse = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    const loop = (s: Animated.Value, o: Animated.Value, delay: number) =>
-      Animated.loop(Animated.sequence([
-        Animated.delay(delay),
-        Animated.parallel([
-          Animated.timing(s, { toValue: 1.6, duration: 1500, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-          Animated.timing(o, { toValue: 0,   duration: 1500, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-        ]),
-        Animated.parallel([
-          Animated.timing(s, { toValue: 1, duration: 0, useNativeDriver: true }),
-          Animated.timing(o, { toValue: delay === 0 ? 0.4 : 0.2, duration: 0, useNativeDriver: true }),
-        ]),
-      ])).start();
-    loop(s1, o1, 0);
-    loop(s2, o2, 750);
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1.2, duration: 2000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 2000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ])
+    ).start();
   }, []);
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      <Animated.View style={[st.ring, { borderColor: color, opacity: o1, transform: [{ scale: s1 }] }]} />
-      <Animated.View style={[st.ring, { borderColor: color, opacity: o2, transform: [{ scale: s2 }] }]} />
-    </View>
+    <Animated.View style={[st.glowingOrb, { backgroundColor: color, transform: [{ scale: pulse }] }]} />
   );
 }
 
@@ -58,6 +45,7 @@ function StepRow({ icon, label, sub, done, active, T, isDarkMode, accentColor }:
           {active && <View style={[st.stepInner, { backgroundColor: accentColor }]} />}
           {!done && !active && <View style={[st.stepInner, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.15)' : '#E4E7EC' }]} />}
         </View>
+        <View style={[st.stepLine, { backgroundColor: done ? '#10B981' : isDarkMode ? 'rgba(255,255,255,0.06)' : '#E4E7EC' }]} />
       </View>
       <View style={st.stepRight}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 3 }}>
@@ -145,10 +133,10 @@ export default function BusinessKYCResultScreen({ navigation }: any) {
     status === 'under_review' ? 'UNDER REVIEW' : 'SUBMITTED';
 
   const heroTitle =
-    isApproved  ? 'Business Identity Verified' :
+    isApproved  ? 'Business Verified' :
     isRejected  ? 'Verification Rejected' :
     isIncomplete ? 'Complete Your Setup' :
-    status === 'under_review' ? 'Business Details In Review' : 'Documents Queueing';
+    status === 'under_review' ? 'In Review' : 'Documents Queueing';
 
   const heroSub =
     isApproved  ? 'Your business registration details have been verified. All enterprise merchant privileges are unlocked.'
@@ -165,16 +153,16 @@ export default function BusinessKYCResultScreen({ navigation }: any) {
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
       {/* Header */}
-      <View style={[st.header, { paddingTop: insets.top + 12, borderBottomColor: T.border }]}>
+      <View style={[st.header, { paddingTop: insets.top + 16 }]}>
         <TouchableOpacity
           onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Main')}
-          style={[st.headerBtn, { backgroundColor: T.surfaceLow }]}
+          style={st.headerBtn}
         >
-          <Feather name="arrow-left" size={20} color={T.text} />
+          <Feather name="arrow-left" size={24} color={T.text} />
         </TouchableOpacity>
         <Text style={[st.headerTitle, { color: T.text }]}>Merchant Profile</Text>
-        <TouchableOpacity onPress={load} style={[st.headerBtn, { backgroundColor: T.surfaceLow }]}>
-          <Feather name="refresh-cw" size={16} color={T.textDim} />
+        <TouchableOpacity onPress={load} style={st.headerBtn}>
+          <Feather name="refresh-cw" size={20} color={T.textDim} />
         </TouchableOpacity>
       </View>
 
@@ -183,51 +171,34 @@ export default function BusinessKYCResultScreen({ navigation }: any) {
         contentContainerStyle={st.scroll}
         showsVerticalScrollIndicator={false}
       >
-        {/* Premium Brutalist Hero status card */}
-        <View style={[st.heroWrap, { backgroundColor: T.surface, borderColor: T.border }]}>
-          <LinearGradient
-            colors={[accentColor + '0E', 'transparent']}
-            style={st.heroGrad}
-            start={{ x: 0.5, y: 0 }}
-            end={{ x: 0.5, y: 1 }}
-          />
-
+        {/* Premium Hero status card */}
+        <View style={st.heroWrap}>
           <View style={st.iconWrap}>
-            {(isReviewing || isIncomplete) && (
-              <PulsingRing color={accentColor} />
-            )}
+            <GlowingOrb color={accentColor + '30'} />
             <LinearGradient
-              colors={[accentColor + '1F', accentColor + '05']}
-              style={[st.iconCircle, { borderColor: accentColor + '2A' }]}
+              colors={[accentColor, accentColor + '99']}
+              style={st.iconCircle}
             >
               <Feather
-                name={isApproved ? 'briefcase' : isRejected ? 'alert-triangle' : isIncomplete ? 'upload-cloud' : 'clock'}
-                size={40}
-                color={accentColor}
+                name={isApproved ? 'check' : isRejected ? 'x' : isIncomplete ? 'upload-cloud' : 'clock'}
+                size={44}
+                color="#FFF"
               />
             </LinearGradient>
           </View>
 
-          <View style={[st.statusBadge, { backgroundColor: accentColor + '14', borderColor: accentColor + '24' }]}>
-            <View style={[st.statusDot, { backgroundColor: accentColor }]} />
+          <View style={[st.statusBadge, { backgroundColor: accentColor + '15' }]}>
             <Text style={[st.statusBadgeText, { color: accentColor }]}>{statusLabel}</Text>
           </View>
 
           <Text style={[st.heroTitle, { color: T.text }]}>{heroTitle}</Text>
           <Text style={[st.heroSub, { color: T.textDim }]}>{heroSub}</Text>
-
-          {isReviewing && (
-            <View style={[st.refreshPill, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
-              <ActivityIndicator size="small" color={T.primary} style={{ transform: [{ scale: 0.65 }] }} />
-              <Text style={[st.refreshPillText, { color: T.textDim }]}>Auto-checking status</Text>
-            </View>
-          )}
         </View>
 
         {/* Progress steps timeline */}
         {(isReviewing || isIncomplete) && (
-          <View style={[st.card, { backgroundColor: T.surface, borderColor: T.border }]}>
-            <Text style={[st.cardLabel, { color: T.textDim, marginBottom: 18 }]}>COMPLIANCE SCHEDULE</Text>
+          <View style={[st.card, { backgroundColor: T.surfaceLow }]}>
+            <Text style={[st.cardLabel, { color: T.textDim, marginBottom: 18 }]}>Compliance Schedule</Text>
             {[
               { icon: 'briefcase',    label: 'Corporate Info Saved', sub: 'Business name, registry & director details', done: true,          active: false },
               { icon: 'upload-cloud', label: 'Upload Documents',     sub: 'Business licenses & proof of status',         done: hasDoc,        active: !hasDoc },
@@ -237,7 +208,7 @@ export default function BusinessKYCResultScreen({ navigation }: any) {
               <StepRow key={i} {...step} T={T} isDarkMode={isDarkMode} accentColor={accentColor} />
             ))}
             <View style={[st.etaRow, { backgroundColor: T.primary + '0A', borderColor: T.primary + '20' }]}>
-              <Feather name="clock" size={13} color={T.primary} />
+              <Feather name="clock" size={16} color={T.primary} />
               <Text style={[st.etaText, { color: T.primary }]}>Review takes up to 1-2 business days</Text>
             </View>
           </View>
@@ -245,11 +216,11 @@ export default function BusinessKYCResultScreen({ navigation }: any) {
 
         {/* Approved Features */}
         {isApproved && (
-          <View style={[st.card, { backgroundColor: T.surface, borderColor: T.border, padding: 0 }]}>
-            <View style={{ paddingHorizontal: 20, paddingTop: 18, paddingBottom: 6 }}>
-              <Text style={[st.cardLabel, { color: T.textDim }]}>UNLOCKED ENTERPRISE FEATURES</Text>
+          <View style={[st.card, { backgroundColor: T.surfaceLow, padding: 0 }]}>
+            <View style={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 12 }}>
+              <Text style={[st.cardLabel, { color: T.textDim }]}>Unlocked Enterprise Features</Text>
             </View>
-            <View style={{ marginTop: 10 }}>
+            <View>
               {[
                 { icon: 'qr-code',  label: 'Merchant QR Payments', sub: 'Accept client crypto transfers instantly' },
                 { icon: 'repeat',   label: 'P2P Trusted Status',   sub: 'List marketplace trades with premium badge' },
@@ -259,17 +230,16 @@ export default function BusinessKYCResultScreen({ navigation }: any) {
                   key={i}
                   style={[
                     st.featureRow,
-                    i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: T.border }
+                    i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }
                   ]}
                 >
-                  <View style={[st.featureIcon, { backgroundColor: 'rgba(16,185,129,0.08)' }]}>
-                    <Feather name={f.icon as any} size={16} color="#10B981" />
+                  <View style={[st.featureIcon, { backgroundColor: 'rgba(16,185,129,0.1)' }]}>
+                    <Feather name={f.icon as any} size={20} color="#10B981" />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[st.featureLabel, { color: T.text }]}>{f.label}</Text>
                     <Text style={[st.featureSub, { color: T.textDim }]}>{f.sub}</Text>
                   </View>
-                  <Feather name="check-circle" size={15} color="#10B981" />
                 </View>
               ))}
             </View>
@@ -278,14 +248,14 @@ export default function BusinessKYCResultScreen({ navigation }: any) {
 
         {/* Rejected feedbacks */}
         {isRejected && (
-          <View style={[st.card, { backgroundColor: T.surface, borderColor: T.border }]}>
+          <View style={[st.card, { backgroundColor: T.surfaceLow }]}>
             <View style={st.cardHeader}>
               <View style={[st.cardIconBox, { backgroundColor: T.error + '15' }]}>
-                <Feather name="info" size={15} color={T.error} />
+                <Feather name="info" size={16} color={T.error} />
               </View>
-              <Text style={[st.cardLabel, { color: T.error }]}>AUDIT FEEDBACK</Text>
+              <Text style={[st.cardLabel, { color: T.error }]}>Audit Feedback</Text>
             </View>
-            <Text style={[st.cardBody, { color: T.text, marginBottom: 14 }]}>
+            <Text style={[st.cardBody, { color: T.text, marginBottom: 16 }]}>
               Corporate details did not satisfy security parameters. Primary reject reasons:
             </Text>
             {[
@@ -305,38 +275,32 @@ export default function BusinessKYCResultScreen({ navigation }: any) {
         {/* Action Panel Buttons */}
         <View style={st.actions}>
           {isApproved && (
-            <TouchableOpacity style={st.primaryBtn} onPress={() => navigation.navigate('MerchantDashboard')} activeOpacity={0.85}>
-              <LinearGradient colors={['#10B981', '#059669']} style={st.primaryBtnGrad}>
-                <Feather name="briefcase" size={18} color="#FFF" />
-                <Text style={st.primaryBtnText}>Merchant Dashboard</Text>
-              </LinearGradient>
+            <TouchableOpacity style={[st.primaryBtn, { backgroundColor: '#10B981' }]} onPress={() => navigation.navigate('MerchantDashboard')} activeOpacity={0.85}>
+              <Feather name="briefcase" size={20} color="#FFF" />
+              <Text style={[st.primaryBtnText, { color: '#FFF' }]}>Merchant Dashboard</Text>
             </TouchableOpacity>
           )}
 
           {isIncomplete && (
-            <TouchableOpacity style={st.primaryBtn} onPress={() => navigation.replace('BusinessKYCForm')} activeOpacity={0.85}>
-              <LinearGradient colors={[T.primary, '#93000d']} style={st.primaryBtnGrad}>
-                <Feather name="upload-cloud" size={18} color="#FFF" />
-                <Text style={st.primaryBtnText}>Resume & Upload Documents</Text>
-              </LinearGradient>
+            <TouchableOpacity style={[st.primaryBtn, { backgroundColor: T.text }]} onPress={() => navigation.replace('BusinessKYCForm')} activeOpacity={0.85}>
+              <Feather name="upload-cloud" size={20} color={T.background} />
+              <Text style={[st.primaryBtnText, { color: T.background }]}>Resume Document Upload</Text>
             </TouchableOpacity>
           )}
 
           {isRejected && (
-            <TouchableOpacity style={st.primaryBtn} onPress={() => navigation.replace('BusinessKYCForm')} activeOpacity={0.85}>
-              <LinearGradient colors={[T.primary, '#93000d']} style={st.primaryBtnGrad}>
-                <Feather name="refresh-cw" size={18} color="#FFF" />
-                <Text style={st.primaryBtnText}>Re-submit Business Details</Text>
-              </LinearGradient>
+            <TouchableOpacity style={[st.primaryBtn, { backgroundColor: T.text }]} onPress={() => navigation.replace('BusinessKYCForm')} activeOpacity={0.85}>
+              <Feather name="refresh-cw" size={20} color={T.background} />
+              <Text style={[st.primaryBtnText, { color: T.background }]}>Re-submit Business Details</Text>
             </TouchableOpacity>
           )}
 
           <TouchableOpacity
-            style={[st.ghostBtn, { backgroundColor: T.surfaceLow, borderColor: T.border }]}
+            style={[st.ghostBtn, { backgroundColor: 'transparent' }]}
             onPress={() => navigation.navigate('Main')}
             activeOpacity={0.7}
           >
-            <Text style={[st.ghostBtnText, { color: T.text }]}>Back to Dashboard</Text>
+            <Text style={[st.ghostBtnText, { color: T.textDim }]}>Return to Dashboard</Text>
           </TouchableOpacity>
         </View>
       </Animated.ScrollView>
@@ -349,70 +313,60 @@ const st = StyleSheet.create({
 
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingBottom: 16,
-    borderBottomWidth: 1,
   },
-  headerBtn:   { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 18, fontFamily: Fonts.extraBold, letterSpacing: -0.5 },
+  headerBtn:   { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 18, fontFamily: Fonts.bold },
 
-  scroll: { paddingHorizontal: 20, paddingBottom: 60, paddingTop: 16 },
+  scroll: { paddingHorizontal: 24, paddingBottom: 60, paddingTop: 16 },
 
   heroWrap: {
     alignItems: 'center',
-    paddingTop: 24,
-    paddingBottom: 24,
-    paddingHorizontal: 16,
-    borderRadius: 24,
-    borderWidth: 1,
-    overflow: 'hidden',
-    marginBottom: 16,
+    paddingTop: 16,
+    paddingBottom: 32,
   },
-  heroGrad: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
-  iconWrap: { width: ICON_SIZE + 32, height: ICON_SIZE + 32, alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
-  ring:     { position: 'absolute', width: ICON_SIZE + 18, height: ICON_SIZE + 18, borderRadius: (ICON_SIZE + 18) / 2, borderWidth: 1 },
-  iconCircle: { width: ICON_SIZE, height: ICON_SIZE, borderRadius: ICON_SIZE / 2, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  iconWrap: { width: ICON_SIZE + 40, height: ICON_SIZE + 40, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
+  glowingOrb: { position: 'absolute', width: ICON_SIZE + 40, height: ICON_SIZE + 40, borderRadius: (ICON_SIZE + 40) / 2 },
+  iconCircle: { width: ICON_SIZE, height: ICON_SIZE, borderRadius: ICON_SIZE / 2, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 10 },
 
-  statusBadge:     { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, marginBottom: 14 },
-  statusDot:       { width: 6, height: 6, borderRadius: 3 },
-  statusBadgeText: { fontSize: 10, fontFamily: Fonts.extraBold, letterSpacing: 0.8 },
-  heroTitle:       { fontSize: 24, fontFamily: Fonts.extraBold, textAlign: 'center', letterSpacing: -0.5, marginBottom: 8 },
-  heroSub:         { fontSize: 13, fontFamily: Fonts.medium, textAlign: 'center', lineHeight: 20, paddingHorizontal: 8 },
-  refreshPill:     { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 14, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
-  refreshPillText: { fontSize: 11, fontFamily: Fonts.bold },
+  statusBadge:     { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20, marginBottom: 16 },
+  statusBadgeText: { fontSize: 12, fontFamily: Fonts.bold, letterSpacing: 1 },
+  heroTitle:       { fontSize: 32, fontFamily: Fonts.extraBold, textAlign: 'center', letterSpacing: -1, marginBottom: 12 },
+  heroSub:         { fontSize: 16, fontFamily: Fonts.medium, textAlign: 'center', lineHeight: 24 },
 
-  card:       { borderRadius: 24, borderWidth: 1, padding: 20, marginBottom: 16 },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
-  cardIconBox:{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  cardLabel:  { fontSize: 10, fontFamily: Fonts.extraBold, letterSpacing: 1.2 },
-  cardBody:   { fontSize: 13, fontFamily: Fonts.medium, lineHeight: 20 },
+  card:       { borderRadius: 24, padding: 24, marginBottom: 20 },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
+  cardIconBox:{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  cardLabel:  { fontSize: 13, fontFamily: Fonts.bold, letterSpacing: 1, textTransform: 'uppercase' },
+  cardBody:   { fontSize: 15, fontFamily: Fonts.medium, lineHeight: 22 },
 
-  stepRow:   { flexDirection: 'row', gap: 14, marginBottom: 12 },
-  stepLeft:  { alignItems: 'center', width: 22 },
-  stepDot:   { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  stepInner: { width: 7, height: 7, borderRadius: 3.5 },
-  stepRight: { flex: 1 },
-  stepLabel: { fontSize: 13, fontFamily: Fonts.bold },
-  stepSub:   { fontSize: 12, fontFamily: Fonts.medium },
-  pill:      { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
-  pillText:  { fontSize: 9, fontFamily: Fonts.extraBold },
+  stepRow:   { flexDirection: 'row', gap: 16, marginBottom: 4 },
+  stepLeft:  { alignItems: 'center', width: 24 },
+  stepDot:   { width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  stepInner: { width: 8, height: 8, borderRadius: 4 },
+  stepLine:  { width: 2, flex: 1, minHeight: 20, marginVertical: 4 },
+  stepRight: { flex: 1, paddingBottom: 20 },
+  stepLabel: { fontSize: 15, fontFamily: Fonts.bold },
+  stepSub:   { fontSize: 13, fontFamily: Fonts.medium, marginTop: 2 },
+  pill:      { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  pillText:  { fontSize: 10, fontFamily: Fonts.bold },
 
-  etaRow:  { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14, padding: 12, borderRadius: 12, borderWidth: 1 },
-  etaText: { fontSize: 12, fontFamily: Fonts.bold },
+  etaRow:  { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14, padding: 16, borderRadius: 16, borderWidth: 1 },
+  etaText: { fontSize: 14, fontFamily: Fonts.bold },
 
-  featureRow:  { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 16 },
-  featureIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  featureLabel:{ fontSize: 13, fontFamily: Fonts.bold, marginBottom: 2 },
-  featureSub:  { fontSize: 12, fontFamily: Fonts.medium, lineHeight: 16 },
+  featureRow:  { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 24, paddingVertical: 20 },
+  featureIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  featureLabel:{ fontSize: 15, fontFamily: Fonts.bold, marginBottom: 2 },
+  featureSub:  { fontSize: 13, fontFamily: Fonts.medium, lineHeight: 18 },
 
-  bulletRow:  { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 8 },
-  bullet:     { width: 5, height: 5, borderRadius: 2.5, marginTop: 7 },
-  bulletText: { flex: 1, fontSize: 12, fontFamily: Fonts.medium, lineHeight: 18 },
+  bulletRow:  { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 10 },
+  bullet:     { width: 6, height: 6, borderRadius: 3, marginTop: 8 },
+  bulletText: { flex: 1, fontSize: 14, fontFamily: Fonts.medium, lineHeight: 20 },
 
-  actions:        { gap: 12, marginTop: 8 },
-  primaryBtn:     { borderRadius: 32, overflow: 'hidden' },
-  primaryBtnGrad: { height: 60, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
-  primaryBtnText: { color: '#FFF', fontSize: 15, fontFamily: Fonts.extraBold, letterSpacing: 0.5 },
-  ghostBtn:       { height: 60, borderRadius: 32, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
-  ghostBtnText:   { fontSize: 15, fontFamily: Fonts.bold },
+  actions:        { gap: 16, marginTop: 16 },
+  primaryBtn:     { height: 64, borderRadius: 32, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
+  primaryBtnText: { fontSize: 18, fontFamily: Fonts.bold },
+  ghostBtn:       { height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
+  ghostBtnText:   { fontSize: 16, fontFamily: Fonts.bold },
 });
