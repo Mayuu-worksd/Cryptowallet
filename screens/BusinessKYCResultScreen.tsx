@@ -280,7 +280,7 @@ export default function BusinessKYCResultScreen({ navigation }: any) {
                 <Feather name="briefcase" size={20} color="#FFF" />
                 <Text style={[st.primaryBtnText, { color: '#FFF' }]}>Merchant Dashboard</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[st.primaryBtn, { backgroundColor: T.surfaceLow, marginTop: 12 }]} onPress={() => navigation.navigate('BusinessKYCForm')} activeOpacity={0.85}>
+              <TouchableOpacity style={[st.primaryBtn, { backgroundColor: T.surfaceLow, marginTop: 12 }]} onPress={() => navigation.navigate('BusinessKYCForm', { edit: true })} activeOpacity={0.85}>
                 <Feather name="edit-2" size={20} color={T.text} />
                 <Text style={[st.primaryBtnText, { color: T.text }]}>Edit Business Details</Text>
               </TouchableOpacity>

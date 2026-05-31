@@ -34,9 +34,9 @@ export default function MerchantDashboardScreen({ navigation }: any) {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const MENU = [
-    { icon: 'qr-code', label: 'QR Generator',   sub: 'Accept crypto',     screen: 'MerchantQR',    color: '#10B981' },
-    { icon: 'user',    label: 'My Profile',     sub: 'Status & Info',     screen: 'BusinessKYCResult', color: T.primary },
-    { icon: 'repeat',  label: 'P2P Trading',    sub: 'Marketplace',       screen: 'P2PMarketplace', color: '#8B5CF6', badge: pending },
+    { icon: 'aperture',    label: 'POS Terminal',   sub: 'Accept crypto',     screen: 'MerchantQR',    color: '#10B981' },
+    { icon: 'user',        label: 'My Profile',     sub: 'Status & Info',     screen: 'BusinessKYCResult', color: T.primary },
+    { icon: 'repeat',      label: 'P2P Trading',    sub: 'Marketplace',       screen: 'P2PMarketplace', color: '#8B5CF6', badge: pending },
     { icon: 'bar-chart-2', label: 'My Orders',  sub: 'P2P History',       screen: 'MyP2POrders',   color: '#F59E0B' },
   ];
 
@@ -181,22 +181,26 @@ export default function MerchantDashboardScreen({ navigation }: any) {
       </View>
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-        {/* Business Card */}
-        <View style={[s.bizCard, { backgroundColor: T.primary + '12', borderColor: T.primary + '25' }]}>
-          <View style={[s.bizIconWrap, { backgroundColor: T.primary + '20' }]}>
+        {/* Sleek Fintech Hero Card */}
+        <LinearGradient
+          colors={isDarkMode ? ['#1A1D24', '#13151A'] : ['#F8FAFC', '#F1F5F9']}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+          style={[s.bizCard, { borderColor: isDarkMode ? '#2A2D35' : '#E2E8F0' }]}
+        >
+          <View style={[s.bizIconWrap, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : '#FFF', borderColor: isDarkMode ? 'rgba(255,255,255,0.1)' : '#E2E8F0', borderWidth: 1 }]}>
             <Feather name="briefcase" size={24} color={T.primary} />
           </View>
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Text style={[s.bizName, { color: T.text }]}>{business?.business_name ?? 'Your Business'}</Text>
-              <View style={[s.verifiedBadge, { backgroundColor: '#10B981' + '20' }]}>
+              <View style={[s.verifiedBadge, { backgroundColor: 'rgba(16,185,129,0.1)' }]}>
                 <Feather name="check-circle" size={11} color="#10B981" />
                 <Text style={s.verifiedText}>VERIFIED</Text>
               </View>
             </View>
-            <Text style={[s.bizType, { color: T.textMuted }]}>{business?.business_type} · {business?.country}</Text>
+            <Text style={[s.bizType, { color: T.textDim }]}>{business?.business_type} · {business?.country}</Text>
           </View>
-        </View>
+        </LinearGradient>
 
         {/* Stats Row */}
         <View style={s.statsRow}>
@@ -248,23 +252,23 @@ const s = StyleSheet.create({
   iconBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '800' },
   scroll: { paddingHorizontal: 20, paddingBottom: 80, paddingTop: 24 },
-  bizCard: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 20, borderRadius: 20, borderWidth: 1, marginBottom: 20 },
-  bizIconWrap: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
-  bizName: { fontSize: 16, fontWeight: '900' },
-  bizType: { fontSize: 13, marginTop: 2 },
-  verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
-  verifiedText: { fontSize: 9, fontWeight: '900', color: '#10B981', letterSpacing: 0.5 },
-  statsRow: { flexDirection: 'row', gap: 10, marginBottom: 28 },
-  statCard: { flex: 1, alignItems: 'center', padding: 16, borderRadius: 16, borderWidth: 1 },
-  statValue: { fontSize: 20, fontWeight: '900', marginBottom: 4 },
-  statLabel: { fontSize: 11, fontWeight: '600' },
-  sectionLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 1.5, marginBottom: 12 },
-  gridContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  gridCard: { width: '48%', padding: 20, borderRadius: 20, borderWidth: 1, marginBottom: 12, alignItems: 'center' },
-  gridIcon: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  bizCard: { flexDirection: 'row', alignItems: 'center', padding: 20, borderRadius: 24, borderWidth: 1, marginBottom: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.1, shadowRadius: 16, elevation: 8 },
+  bizIconWrap: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+  bizName: { fontSize: 18, fontWeight: '800', marginBottom: 2 },
+  bizType: { fontSize: 13, fontWeight: '600', marginTop: 4 },
+  verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  verifiedText: { fontSize: 10, fontWeight: '900', color: '#10B981', letterSpacing: 0.5 },
+  statsRow: { flexDirection: 'row', gap: 12, marginBottom: 28 },
+  statCard: { flex: 1, alignItems: 'flex-start', padding: 16, borderRadius: 20, borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  statValue: { fontSize: 22, fontWeight: '900', marginBottom: 4, letterSpacing: -0.5 },
+  statLabel: { fontSize: 11, fontWeight: '700' },
+  sectionLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 1.5, marginBottom: 16 },
+  gridContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  gridCard: { width: '48%', padding: 20, borderRadius: 24, borderWidth: 1, marginBottom: 16, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 4 },
+  gridIcon: { width: 56, height: 56, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   gridTextWrap: { alignItems: 'center' },
-  gridLabel: { fontSize: 15, fontWeight: '800', marginBottom: 4, textAlign: 'center' },
-  gridSub: { fontSize: 11, textAlign: 'center', lineHeight: 14 },
+  gridLabel: { fontSize: 15, fontWeight: '800', marginBottom: 6, textAlign: 'center' },
+  gridSub: { fontSize: 12, textAlign: 'center', lineHeight: 16, fontWeight: '500' },
   notifBadge: { position: 'absolute', top: 12, right: 12, width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   notifText: { color: '#FFF', fontSize: 11, fontWeight: '900' },
   emptyIcon: { width: 90, height: 90, borderRadius: 45, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
