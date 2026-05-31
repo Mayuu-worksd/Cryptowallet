@@ -3,9 +3,11 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Platfo
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useWallet } from '../store/WalletContext';
 import { Theme } from '../constants';
 import { merchantQRService } from '../services/merchantService';
+import TokenIcon from '../components/TokenIcon';
 
 const TOKENS = ['ETH', 'USDC', 'USDT', 'BTC', 'SOL', 'BNB', 'XRP', 'TON', 'TRX', 'SUI'];
 
@@ -78,18 +80,32 @@ export default function MerchantQRScreen({ navigation }: any) {
         </TouchableOpacity>
 
         {/* Token Selector */}
-        <Text style={[s.label, { color: T.textDim }]}>SELECT TOKEN</Text>
-        <View style={s.tokenRow}>
-          {TOKENS.map(t => (
-            <TouchableOpacity
-              key={t}
-              style={[s.tokenBtn, { backgroundColor: token === t ? T.primary : T.surface, borderColor: token === t ? T.primary : T.border }]}
-              onPress={() => setToken(t)}
-              activeOpacity={0.8}
-            >
-              <Text style={[s.tokenBtnText, { color: token === t ? '#FFF' : T.textMuted }]}>{t}</Text>
-            </TouchableOpacity>
-          ))}
+        <Text style={[s.label, { color: T.textDim }]}>SELECT ASSET</Text>
+        <View style={{ marginHorizontal: -20, marginBottom: 24 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }}>
+            {TOKENS.map(t => {
+              const active = token === t;
+              return (
+                <TouchableOpacity
+                  key={t}
+                  style={[s.tokenCard, { 
+                    backgroundColor: active ? T.primary + '15' : T.surface, 
+                    borderColor: active ? T.primary : T.border 
+                  }]}
+                  onPress={() => setToken(t)}
+                  activeOpacity={0.8}
+                >
+                  <TokenIcon token={t} size={32} />
+                  <Text style={[s.tokenCardText, { color: active ? T.text : T.textMuted }]}>{t}</Text>
+                  {active && (
+                    <View style={[s.tokenCheck, { backgroundColor: T.primary }]}>
+                      <Feather name="check" size={10} color="#FFF" />
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
         </View>
 
         {/* Amount */}
@@ -127,23 +143,29 @@ export default function MerchantQRScreen({ navigation }: any) {
         {/* QR Display */}
         {qrString ? (
           <View style={[s.qrCard, { backgroundColor: T.surface, borderColor: T.border }]}>
+            <LinearGradient colors={[T.primary + '20', 'transparent']} style={s.qrGradientTop} />
             <View style={s.qrWrap}>
-              <QRCode value={qrString} size={200} color={isDarkMode ? '#FFF' : '#000'} backgroundColor="transparent" />
+              <View style={[s.qrCodeWrapper, { borderColor: T.border, backgroundColor: isDarkMode ? '#FFF' : '#FFF' }]}>
+                <QRCode value={qrString} size={220} color="#000" backgroundColor="transparent" />
+              </View>
             </View>
 
             <View style={[s.qrInfo, { borderTopColor: T.border }]}>
-              <Text style={[s.qrInfoLabel, { color: T.textDim }]}>Token</Text>
-              <Text style={[s.qrInfoValue, { color: T.text }]}>{token}</Text>
+              <Text style={[s.qrInfoLabel, { color: T.textDim }]}>Payment Asset</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <TokenIcon token={token} size={18} />
+                <Text style={[s.qrInfoValue, { color: T.text }]}>{token}</Text>
+              </View>
             </View>
             {amount ? (
               <View style={[s.qrInfo, { borderTopColor: T.border }]}>
-                <Text style={[s.qrInfoLabel, { color: T.textDim }]}>Amount</Text>
+                <Text style={[s.qrInfoLabel, { color: T.textDim }]}>Amount Requested</Text>
                 <Text style={[s.qrInfoValue, { color: T.text }]}>{amount} {token}</Text>
               </View>
             ) : null}
             {reference ? (
               <View style={[s.qrInfo, { borderTopColor: T.border }]}>
-                <Text style={[s.qrInfoLabel, { color: T.textDim }]}>Reference</Text>
+                <Text style={[s.qrInfoLabel, { color: T.textDim }]}>Reference Note</Text>
                 <Text style={[s.qrInfoValue, { color: T.text }]}>{reference}</Text>
               </View>
             ) : null}
@@ -151,16 +173,16 @@ export default function MerchantQRScreen({ navigation }: any) {
             <View style={s.qrActions}>
               <TouchableOpacity style={[s.qrActionBtn, { backgroundColor: T.surfaceLow, borderColor: T.border }]} onPress={handleShare} activeOpacity={0.8}>
                 <Feather name="share-2" size={16} color={T.text} />
-                <Text style={[s.qrActionText, { color: T.text }]}>Share</Text>
+                <Text style={[s.qrActionText, { color: T.text }]}>Share QR</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[s.qrActionBtn, { backgroundColor: saved ? '#10B981' + '20' : T.primary + '15', borderColor: saved ? '#10B981' : T.primary }]}
+                style={[s.qrActionBtn, { backgroundColor: saved ? '#10B981' + '15' : T.primary + '15', borderColor: saved ? '#10B981' : T.primary }]}
                 onPress={handleSave}
                 disabled={saving || saved}
                 activeOpacity={0.8}
               >
                 {saving ? <ActivityIndicator size="small" color={T.primary} /> : <Feather name={saved ? 'check' : 'bookmark'} size={16} color={saved ? '#10B981' : T.primary} />}
-                <Text style={[s.qrActionText, { color: saved ? '#10B981' : T.primary }]}>{saved ? 'Saved!' : 'Save'}</Text>
+                <Text style={[s.qrActionText, { color: saved ? '#10B981' : T.primary }]}>{saved ? 'Saved' : 'Save to Gallery'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -180,21 +202,23 @@ const s = StyleSheet.create({
   allInOneIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   allInOneTitle: { fontSize: 15, fontWeight: '800', marginBottom: 2 },
   allInOneSub: { fontSize: 12 },
-  label: { fontSize: 11, fontWeight: '800', letterSpacing: 1.5, marginBottom: 10 },
-  tokenRow: { flexDirection: 'row', gap: 10, marginBottom: 24 },
-  tokenBtn: { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 14, borderWidth: 1.5 },
-  tokenBtnText: { fontSize: 13, fontWeight: '800' },
-  input: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 14, paddingHorizontal: 16, height: 54, marginBottom: 20 },
-  inputText: { flex: 1, fontSize: 15, fontWeight: '600' },
-  inputSuffix: { fontSize: 13, fontWeight: '700' },
-  generateBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, height: 58, borderRadius: 18, marginBottom: 28, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.25, shadowRadius: 10, elevation: 6 },
+  label: { fontSize: 11, fontWeight: '800', letterSpacing: 1.5, marginBottom: 12 },
+  tokenCard: { width: 85, height: 90, alignItems: 'center', justifyContent: 'center', borderRadius: 20, borderWidth: 1.5, padding: 8 },
+  tokenCardText: { fontSize: 13, fontWeight: '800', marginTop: 8 },
+  tokenCheck: { position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#101114' },
+  input: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 16, paddingHorizontal: 18, height: 58, marginBottom: 24 },
+  inputText: { flex: 1, fontSize: 16, fontWeight: '600' },
+  inputSuffix: { fontSize: 14, fontWeight: '700' },
+  generateBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, height: 60, borderRadius: 20, marginBottom: 32, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 },
   generateBtnText: { color: '#FFF', fontSize: 16, fontWeight: '900' },
-  qrCard: { borderRadius: 24, borderWidth: 1, overflow: 'hidden', marginBottom: 20 },
-  qrWrap: { alignItems: 'center', padding: 32 },
-  qrInfo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderTopWidth: 1 },
+  qrCard: { borderRadius: 28, borderWidth: 1, overflow: 'hidden', marginBottom: 20 },
+  qrGradientTop: { position: 'absolute', top: 0, left: 0, right: 0, height: 140, opacity: 0.8 },
+  qrWrap: { alignItems: 'center', padding: 40, paddingTop: 48 },
+  qrCodeWrapper: { padding: 16, borderRadius: 24, borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 10 },
+  qrInfo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 18, borderTopWidth: 1 },
   qrInfoLabel: { fontSize: 13, fontWeight: '600' },
-  qrInfoValue: { fontSize: 14, fontWeight: '700' },
-  qrActions: { flexDirection: 'row', gap: 12, padding: 16 },
-  qrActionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, borderRadius: 14, borderWidth: 1 },
+  qrInfoValue: { fontSize: 15, fontWeight: '800' },
+  qrActions: { flexDirection: 'row', gap: 12, padding: 20, paddingTop: 10 },
+  qrActionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 54, borderRadius: 16, borderWidth: 1 },
   qrActionText: { fontSize: 14, fontWeight: '800' },
 });

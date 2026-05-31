@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import { useWallet } from '../store/WalletContext';
 import { Theme } from '../constants';
@@ -181,22 +182,27 @@ export default function MerchantDashboardScreen({ navigation }: any) {
       </View>
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-        {/* Business Card */}
-        <View style={[s.bizCard, { backgroundColor: T.primary + '12', borderColor: T.primary + '25' }]}>
-          <View style={[s.bizIconWrap, { backgroundColor: T.primary + '20' }]}>
-            <Feather name="briefcase" size={24} color={T.primary} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={[s.bizName, { color: T.text }]}>{business?.business_name ?? 'Your Business'}</Text>
-              <View style={[s.verifiedBadge, { backgroundColor: '#10B981' + '20' }]}>
-                <Feather name="check-circle" size={11} color="#10B981" />
-                <Text style={s.verifiedText}>VERIFIED</Text>
-              </View>
+        {/* Premium Business Hero Card */}
+        <LinearGradient
+          colors={isDarkMode ? [T.primary + 'CC', T.primary + '55'] : [T.primary, T.primary + 'DD']}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+          style={s.bizCard}
+        >
+          <View style={s.bizTop}>
+            <View style={[s.bizIconWrap, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+              <Feather name="briefcase" size={24} color="#FFF" />
             </View>
-            <Text style={[s.bizType, { color: T.textMuted }]}>{business?.business_type} · {business?.country}</Text>
+            <View style={[s.verifiedBadge, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+              <Feather name="check-circle" size={12} color="#FFF" />
+              <Text style={s.verifiedText}>VERIFIED</Text>
+            </View>
           </View>
-        </View>
+          
+          <View style={s.bizBottom}>
+            <Text style={s.bizName}>{business?.business_name ?? 'Your Business'}</Text>
+            <Text style={s.bizType}>{business?.business_type} • {business?.country}</Text>
+          </View>
+        </LinearGradient>
 
         {/* Stats Row */}
         <View style={s.statsRow}>
@@ -248,12 +254,14 @@ const s = StyleSheet.create({
   iconBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '800' },
   scroll: { paddingHorizontal: 20, paddingBottom: 80, paddingTop: 24 },
-  bizCard: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 20, borderRadius: 20, borderWidth: 1, marginBottom: 20 },
-  bizIconWrap: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
-  bizName: { fontSize: 16, fontWeight: '900' },
-  bizType: { fontSize: 13, marginTop: 2 },
-  verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
-  verifiedText: { fontSize: 9, fontWeight: '900', color: '#10B981', letterSpacing: 0.5 },
+  bizCard: { padding: 24, borderRadius: 24, marginBottom: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 12, minHeight: 160, justifyContent: 'space-between' },
+  bizTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  bizBottom: { marginTop: 20 },
+  bizIconWrap: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  bizName: { fontSize: 22, fontWeight: '900', color: '#FFF', marginBottom: 4 },
+  bizType: { fontSize: 14, color: 'rgba(255,255,255,0.8)', fontWeight: '600' },
+  verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
+  verifiedText: { fontSize: 10, fontWeight: '900', color: '#FFF', letterSpacing: 0.5 },
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 28 },
   statCard: { flex: 1, alignItems: 'center', padding: 16, borderRadius: 16, borderWidth: 1 },
   statValue: { fontSize: 20, fontWeight: '900', marginBottom: 4 },
