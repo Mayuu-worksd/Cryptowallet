@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
   ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { CARD_DESIGNS, CardDesignKey } from './CardDesigns';
@@ -18,6 +19,7 @@ export default function CreateCardFlow({ onComplete, onCancel }: Props) {
   const [holderName, setHolderName]         = useState('');
   const [selectedDesign, setSelectedDesign] = useState<CardDesignKey>('dark');
   const [nameError, setNameError]           = useState('');
+  const insets = useSafeAreaInsets();
 
   const handleStep1Next = () => {
     if (!holderName.trim()) { setNameError('Card holder name is required'); return; }
@@ -36,8 +38,8 @@ export default function CreateCardFlow({ onComplete, onCancel }: Props) {
     return (
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.container}>
-          <View style={styles.topBar}>
-            <TouchableOpacity onPress={onCancel} style={styles.backBtn}>
+          <View style={[styles.topBar, { paddingTop: Math.max(insets.top + 10, 50) }]}>
+            <TouchableOpacity onPress={onCancel} style={styles.backBtn} activeOpacity={0.7} hitSlop={{top:15, bottom:15, left:15, right:15}}>
               <Feather name="x" size={20} color="rgba(255,255,255,0.8)" />
             </TouchableOpacity>
             <StepDots current={1} />
@@ -91,8 +93,8 @@ export default function CreateCardFlow({ onComplete, onCancel }: Props) {
   if (step === 2) {
     return (
       <View style={styles.container}>
-        <View style={styles.topBar}>
-          <TouchableOpacity onPress={() => setStep(1)} style={styles.backBtn}>
+        <View style={[styles.topBar, { paddingTop: Math.max(insets.top + 10, 50) }]}>
+          <TouchableOpacity onPress={() => setStep(1)} style={styles.backBtn} activeOpacity={0.7} hitSlop={{top:15, bottom:15, left:15, right:15}}>
             <Feather name="arrow-left" size={20} color="rgba(255,255,255,0.8)" />
           </TouchableOpacity>
           <StepDots current={2} />
@@ -180,7 +182,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 60,
     paddingBottom: 20,
   },
   backBtn: {
