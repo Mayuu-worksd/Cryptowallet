@@ -38,23 +38,33 @@ export default function CreateCardFlow({ onComplete, onCancel }: Props) {
         <View style={styles.container}>
           <View style={styles.topBar}>
             <TouchableOpacity onPress={onCancel} style={styles.backBtn}>
-              <Feather name="x" size={18} color="rgba(255,255,255,0.6)" />
+              <Feather name="x" size={20} color="rgba(255,255,255,0.8)" />
             </TouchableOpacity>
             <StepDots current={1} />
-            <View style={{ width: 36 }} />
+            <View style={{ width: 40 }} />
           </View>
 
-          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             <Text style={styles.stepLabel}>STEP 1 OF 2</Text>
-            <Text style={styles.title}>Card Details</Text>
-            <Text style={styles.subtitle}>Enter your name exactly as you want it on the card</Text>
+            <Text style={styles.title}>Personalize Your Card</Text>
+            <Text style={styles.subtitle}>Enter your name as it will appear on your premium virtual card.</Text>
+
+            {/* Live Preview in Step 1 */}
+            <View style={styles.livePreviewWrap}>
+              <CardPreview
+                cardNumber="•••• •••• •••• ••••"
+                holderName={holderName || 'YOUR NAME'}
+                expiry="••/••"
+                designKey="dark"
+              />
+            </View>
 
             <View style={styles.fieldWrap}>
               <Text style={styles.fieldLabel}>CARD HOLDER NAME</Text>
               <TextInput
                 style={[styles.input, !!nameError && styles.inputError]}
                 placeholder="e.g. JOHN DOE"
-                placeholderTextColor="rgba(255,255,255,0.2)"
+                placeholderTextColor="rgba(255,255,255,0.15)"
                 value={holderName}
                 onChangeText={t => { setHolderName(t.toUpperCase()); setNameError(''); }}
                 autoCapitalize="characters"
@@ -62,13 +72,13 @@ export default function CreateCardFlow({ onComplete, onCancel }: Props) {
                 autoFocus
               />
               {!!nameError && <Text style={styles.errorText}>{nameError}</Text>}
-              <Text style={styles.hint}>Displayed in uppercase on your card</Text>
+              <Text style={styles.hint}>This name will be embossed on your virtual card</Text>
             </View>
 
-            <TouchableOpacity onPress={handleStep1Next} activeOpacity={0.85}>
+            <TouchableOpacity onPress={handleStep1Next} activeOpacity={0.85} style={styles.btnWrapper}>
               <LinearGradient colors={['#ff544e', '#8b201f']} style={styles.primaryBtn}>
-                <Text style={styles.primaryBtnText}>Continue</Text>
-                <Feather name="arrow-right" size={17} color="#FFF" />
+                <Text style={styles.primaryBtnText}>Continue to Design</Text>
+                <Feather name="arrow-right" size={18} color="#FFF" />
               </LinearGradient>
             </TouchableOpacity>
           </ScrollView>
@@ -83,19 +93,19 @@ export default function CreateCardFlow({ onComplete, onCancel }: Props) {
       <View style={styles.container}>
         <View style={styles.topBar}>
           <TouchableOpacity onPress={() => setStep(1)} style={styles.backBtn}>
-            <Feather name="arrow-left" size={18} color="rgba(255,255,255,0.6)" />
+            <Feather name="arrow-left" size={20} color="rgba(255,255,255,0.8)" />
           </TouchableOpacity>
           <StepDots current={2} />
-          <View style={{ width: 36 }} />
+          <View style={{ width: 40 }} />
         </View>
 
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <Text style={styles.stepLabel}>STEP 2 OF 2</Text>
-          <Text style={styles.title}>Choose Design</Text>
-          <Text style={styles.subtitle}>Pick a style for your virtual card</Text>
+          <Text style={styles.title}>Choose Your Style</Text>
+          <Text style={styles.subtitle}>Select a premium finish for your virtual card.</Text>
 
           {/* Live preview of selected design */}
-          <View style={styles.previewWrap}>
+          <View style={styles.livePreviewWrap}>
             <CardPreview
               cardNumber="•••• •••• •••• ••••"
               holderName={holderName || 'YOUR NAME'}
@@ -123,16 +133,16 @@ export default function CreateCardFlow({ onComplete, onCancel }: Props) {
                   <Text style={[styles.designLabel, selectedDesign === d.key && styles.designLabelActive]}>
                     {d.label}
                   </Text>
-                  {selectedDesign === d.key && <Feather name="check-circle" size={14} color="#FF3B3B" />}
+                  {selectedDesign === d.key && <Feather name="check-circle" size={16} color="#FF3B3B" />}
                 </View>
               </TouchableOpacity>
             ))}
           </View>
 
-          <TouchableOpacity onPress={handleCreate} activeOpacity={0.85}>
+          <TouchableOpacity onPress={handleCreate} activeOpacity={0.85} style={styles.btnWrapper}>
             <LinearGradient colors={['#ff544e', '#8b201f']} style={styles.primaryBtn}>
-              <Text style={styles.primaryBtnText}>Create My Card</Text>
-              <Feather name="credit-card" size={17} color="#FFF" />
+              <Text style={styles.primaryBtnText}>Activate Virtual Card</Text>
+              <Feather name="credit-card" size={18} color="#FFF" />
             </LinearGradient>
           </TouchableOpacity>
         </ScrollView>
@@ -144,92 +154,207 @@ export default function CreateCardFlow({ onComplete, onCancel }: Props) {
   return (
     <View style={[styles.container, styles.creatingWrap]}>
       <ActivityIndicator size="large" color="#FF3B3B" />
-      <Text style={styles.creatingTitle}>Creating your card</Text>
-      <Text style={styles.creatingSub}>Generating secure card details…</Text>
+      <Text style={styles.creatingTitle}>Activating Card</Text>
+      <Text style={styles.creatingSub}>Generating your secure virtual credentials...</Text>
     </View>
   );
 }
 
-function StepDots({ current }: { current: number }) {
+function StepDots({ current }: { current: 1 | 2 }) {
   return (
-    <View style={{ flexDirection: 'row', gap: 8 }}>
-      {[1, 2].map(s => (
-        <View key={s} style={[dotStyles.dot, current >= s && dotStyles.dotActive]} />
-      ))}
+    <View style={styles.dotsRow}>
+      <View style={[styles.dot, current >= 1 && styles.dotActive]} />
+      <View style={[styles.dot, current >= 2 && styles.dotActive]} />
     </View>
   );
 }
-
-const dotStyles = StyleSheet.create({
-  dot: { width: 28, height: 4, borderRadius: 2, backgroundColor: '#2a2a2a' },
-  dotActive: { backgroundColor: '#FF3B3B' },
-});
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  container: { flex: 1, backgroundColor: '#101114' },
+  container: {
+    flex: 1,
+    backgroundColor: '#0A0A0A',
+  },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 58 : 20,
-    paddingBottom: 16,
+    paddingTop: 60,
+    paddingBottom: 20,
   },
   backBtn: {
-    width: 36, height: 36, borderRadius: 12,
-    backgroundColor: '#1c1b1b',
+    width: 40, height: 40,
+    borderRadius: 20,
+    backgroundColor: '#1A1A1A',
     alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: '#333',
   },
-  content: { paddingHorizontal: 24, paddingBottom: 48 },
-  stepLabel: { fontSize: 11, fontWeight: '800', color: '#FF3B3B', letterSpacing: 1.5, marginBottom: 8 },
-  title: { fontSize: 28, fontWeight: '900', color: '#FFF', letterSpacing: -0.5, marginBottom: 8 },
-  subtitle: { fontSize: 14, color: 'rgba(255,255,255,0.45)', marginBottom: 32, lineHeight: 20 },
-  fieldWrap: { marginBottom: 28 },
-  fieldLabel: { fontSize: 10, fontWeight: '800', color: 'rgba(255,255,255,0.4)', letterSpacing: 1.2, marginBottom: 10 },
+  dotsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  dot: {
+    width: 24, height: 4,
+    borderRadius: 2,
+    backgroundColor: '#333',
+  },
+  dotActive: {
+    backgroundColor: '#FF3B3B',
+    shadowColor: '#FF3B3B',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  content: {
+    paddingHorizontal: 24,
+    paddingBottom: 60,
+    paddingTop: 10,
+  },
+  stepLabel: {
+    fontSize: 12,
+    fontFamily: 'Inter-Bold',
+    color: '#FF3B3B',
+    letterSpacing: 1.5,
+    marginBottom: 8,
+  },
+  title: {
+    fontSize: 32,
+    fontFamily: 'Outfit-Bold',
+    color: '#FFFFFF',
+    marginBottom: 8,
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    fontSize: 15,
+    fontFamily: 'Inter-Regular',
+    color: '#A0A0A0',
+    marginBottom: 30,
+    lineHeight: 22,
+  },
+  livePreviewWrap: {
+    marginBottom: 40,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.5,
+    shadowRadius: 30,
+    elevation: 15,
+  },
+  fieldWrap: {
+    marginBottom: 40,
+  },
+  fieldLabel: {
+    fontSize: 12,
+    fontFamily: 'Inter-SemiBold',
+    color: '#888',
+    letterSpacing: 1,
+    marginBottom: 10,
+  },
   input: {
-    backgroundColor: '#1c1b1b',
-    borderRadius: 14,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#FFF',
+    height: 60,
+    backgroundColor: '#141414',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)',
+    borderColor: '#333',
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    fontSize: 18,
+    fontFamily: 'Inter-SemiBold',
+    color: '#FFF',
+    letterSpacing: 1.5,
   },
-  inputError: { borderColor: '#FF3B3B' },
-  errorText: { color: '#FF3B3B', fontSize: 12, fontWeight: '600', marginTop: 6 },
-  hint: { fontSize: 11, color: 'rgba(255,255,255,0.25)', marginTop: 7 },
+  inputError: {
+    borderColor: '#FF3B3B',
+    backgroundColor: 'rgba(255,59,59,0.05)',
+  },
+  errorText: {
+    color: '#FF3B3B',
+    fontSize: 12,
+    fontFamily: 'Inter-Medium',
+    marginTop: 8,
+    marginLeft: 4,
+  },
+  hint: {
+    color: '#666',
+    fontSize: 13,
+    fontFamily: 'Inter-Regular',
+    marginTop: 10,
+    marginLeft: 4,
+  },
+  btnWrapper: {
+    marginTop: 10,
+    shadowColor: '#FF3B3B',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 8,
+  },
   primaryBtn: {
+    height: 60,
+    borderRadius: 30,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 18,
-    borderRadius: 16,
+    gap: 12,
   },
-  primaryBtnText: { color: '#FFF', fontSize: 16, fontWeight: '800' },
-  previewWrap: { marginBottom: 24 },
-  designGrid: { gap: 14, marginBottom: 24 },
+  primaryBtnText: {
+    color: '#FFF',
+    fontSize: 17,
+    fontFamily: 'Inter-Bold',
+    letterSpacing: 0.5,
+  },
+  previewWrap: {
+    marginBottom: 30,
+    alignItems: 'center',
+  },
+  designGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+    marginBottom: 40,
+  },
   designOption: {
-    borderRadius: 16,
+    width: '47%',
+    backgroundColor: '#141414',
+    borderRadius: 20,
+    padding: 12,
     borderWidth: 2,
     borderColor: 'transparent',
-    backgroundColor: '#1c1b1b',
-    padding: 12,
   },
-  designOptionSelected: { borderColor: '#FF3B3B' },
+  designOptionSelected: {
+    borderColor: '#FF3B3B',
+    backgroundColor: '#1A0B0B',
+  },
   designLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginTop: 14,
     paddingHorizontal: 4,
-    marginTop: 10,
   },
-  designLabel: { fontSize: 13, fontWeight: '700', color: 'rgba(255,255,255,0.45)' },
-  designLabelActive: { color: '#FFF' },
-  creatingWrap: { alignItems: 'center', justifyContent: 'center', gap: 14 },
-  creatingTitle: { fontSize: 20, fontWeight: '800', color: '#FFF', marginTop: 8 },
-  creatingSub: { fontSize: 14, color: 'rgba(255,255,255,0.4)' },
+  designLabel: {
+    color: '#888',
+    fontSize: 13,
+    fontFamily: 'Inter-SemiBold',
+  },
+  designLabelActive: {
+    color: '#FFF',
+  },
+  creatingWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  creatingTitle: {
+    color: '#FFF',
+    fontSize: 24,
+    fontFamily: 'Outfit-Bold',
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  creatingSub: {
+    color: '#888',
+    fontSize: 15,
+    fontFamily: 'Inter-Regular',
+  },
 });
