@@ -766,21 +766,21 @@ export function WalletProvider({ children }: { children: ReactNode }) {
                 ['cw_card_details', JSON.stringify(restoredDetails)],
               ]);
             } else if (savedCardCreated === 'true' && savedDetails) {
-              // Local card exists but not yet in Supabase — push it up
-              const localDetails = JSON.parse(savedDetails);
-              const last4 = (localDetails.number ?? '').replace(/\s/g, '').slice(-4) || '0000';
-              const [expMonth, expYear] = (localDetails.expiry ?? '12/28').split('/');
-              dbCardService.createCard({
-                wallet_address: address,
-                card_last4:     last4,
-                expiry_month:   expMonth ?? '12',
-                expiry_year:    expYear  ?? '28',
-                card_type:      'classic',
-                balance:        savedCard ? parseFloat(savedCard) : 0,
-                status:         'active',
-                holder_name:    localDetails.holderName ?? 'CARD HOLDER',
-                design:         localDetails.design ?? 'dark',
-              }).catch(() => {});
+              // Local card exists but not yet in Supabase — this is a leaked/stale card from another session!
+              // Wipe local card storage to prevent contamination
+              await AsyncStorage.multiRemove([
+                'cw_card_created', 'cw_card_balance', 'cw_card_details', 'cw_card_transactions'
+              ]);
+              setCardCreated(false);
+              setCardBalance(0);
+              setCardDetails({
+                number: '\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022',
+                expiry: '\u2022\u2022/\u2022\u2022',
+                cvv: '\u2022\u2022\u2022',
+                brand: 'VISA',
+                holderName: 'CARD HOLDER',
+                design: 'dark',
+              });
             }
 
             // ── Transaction restore: merge Supabase + AsyncStorage ──
