@@ -1106,6 +1106,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setCardBalance(0);
       setCardCreated(false);
       setCardTransactions([]);
+      setCardDetails({
+        number: '\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022',
+        expiry: '\u2022\u2022/\u2022\u2022',
+        cvv: '\u2022\u2022\u2022',
+        brand: 'VISA',
+        holderName: 'CARD HOLDER',
+        design: 'dark',
+      });
       setTransactions([]);
       setTronAddress('');
 
@@ -1118,6 +1126,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         'cw_transactions', 'cw_token_balances',
         'cw_locked_balance', 'cw_read_only',
         'tx_history_cache', 'swap_transactions',
+        'cw_card_created', 'cw_card_balance',
+        'cw_card_details', 'cw_card_transactions',
       ]);
 
       if (isNew || isSwitching) {
@@ -1436,11 +1446,25 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     clearWalletSession();
     await clearPin();
     await AsyncStorage.removeItem('cw_read_only');
+    await AsyncStorage.multiRemove([
+      'cw_card_created', 'cw_card_balance', 'cw_card_details', 'cw_card_transactions'
+    ]);
     // Fully reset in-memory state → App.tsx re-renders Landing stack
     setHasWallet(false);
     setWalletAddress('');
     setTronAddress('');
     setEthBalance('0.0');
+    setCardBalance(0);
+    setCardCreated(false);
+    setCardTransactions([]);
+    setCardDetails({
+      number: '\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022',
+      expiry: '\u2022\u2022/\u2022\u2022',
+      cvv: '\u2022\u2022\u2022',
+      brand: 'VISA',
+      holderName: 'CARD HOLDER',
+      design: 'dark',
+    });
     setIsReadOnly(false);
     setPinEnabled(false);
   }, []);
