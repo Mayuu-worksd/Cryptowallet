@@ -11,7 +11,7 @@ module.exports = {
     updates: {
       url: "https://u.expo.dev/8c882003-2f5c-42f8-963a-9bd47b068eab",
       enabled: true,
-      fallbackToCacheTimeout: 0,
+      fallbackToCacheTimeout: 10000,
       checkAutomatically: "ON_LOAD",
     },
     runtimeVersion: {
