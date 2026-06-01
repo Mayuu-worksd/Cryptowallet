@@ -3,6 +3,8 @@ const path = require('path');
 
 const config = getDefaultConfig(__dirname);
 
+config.maxWorkers = 1;
+
 // ── Fast Refresh + verbose logging ───────────────────────────────────────────
 config.server = {
   ...config.server,
