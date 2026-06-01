@@ -1134,6 +1134,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setBalances({ USDT: 0, USDC: 0, ETH: 0, BTC: 0, SOL: 0, BNB: 0, XRP: 0, TON: 0, TRX: 0, SUI: 0 });
         setEthBalance('0.0');
         setLockedBalance({});
+        setCardCreated(false);
+        setCardBalance(0);
+        setCardTransactions([]);
+        setCardDetails({
+          number: '\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022',
+          expiry: '\u2022\u2022/\u2022\u2022',
+          cvv: '\u2022\u2022\u2022',
+          brand: 'VISA',
+          holderName: 'CARD HOLDER',
+          design: 'dark',
+        });
       }
 
       await storageService.saveWallet(data.privateKey, data.mnemonic, data.address, data.tronAddress, data.tronPrivateKey);
@@ -1339,6 +1350,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             ['cw_card_balance', String(dbCard.balance)],
             ['cw_card_details', JSON.stringify(restoredDetails)],
           ]);
+        } else {
+          setCardCreated(false);
+          setCardBalance(0);
+          setCardDetails({
+            number: '\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022',
+            expiry: '\u2022\u2022/\u2022\u2022',
+            cvv: '\u2022\u2022\u2022',
+            brand: 'VISA',
+            holderName: 'CARD HOLDER',
+            design: 'dark',
+          });
         }
 
         // ── Restore card transactions ──
