@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
-import { Theme } from '../constants';
+import { Theme, Fonts } from '../constants';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   ActivityIndicator, Image, Platform, Animated, Dimensions, PanResponder,
+  Modal, Pressable
 } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import {
   Svg, Path, Defs, LinearGradient, Stop,
   Line, Circle, Rect, Text as SvgText,
@@ -19,20 +20,21 @@ const { width: SCREEN_W } = Dimensions.get('window');
 
 // Chart layout constants
 const H_PAD    = 24;
-const Y_AXIS_W = 58;
+const Y_AXIS_W = 0; // We will hide Y axis to match the image precisely or just keep it small. The image doesn't show a Y axis label for the chart, but let's keep the plot width full.
 const CHART_W  = SCREEN_W - H_PAD * 2;
-const PLOT_W   = CHART_W - Y_AXIS_W;
-const CHART_H  = 210;
+const PLOT_W   = CHART_W; 
+const CHART_H  = 220;
 const PAD_T    = 18;
 const PAD_B    = 18;
 const PLOT_H   = CHART_H - PAD_T - PAD_B;
 
 const RANGES = [
-  { label: '1D', days: 1   },
-  { label: '7D', days: 7   },
-  { label: '1M', days: 30  },
-  { label: '3M', days: 90  },
-  { label: '1Y', days: 365 },
+  { label: 'LIVE', days: 1   }, // placeholder for 1d
+  { label: '1H', days: 1     }, 
+  { label: '1D', days: 1     },
+  { label: '1W', days: 7     },
+  { label: '1M', days: 30    },
+  { label: '1Y', days: 365   },
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -57,9 +59,7 @@ interface TradingChartProps {
 const TradingChart = React.memo(({ prices, color, isDark, fiatSymbol }: TradingChartProps) => {
   const [crosshair, setCrosshair] = useState<{ xi: number } | null>(null);
 
-  const gridColor  = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
-  const labelColor = isDark ? 'rgba(255,255,255,0.4)'  : 'rgba(0,0,0,0.4)';
-  const tooltipBg  = isDark ? '#1c1b1b' : '#ffffff';
+  const tooltipBg  = isDark ? '#2A2B31' : '#ffffff';
   const tooltipTxt = isDark ? '#ffffff' : '#131313';
 
   // Downsample to max 120 pts
@@ -80,32 +80,12 @@ const TradingChart = React.memo(({ prices, color, isDark, fiatSymbol }: TradingC
   const ys = useMemo(() => sample.map(p => toY(p)), [sample, min, range]);
 
   const linePath = useMemo(() => buildBezierPath(xs, ys), [xs, ys]);
-  const areaPath = useMemo(() =>
-    linePath +
-    ` L ${xs[xs.length - 1].toFixed(1)} ${CHART_H}` +
-    ` L ${xs[0].toFixed(1)} ${CHART_H} Z`,
-    [linePath, xs]);
-
-  const fmtYLabel = useCallback((p: number): string => {
-    if (p >= 1_000_000) return `${fiatSymbol}${(p / 1_000_000).toFixed(2)}M`;
-    if (p >= 1_000)     return `${fiatSymbol}${(p / 1_000).toFixed(1)}k`;
-    if (p >= 1)         return `${fiatSymbol}${p.toFixed(2)}`;
-    return `${fiatSymbol}${p.toFixed(4)}`;
-  }, [fiatSymbol]);
 
   const fmtTooltip = useCallback((p: number): string => {
     if (p >= 1_000) return `${fiatSymbol}${p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     if (p >= 1)     return `${fiatSymbol}${p.toFixed(4)}`;
     return `${fiatSymbol}${p.toFixed(6)}`;
   }, [fiatSymbol]);
-
-  // 5 horizontal grid levels
-  const gridLevels = useMemo(() =>
-    [0, 0.25, 0.5, 0.75, 1].map(t => ({
-      y:     PAD_T + (1 - t) * PLOT_H,
-      label: fmtYLabel(min + t * range),
-    })),
-    [min, range, fmtYLabel]);
 
   // Crosshair data
   const cx = crosshair != null ? xs[crosshair.xi] : null;
@@ -135,35 +115,16 @@ const TradingChart = React.memo(({ prices, color, isDark, fiatSymbol }: TradingC
   }), []);
 
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+    <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginVertical: 10 }}>
       {/* ── Plot area (touch-enabled) ── */}
       <View {...panResponder.panHandlers} style={{ width: PLOT_W, height: CHART_H }}>
         <Svg width={PLOT_W} height={CHART_H}>
-          <Defs>
-            <LinearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor={color} stopOpacity="0.3" />
-              <Stop offset="1" stopColor={color} stopOpacity="0" />
-            </LinearGradient>
-          </Defs>
-
-          {/* Horizontal grid lines */}
-          {gridLevels.map((g, i) => (
-            <Line key={i}
-              x1={0} y1={g.y} x2={PLOT_W} y2={g.y}
-              stroke={gridColor} strokeWidth={1} strokeDasharray="4 5"
-            />
-          ))}
-
-          {/* Area fill */}
-          <Path d={areaPath} fill="url(#areaGrad)" />
-
           {/* Price line */}
-          <Path d={linePath} stroke={color} strokeWidth={2.2}
+          <Path d={linePath} stroke={color} strokeWidth={2.5}
             fill="none" strokeLinecap="round" strokeLinejoin="round" />
 
           {/* Last-price dot */}
-          <Circle cx={xs[xs.length - 1]} cy={ys[ys.length - 1]} r={4} fill={color} />
-          <Circle cx={xs[xs.length - 1]} cy={ys[ys.length - 1]} r={8} fill={color} fillOpacity={0.18} />
+          <Circle cx={xs[xs.length - 1]} cy={ys[ys.length - 1]} r={5} fill={color} />
 
           {/* Crosshair */}
           {cx != null && cy != null && cPrice != null && (
@@ -176,7 +137,7 @@ const TradingChart = React.memo(({ prices, color, isDark, fiatSymbol }: TradingC
               <Circle cx={cx} cy={cy} r={10} fill={color} fillOpacity={0.15} />
               {/* Tooltip */}
               <Rect x={tooltipX} y={PAD_T - 2} width={TOOLTIP_W} height={22} rx={7}
-                fill={tooltipBg} stroke={color} strokeWidth={1} strokeOpacity={0.5} />
+                fill={tooltipBg} stroke={color} strokeWidth={1} />
               <SvgText
                 x={tooltipX + TOOLTIP_W / 2} y={PAD_T + 14}
                 textAnchor="middle" fontSize={11} fontWeight="700" fill={tooltipTxt}
@@ -187,17 +148,6 @@ const TradingChart = React.memo(({ prices, color, isDark, fiatSymbol }: TradingC
           )}
         </Svg>
       </View>
-
-      {/* ── Y-axis labels ── */}
-      <Svg width={Y_AXIS_W} height={CHART_H}>
-        {gridLevels.map((g, i) => (
-          <SvgText key={i} x={6} y={g.y + 4}
-            fontSize={10} fontWeight="600" fill={labelColor}
-          >
-            {g.label}
-          </SvgText>
-        ))}
-      </Svg>
     </View>
   );
 });
@@ -217,7 +167,9 @@ export default function CoinChartScreen({ route, navigation }: any) {
 
   const [chartData, setChartData] = useState<number[]>([]);
   const [loading, setLoading]     = useState(true);
-  const [range, setRange]         = useState(7);
+  const [range, setRange]         = useState(1);
+  const [tradeModalVisible, setTradeModalVisible] = useState(false);
+
   // Always reflect live context price; chart fetch may override with latest candle
   const contextPrice = prices[symbol]?.usd ?? 0;
   const [priceNow, setPriceNow]   = useState(contextPrice);
@@ -305,14 +257,6 @@ export default function CoinChartScreen({ route, navigation }: any) {
   }, [fiatInfo]);
 
   const safeNum = (n: number) => (typeof n === 'number' && isFinite(n) ? n : 0);
-
-  const stats = useMemo(() => [
-    { label: 'Current Price', value: formatPrice(safeNum(priceNow)) },
-    { label: '24h Change',    value: `${isUp ? '+' : ''}${safeNum(change24h).toFixed(2)}%`, color: isUp ? T.success : T.error },
-    { label: 'Range High',    value: chartData.length >= 2 ? formatPrice(safeNum(chartMax)) : '—' },
-    { label: 'Range Low',     value: chartData.length >= 2 ? formatPrice(safeNum(chartMin)) : '—' },
-  ], [priceNow, isUp, change24h, chartData, chartMax, chartMin, formatPrice, T]);
-
   const chartLineColor = chartUp ? T.success : T.error;
 
   const tokenTxs = useMemo(() => {
@@ -329,59 +273,40 @@ export default function CoinChartScreen({ route, navigation }: any) {
     <View style={[styles.container, { backgroundColor: T.background }]}>
 
       {/* Header */}
-      <View style={[styles.header, { borderBottomColor: T.border, paddingTop: insets.top + 12 }]}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
-          <Feather name="arrow-left" size={24} color={T.text} />
-        </TouchableOpacity>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          {meta && <Image source={{ uri: meta.iconUrl }} style={styles.headerIcon} />}
-          <View>
-            <Text style={[styles.headerTitle, { color: T.text }]}>{meta?.name ?? symbol}</Text>
-            <Text style={[styles.headerSym, { color: T.textMuted }]}>{symbol}</Text>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
+            <Feather name="arrow-left" size={24} color={T.text} />
+          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginLeft: 8 }}>
+            {meta ? (
+              <Image source={{ uri: meta.iconUrl }} style={styles.headerIcon} />
+            ) : (
+              <View style={[styles.headerIcon, { backgroundColor: color + '20', alignItems: 'center', justifyContent: 'center' }]}>
+                <Text style={{ color, fontWeight: '800' }}>{symbol.charAt(0)}</Text>
+              </View>
+            )}
+            <View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={[styles.headerSym, { color: T.text }]}>{symbol}</Text>
+              </View>
+              <Text style={[styles.headerTitle, { color: T.textMuted }]}>{meta?.name ?? symbol}</Text>
+            </View>
           </View>
         </View>
-        <View style={{ width: 40 }} />
+
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={[styles.priceTop, { color: T.text }]}>{formatPrice(priceNow)}</Text>
+          <Text style={[styles.changeTop, { color: chartLineColor }]}>
+            {chartUp ? '+' : ''}{(typeof pctChange === 'number' && isFinite(pctChange) ? pctChange : 0).toFixed(2)}%
+          </Text>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
-        {/* Price + change */}
-        <View style={styles.priceSection}>
-          <Text style={[styles.price, { color: T.text }]}>{formatPrice(priceNow)}</Text>
-          <View style={[styles.changePill, { backgroundColor: chartUp ? T.success + '22' : T.error + '22' }]}>
-            <Feather name={chartUp ? 'trending-up' : 'trending-down'} size={13} color={chartLineColor} />
-            <Text style={[styles.changeText, { color: chartLineColor }]}>
-              {chartUp ? '+' : ''}{(typeof pctChange === 'number' && isFinite(pctChange) ? pctChange : 0).toFixed(2)}%
-            </Text>
-          </View>
-        </View>
-
-        {/* Quick Action Buttons */}
-        <View style={styles.actionRow}>
-           <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('Send', { symbol })} activeOpacity={0.7}>
-              <View style={[styles.actionIconBg, { backgroundColor: T.primary + '18' }]}>
-                 <Feather name="arrow-up-right" size={20} color={T.primary} />
-              </View>
-              <Text style={[styles.actionBtnText, { color: T.text }]}>Send</Text>
-           </TouchableOpacity>
-
-           <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('Receive', { symbol })} activeOpacity={0.7}>
-              <View style={[styles.actionIconBg, { backgroundColor: T.primary + '18' }]}>
-                 <Feather name="arrow-down-left" size={20} color={T.primary} />
-              </View>
-              <Text style={[styles.actionBtnText, { color: T.text }]}>Receive</Text>
-           </TouchableOpacity>
-
-           <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('Swap', { fromToken: symbol })} activeOpacity={0.7}>
-              <View style={[styles.actionIconBg, { backgroundColor: T.primary + '18' }]}>
-                 <Feather name="refresh-cw" size={20} color={T.primary} />
-              </View>
-              <Text style={[styles.actionBtnText, { color: T.text }]}>Swap</Text>
-           </TouchableOpacity>
-        </View>
-
-        {/* Chart card */}
-        <View style={[styles.chartBox, { backgroundColor: T.surface, borderColor: T.border }]}>
+        {/* Chart */}
+        <View style={styles.chartBox}>
           {loading ? (
             <View style={{ height: CHART_H, alignItems: 'center', justifyContent: 'center' }}>
               <ActivityIndicator color={color} size="large" />
@@ -403,16 +328,16 @@ export default function CoinChartScreen({ route, navigation }: any) {
           )}
 
           {/* Range selector */}
-          <View style={[styles.rangeRow, { borderTopColor: T.border }]}>
+          <View style={styles.rangeRow}>
             {RANGES.map(r => (
               <TouchableOpacity
                 key={r.label}
-                style={[styles.rangeBtn, range === r.days && { backgroundColor: color + '22' }]}
+                style={[styles.rangeBtn, range === r.days && { backgroundColor: T.surfaceLow }]}
                 onPress={() => setRange(r.days)}
                 activeOpacity={0.7}
               >
                 <Text style={[styles.rangeBtnText, {
-                  color: range === r.days ? color : T.textMuted,
+                  color: range === r.days ? T.text : T.textMuted,
                   fontWeight: range === r.days ? '800' : '600',
                 }]}>{r.label}</Text>
               </TouchableOpacity>
@@ -420,117 +345,173 @@ export default function CoinChartScreen({ route, navigation }: any) {
           </View>
         </View>
 
-        {/* Holdings */}
-        <View style={[styles.holdingsCard, { backgroundColor: T.surface, borderColor: T.border }]}>
-          <Text style={[styles.sectionLabel, { color: T.textMuted }]}>YOUR HOLDINGS</Text>
-          {isWatchOnly ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <View style={[{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, backgroundColor: T.primary + '18' }]}>
-                <Text style={{ color: T.primary, fontSize: 12, fontWeight: '700' }}>Coming Soon</Text>
-              </View>
-              <Text style={[styles.holdingsUsd, { color: T.textMuted }]}>{COIN_META[symbol]?.name} on-chain support coming soon</Text>
-            </View>
-          ) : (
-            <View style={styles.holdingsRow}>
-              <View>
-                <Text style={[styles.holdingsAmount, { color: T.text }]}>
-                  {balance.toFixed(6)} {symbol}
+        {/* Your Balance */}
+        <View style={styles.balanceSection}>
+           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+             <Text style={[styles.sectionTitle, { color: T.text }]}>Your balance</Text>
+             <View style={{ alignItems: 'flex-end' }}>
+                <Text style={[styles.balanceFiat, { color: T.text }]}>
+                   {formatFiat(typeof usdValue === 'number' && isFinite(usdValue) ? usdValue : 0)}
                 </Text>
-                <Text style={[styles.holdingsUsd, { color: T.textMuted }]}>
-                  ≈ {formatFiat(typeof usdValue === 'number' && isFinite(usdValue) ? usdValue : 0)}
+                <Text style={[styles.balanceToken, { color: T.textMuted }]}>
+                   {balance.toFixed(4)} {symbol}
                 </Text>
-              </View>
-              <View style={[styles.holdingsBadge, { backgroundColor: color + '18' }]}>
-                <Text style={[styles.holdingsBadgeText, { color }]}>{symbol}</Text>
-              </View>
-            </View>
-          )}
+             </View>
+           </View>
+
+           {/* Send & Receive Pills */}
+           <View style={styles.balanceActions}>
+              <TouchableOpacity style={[styles.pillBtn, { backgroundColor: T.surfaceLow }]} onPress={() => navigation.navigate('Send', { symbol })}>
+                 <Feather name="arrow-up-right" size={16} color={T.text} style={{ marginRight: 8 }} />
+                 <Text style={[styles.pillBtnText, { color: T.text }]}>Send</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.pillBtn, { backgroundColor: T.surfaceLow }]} onPress={() => navigation.navigate('Receive', { symbol })}>
+                 <Ionicons name="qr-code-outline" size={16} color={T.text} style={{ marginRight: 8 }} />
+                 <Text style={[styles.pillBtnText, { color: T.text }]}>Receive</Text>
+              </TouchableOpacity>
+           </View>
         </View>
 
-        {/* Market Stats */}
-        <View style={[styles.statsCard, { backgroundColor: T.surface, borderColor: T.border }]}>
-          <Text style={[styles.sectionLabel, { color: T.textMuted }]}>MARKET STATS</Text>
-          {stats.map((stat, i, arr) => (
-            <View key={stat.label} style={[
-              styles.statRow,
-              i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: T.border },
-            ]}>
-              <Text style={[styles.statLabel, { color: T.textMuted }]}>{stat.label}</Text>
-              <Text style={[styles.statValue, { color: stat.color ?? T.text }]}>{stat.value}</Text>
-            </View>
-          ))}
-        </View>
-        
-        {/* Token Transaction History */}
-        <View style={[styles.historyCard, { backgroundColor: T.surface, borderColor: T.border }]}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-            <Text style={[styles.sectionLabel, { color: T.textMuted, marginBottom: 0 }]}>TRANSACTION HISTORY</Text>
-            {tokenTxs.length > 0 && (
-              <TouchableOpacity onPress={() => navigation.navigate('History', { filterSymbol: symbol })}>
-                <Text style={{ fontSize: 12, fontWeight: '700', color: T.primary }}>See All</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+        {/* Recent History */}
+        <View style={styles.historySection}>
+          <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }} onPress={() => navigation.navigate('History', { filterSymbol: symbol })}>
+             <Text style={[styles.sectionTitle, { color: T.text }]}>Recent history</Text>
+             <Feather name="chevron-right" size={18} color={T.text} style={{ marginLeft: 4 }} />
+          </TouchableOpacity>
           
           {tokenTxs.length === 0 ? (
-            <View style={{ paddingVertical: 24, alignItems: 'center' }}>
-              <Feather name="file-text" size={32} color={T.border} />
-              <Text style={{ color: T.textMuted, marginTop: 12, fontSize: 13, fontWeight: '500' }}>No {symbol} transactions yet</Text>
+            <View style={{ paddingVertical: 12, alignItems: 'center' }}>
+              <Text style={{ color: T.textMuted, fontSize: 13, fontWeight: '500' }}>
+                 Missing a transaction? <Text style={{ color: T.success, fontWeight: '700' }}>View on explorer</Text>
+              </Text>
             </View>
           ) : (
-            tokenTxs.slice(0, 5).map((tx: any, i: number) => {
-              const isSent = tx.type === 'sent';
-              const isSwap = tx.type === 'swap' || tx.type === 'SWAP';
-              
-              let iconName = isSent ? 'arrow-up-right' : 'arrow-down-left';
-              let iconColor = isSent ? T.text : T.success;
-              let bgStyle = isSent ? T.surfaceLow : T.success + '15';
-              let title = isSent ? `Sent ${tx.coin}` : `Received ${tx.coin}`;
-              let amountText = `${isSent ? '-' : '+'}${tx.amount} ${tx.coin}`;
-              let amountColor = isSent ? T.text : T.success;
-
-              if (isSwap) {
-                iconName = 'refresh-cw';
-                iconColor = T.primary;
-                bgStyle = T.primary + '15';
-                title = `Swapped ${tx.coin} to ${tx.buyToken}`;
+            <View style={{ gap: 16 }}>
+              {tokenTxs.slice(0, 3).map((tx: any, i: number) => {
+                const isSent = tx.type === 'sent';
+                const isSwap = tx.type === 'swap' || tx.type === 'SWAP';
                 
-                // if we are on the fromToken page, it's a sent amount
-                if (tx.coin === symbol) {
-                   amountText = `-${tx.amount} ${tx.coin}`;
-                   amountColor = T.text;
-                } else {
-                   amountText = `+${tx.buyAmount ?? '?'} ${tx.buyToken}`;
-                   amountColor = T.success;
-                }
-              }
+                let iconName = isSent ? 'arrow-up-right' : 'arrow-down-left';
+                let iconColor = isSent ? T.text : T.success;
+                let bgStyle = isSent ? T.surfaceLow : T.success + '15';
+                let title = isSent ? `Sent ${tx.coin}` : `Received ${tx.coin}`;
+                let amountText = `${isSent ? '-' : '+'}${tx.amount} ${tx.coin}`;
+                let amountColor = isSent ? T.text : T.success;
 
-              return (
-                <TouchableOpacity key={tx.id || i} style={[styles.txRow, i !== 0 && { borderTopWidth: 1, borderTopColor: T.border }]} activeOpacity={0.7}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                    <View style={[styles.txIconBg, { backgroundColor: bgStyle }]}>
-                      <Feather name={iconName as any} size={16} color={iconColor} />
+                if (isSwap) {
+                  iconName = 'refresh-cw';
+                  iconColor = T.primary;
+                  bgStyle = T.primary + '15';
+                  title = `Swapped ${tx.coin} to ${tx.buyToken}`;
+                  
+                  if (tx.coin === symbol) {
+                     amountText = `-${tx.amount} ${tx.coin}`;
+                     amountColor = T.text;
+                  } else {
+                     amountText = `+${tx.buyAmount ?? '?'} ${tx.buyToken}`;
+                     amountColor = T.success;
+                  }
+                }
+
+                return (
+                  <TouchableOpacity key={tx.id || i} style={styles.txRow} activeOpacity={0.7}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                      <View style={[styles.txIconBg, { backgroundColor: bgStyle }]}>
+                        <Feather name={iconName as any} size={16} color={iconColor} />
+                      </View>
+                      <View>
+                        <Text style={[styles.txTitle, { color: T.text }]}>{title}</Text>
+                        <Text style={[styles.txDate, { color: T.textMuted }]}>
+                           {new Date(tx.date || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                      </View>
                     </View>
-                    <View>
-                      <Text style={[styles.txTitle, { color: T.text }]}>{title}</Text>
-                      <Text style={[styles.txDate, { color: T.textMuted }]}>
-                         {new Date(tx.date || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={[styles.txAmount, { color: amountColor }]}>{amountText}</Text>
+                      <Text style={[styles.txUsd, { color: T.textMuted }]}>
+                         {tx.usdValue ? formatFiat(parseFloat(tx.usdValue)) : ''}
                       </Text>
                     </View>
-                  </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={[styles.txAmount, { color: amountColor }]}>{amountText}</Text>
-                    <Text style={[styles.txUsd, { color: T.textMuted }]}>
-                       {tx.usdValue ? formatFiat(parseFloat(tx.usdValue)) : ''}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           )}
+        </View>
+
+        {/* Stats */}
+        <View style={styles.statsSection}>
+           <Text style={[styles.sectionTitle, { color: T.text, marginBottom: 20 }]}>Stats</Text>
+           <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 24 }}>
+              <View style={{ width: '50%' }}>
+                 <Text style={[styles.statLabel, { color: T.textMuted }]}>Market Cap</Text>
+                 <Text style={[styles.statValue, { color: T.text }]}>$45.68B</Text>
+              </View>
+              <View style={{ width: '50%' }}>
+                 <Text style={[styles.statLabel, { color: T.textMuted }]}>24h Volume</Text>
+                 <Text style={[styles.statValue, { color: T.text }]}>$3.65B</Text>
+              </View>
+              <View style={{ width: '50%' }}>
+                 <Text style={[styles.statLabel, { color: T.textMuted }]}>Holders</Text>
+                 <Text style={[styles.statValue, { color: T.text }]}>-</Text>
+              </View>
+              <View style={{ width: '50%' }}>
+                 <Text style={[styles.statLabel, { color: T.textMuted }]}>Created</Text>
+                 <Text style={[styles.statValue, { color: T.text }]}>14 Jan 2024</Text>
+              </View>
+           </View>
         </View>
 
       </ScrollView>
+
+      {/* Sticky Trade Button */}
+      <View style={[styles.stickyFooter, { paddingBottom: insets.bottom + 20 }]}>
+         <TouchableOpacity 
+            style={[styles.tradeBtn, { backgroundColor: Theme.colors.success }]} 
+            activeOpacity={0.8}
+            onPress={() => setTradeModalVisible(true)}
+         >
+            <Text style={styles.tradeBtnText}>Trade</Text>
+         </TouchableOpacity>
+      </View>
+
+      {/* Trade Modal */}
+      <Modal visible={tradeModalVisible} transparent animationType="slide" onRequestClose={() => setTradeModalVisible(false)}>
+         <View style={styles.modalOverlay}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => setTradeModalVisible(false)} />
+            <View style={[styles.modalContent, { backgroundColor: T.surface, paddingBottom: insets.bottom + 24 }]}>
+               <View style={styles.modalActionsList}>
+                  <TouchableOpacity 
+                     style={[styles.modalBtn, { backgroundColor: Theme.colors.success }]} 
+                     activeOpacity={0.8}
+                     onPress={() => {
+                        setTradeModalVisible(false);
+                        navigation.navigate('Swap', { fromToken: symbol });
+                     }}
+                  >
+                     <Text style={styles.modalBtnText}>Swap</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity style={[styles.modalBtn, { backgroundColor: Theme.colors.success }]} activeOpacity={0.8}>
+                     <Text style={styles.modalBtnText}>Sell</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity style={[styles.modalBtn, { backgroundColor: Theme.colors.success }]} activeOpacity={0.8}>
+                     <Text style={styles.modalBtnText}>Buy</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                     style={[styles.modalCloseBtn, { backgroundColor: T.surfaceLow }]} 
+                     activeOpacity={0.8}
+                     onPress={() => setTradeModalVisible(false)}
+                  >
+                     <Feather name="x" size={24} color={Theme.colors.success} />
+                  </TouchableOpacity>
+               </View>
+            </View>
+         </View>
+      </Modal>
+
     </View>
   );
 }
@@ -539,49 +520,51 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingBottom: 14,
-    borderBottomWidth: 1,
+    paddingHorizontal: 20, paddingBottom: 10,
   },
-  backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center', borderRadius: 22 },
-  headerIcon: { width: 36, height: 36, borderRadius: 18 },
-  headerTitle: { fontSize: 17, fontWeight: '800' },
-  headerSym: { fontSize: 12, fontWeight: '600', marginTop: 1 },
+  backBtn: { width: 32, height: 32, justifyContent: 'center', alignItems: 'flex-start' },
+  headerIcon: { width: 28, height: 28, borderRadius: 14 },
+  headerSym: { fontSize: 16, fontFamily: Fonts.bold },
+  headerTitle: { fontSize: 13, fontFamily: Fonts.medium },
+  priceTop: { fontSize: 20, fontFamily: Fonts.bold, letterSpacing: -0.5 },
+  changeTop: { fontSize: 13, fontFamily: Fonts.semiBold, marginTop: 2 },
 
-  scroll: { paddingHorizontal: H_PAD, paddingBottom: 80, paddingTop: 20 },
+  scroll: { paddingHorizontal: H_PAD, paddingBottom: 120, paddingTop: 10 },
 
-  priceSection: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
-  price: { fontSize: 36, fontWeight: '800', letterSpacing: -1 },
-  changePill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
-  changeText: { fontSize: 13, fontWeight: '700' },
+  chartBox: { marginBottom: 32 },
+  rangeRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 10, marginTop: 10 },
+  rangeBtn: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20 },
+  rangeBtnText: { fontSize: 12 },
 
-  actionRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20, gap: 12 },
-  actionBtn: { flex: 1, alignItems: 'center', backgroundColor: 'transparent' },
-  actionIconBg: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  actionBtnText: { fontSize: 13, fontWeight: '700' },
+  sectionTitle: { fontSize: 16, fontFamily: Fonts.bold },
 
-  chartBox: { borderRadius: 20, paddingTop: 16, paddingBottom: 4, paddingHorizontal: 0, borderWidth: 1, marginBottom: 16, overflow: 'hidden' },
-  rangeRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, paddingHorizontal: 12, paddingBottom: 8, borderTopWidth: 1 },
-  rangeBtn: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 10 },
-  rangeBtnText: { fontSize: 13 },
+  balanceSection: { marginBottom: 32 },
+  balanceFiat: { fontSize: 18, fontFamily: Fonts.bold },
+  balanceToken: { fontSize: 13, fontFamily: Fonts.semiBold, marginTop: 2 },
+  balanceActions: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, marginTop: 12 },
+  pillBtn: { flex: 1, flexDirection: 'row', height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  pillBtnText: { fontSize: 15, fontFamily: Fonts.semiBold },
 
-  holdingsCard: { borderRadius: 18, padding: 18, borderWidth: 1, marginBottom: 14 },
-  sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1, marginBottom: 14 },
-  holdingsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  holdingsAmount: { fontSize: 20, fontWeight: '800', marginBottom: 4 },
-  holdingsUsd: { fontSize: 14, fontWeight: '500' },
-  holdingsBadge: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
-  holdingsBadgeText: { fontSize: 14, fontWeight: '800' },
+  historySection: { marginBottom: 36 },
+  txRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  txIconBg: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  txTitle: { fontSize: 15, fontFamily: Fonts.bold, marginBottom: 2 },
+  txDate: { fontSize: 13, fontFamily: Fonts.medium },
+  txAmount: { fontSize: 15, fontFamily: Fonts.bold, marginBottom: 2 },
+  txUsd: { fontSize: 13, fontFamily: Fonts.medium },
 
-  statsCard: { borderRadius: 18, padding: 18, borderWidth: 1, marginBottom: 14 },
-  statRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12 },
-  statLabel: { fontSize: 14, fontWeight: '500' },
-  statValue: { fontSize: 14, fontWeight: '700' },
-  
-  historyCard: { borderRadius: 18, padding: 18, borderWidth: 1, marginBottom: 14 },
-  txRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12 },
-  txIconBg: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  txTitle: { fontSize: 14, fontWeight: '700', marginBottom: 2 },
-  txDate: { fontSize: 12, fontWeight: '500' },
-  txAmount: { fontSize: 14, fontWeight: '800', marginBottom: 2 },
-  txUsd: { fontSize: 12, fontWeight: '500' },
+  statsSection: { marginBottom: 20 },
+  statLabel: { fontSize: 13, fontFamily: Fonts.medium, marginBottom: 6 },
+  statValue: { fontSize: 15, fontFamily: Fonts.bold },
+
+  stickyFooter: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 20, paddingTop: 16, backgroundColor: 'transparent' },
+  tradeBtn: { height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
+  tradeBtnText: { color: '#000', fontSize: 16, fontFamily: Fonts.bold },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
+  modalActionsList: { gap: 12 },
+  modalBtn: { height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
+  modalBtnText: { color: '#000', fontSize: 16, fontFamily: Fonts.bold },
+  modalCloseBtn: { height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginTop: 8 }
 });
