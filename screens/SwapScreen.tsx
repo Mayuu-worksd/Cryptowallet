@@ -63,7 +63,7 @@ const NETWORK_TOKENS: Record<string, string[]> = {
   'Solana Devnet':    ['SOL', 'USDT', 'USDC'],
 };
 
-export default function SwapScreen({ navigation }: any) {
+export default function SwapScreen({ navigation, route }: any) {
   const insets = useSafeAreaInsets();
   const { balances, ethBalance, isDarkMode, network, refreshBalance, walletAddress, applySwapBalances, addTx, formatFiat } = useWallet();
   const { prices } = useMarket();
@@ -73,7 +73,7 @@ export default function SwapScreen({ navigation }: any) {
   const walletRef = useRef(walletAddress);
   walletRef.current = walletAddress;
 
-  const [sellToken, setSellToken] = useState('ETH');
+  const [sellToken, setSellToken] = useState(() => route?.params?.fromToken || 'ETH');
   const [buyToken, setBuyToken]   = useState('USDT');
   const [sellAmount, setSellAmount] = useState('');
   
@@ -133,8 +133,14 @@ export default function SwapScreen({ navigation }: any) {
   const customTokensRef = useRef(customTokens);
   customTokensRef.current = customTokens;
 
+  const isFirstRender = useRef(true);
+
   // Reset tokens when network changes to avoid invalid pairs
   useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
     const available = NETWORK_TOKENS[network] ?? ['ETH', 'USDT', 'USDC'];
     const nativeSell = available[0];
     const nativeBuy  = available[1] ?? available[0];

@@ -13,6 +13,7 @@ import {
 import { useWallet, useMarket } from '../store/WalletContext';
 import { COIN_META, COIN_COLORS } from '../constants';
 import { SYMBOL_TO_COINGECKO_ID } from '../services/marketService';
+import { SUPPORTED_FIAT_CURRENCIES } from '../constants/currencyConfig';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -45,27 +46,15 @@ function buildBezierPath(xs: number[], ys: number[]): string {
   return d;
 }
 
-function fmtYLabel(p: number): string {
-  if (p >= 1_000_000) return `$${(p / 1_000_000).toFixed(2)}M`;
-  if (p >= 1_000)     return `$${(p / 1_000).toFixed(1)}k`;
-  if (p >= 1)         return `$${p.toFixed(2)}`;
-  return `$${p.toFixed(4)}`;
-}
-
-function fmtTooltip(p: number): string {
-  if (p >= 1_000) return `$${p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  if (p >= 1)     return `$${p.toFixed(4)}`;
-  return `$${p.toFixed(6)}`;
-}
-
 // ── Trading Chart ──────────────────────────────────────────────────────────
 interface TradingChartProps {
   prices: number[];
   color: string;
   isDark: boolean;
+  fiatSymbol: string;
 }
 
-const TradingChart = React.memo(({ prices, color, isDark }: TradingChartProps) => {
+const TradingChart = React.memo(({ prices, color, isDark, fiatSymbol }: TradingChartProps) => {
   const [crosshair, setCrosshair] = useState<{ xi: number } | null>(null);
 
   const gridColor  = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
@@ -97,13 +86,26 @@ const TradingChart = React.memo(({ prices, color, isDark }: TradingChartProps) =
     ` L ${xs[0].toFixed(1)} ${CHART_H} Z`,
     [linePath, xs]);
 
+  const fmtYLabel = useCallback((p: number): string => {
+    if (p >= 1_000_000) return `${fiatSymbol}${(p / 1_000_000).toFixed(2)}M`;
+    if (p >= 1_000)     return `${fiatSymbol}${(p / 1_000).toFixed(1)}k`;
+    if (p >= 1)         return `${fiatSymbol}${p.toFixed(2)}`;
+    return `${fiatSymbol}${p.toFixed(4)}`;
+  }, [fiatSymbol]);
+
+  const fmtTooltip = useCallback((p: number): string => {
+    if (p >= 1_000) return `${fiatSymbol}${p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    if (p >= 1)     return `${fiatSymbol}${p.toFixed(4)}`;
+    return `${fiatSymbol}${p.toFixed(6)}`;
+  }, [fiatSymbol]);
+
   // 5 horizontal grid levels
   const gridLevels = useMemo(() =>
     [0, 0.25, 0.5, 0.75, 1].map(t => ({
       y:     PAD_T + (1 - t) * PLOT_H,
       label: fmtYLabel(min + t * range),
     })),
-    [min, range]);
+    [min, range, fmtYLabel]);
 
   // Crosshair data
   const cx = crosshair != null ? xs[crosshair.xi] : null;
@@ -204,11 +206,14 @@ const TradingChart = React.memo(({ prices, color, isDark }: TradingChartProps) =
 export default function CoinChartScreen({ route, navigation }: any) {
   const insets = useSafeAreaInsets();
   const { symbol } = route.params as { symbol: string };
-  const { isDarkMode, balances, ethBalance, formatFiat } = useWallet() as any;
+  const { isDarkMode, balances, ethBalance, formatFiat, fiatCurrency, transactions } = useWallet() as any;
   const { prices } = useMarket();
   const T     = isDarkMode ? Theme.colors : Theme.lightColors;
   const color = COIN_COLORS[symbol] ?? T.primary;
   const meta  = COIN_META[symbol];
+
+  const fiatInfo = SUPPORTED_FIAT_CURRENCIES[fiatCurrency] || { symbol: '$', rate: 1 };
+  const fiatSymbolStr = fiatInfo.symbol;
 
   const [chartData, setChartData] = useState<number[]>([]);
   const [loading, setLoading]     = useState(true);
@@ -292,22 +297,33 @@ export default function CoinChartScreen({ route, navigation }: any) {
   const chartUp = pctChange >= 0;
 
   const formatPrice = useCallback((p: number) => {
-    if (typeof p !== 'number' || !isFinite(p) || p <= 0) return '$0.00';
-    if (p >= 1000) return `$${p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    if (p >= 1)    return `$${p.toFixed(4)}`;
-    return `$${p.toFixed(6)}`;
-  }, []);
+    const converted = p * fiatInfo.rate;
+    if (typeof converted !== 'number' || !isFinite(converted) || converted <= 0) return `${fiatInfo.symbol}0.00`;
+    if (converted >= 1000) return `${fiatInfo.symbol}${converted.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    if (converted >= 1)    return `${fiatInfo.symbol}${converted.toFixed(4)}`;
+    return `${fiatInfo.symbol}${converted.toFixed(6)}`;
+  }, [fiatInfo]);
 
   const safeNum = (n: number) => (typeof n === 'number' && isFinite(n) ? n : 0);
 
   const stats = useMemo(() => [
     { label: 'Current Price', value: formatPrice(safeNum(priceNow)) },
     { label: '24h Change',    value: `${isUp ? '+' : ''}${safeNum(change24h).toFixed(2)}%`, color: isUp ? T.success : T.error },
-    { label: 'Range High',    value: chartData.length >= 2 ? `$${safeNum(chartMax).toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '—' },
-    { label: 'Range Low',     value: chartData.length >= 2 ? `$${safeNum(chartMin).toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '—' },
+    { label: 'Range High',    value: chartData.length >= 2 ? formatPrice(safeNum(chartMax)) : '—' },
+    { label: 'Range Low',     value: chartData.length >= 2 ? formatPrice(safeNum(chartMin)) : '—' },
   ], [priceNow, isUp, change24h, chartData, chartMax, chartMin, formatPrice, T]);
 
   const chartLineColor = chartUp ? T.success : T.error;
+
+  const tokenTxs = useMemo(() => {
+    if (!transactions) return [];
+    return transactions.filter((tx: any) => 
+      tx.coin === symbol || 
+      tx.symbol === symbol || 
+      (tx.type === 'swap' && (tx.buyToken === symbol || tx.coin === symbol)) ||
+      (tx.type === 'SWAP' && (tx.buyToken === symbol || tx.coin === symbol))
+    ).sort((a: any, b: any) => new Date(b.date || Date.now()).getTime() - new Date(a.date || Date.now()).getTime());
+  }, [transactions, symbol]);
 
   return (
     <View style={[styles.container, { backgroundColor: T.background }]}>
@@ -340,6 +356,30 @@ export default function CoinChartScreen({ route, navigation }: any) {
           </View>
         </View>
 
+        {/* Quick Action Buttons */}
+        <View style={styles.actionRow}>
+           <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('Send', { symbol })} activeOpacity={0.7}>
+              <View style={[styles.actionIconBg, { backgroundColor: T.primary + '18' }]}>
+                 <Feather name="arrow-up-right" size={20} color={T.primary} />
+              </View>
+              <Text style={[styles.actionBtnText, { color: T.text }]}>Send</Text>
+           </TouchableOpacity>
+
+           <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('Receive', { symbol })} activeOpacity={0.7}>
+              <View style={[styles.actionIconBg, { backgroundColor: T.primary + '18' }]}>
+                 <Feather name="arrow-down-left" size={20} color={T.primary} />
+              </View>
+              <Text style={[styles.actionBtnText, { color: T.text }]}>Receive</Text>
+           </TouchableOpacity>
+
+           <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('Swap', { fromToken: symbol })} activeOpacity={0.7}>
+              <View style={[styles.actionIconBg, { backgroundColor: T.primary + '18' }]}>
+                 <Feather name="refresh-cw" size={20} color={T.primary} />
+              </View>
+              <Text style={[styles.actionBtnText, { color: T.text }]}>Swap</Text>
+           </TouchableOpacity>
+        </View>
+
         {/* Chart card */}
         <View style={[styles.chartBox, { backgroundColor: T.surface, borderColor: T.border }]}>
           {loading ? (
@@ -357,6 +397,7 @@ export default function CoinChartScreen({ route, navigation }: any) {
                 prices={chartData}
                 color={chartLineColor}
                 isDark={isDarkMode}
+                fiatSymbol={fiatSymbolStr}
               />
             </Animated.View>
           )}
@@ -406,7 +447,7 @@ export default function CoinChartScreen({ route, navigation }: any) {
           )}
         </View>
 
-        {/* Stats */}
+        {/* Market Stats */}
         <View style={[styles.statsCard, { backgroundColor: T.surface, borderColor: T.border }]}>
           <Text style={[styles.sectionLabel, { color: T.textMuted }]}>MARKET STATS</Text>
           {stats.map((stat, i, arr) => (
@@ -418,6 +459,75 @@ export default function CoinChartScreen({ route, navigation }: any) {
               <Text style={[styles.statValue, { color: stat.color ?? T.text }]}>{stat.value}</Text>
             </View>
           ))}
+        </View>
+        
+        {/* Token Transaction History */}
+        <View style={[styles.historyCard, { backgroundColor: T.surface, borderColor: T.border }]}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <Text style={[styles.sectionLabel, { color: T.textMuted, marginBottom: 0 }]}>TRANSACTION HISTORY</Text>
+            {tokenTxs.length > 0 && (
+              <TouchableOpacity onPress={() => navigation.navigate('History', { filterSymbol: symbol })}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: T.primary }}>See All</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          
+          {tokenTxs.length === 0 ? (
+            <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+              <Feather name="file-text" size={32} color={T.border} />
+              <Text style={{ color: T.textMuted, marginTop: 12, fontSize: 13, fontWeight: '500' }}>No {symbol} transactions yet</Text>
+            </View>
+          ) : (
+            tokenTxs.slice(0, 5).map((tx: any, i: number) => {
+              const isSent = tx.type === 'sent';
+              const isSwap = tx.type === 'swap' || tx.type === 'SWAP';
+              
+              let iconName = isSent ? 'arrow-up-right' : 'arrow-down-left';
+              let iconColor = isSent ? T.text : T.success;
+              let bgStyle = isSent ? T.surfaceLow : T.success + '15';
+              let title = isSent ? `Sent ${tx.coin}` : `Received ${tx.coin}`;
+              let amountText = `${isSent ? '-' : '+'}${tx.amount} ${tx.coin}`;
+              let amountColor = isSent ? T.text : T.success;
+
+              if (isSwap) {
+                iconName = 'refresh-cw';
+                iconColor = T.primary;
+                bgStyle = T.primary + '15';
+                title = `Swapped ${tx.coin} to ${tx.buyToken}`;
+                
+                // if we are on the fromToken page, it's a sent amount
+                if (tx.coin === symbol) {
+                   amountText = `-${tx.amount} ${tx.coin}`;
+                   amountColor = T.text;
+                } else {
+                   amountText = `+${tx.buyAmount ?? '?'} ${tx.buyToken}`;
+                   amountColor = T.success;
+                }
+              }
+
+              return (
+                <TouchableOpacity key={tx.id || i} style={[styles.txRow, i !== 0 && { borderTopWidth: 1, borderTopColor: T.border }]} activeOpacity={0.7}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <View style={[styles.txIconBg, { backgroundColor: bgStyle }]}>
+                      <Feather name={iconName as any} size={16} color={iconColor} />
+                    </View>
+                    <View>
+                      <Text style={[styles.txTitle, { color: T.text }]}>{title}</Text>
+                      <Text style={[styles.txDate, { color: T.textMuted }]}>
+                         {new Date(tx.date || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={[styles.txAmount, { color: amountColor }]}>{amountText}</Text>
+                    <Text style={[styles.txUsd, { color: T.textMuted }]}>
+                       {tx.usdValue ? formatFiat(parseFloat(tx.usdValue)) : ''}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+          )}
         </View>
 
       </ScrollView>
@@ -444,6 +554,11 @@ const styles = StyleSheet.create({
   changePill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
   changeText: { fontSize: 13, fontWeight: '700' },
 
+  actionRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20, gap: 12 },
+  actionBtn: { flex: 1, alignItems: 'center', backgroundColor: 'transparent' },
+  actionIconBg: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  actionBtnText: { fontSize: 13, fontWeight: '700' },
+
   chartBox: { borderRadius: 20, paddingTop: 16, paddingBottom: 4, paddingHorizontal: 0, borderWidth: 1, marginBottom: 16, overflow: 'hidden' },
   rangeRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, paddingHorizontal: 12, paddingBottom: 8, borderTopWidth: 1 },
   rangeBtn: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 10 },
@@ -457,8 +572,16 @@ const styles = StyleSheet.create({
   holdingsBadge: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
   holdingsBadgeText: { fontSize: 14, fontWeight: '800' },
 
-  statsCard: { borderRadius: 18, padding: 18, borderWidth: 1 },
+  statsCard: { borderRadius: 18, padding: 18, borderWidth: 1, marginBottom: 14 },
   statRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12 },
   statLabel: { fontSize: 14, fontWeight: '500' },
   statValue: { fontSize: 14, fontWeight: '700' },
+  
+  historyCard: { borderRadius: 18, padding: 18, borderWidth: 1, marginBottom: 14 },
+  txRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12 },
+  txIconBg: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  txTitle: { fontSize: 14, fontWeight: '700', marginBottom: 2 },
+  txDate: { fontSize: 12, fontWeight: '500' },
+  txAmount: { fontSize: 14, fontWeight: '800', marginBottom: 2 },
+  txUsd: { fontSize: 12, fontWeight: '500' },
 });

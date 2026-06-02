@@ -119,13 +119,20 @@ function deriveChainAddress(evmAddress: string, symbol: string, nativeTronAddres
   return evmAddress;
 }
 
-export default function ReceiveScreen({ navigation }: any) {
+export default function ReceiveScreen({ navigation, route }: any) {
   const insets = useSafeAreaInsets();
   const { walletAddress, tronAddress: ctxTronAddress, isDarkMode } = useWallet() as any;
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
 
   const [tronAddress, setTronAddress] = useState(ctxTronAddress || '');
-  const [selectedToken, setSelectedToken] = useState(RECEIVE_TOKENS[0]);
+  const [selectedToken, setSelectedToken] = useState(() => {
+    const sym = route?.params?.symbol;
+    if (sym) {
+      const match = RECEIVE_TOKENS.find(t => t.symbol === sym);
+      if (match) return match;
+    }
+    return RECEIVE_TOKENS[0];
+  });
   const [tokenModalVisible, setTokenModalVisible] = useState(false);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'success' as 'success' | 'error' | 'info' });
 
