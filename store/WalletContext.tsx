@@ -819,23 +819,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
                 status:     'success' as const,
                 timestamp:  t.created_at ?? new Date().toISOString(),
               }));
-            if (dbCardTxs.length > 0) {
+            if (vcc || dbCard) {
               setCardTransactions(dbCardTxs);
               AsyncStorage.setItem('cw_card_transactions', JSON.stringify(dbCardTxs)).catch(() => {});
-            } else if (savedCardTxs) {
-              // Migrate local card txs up to Supabase
-              const localCardTxs: CardTransaction[] = JSON.parse(savedCardTxs);
-              localCardTxs.forEach(t => {
-                txService.log({
-                  wallet_address: address,
-                  type:      t.type === 'topup' ? 'card_topup' : 'card_spend',
-                  token:     t.coin ?? 'USD',
-                  amount:    t.coinAmount ?? t.amount,
-                  usd_value: t.amount,
-                  status:    'success',
-                  label:     t.label,
-                }).catch(() => {});
-              });
+            } else {
+              setCardTransactions([]);
+              AsyncStorage.removeItem('cw_card_transactions').catch(() => {});
             }
           } catch {
             // Supabase offline — AsyncStorage data already loaded above, nothing lost
@@ -1403,9 +1392,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             status:     'success' as const,
             timestamp:  t.created_at ?? new Date().toISOString(),
           }));
-        if (restoredCardTxs.length > 0) {
+        if (dbCard || vcc) {
           setCardTransactions(restoredCardTxs);
           await AsyncStorage.setItem('cw_card_transactions', JSON.stringify(restoredCardTxs));
+        } else {
+          setCardTransactions([]);
+          await AsyncStorage.removeItem('cw_card_transactions');
         }
 
         // ── Restore wallet transactions (send/receive/swap) ──
@@ -1759,9 +1751,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           status:     'success' as const,
           timestamp:  t.created_at ?? new Date().toISOString(),
         }));
-      if (cardTxs.length > 0) {
+      if (cardCreated) {
         setCardTransactions(cardTxs);
         AsyncStorage.setItem('cw_card_transactions', JSON.stringify(cardTxs)).catch(() => {});
+      } else {
+        setCardTransactions([]);
+        AsyncStorage.removeItem('cw_card_transactions').catch(() => {});
       }
     } catch {}
   }, [walletAddress]);
