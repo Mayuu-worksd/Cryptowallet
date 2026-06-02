@@ -105,7 +105,7 @@ const FALLBACK_SHIPPING_FEES: Record<string, number> = {
 const FALLBACK_COUNTRIES = Object.keys(FALLBACK_SHIPPING_FEES);
 
 export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
-  const { isDarkMode, walletAddress, kycStatus, cardDetails, p2pCurrency } = useWallet() as any;
+  const { isDarkMode, walletAddress, kycStatus, cardDetails, p2pCurrency, accountType } = useWallet() as any;
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const insets = useSafeAreaInsets();
 
@@ -240,8 +240,6 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
     }
   };
 
-  const cardFaceHolderName = cardDetails?.holderName?.toUpperCase() || 'CARD HOLDER';
-
   // ── Loading ────────────────────────────────────────────────────────────────
   if (checkingExisting) {
     return (
@@ -294,7 +292,7 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
           
           <TouchableOpacity
             style={[styles.gateBtn, { backgroundColor: T.text }]}
-            onPress={() => navigation.navigate(liveKycStatus ? 'KYCStatus' : 'KYCForm')}
+            onPress={() => navigation.navigate(accountType === 'business' ? 'BusinessKYCResult' : 'KYCStatus')}
             activeOpacity={0.9}
           >
             <Feather name="shield" size={16} color={T.background} />

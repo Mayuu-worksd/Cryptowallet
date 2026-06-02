@@ -210,6 +210,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.setItem('cw_account_type', type);
     if (walletAddress) {
       profileService.upsert(walletAddress, { account_type: type }).catch(() => {});
+      // Refresh KYC immediately based on new type
+      try {
+        if (type === 'business') {
+          const { businessKYCService } = await import('../services/merchantService');
+          const record = await businessKYCService.getStatus(walletAddress);
+          setKycStatus(record?.status ?? null);
+        } else {
+          const record = await kycService.getStatus(walletAddress);
+          setKycStatus(record?.status ?? null);
+        }
+      } catch (e) {}
     }
   }, [walletAddress]);
 
@@ -380,10 +391,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const refreshKYCStatus = useCallback(async () => {
     if (!walletAddress) return;
     try {
-      const record = await kycService.getStatus(walletAddress);
-      setKycStatus(record?.status ?? null);
+      if (accountType === 'business') {
+        const { businessKYCService } = await import('../services/merchantService');
+        const record = await businessKYCService.getStatus(walletAddress);
+        setKycStatus(record?.status ?? null);
+      } else {
+        const record = await kycService.getStatus(walletAddress);
+        setKycStatus(record?.status ?? null);
+      }
     } catch (_e) {}
-  }, [walletAddress]);
+  }, [walletAddress, accountType]);
 
   useEffect(() => { refreshPinEnabled(); }, []);
 
@@ -571,13 +588,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           // set_wallet must complete first so RLS policies allow the queries
           try {
             await setWallet(address);
-            const [vcc, dbCard, dbTxs, variants, kycRecord, dbNetworksRes] = await Promise.all([
+            const [vcc, dbCard, dbTxs, variants, kycRecord, dbNetworksRes, bizRecord] = await Promise.all([
               vccService.getCard(address),
               dbCardService.getCard(address),
               txService.getAll(address, 200),
               cardVariantService.getVariants(),
               kycService.getStatus(address),
-              supabase.from('admin_networks').select('*').eq('is_active', true)
+              supabase.from('admin_networks').select('*').eq('is_active', true),
+              import('../services/merchantService').then(m => m.businessKYCService.getStatus(address)).catch(() => null)
             ]);
 
             // Inject Dynamic Networks from Admin Dashboard
@@ -600,7 +618,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             }
 
             // KYC
-            setKycStatus(kycRecord?.status ?? null);
+            const acctType = savedAccountType ?? 'personal';
+            if (acctType === 'business') {
+              setKycStatus(bizRecord?.status ?? null);
+            } else {
+              setKycStatus(kycRecord?.status ?? null);
+            }
 
             // ── Restore profile fields from Supabase (wins over AsyncStorage) ──
             if (vcc || dbCard) supabaseCardRestoredRef.current = true;
@@ -1159,16 +1182,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         await setWallet(data.address);
 
         // ── Fetch everything from Supabase in parallel ──
-        const [vcc, dbCard, dbTxs, variants, kycRecord] = await Promise.all([
+        const [vcc, dbCard, dbTxs, variants, kycRecord, bizRecord] = await Promise.all([
           vccService.getCard(data.address),
           dbCardService.getCard(data.address),
           txService.getAll(data.address, 500),
           cardVariantService.getVariants(),
           kycService.getStatus(data.address),
-          Promise.resolve([]),
+          import('../services/merchantService').then(m => m.businessKYCService.getStatus(data.address)).catch(() => null),
         ]);
 
-        // ── Restore KYC status ──
+        // ── Restore KYC status (deferred type check) ──
+        // We will update this again after profile fetch if they are business
         setKycStatus(kycRecord?.status ?? null);
 
         // ── Restore wallet name from Supabase profile or keep address-based default ──
@@ -1183,6 +1207,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
               setAccountTypeState(profile.account_type);
               setAccountTypeSet(true);
               await AsyncStorage.setItem('cw_account_type', profile.account_type);
+              if (profile.account_type === 'business') {
+                setKycStatus(bizRecord?.status ?? null);
+              }
             }
             if (profile.p2p_country) {
               setP2PCountryState(profile.p2p_country);

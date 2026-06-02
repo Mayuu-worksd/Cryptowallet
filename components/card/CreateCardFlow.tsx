@@ -70,7 +70,7 @@ export default function CreateCardFlow({ onComplete, onCancel }: Props) {
   // ── Step 1: Enter Details ──────────────────────────────────────────────────
   if (step === 1) {
     return (
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.container}>
           {renderTopBar(1)}
 
@@ -325,7 +325,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   carouselWrapper: {
-    height: 260,
+    height: 390,
     width: SCREEN_WIDTH,
   },
   carouselScroll: {

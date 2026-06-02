@@ -59,7 +59,7 @@ export default function CardScreen({ navigation, route }: any) {
     balances, ethBalance, spendCard, topupCard, cardBalance,
     isDarkMode, network,
     createCard, updateCardDetails, kycStatus,
-    refreshCardData, refreshBalance,
+    refreshCardData, refreshBalance, accountType,
   } = useWallet();
   const { prices } = useMarket();
 
@@ -243,6 +243,26 @@ export default function CardScreen({ navigation, route }: any) {
 
   if (showCreate) {
     return <CreateCardFlow onComplete={handleCardCreated} onCancel={() => setShowCreate(false)} />;
+  }
+
+  if (kycStatus !== 'verified') {
+    return (
+      <View style={[styles.root, { backgroundColor: T.background, justifyContent: 'center', alignItems: 'center' }]}>
+        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
+        <Feather name="shield" size={64} color={T.primary} style={{ marginBottom: 24 }} />
+        <Text style={{ color: T.text, fontSize: 24, fontFamily: 'Inter_900Black', marginBottom: 12, letterSpacing: -0.5 }}>Identity Verification</Text>
+        <Text style={{ color: T.textMuted, fontSize: 15, fontFamily: 'Inter_500Medium', textAlign: 'center', marginHorizontal: 40, marginBottom: 40, lineHeight: 22 }}>
+          Complete your KYC verification to unlock premium Virtual and Physical cards.
+        </Text>
+        <TouchableOpacity
+          onPress={() => navigation.navigate(accountType === 'business' ? 'BusinessKYCResult' : 'KYCStatus')}
+          style={[styles.applyButton, { backgroundColor: T.text, width: '80%', height: 60 }]}
+          activeOpacity={0.9}
+        >
+          <Text style={[styles.applyButtonText, { color: T.background }]}>Complete KYC Verification</Text>
+        </TouchableOpacity>
+      </View>
+    );
   }
 
   return (
