@@ -292,7 +292,7 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
           
           <TouchableOpacity
             style={[styles.gateBtn, { backgroundColor: T.text }]}
-            onPress={() => navigation.navigate(accountType === 'business' ? 'BusinessKYCResult' : 'KYCStatus')}
+            onPress={() => navigation.navigate(accountType === 'business' ? 'BusinessKYCResult' : 'KYCIntro')}
             activeOpacity={0.9}
           >
             <Feather name="shield" size={16} color={T.background} />

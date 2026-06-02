@@ -92,7 +92,7 @@ export default function KYCUploadScreen({ navigation, route }: any) {
       ]);
       await kycService.finalizeSubmission(walletAddress, documentUrl, selfieUrl);
       if (refreshKYCStatus) await refreshKYCStatus();
-      navigation.replace('KYCStatus');
+      navigation.replace('KYCResult');
     } catch (e: any) {
       showToast(e?.message ?? 'Upload failed. Check your connection.', 'error');
     } finally {

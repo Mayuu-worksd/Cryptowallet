@@ -255,7 +255,7 @@ export default function CardScreen({ navigation, route }: any) {
           Complete your KYC verification to unlock premium Virtual and Physical cards.
         </Text>
         <TouchableOpacity
-          onPress={() => navigation.navigate(accountType === 'business' ? 'BusinessKYCResult' : 'KYCStatus')}
+          onPress={() => navigation.navigate(accountType === 'business' ? 'BusinessKYCResult' : 'KYCIntro')}
           style={[styles.applyButton, { backgroundColor: T.text, width: '80%', height: 60 }]}
           activeOpacity={0.9}
         >
@@ -605,7 +605,7 @@ export default function CardScreen({ navigation, route }: any) {
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
-                onPress={() => navigation.navigate(kycStatus === 'verified' ? 'ApplyPhysicalCard' : 'KYCStatus', { preselectedVariant: physicalTier })}
+                onPress={() => navigation.navigate(kycStatus === 'verified' ? 'ApplyPhysicalCard' : 'KYCIntro', { preselectedVariant: physicalTier })}
                 style={[styles.applyButton, { backgroundColor: T.text }]}
                 activeOpacity={0.9}
               >
