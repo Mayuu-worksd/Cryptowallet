@@ -11,6 +11,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const isSmall = SCREEN_WIDTH < 375;
 import * as Clipboard from 'expo-clipboard';
 import { Feather } from '@expo/vector-icons';
+import * as Updates from 'expo-updates';
 import { useWallet, useMarket } from '../store/WalletContext';
 import { storageService } from '../services/storageService';
 import { COIN_META, COIN_COLORS } from '../constants';
@@ -128,6 +129,29 @@ export default function SettingsScreen({ navigation }: any) {
   const [showPinSetup, setShowPinSetup]   = useState(false);
   const [showRegionModal, setShowRegionModal] = useState(false);
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
+  const [updateLoading, setUpdateLoading] = useState(false);
+
+  const handleCheckForUpdate = async () => {
+    try {
+      setUpdateLoading(true);
+      const update = await Updates.checkForUpdateAsync();
+      if (update.isAvailable) {
+        showToast('Update found! Downloading now...', 'success');
+        await Updates.fetchUpdateAsync();
+        Alert.alert(
+          'Update Ready',
+          'A new version has been downloaded. Restart the app to apply it.',
+          [{ text: 'Restart', onPress: () => Updates.reloadAsync() }]
+        );
+      } else {
+        showToast('You are on the latest version!', 'info');
+      }
+    } catch (e: any) {
+      showToast(e.message || 'Error checking for updates', 'error');
+    } finally {
+      setUpdateLoading(false);
+    }
+  };
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') =>
     setToast({ visible: true, message, type });
@@ -743,7 +767,33 @@ export default function SettingsScreen({ navigation }: any) {
             />
           </View>
 
-          {/* Security & Backup Section */}
+          {/* App Updates */}
+          <TouchableOpacity
+            style={styles.menuRow}
+            activeOpacity={0.7}
+            onPress={handleCheckForUpdate}
+            disabled={updateLoading}
+          >
+            <View style={styles.menuLeft}>
+              <View style={[styles.menuIconBox, { backgroundColor: T.background }]}>
+                {updateLoading ? (
+                  <ActivityIndicator size="small" color={T.primary} />
+                ) : (
+                  <Feather name="download-cloud" size={18} color={T.primary} />
+                )}
+              </View>
+              <View>
+                <Text style={[styles.menuLabel, { color: T.text }]}>Check for Updates</Text>
+                <Text style={[styles.menuSub, { color: T.textMuted }]}>
+                  {updateLoading ? 'Checking...' : 'Force download latest OTA UI/UX bundle'}
+                </Text>
+              </View>
+            </View>
+            <Feather name="chevron-right" size={20} color={T.textMuted} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Security & Backup Section */}
           <Text style={[styles.sectionTitle, { color: T.textMuted, marginTop: 24, marginBottom: 8 }]}>Security & Cloud Backup</Text>
           <View style={[styles.cardBlock, { backgroundColor: T.surface, marginBottom: 16 }]}>
             {/* Show Recovery Phrase */}
@@ -805,9 +855,10 @@ export default function SettingsScreen({ navigation }: any) {
             </TouchableOpacity>
           </View>
 
-          {/* Transaction History */}
-          <TouchableOpacity
-            style={[styles.menuRow, { borderBottomWidth: 1, borderBottomColor: T.border }]}
+          <View style={[styles.cardBlock, { backgroundColor: T.surface }]}>
+            {/* Transaction History */}
+            <TouchableOpacity
+              style={[styles.menuRow, { borderBottomWidth: 1, borderBottomColor: T.border }]}
             activeOpacity={0.7}
             onPress={() => navigation.navigate('History')}
           >
@@ -858,7 +909,7 @@ export default function SettingsScreen({ navigation }: any) {
             </View>
             <Feather name="chevron-right" size={20} color={T.textMuted} />
           </TouchableOpacity>
-        </View>
+          </View>
 
         {/* Testnet Faucets */}
         {(network === 'Sepolia' || network === 'TRON Nile') && (

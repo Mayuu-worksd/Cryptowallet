@@ -215,21 +215,21 @@ const styles = StyleSheet.create({
   },
   stepLabel: {
     fontSize: 12,
-    fontFamily: 'Inter-Bold',
+    fontFamily: 'Inter_700Bold',
     color: '#FF3B3B',
     letterSpacing: 1.5,
     marginBottom: 8,
   },
   title: {
     fontSize: 32,
-    fontFamily: 'Outfit-Bold',
+    fontFamily: 'Inter_800ExtraBold',
     color: '#FFFFFF',
     marginBottom: 8,
     letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 15,
-    fontFamily: 'Inter-Regular',
+    fontFamily: 'Inter_400Regular',
     color: '#A0A0A0',
     marginBottom: 30,
     lineHeight: 22,
@@ -248,7 +248,7 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     fontSize: 12,
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: 'Inter_600SemiBold',
     color: '#888',
     letterSpacing: 1,
     marginBottom: 10,
@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingHorizontal: 20,
     fontSize: 18,
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: 'Inter_600SemiBold',
     color: '#FFF',
     letterSpacing: 1.5,
   },
@@ -272,14 +272,14 @@ const styles = StyleSheet.create({
   errorText: {
     color: '#FF3B3B',
     fontSize: 12,
-    fontFamily: 'Inter-Medium',
+    fontFamily: 'Inter_500Medium',
     marginTop: 8,
     marginLeft: 4,
   },
   hint: {
     color: '#666',
     fontSize: 13,
-    fontFamily: 'Inter-Regular',
+    fontFamily: 'Inter_400Regular',
     marginTop: 10,
     marginLeft: 4,
   },
@@ -302,7 +302,7 @@ const styles = StyleSheet.create({
   primaryBtnText: {
     color: '#FFF',
     fontSize: 17,
-    fontFamily: 'Inter-Bold',
+    fontFamily: 'Inter_700Bold',
     letterSpacing: 0.5,
   },
   previewWrap: {
@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
   designLabel: {
     color: '#888',
     fontSize: 13,
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: 'Inter_600SemiBold',
   },
   designLabelActive: {
     color: '#FFF',
@@ -349,13 +349,13 @@ const styles = StyleSheet.create({
   creatingTitle: {
     color: '#FFF',
     fontSize: 24,
-    fontFamily: 'Outfit-Bold',
+    fontFamily: 'Inter_800ExtraBold',
     marginTop: 24,
     marginBottom: 8,
   },
   creatingSub: {
     color: '#888',
     fontSize: 15,
-    fontFamily: 'Inter-Regular',
+    fontFamily: 'Inter_400Regular',
   },
 });

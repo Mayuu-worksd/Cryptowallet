@@ -1400,21 +1400,31 @@ export default function App() {
       });
     notificationService.requestPermissions().catch(() => {});
 
-    // OTA Update Check
+    // OTA Update Check — only runs in standalone builds, not Expo Go
     async function onFetchUpdateAsync() {
       try {
-        if (!__DEV__) {
+        if (!__DEV__ && Updates.isEmbeddedLaunch !== undefined) {
           const update = await Updates.checkForUpdateAsync();
           if (update.isAvailable) {
             await Updates.fetchUpdateAsync();
             await Updates.reloadAsync();
           }
         }
-      } catch (error) {
-        console.log(`Error fetching latest Expo update: ${error}`);
+      } catch (_error) {
+        // silently ignore in Expo Go
       }
     }
     onFetchUpdateAsync();
+
+    const appStateSubscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        onFetchUpdateAsync();
+      }
+    });
+
+    return () => {
+      appStateSubscription.remove();
+    };
   }, []);
 
   if (showOnboarding === null || !fontsReady) {
@@ -1424,7 +1434,9 @@ export default function App() {
           <GestureHandlerRootView
             style={{ flex: 1, backgroundColor: "#000000" }}
           >
-            <SplashScreen onFinish={() => {}} />
+            <View style={{ flex: 1, backgroundColor: "#000000" }}>
+              <SplashScreen onFinish={() => {}} />
+            </View>
           </GestureHandlerRootView>
         </SafeAreaProvider>
       </ErrorBoundary>
@@ -1497,7 +1509,11 @@ export default function App() {
               <GlobalLoadingOverlay />
             </NavigationContainer>
           </WalletProvider>
-          {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
+          {showSplash && (
+            <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: "#000000", zIndex: 9999 }}>
+              <SplashScreen onFinish={() => setShowSplash(false)} />
+            </View>
+          )}
         </GestureHandlerRootView>
       </SafeAreaProvider>
     </ErrorBoundary>

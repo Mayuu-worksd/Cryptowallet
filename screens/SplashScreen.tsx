@@ -75,7 +75,7 @@ export default function SplashScreen({ onFinish }: Props) {
   }, []);
 
   return (
-    <Animated.View style={[styles.wrapper, { opacity: screenOpacity }]}>
+    <Animated.View style={[styles.wrapper, { opacity: screenOpacity, backgroundColor: '#000000' }]}>
       <StatusBar barStyle="light-content" backgroundColor="#000000" />
 
       {/* Background */}
