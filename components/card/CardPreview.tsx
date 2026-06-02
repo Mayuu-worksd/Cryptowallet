@@ -1,135 +1,69 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
-import { haptics } from '../../utils/haptics';
 import { getDesign } from './CardDesigns';
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
 type Props = {
-  cardNumber: string;
+  cardNumber?: string;
   holderName: string;
-  expiry: string;
+  expiry?: string;
   cvv?: string;
   designKey: string;
   frozen?: boolean;
   compact?: boolean;
 };
 
-// Render each digit/bullet as individual fixed-width Text to guarantee
-// equal spacing on every Android OEM and iOS device — no system font dependency.
-function CardDigits({ value, color, fontSize = 18 }: { value: string; color: string; fontSize?: number }) {
-  return (
-    <View style={s.digitsRow}>
-      {value.split('').map((ch, i) => (
-        <Text
-          key={i}
-          style={[s.digit, { color, fontSize, fontFamily: 'Inter_700Bold', width: ch === ' ' ? fontSize * 0.55 : fontSize * 0.62 }]}
-          allowFontScaling={false}
-        >
-          {ch === ' ' ? '' : ch}
-        </Text>
-      ))}
-    </View>
-  );
-}
-
-export default function CardPreview({ cardNumber, holderName, expiry, cvv = '•••', designKey, frozen = false, compact = false }: Props) {
-  const [showDetails, setShowDetails] = useState(false);
-  const [authenticating, setAuthenticating] = useState(false);
+export default function CardPreview({ holderName, designKey, frozen = false, compact = false }: Props) {
   const design = getDesign(designKey);
 
-  const digits = useMemo(() => {
-    const clean = cardNumber.replace(/\s/g, '');
-    if (showDetails) {
-      // groups of 4 separated by a space
-      return clean.replace(/(.{4})(?=.)/g, '$1 ');
-    }
-    const last4 = clean.slice(-4) || '••••';
-    return `•••• •••• •••• ${last4}`;
-  }, [cardNumber, showDetails]);
-
-  const displayExpiry = showDetails ? expiry : '••/••';
-  const displayCvv    = showDetails ? cvv    : '•••';
-
-  const handleToggle = () => {
-    if (authenticating) return;
-    haptics.selection();
-    if (!showDetails) {
-      setAuthenticating(true);
-      setTimeout(() => { setAuthenticating(false); setShowDetails(true); }, 600);
-    } else {
-      setShowDetails(false);
-    }
-  };
-
-  const digitSize = compact ? 14 : 17;
-
   return (
-    <View style={[s.shadow, compact && s.shadowCompact]}>
-      <LinearGradient
-        colors={design.colors}
+    <View style={[styles.shadowWrapper, compact && styles.shadowCompact]}>
+      <LinearGradient 
+        colors={design.colors} 
         start={design.start}
         end={design.end}
-        style={[s.card, compact && s.cardCompact, frozen && s.frozenCard]}
+        style={[styles.portraitCard, compact && styles.cardCompact, frozen && { opacity: 0.65 }]}
       >
-        <View style={[s.glow, { backgroundColor: design.accentColor + '18' }]} />
-
-        {/* Header */}
-        <View style={s.header}>
-          <View>
-            <Text style={[s.bankName, { color: design.accentColor, fontFamily: 'Inter_800ExtraBold' }]} allowFontScaling={false}>
-              CRYPTOWALLET
-            </Text>
-            <Text style={[s.cardType, { color: design.mutedColor, fontFamily: 'Inter_700Bold' }]} allowFontScaling={false}>
-              VIRTUAL CARD
-            </Text>
-          </View>
-          {/* Mastercard circles */}
-          <View style={s.mcWrap}>
-            <View style={[s.mcCircle, { backgroundColor: '#EB001B' }]} />
-            <View style={[s.mcCircle, { backgroundColor: '#F79E1B', marginLeft: -10 }]} />
-          </View>
+        <View style={styles.glow} />
+        
+        {/* EMV Chip */}
+        <View style={styles.cardChip}>
+          <View style={styles.chipLineHorizontal} />
+          <View style={styles.chipLineVertical} />
         </View>
-
-        {/* Card Number — individual digit rendering */}
-        <View style={s.numberWrap}>
-          <CardDigits value={digits} color={design.textColor} fontSize={digitSize} />
+        
+        {/* Contactless Icon */}
+        <View style={styles.cardWifi}>
+          <Feather name="wifi" size={15} color="rgba(255,255,255,0.4)" style={{ transform: [{ rotate: '90deg' }] }} />
         </View>
-
-        {/* Footer */}
-        <View style={s.footer}>
-          <View style={s.footerItem}>
-            <Text style={[s.label, { color: design.mutedColor, fontFamily: 'Inter_700Bold' }]} allowFontScaling={false}>CARD HOLDER</Text>
-            <Text style={[s.value, { color: design.textColor, fontFamily: 'Inter_700Bold' }]} numberOfLines={1} allowFontScaling={false}>
-              {holderName.toUpperCase()}
-            </Text>
-          </View>
-          <View style={s.footerItem}>
-            <Text style={[s.label, { color: design.mutedColor, fontFamily: 'Inter_700Bold' }]} allowFontScaling={false}>EXPIRES</Text>
-            <Text style={[s.value, { color: design.textColor, fontFamily: 'Inter_700Bold' }]} allowFontScaling={false}>
-              {displayExpiry}
-            </Text>
-          </View>
-          <View style={s.footerItem}>
-            <Text style={[s.label, { color: design.mutedColor, fontFamily: 'Inter_700Bold' }]} allowFontScaling={false}>CVV</Text>
-            <Text style={[s.value, { color: design.textColor, fontFamily: 'Inter_700Bold' }]} allowFontScaling={false}>
-              {displayCvv}
-            </Text>
-          </View>
-          {!compact && (
-            <TouchableOpacity onPress={handleToggle} style={[s.eyeBtn, { backgroundColor: 'rgba(255,255,255,0.12)' }]} activeOpacity={0.7}>
-              {authenticating
-                ? <ActivityIndicator size="small" color={design.accentColor} />
-                : <Feather name={showDetails ? 'eye' : 'eye-off'} size={14} color={design.accentColor} />
-              }
-            </TouchableOpacity>
-          )}
+        
+        {/* Brand Text (Rotated right) */}
+        <View style={styles.brandRotatedContainer}>
+          <View style={[styles.brandDot, { backgroundColor: design.accentColor || '#EC2629' }]} />
+          <Text style={styles.brandRotatedText}>{design.label ? design.label.toUpperCase() : 'CRYPTOWALLET'}</Text>
         </View>
-
+        
+        {/* Card Holder (Bottom Right) */}
+        <View style={styles.cardFaceHolderWrap}>
+          <Text style={styles.cardFaceHolderLabel}>CARD HOLDER</Text>
+          <Text style={styles.cardFaceHolderName} numberOfLines={1}>
+            {holderName ? holderName.toUpperCase() : 'CARD HOLDER'}
+          </Text>
+        </View>
+        
+        {/* VISA Logo (Rotated bottom left) */}
+        <View style={styles.visaRotatedContainer}>
+          <Text style={styles.visaRotatedText}>VISA</Text>
+        </View>
+        
+        {/* Frozen Overlay */}
         {frozen && (
-          <View style={s.frozenOverlay}>
-            <Feather name="lock" size={28} color="#FFF" />
-            <Text style={[s.frozenText, { fontFamily: 'Inter_800ExtraBold' }]} allowFontScaling={false}>CARD FROZEN</Text>
+          <View style={styles.frozenOverlay}>
+            <Feather name="lock" size={32} color="#FFFFFF" />
+            <Text style={styles.frozenText}>CARD LOCKED</Text>
           </View>
         )}
       </LinearGradient>
@@ -137,51 +71,145 @@ export default function CardPreview({ cardNumber, holderName, expiry, cvv = '•
   );
 }
 
-const s = StyleSheet.create({
-  shadow: {
-    width: '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 14 },
-    shadowOpacity: 0.4,
-    shadowRadius: 22,
-    elevation: 12,
+const styles = StyleSheet.create({
+  shadowWrapper: {
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  shadowCompact: { shadowOpacity: 0.2, shadowRadius: 10, elevation: 5 },
-  card: {
-    aspectRatio: 1.586,
+  shadowCompact: {
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  portraitCard: {
+    width: 230,
+    height: 360,
     borderRadius: 24,
-    padding: 20,
-    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    position: 'relative',
     overflow: 'hidden',
   },
-  cardCompact: { padding: 14, borderRadius: 16 },
-  frozenCard: { opacity: 0.75 },
+  cardCompact: {
+    width: 140,
+    height: 220,
+    borderRadius: 16,
+  },
   glow: {
     position: 'absolute',
-    top: -60, right: -60,
-    width: 220, height: 220,
-    borderRadius: 110,
+    top: -80,
+    right: -80,
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(255,255,255,0.03)',
   },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  bankName: { fontSize: 16, letterSpacing: 0.5 },
-  cardType: { fontSize: 8, letterSpacing: 1.5, marginTop: 2 },
-  mcWrap: { flexDirection: 'row', alignItems: 'center' },
-  mcCircle: { width: 22, height: 22, borderRadius: 11, opacity: 0.9 },
-  numberWrap: { marginVertical: 4 },
-  digitsRow: { flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'center' },
-  digit: { textAlign: 'center', includeFontPadding: false, textAlignVertical: 'center' },
-  footer: { flexDirection: 'row', alignItems: 'flex-end' },
-  footerItem: { marginRight: 14 },
-  label: { fontSize: 7, letterSpacing: 0.8, marginBottom: 3, opacity: 0.8 },
-  value: { fontSize: 12, letterSpacing: 0.5 },
-  eyeBtn: { marginLeft: 'auto', width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  cardChip: {
+    width: 38,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: '#E5A93C', 
+    position: 'absolute',
+    top: 100,
+    left: 24,
+    overflow: 'hidden',
+    borderWidth: 1.2,
+    borderColor: '#D4942A',
+    padding: 3,
+  },
+  chipLineHorizontal: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 13,
+    height: 1,
+    backgroundColor: '#B57C1E',
+  },
+  chipLineVertical: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 18,
+    width: 1,
+    backgroundColor: '#B57C1E',
+  },
+  cardWifi: {
+    position: 'absolute',
+    top: 105,
+    right: 24,
+  },
+  brandRotatedContainer: {
+    position: 'absolute',
+    top: 75,
+    right: -35,
+    transform: [{ rotate: '90deg' }],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  brandDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  brandRotatedText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontFamily: 'Inter_400Regular',
+    letterSpacing: 4,
+    opacity: 0.85,
+  },
+  cardFaceHolderWrap: {
+    position: 'absolute',
+    bottom: 50,
+    right: 24,
+    alignItems: 'flex-end',
+    maxWidth: 150,
+  },
+  cardFaceHolderLabel: {
+    fontSize: 8,
+    color: 'rgba(255,255,255,0.4)',
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    marginBottom: 4,
+  },
+  cardFaceHolderName: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 1,
+  },
+  visaRotatedContainer: {
+    position: 'absolute',
+    bottom: 50,
+    left: 20,
+    transform: [{ rotate: '270deg' }],
+  },
+  visaRotatedText: {
+    color: '#FFFFFF',
+    fontSize: 32,
+    fontWeight: '900',
+    fontStyle: 'italic',
+    letterSpacing: 0.5,
+  },
   frozenOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.72)',
+    backgroundColor: 'rgba(0,0,0,0.8)',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 20,
-    borderRadius: 24,
+    zIndex: 10,
   },
-  frozenText: { color: '#FFF', fontSize: 13, marginTop: 10, letterSpacing: 2 },
+  frozenText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 2,
+    marginTop: 12,
+  },
 });
