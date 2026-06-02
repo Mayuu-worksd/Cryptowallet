@@ -581,7 +581,7 @@ export default function CardScreen({ navigation, route }: any) {
                 style={[styles.applyButton, { backgroundColor: T.text }]}
                 activeOpacity={0.9}
               >
-                <Text style={[styles.applyButtonText, { color: T.background }]}>Create a Virtual Card · 10 USD</Text>
+                <Text style={[styles.applyButtonText, { color: T.background }]}>Create a Virtual Card</Text>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity

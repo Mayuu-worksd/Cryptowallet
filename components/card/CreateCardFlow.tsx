@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
-  ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform,
+  ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform, Dimensions
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -9,17 +9,20 @@ import { Feather } from '@expo/vector-icons';
 import { CARD_DESIGNS, CardDesignKey } from './CardDesigns';
 import CardPreview from './CardPreview';
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
 type Props = {
   onComplete: (holderName: string, design: CardDesignKey) => void;
   onCancel: () => void;
 };
 
 export default function CreateCardFlow({ onComplete, onCancel }: Props) {
-  const [step, setStep]                     = useState<1 | 2 | 3>(1);
-  const [holderName, setHolderName]         = useState('');
-  const [selectedDesign, setSelectedDesign] = useState<CardDesignKey>('dark');
-  const [nameError, setNameError]           = useState('');
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [holderName, setHolderName] = useState('');
+  const [selectedDesign, setSelectedDesign] = useState<CardDesignKey>(CARD_DESIGNS[0].key);
+  const [nameError, setNameError] = useState('');
   const insets = useSafeAreaInsets();
+  const scrollRef = useRef<ScrollView>(null);
 
   const handleStep1Next = () => {
     if (!holderName.trim()) { setNameError('Card holder name is required'); return; }
@@ -33,32 +36,58 @@ export default function CreateCardFlow({ onComplete, onCancel }: Props) {
     onComplete(holderName.trim().toUpperCase(), selectedDesign);
   };
 
+  const onScroll = (event: any) => {
+    const x = event.nativeEvent.contentOffset.x;
+    const index = Math.round(x / SCREEN_WIDTH);
+    if (CARD_DESIGNS[index] && selectedDesign !== CARD_DESIGNS[index].key) {
+      setSelectedDesign(CARD_DESIGNS[index].key);
+    }
+  };
+
+  const handleIndicatorPress = (key: CardDesignKey, index: number) => {
+    setSelectedDesign(key);
+    scrollRef.current?.scrollTo({ x: index * SCREEN_WIDTH, animated: true });
+  };
+
+  const renderTopBar = (currentStep: 1 | 2) => (
+    <View style={[styles.topBar, { paddingTop: Math.max(insets.top + 10, 50) }]}>
+      <TouchableOpacity 
+        onPress={currentStep === 1 ? onCancel : () => setStep(1)} 
+        style={styles.backBtn} 
+        activeOpacity={0.7} 
+        hitSlop={{top:15, bottom:15, left:15, right:15}}
+      >
+        <Feather name={currentStep === 1 ? "x" : "chevron-left"} size={22} color="#FFF" />
+      </TouchableOpacity>
+      <View style={styles.dotsRow}>
+        <View style={[styles.dot, currentStep >= 1 && styles.dotActive]} />
+        <View style={[styles.dot, currentStep >= 2 && styles.dotActive]} />
+      </View>
+      <View style={{ width: 44 }} />
+    </View>
+  );
+
   // ── Step 1: Enter Details ──────────────────────────────────────────────────
   if (step === 1) {
     return (
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.container}>
-          <View style={[styles.topBar, { paddingTop: Math.max(insets.top + 10, 50) }]}>
-            <TouchableOpacity onPress={onCancel} style={styles.backBtn} activeOpacity={0.7} hitSlop={{top:15, bottom:15, left:15, right:15}}>
-              <Feather name="x" size={20} color="rgba(255,255,255,0.8)" />
-            </TouchableOpacity>
-            <StepDots current={1} />
-            <View style={{ width: 40 }} />
-          </View>
+          {renderTopBar(1)}
 
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-            <Text style={styles.stepLabel}>STEP 1 OF 2</Text>
+            <Text style={styles.stepLabel}>STEP 1</Text>
             <Text style={styles.title}>Personalize Your Card</Text>
-            <Text style={styles.subtitle}>Enter your name as it will appear on your premium virtual card.</Text>
+            <Text style={styles.subtitle}>Enter your name exactly as you want it embossed on your premium virtual card.</Text>
 
-            {/* Live Preview in Step 1 */}
             <View style={styles.livePreviewWrap}>
-              <CardPreview
-                cardNumber="•••• •••• •••• ••••"
-                holderName={holderName || 'YOUR NAME'}
-                expiry="••/••"
-                designKey="dark"
-              />
+              <View style={{ width: '100%', paddingHorizontal: 20 }}>
+                <CardPreview
+                  cardNumber="•••• •••• •••• ••••"
+                  holderName={holderName || 'CARD HOLDER'}
+                  expiry="••/••"
+                  designKey="dark"
+                />
+              </View>
             </View>
 
             <View style={styles.fieldWrap}>
@@ -66,7 +95,7 @@ export default function CreateCardFlow({ onComplete, onCancel }: Props) {
               <TextInput
                 style={[styles.input, !!nameError && styles.inputError]}
                 placeholder="e.g. JOHN DOE"
-                placeholderTextColor="rgba(255,255,255,0.15)"
+                placeholderTextColor="rgba(255,255,255,0.2)"
                 value={holderName}
                 onChangeText={t => { setHolderName(t.toUpperCase()); setNameError(''); }}
                 autoCapitalize="characters"
@@ -74,14 +103,13 @@ export default function CreateCardFlow({ onComplete, onCancel }: Props) {
                 autoFocus
               />
               {!!nameError && <Text style={styles.errorText}>{nameError}</Text>}
-              <Text style={styles.hint}>This name will be embossed on your virtual card</Text>
             </View>
 
             <TouchableOpacity onPress={handleStep1Next} activeOpacity={0.85} style={styles.btnWrapper}>
-              <LinearGradient colors={['#ff544e', '#8b201f']} style={styles.primaryBtn}>
-                <Text style={styles.primaryBtnText}>Continue to Design</Text>
-                <Feather name="arrow-right" size={18} color="#FFF" />
-              </LinearGradient>
+              <View style={styles.primaryBtn}>
+                <Text style={styles.primaryBtnText}>Continue</Text>
+                <Feather name="arrow-right" size={20} color="#000" />
+              </View>
             </TouchableOpacity>
           </ScrollView>
         </View>
@@ -93,61 +121,64 @@ export default function CreateCardFlow({ onComplete, onCancel }: Props) {
   if (step === 2) {
     return (
       <View style={styles.container}>
-        <View style={[styles.topBar, { paddingTop: Math.max(insets.top + 10, 50) }]}>
-          <TouchableOpacity onPress={() => setStep(1)} style={styles.backBtn} activeOpacity={0.7} hitSlop={{top:15, bottom:15, left:15, right:15}}>
-            <Feather name="arrow-left" size={20} color="rgba(255,255,255,0.8)" />
-          </TouchableOpacity>
-          <StepDots current={2} />
-          <View style={{ width: 40 }} />
+        {renderTopBar(2)}
+
+        <View style={styles.step2Header}>
+          <Text style={styles.stepLabel}>STEP 2</Text>
+          <Text style={styles.title}>Choose Your Style</Text>
+          <Text style={styles.subtitle}>Swipe to select a premium finish for your virtual card.</Text>
         </View>
 
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <Text style={styles.stepLabel}>STEP 2 OF 2</Text>
-          <Text style={styles.title}>Choose Your Style</Text>
-          <Text style={styles.subtitle}>Select a premium finish for your virtual card.</Text>
-
-          {/* Live preview of selected design */}
-          <View style={styles.livePreviewWrap}>
-            <CardPreview
-              cardNumber="•••• •••• •••• ••••"
-              holderName={holderName || 'YOUR NAME'}
-              expiry="••/••"
-              designKey={selectedDesign}
-            />
-          </View>
-
-          <View style={styles.designGrid}>
+        <View style={styles.carouselWrapper}>
+          <ScrollView
+            ref={scrollRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
+            style={styles.carouselScroll}
+            contentContainerStyle={styles.carouselContent}
+          >
             {CARD_DESIGNS.map(d => (
-              <TouchableOpacity
-                key={d.key}
-                onPress={() => setSelectedDesign(d.key)}
-                activeOpacity={0.8}
-                style={[styles.designOption, selectedDesign === d.key && styles.designOptionSelected]}
-              >
-                <CardPreview
-                  cardNumber="•••• •••• •••• ••••"
-                  holderName={holderName || 'YOUR NAME'}
-                  expiry="••/••"
-                  designKey={d.key}
-                  compact
-                />
-                <View style={styles.designLabelRow}>
-                  <Text style={[styles.designLabel, selectedDesign === d.key && styles.designLabelActive]}>
-                    {d.label}
-                  </Text>
-                  {selectedDesign === d.key && <Feather name="check-circle" size={16} color="#FF3B3B" />}
+              <View key={d.key} style={styles.carouselItem}>
+                <View style={{ width: '100%' }}>
+                  <CardPreview
+                    cardNumber="•••• •••• •••• ••••"
+                    holderName={holderName || 'CARD HOLDER'}
+                    expiry="••/••"
+                    designKey={d.key}
+                  />
                 </View>
-              </TouchableOpacity>
+              </View>
             ))}
-          </View>
+          </ScrollView>
+        </View>
 
+        <View style={styles.indicatorContainer}>
+          {CARD_DESIGNS.map((s, idx) => (
+            <TouchableOpacity
+              key={s.key}
+              onPress={() => handleIndicatorPress(s.key, idx)}
+              style={[styles.indicatorDot, selectedDesign === s.key && styles.indicatorDotActive, { backgroundColor: s.colors[0] }]}
+            />
+          ))}
+        </View>
+        
+        <View style={styles.selectedLabelWrap}>
+            <Text style={styles.selectedLabelText}>
+                {CARD_DESIGNS.find(d => d.key === selectedDesign)?.label?.toUpperCase()}
+            </Text>
+        </View>
+
+        <View style={styles.footerWrap}>
           <TouchableOpacity onPress={handleCreate} activeOpacity={0.85} style={styles.btnWrapper}>
-            <LinearGradient colors={['#ff544e', '#8b201f']} style={styles.primaryBtn}>
+            <View style={styles.primaryBtn}>
               <Text style={styles.primaryBtnText}>Activate Virtual Card</Text>
-              <Feather name="credit-card" size={18} color="#FFF" />
-            </LinearGradient>
+              <Feather name="check" size={20} color="#000" />
+            </View>
           </TouchableOpacity>
-        </ScrollView>
+        </View>
       </View>
     );
   }
@@ -155,18 +186,9 @@ export default function CreateCardFlow({ onComplete, onCancel }: Props) {
   // ── Step 3: Creating ───────────────────────────────────────────────────────
   return (
     <View style={[styles.container, styles.creatingWrap]}>
-      <ActivityIndicator size="large" color="#FF3B3B" />
+      <ActivityIndicator size="large" color="#FFF" />
       <Text style={styles.creatingTitle}>Activating Card</Text>
       <Text style={styles.creatingSub}>Generating your secure virtual credentials...</Text>
-    </View>
-  );
-}
-
-function StepDots({ current }: { current: 1 | 2 }) {
-  return (
-    <View style={styles.dotsRow}>
-      <View style={[styles.dot, current >= 1 && styles.dotActive]} />
-      <View style={[styles.dot, current >= 2 && styles.dotActive]} />
     </View>
   );
 }
@@ -175,7 +197,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   container: {
     flex: 1,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: '#101114',
   },
   topBar: {
     flexDirection: 'row',
@@ -185,11 +207,11 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   backBtn: {
-    width: 40, height: 40,
-    borderRadius: 20,
-    backgroundColor: '#1A1A1A',
+    width: 44, height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: '#333',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
   },
   dotsRow: {
     flexDirection: 'row',
@@ -198,67 +220,65 @@ const styles = StyleSheet.create({
   dot: {
     width: 24, height: 4,
     borderRadius: 2,
-    backgroundColor: '#333',
+    backgroundColor: 'rgba(255,255,255,0.15)',
   },
   dotActive: {
-    backgroundColor: '#FF3B3B',
-    shadowColor: '#FF3B3B',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 6,
-    elevation: 4,
+    backgroundColor: '#FFF',
   },
   content: {
     paddingHorizontal: 24,
     paddingBottom: 60,
     paddingTop: 10,
   },
+  step2Header: {
+    paddingHorizontal: 24,
+    paddingTop: 10,
+    marginBottom: 20,
+  },
   stepLabel: {
     fontSize: 12,
-    fontFamily: 'Inter_700Bold',
-    color: '#FF3B3B',
-    letterSpacing: 1.5,
+    fontFamily: 'Inter_800ExtraBold',
+    color: '#FFF',
+    opacity: 0.5,
+    letterSpacing: 2,
     marginBottom: 8,
   },
   title: {
-    fontSize: 32,
+    fontSize: 34,
     fontFamily: 'Inter_800ExtraBold',
     color: '#FFFFFF',
-    marginBottom: 8,
-    letterSpacing: -0.5,
+    marginBottom: 10,
+    letterSpacing: -1,
   },
   subtitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontFamily: 'Inter_400Regular',
     color: '#A0A0A0',
     marginBottom: 30,
-    lineHeight: 22,
+    lineHeight: 24,
   },
   livePreviewWrap: {
     marginBottom: 40,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.5,
-    shadowRadius: 30,
-    elevation: 15,
+    width: '100%',
   },
   fieldWrap: {
     marginBottom: 40,
   },
   fieldLabel: {
-    fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
-    color: '#888',
-    letterSpacing: 1,
-    marginBottom: 10,
+    fontSize: 11,
+    fontFamily: 'Inter_700Bold',
+    color: 'rgba(255,255,255,0.5)',
+    letterSpacing: 1.5,
+    marginBottom: 12,
+    marginLeft: 4,
   },
   input: {
-    height: 60,
-    backgroundColor: '#141414',
+    height: 64,
+    backgroundColor: 'rgba(255,255,255,0.04)',
     borderWidth: 1,
-    borderColor: '#333',
-    borderRadius: 16,
+    borderColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 20,
     paddingHorizontal: 20,
     fontSize: 18,
     fontFamily: 'Inter_600SemiBold',
@@ -276,71 +296,78 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginLeft: 4,
   },
-  hint: {
-    color: '#666',
-    fontSize: 13,
-    fontFamily: 'Inter_400Regular',
-    marginTop: 10,
-    marginLeft: 4,
+  footerWrap: {
+    paddingHorizontal: 24,
+    paddingBottom: 40,
+    marginTop: 'auto',
   },
   btnWrapper: {
     marginTop: 10,
-    shadowColor: '#FF3B3B',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 8,
   },
   primaryBtn: {
-    height: 60,
-    borderRadius: 30,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#FFF',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
+    shadowColor: '#FFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 5,
   },
   primaryBtnText: {
-    color: '#FFF',
+    color: '#000',
     fontSize: 17,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: 'Inter_800ExtraBold',
     letterSpacing: 0.5,
   },
-  previewWrap: {
-    marginBottom: 30,
+  carouselWrapper: {
+    height: 260,
+    width: SCREEN_WIDTH,
+  },
+  carouselScroll: {
+    flex: 1,
+  },
+  carouselContent: {
     alignItems: 'center',
   },
-  designGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
-    marginBottom: 40,
+  carouselItem: {
+    width: SCREEN_WIDTH,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
   },
-  designOption: {
-    width: '47%',
-    backgroundColor: '#141414',
-    borderRadius: 20,
-    padding: 12,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  designOptionSelected: {
-    borderColor: '#FF3B3B',
-    backgroundColor: '#1A0B0B',
-  },
-  designLabelRow: {
+  indicatorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 14,
-    paddingHorizontal: 4,
+    justifyContent: 'center',
+    marginTop: 20,
+    gap: 10,
   },
-  designLabel: {
-    color: '#888',
-    fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
+  indicatorDot: {
+    width: 12, height: 12,
+    borderRadius: 6,
+    opacity: 0.3,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)'
   },
-  designLabelActive: {
+  indicatorDotActive: {
+    opacity: 1,
+    transform: [{ scale: 1.2 }],
+    borderColor: '#FFF',
+  },
+  selectedLabelWrap: {
+    alignItems: 'center',
+    marginTop: 24,
+  },
+  selectedLabelText: {
     color: '#FFF',
+    fontSize: 14,
+    fontFamily: 'Inter_800ExtraBold',
+    letterSpacing: 2,
   },
   creatingWrap: {
     alignItems: 'center',
@@ -348,14 +375,15 @@ const styles = StyleSheet.create({
   },
   creatingTitle: {
     color: '#FFF',
-    fontSize: 24,
+    fontSize: 26,
     fontFamily: 'Inter_800ExtraBold',
     marginTop: 24,
     marginBottom: 8,
+    letterSpacing: -0.5,
   },
   creatingSub: {
-    color: '#888',
-    fontSize: 15,
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 16,
     fontFamily: 'Inter_400Regular',
   },
 });
