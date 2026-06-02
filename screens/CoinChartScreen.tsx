@@ -467,7 +467,7 @@ export default function CoinChartScreen({ route, navigation }: any) {
       {/* Sticky Trade Button */}
       <View style={[styles.stickyFooter, { paddingBottom: insets.bottom + 20 }]}>
          <TouchableOpacity 
-            style={[styles.tradeBtn, { backgroundColor: Theme.colors.success }]} 
+            style={[styles.tradeBtn, { backgroundColor: T.primary }]} 
             activeOpacity={0.8}
             onPress={() => setTradeModalVisible(true)}
          >
@@ -482,7 +482,7 @@ export default function CoinChartScreen({ route, navigation }: any) {
             <View style={[styles.modalContent, { backgroundColor: T.surface, paddingBottom: insets.bottom + 24 }]}>
                <View style={styles.modalActionsList}>
                   <TouchableOpacity 
-                     style={[styles.modalBtn, { backgroundColor: Theme.colors.success }]} 
+                     style={[styles.modalBtn, { backgroundColor: T.primary }]} 
                      activeOpacity={0.8}
                      onPress={() => {
                         setTradeModalVisible(false);
@@ -492,11 +492,11 @@ export default function CoinChartScreen({ route, navigation }: any) {
                      <Text style={styles.modalBtnText}>Swap</Text>
                   </TouchableOpacity>
                   
-                  <TouchableOpacity style={[styles.modalBtn, { backgroundColor: Theme.colors.success }]} activeOpacity={0.8}>
+                  <TouchableOpacity style={[styles.modalBtn, { backgroundColor: T.primary }]} activeOpacity={0.8}>
                      <Text style={styles.modalBtnText}>Sell</Text>
                   </TouchableOpacity>
                   
-                  <TouchableOpacity style={[styles.modalBtn, { backgroundColor: Theme.colors.success }]} activeOpacity={0.8}>
+                  <TouchableOpacity style={[styles.modalBtn, { backgroundColor: T.primary }]} activeOpacity={0.8}>
                      <Text style={styles.modalBtnText}>Buy</Text>
                   </TouchableOpacity>
 
@@ -505,7 +505,7 @@ export default function CoinChartScreen({ route, navigation }: any) {
                      activeOpacity={0.8}
                      onPress={() => setTradeModalVisible(false)}
                   >
-                     <Feather name="x" size={24} color={Theme.colors.success} />
+                     <Feather name="x" size={24} color={T.primary} />
                   </TouchableOpacity>
                </View>
             </View>
@@ -559,12 +559,12 @@ const styles = StyleSheet.create({
 
   stickyFooter: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 20, paddingTop: 16, backgroundColor: 'transparent' },
   tradeBtn: { height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
-  tradeBtnText: { color: '#000', fontSize: 16, fontFamily: Fonts.bold },
+  tradeBtnText: { color: '#FFF', fontSize: 16, fontFamily: Fonts.bold },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
   modalActionsList: { gap: 12 },
   modalBtn: { height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
-  modalBtnText: { color: '#000', fontSize: 16, fontFamily: Fonts.bold },
+  modalBtnText: { color: '#FFF', fontSize: 16, fontFamily: Fonts.bold },
   modalCloseBtn: { height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginTop: 8 }
 });
