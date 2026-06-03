@@ -110,6 +110,7 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
   const insets = useSafeAreaInsets();
 
   const { preselectedVariant } = route?.params || {};
+  const cardFaceHolderName = cardDetails?.holderName?.toUpperCase() || 'VALUED MEMBER';
 
   const [variants, setVariants] = useState<CardVariant[]>([]);
   const [selectedVariant, setSelectedVariant] = useState<CardVariant | null>(null);
