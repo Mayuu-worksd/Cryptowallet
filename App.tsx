@@ -20,6 +20,7 @@ import {
   AppState,
   Modal,
   Pressable,
+  Alert,
 } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Feather } from "@expo/vector-icons";
@@ -1407,7 +1408,14 @@ export default function App() {
           const update = await Updates.checkForUpdateAsync();
           if (update.isAvailable) {
             await Updates.fetchUpdateAsync();
-            await Updates.reloadAsync();
+            Alert.alert(
+              'Update Ready',
+              'A new update has been downloaded in the background. Would you like to restart the app now to apply it?',
+              [
+                { text: 'Not Now', style: 'cancel' },
+                { text: 'Restart', onPress: () => Updates.reloadAsync() }
+              ]
+            );
           }
         }
       } catch (_error) {

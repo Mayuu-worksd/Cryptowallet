@@ -136,19 +136,39 @@ export default function SettingsScreen({ navigation }: any) {
       setUpdateLoading(true);
       const update = await Updates.checkForUpdateAsync();
       if (update.isAvailable) {
-        showToast('Update found! Downloading now...', 'success');
-        await Updates.fetchUpdateAsync();
+        setUpdateLoading(false); // Hide loading while alert is shown
         Alert.alert(
-          'Update Ready',
-          'A new version has been downloaded. Restart the app to apply it.',
-          [{ text: 'Restart', onPress: () => Updates.reloadAsync() }]
+          'Update Available',
+          'A new version of the app is available. Do you want to download and install it?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Update & Restart', 
+              onPress: async () => {
+                try {
+                  setUpdateLoading(true);
+                  showToast('Downloading update...', 'info');
+                  await Updates.fetchUpdateAsync();
+                  Alert.alert(
+                    'Update Ready',
+                    'The update has been downloaded. The app will now restart.',
+                    [{ text: 'Restart Now', onPress: () => Updates.reloadAsync() }]
+                  );
+                } catch (err: any) {
+                  showToast(err.message || 'Error downloading update', 'error');
+                } finally {
+                  setUpdateLoading(false);
+                }
+              }
+            }
+          ]
         );
       } else {
         showToast('You are on the latest version!', 'info');
+        setUpdateLoading(false);
       }
     } catch (e: any) {
       showToast(e.message || 'Error checking for updates', 'error');
-    } finally {
       setUpdateLoading(false);
     }
   };
