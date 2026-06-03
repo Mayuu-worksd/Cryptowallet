@@ -273,7 +273,7 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
           </Text>
           
           <View style={[styles.kycStatusBox, { backgroundColor: T.surface, borderColor: T.border }]}>
-            <Text style={[styles.kycStatusLabel, { color: T.textMuted }]}>STATUS</Text>
+            <Text style={[styles.kycStatusLabel, { color: T.textMuted }]}>KYC VERIFICATION STATUS</Text>
             <View style={[styles.kycBadge, { backgroundColor:
               liveKycStatus === 'under_review' ? 'rgba(59,130,246,0.08)' :
               liveKycStatus === 'pending'      ? 'rgba(245,158,11,0.08)' :
