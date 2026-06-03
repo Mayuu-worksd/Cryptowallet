@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Platform, ActivityIndicator, Modal, Dimensions, StatusBar,
+  Platform, ActivityIndicator, Modal, Dimensions, StatusBar, Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -591,7 +591,7 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
 
             {/* Custom checks */}
             <View style={styles.featuresList}>
-              {selectedVariant.features.map(f => (
+              {(selectedVariant.features || []).map(f => (
                 <View key={f} style={styles.featureRow}>
                   <View style={[styles.checkCircle, { backgroundColor: 'rgba(0,200,83,0.06)' }]}>
                     <Feather name="check" size={11} color="#00C853" />
