@@ -638,9 +638,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
     route?.params?.tab === 'sell' ? 'sell' : 'buy'
   );
 
-  useFocusEffect(useCallback(() => {
-    if (route?.params?.tab) setTab(route.params.tab);
-  }, [route?.params?.tab]));
+
 
   const [orders,  setOrders]  = useState<P2POrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -671,6 +669,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
   const [fiatModal,    setFiatModal]    = useState(false);
   const [methodModal,  setMethodModal]  = useState(false);
   const [countryModal, setCountryModal] = useState(false);
+
 
   // Auto-heal locked balance: compare AsyncStorage locks vs real active DB orders
   const healLockedBalance = useCallback(async () => {
@@ -890,6 +889,20 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
     const isTron = ['TRON', 'TRON Nile'].includes(network);
     setSellToken(isTron ? 'TRX' : 'ETH');
   };
+
+  useFocusEffect(useCallback(() => {
+    if (route?.params?.tab) setTab(route.params.tab);
+    if (route?.params?.token) {
+      setFilterToken(route.params.token);
+      if (route?.params?.tab === 'sell') {
+        resetSellModal();
+        setSellToken(route.params.token);
+        setShowSellModal(true);
+      } else {
+        setSellToken(route.params.token);
+      }
+    }
+  }, [route?.params?.tab, route?.params?.token]));
 
   const STEPS = ['Token', 'Amount', 'Details', 'Review'];
 

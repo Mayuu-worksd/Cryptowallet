@@ -492,12 +492,15 @@ export default function CoinChartScreen({ route, navigation }: any) {
                      <Text style={styles.modalBtnText}>Swap</Text>
                   </TouchableOpacity>
                   
-                  <TouchableOpacity style={[styles.modalBtn, { backgroundColor: T.primary }]} activeOpacity={0.8}>
+                  <TouchableOpacity 
+                     style={[styles.modalBtn, { backgroundColor: T.primary }]} 
+                     activeOpacity={0.8}
+                     onPress={() => {
+                        setTradeModalVisible(false);
+                        navigation.navigate('P2PMarketplace', { tab: 'sell', token: symbol });
+                     }}
+                  >
                      <Text style={styles.modalBtnText}>Sell</Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity style={[styles.modalBtn, { backgroundColor: T.primary }]} activeOpacity={0.8}>
-                     <Text style={styles.modalBtnText}>Buy</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity 
