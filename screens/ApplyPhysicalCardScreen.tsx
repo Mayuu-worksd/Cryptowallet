@@ -310,14 +310,31 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
   // Show status screen for any non-rejected existing request
   if (existingRequest && !submitted && existingRequest.status !== 'rejected') {
     const req = existingRequest;
-    const isApproved = req.status === 'approved';
-    const statusColor = isApproved ? '#00C853' : '#F59E0B';
-    const statusIcon  = isApproved ? 'check-circle' : 'clock';
-    const statusLabel = isApproved ? 'APPROVED' : 'UNDER REVIEW';
-    const statusTitle = isApproved ? 'Card Ready for Dispatch' : 'Processing Order';
-    const statusSub   = isApproved
-      ? `Your high-fidelity physical card has been approved and is currently being minted and prepared for dispatch to ${req.country}.`
-      : 'Our compliance desk is currently validating your wallet. Review will finish shortly.';
+    let statusColor = '#F59E0B';
+    let statusIcon  = 'clock';
+    let statusLabel = 'UNDER REVIEW';
+    let statusTitle = 'Processing Order';
+    let statusSub   = 'Our compliance desk is currently validating your wallet. Review will finish shortly.';
+
+    if (req.status === 'approved') {
+      statusColor = '#00C853';
+      statusIcon  = 'check-circle';
+      statusLabel = 'APPROVED';
+      statusTitle = 'Card Ready for Dispatch';
+      statusSub   = `Your high-fidelity physical card has been approved and is currently being minted and prepared for dispatch to ${req.country}.`;
+    } else if (req.status === 'shipped') {
+      statusColor = '#3B82F6';
+      statusIcon  = 'truck';
+      statusLabel = 'SHIPPED';
+      statusTitle = 'Card Dispatched';
+      statusSub   = `Your physical card has been shipped to ${req.country}. Tracking details will be provided via email.`;
+    } else if (req.status === 'completed') {
+      statusColor = '#8B5CF6';
+      statusIcon  = 'check';
+      statusLabel = 'DELIVERED';
+      statusTitle = 'Card Delivered';
+      statusSub   = `Your physical card was successfully delivered to ${req.country}.`;
+    }
 
     return (
       <View style={{ flex: 1, backgroundColor: T.background }}>
