@@ -56,7 +56,7 @@ export default function CardScreen({ navigation, route }: any) {
   const {
     cardFrozen, toggleFreezeCard,
     cardDetails, cardTransactions, cardCreated,
-    balances, ethBalance, spendCard, topupCard, cardBalance,
+    balances, ethBalance, spendCard,
     isDarkMode, network,
     createCard, updateCardDetails, kycStatus,
     refreshCardData, refreshBalance, accountType,
@@ -76,14 +76,10 @@ export default function CardScreen({ navigation, route }: any) {
 
   const [showCreate, setShowCreate] = useState(false);
   const [showSpend, setShowSpend] = useState(false);
-  const [showTopup, setShowTopup] = useState(false);
   const [balanceHidden, setBalanceHidden] = useState(false);
 
   const [merchant, setMerchant] = useState<CustomMerchant>({ name: '', amount: '', icon: '🛍️' });
-  const [topupToken, setTopupToken] = useState<typeof COINS[number]>('ETH');
-  const [topupAmount, setTopupAmount] = useState('');
   const [loading, setLoading] = useState(false);
-  const [topupLoading, setTopupLoading] = useState(false);
   
   const [toast, setToast] = useState({
     visible: false, message: '', type: 'success' as 'success' | 'error' | 'info',
@@ -115,55 +111,28 @@ export default function CardScreen({ navigation, route }: any) {
     }
   }, [route?.params?.initialTab]);
 
-  const topupTokenBalance = useMemo(() =>
-    topupToken === 'ETH' ? parseFloat(ethBalance) : (balances[topupToken] ?? 0),
-    [topupToken, ethBalance, balances]);
-
-  const topupRate = useMemo(() => prices[topupToken]?.usd ?? 1, [topupToken, prices]);
-
-  const topupUSD = useMemo(() => {
-    const amt = parseFloat(topupAmount);
-    return isNaN(amt) ? 0 : +(amt * topupRate);
-  }, [topupAmount, topupRate]);
-
   const handleCardCreated = (holderName: string) => {
     createCard(holderName, selectedSkin === 'standard' ? 'dark' : selectedSkin === 'solana' ? 'neon' : 'emerald');
     setShowCreate(false);
     showToast('Vault Card successfully activated', 'success');
   };
 
-  const handleTopup = async () => {
-    const amt = parseFloat(topupAmount);
-    if (isNaN(amt) || amt <= 0) { showToast('Enter a valid amount', 'error'); return; }
-    if (amt > topupTokenBalance + 0.000001) { showToast(`Insufficient ${topupToken} balance`, 'error'); return; }
-    setTopupLoading(true);
-    await new Promise(r => setTimeout(r, 800));
-    const ok = topupCard(topupToken, amt);
-    setTopupLoading(false);
-    if (ok) {
-      showToast(`${formatFiat(topupUSD)} added to card balance`, 'success');
-      setTopupAmount('');
-      setShowTopup(false);
-    } else showToast('Top-up failed. Check balance.', 'error');
-  };
-
   const handleSpend = async () => {
     const amtUSD = parseFloat(merchant.amount);
     if (!merchant.name.trim()) { showToast('Enter a merchant name', 'error'); return; }
     if (isNaN(amtUSD) || amtUSD <= 0) { showToast('Enter a valid amount', 'error'); return; }
-    if (amtUSD > 1000) { showToast(`Exceeds limit (${formatFiat(1000)})`, 'error'); return; }
+    if (amtUSD > 10000) { showToast(`Exceeds limit (${formatFiat(10000)})`, 'error'); return; }
     if (cardFrozen) { showToast('Card is frozen. Unfreeze to spend.', 'error'); return; }
-    if (amtUSD > cardBalance) { showToast('Insufficient card balance. Top up first.', 'error'); return; }
 
     setLoading(true);
     await new Promise(r => setTimeout(r, 900));
-    const ok = spendCard(topupToken, amtUSD, `${merchant.icon} ${merchant.name.trim()}`);
+    const ok = spendCard(amtUSD, `${merchant.icon} ${merchant.name.trim()}`);
     setLoading(false);
     if (ok) {
       showToast(`Paid ${formatFiat(amtUSD)} to ${merchant.name.trim()}`, 'success');
       setMerchant({ name: '', amount: '', icon: '🛍️' });
       setShowSpend(false);
-    } else showToast('Payment failed. Try again.', 'error');
+    } else showToast('Insufficient combined wallet balance.', 'error');
   };
 
   const copyToClipboard = async (text: string, label: string) => {
@@ -762,9 +731,9 @@ export default function CardScreen({ navigation, route }: any) {
               <View style={styles.premiumWidgetHeader}>
                 <View style={styles.premiumTitleWrap}>
                   <View style={[styles.premiumIconBadge, { backgroundColor: 'rgba(0,200,83,0.08)' }]}>
-                    <Feather name="credit-card" size={14} color="#00C853" />
+                    <Feather name="layers" size={14} color="#00C853" />
                   </View>
-                  <Text style={[styles.premiumWidgetTitle, { color: T.textMuted }]}>Ledger Balance</Text>
+                  <Text style={[styles.premiumWidgetTitle, { color: T.textMuted }]}>Wallet Spend Power</Text>
                 </View>
                 <TouchableOpacity onPress={() => setBalanceHidden(v => !v)} activeOpacity={0.7}>
                   <Feather name={balanceHidden ? 'eye-off' : 'eye'} size={15} color={T.textDim} />
@@ -774,7 +743,7 @@ export default function CardScreen({ navigation, route }: any) {
               <View style={styles.balanceContainer}>
                 {!balanceHidden && <Text style={[styles.activeCurrencySymbol, { color: T.text }]}>{fiatSymbol}</Text>}
                 <Text style={[styles.activeBalanceText, { color: T.text }]}>
-                  {balanceHidden ? '••••••' : convertFiat(cardBalance).toFixed(2)}
+                  {balanceHidden ? '••••••' : convertFiat(Object.keys(balances).reduce((sum, key) => sum + (balances[key] * (prices[key]?.usd || 0)), parseFloat(ethBalance) * (prices['ETH']?.usd || 0))).toFixed(2)}
                 </Text>
                 {!balanceHidden && <Text style={[styles.activeUsdtTag, { color: T.textDim }]}>{fiatCurrency}</Text>}
               </View>
@@ -791,20 +760,11 @@ export default function CardScreen({ navigation, route }: any) {
             <View style={styles.actionsContainer}>
               <TouchableOpacity
                 style={[styles.actionBtn, { backgroundColor: T.text }]}
-                onPress={() => { setShowSpend(v => !v); setShowTopup(false); }}
+                onPress={() => { setShowSpend(v => !v); }}
                 activeOpacity={0.9}
               >
                 <Feather name="shopping-bag" size={17} color={T.background} />
                 <Text style={[styles.actionBtnText, { color: T.background }]}>Pay Now</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: T.surface, borderWidth: 1, borderColor: T.border }]}
-                onPress={() => { setShowTopup(v => !v); setShowSpend(false); }}
-                activeOpacity={0.9}
-              >
-                <Feather name="plus-circle" size={17} color={T.text} />
-                <Text style={[styles.actionBtnText, { color: T.text }]}>Top Up</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -820,78 +780,7 @@ export default function CardScreen({ navigation, route }: any) {
               </TouchableOpacity>
             </View>
 
-            {/* Top Up Collapsible Panel */}
-            {showTopup && (
-              <View style={[styles.interactivePanel, { backgroundColor: T.surface, borderColor: T.border }, styles.shadowWrapper]}>
-                <View style={styles.panelHeader}>
-                  <Text style={[styles.panelTitle, { color: T.text }]}>Top Up Vault Card</Text>
-                  <TouchableOpacity onPress={() => { setShowTopup(false); setTopupAmount(''); }}>
-                    <Feather name="x" size={16} color={T.textDim} />
-                  </TouchableOpacity>
-                </View>
 
-                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
-                  {COINS.map(c => (
-                    <TouchableOpacity
-                      key={c}
-                      onPress={() => { setTopupToken(c); setTopupAmount(''); }}
-                      style={[
-                        styles.tokenPill,
-                        { backgroundColor: T.surfaceLow, borderColor: T.border },
-                        topupToken === c && [styles.tokenPillActive, { borderColor: T.primary }],
-                      ]}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={[styles.tokenPillText, { color: T.textDim }, topupToken === c && { color: T.primary }]}>
-                        {c}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                <Text style={[styles.inputLabel, { color: T.textDim }]}>AMOUNT ({topupToken})</Text>
-                <View style={[styles.inputPill, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
-                  <TextInput
-                    style={[styles.textInput, { color: T.text }]}
-                    placeholder="0.00"
-                    placeholderTextColor={T.textDim}
-                    keyboardType="decimal-pad"
-                    value={topupAmount}
-                    onChangeText={v => setTopupAmount(v.replace(/[^0-9.]/g, ''))}
-                  />
-                  <TouchableOpacity
-                    onPress={() => setTopupAmount((Math.floor(topupTokenBalance * 100000) / 100000).toString())}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.maxText, { color: T.primary }]}>MAX</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.rowBetween}>
-                  <Text style={[styles.balanceText, { color: T.textDim }]}>
-                    Available: {topupTokenBalance.toFixed(4)} {topupToken}
-                  </Text>
-                  {topupUSD > 0 && (
-                    <Text style={[styles.successText, { color: T.success }]}>+{formatFiat(topupUSD)}</Text>
-                  )}
-                </View>
-
-                <TouchableOpacity
-                  style={[styles.panelConfirmBtn, { backgroundColor: T.primary }, (!topupAmount || topupLoading) && { opacity: 0.5 }]}
-                  onPress={handleTopup}
-                  disabled={!topupAmount || topupLoading}
-                  activeOpacity={0.8}
-                >
-                  {topupLoading ? (
-                    <ActivityIndicator color="#FFFFFF" />
-                  ) : (
-                    <Text style={styles.panelConfirmBtnText}>
-                      {topupUSD > 0 ? `Add ${formatFiat(topupUSD)} to Card` : 'Enter Amount'}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            )}
 
             {/* Pay Collapsible Panel */}
             {showSpend && (

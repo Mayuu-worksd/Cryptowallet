@@ -816,3 +816,21 @@ export const fiatCurrencyService = {
     }
   }
 };
+
+// ─── Admin Settings Service ───────────────────────────────────────────────────
+
+export const adminSettingsService = {
+  async getSetting<T>(key: string, defaultValue: T): Promise<T> {
+    try {
+      const { data, error } = await supabase
+        .from('admin_settings')
+        .select('value')
+        .eq('key', key)
+        .maybeSingle();
+      if (error || !data || !data.value) return defaultValue;
+      return data.value as T;
+    } catch {
+      return defaultValue;
+    }
+  }
+};

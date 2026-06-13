@@ -37,7 +37,7 @@ type CardData = {
 
 export default function VCCCardDetailScreen({ navigation }: any) {
   usePreventScreenCapture();
-  const { walletAddress, isDarkMode, cardDetails, cardBalance, cardCreated, formatFiat, fiatCurrency } = useWallet() as any;
+  const { walletAddress, isDarkMode, cardDetails, cardCreated, formatFiat, fiatCurrency } = useWallet() as any;
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const insets = useSafeAreaInsets();
 
@@ -237,11 +237,7 @@ export default function VCCCardDetailScreen({ navigation }: any) {
         </LinearGradient>
 
         {/* ── Balance ── */}
-        <View style={[s.balanceCard, { backgroundColor: T.surface, borderColor: T.border }]}>
-          <Text style={[s.balanceLabel, { color: T.textDim }]}>AVAILABLE BALANCE</Text>
-          <Text style={[s.balanceValue, { color: T.text }]}>{formatFiat(cardData.balance)}</Text>
-          <Text style={[s.balanceSub, { color: T.textMuted }]}>{fiatCurrency} · {cardData.variant.toUpperCase()} CARD</Text>
-        </View>
+
 
         {/* ── Card Details ── */}
         <Text style={[s.sectionTitle, { color: T.textDim }]}>CARD INFORMATION</Text>

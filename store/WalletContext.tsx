@@ -8,7 +8,7 @@ import { getWalletBalances } from '../services/balanceService';
 import { storageService } from '../services/storageService';
 import { marketService, NewsItem } from '../services/marketService';
 import { hasPinSetup, clearPin } from '../services/pinService';
-import { kycService, KYCStatus, txService, dbCardService, vccService, cardVariantService, VCCCard, profileService } from '../services/supabaseService';
+import { kycService, KYCStatus, txService, dbCardService, vccService, cardVariantService, VCCCard, profileService, adminSettingsService } from '../services/supabaseService';
 import { transactionService } from '../services/transactionService';
 import { cardService } from '../services/cardService';
 import { supabase, setWallet, clearWalletSession } from '../services/supabaseClient';
@@ -157,6 +157,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [cardFrozen,       setCardFrozen]       = useState(false);
   const [cardTransactions, setCardTransactions] = useState<CardTransaction[]>([]);
   const [cardCreated,      setCardCreated]      = useState(false);
+  const [paymentPriority,  setPaymentPriority]  = useState<string[]>(['USDT', 'BTC', 'ETH', 'BNB', 'TRX']);
   const [cardDetails,      setCardDetails]      = useState<{ number: string; expiry: string; cvv: string; brand: 'VISA' | 'MASTERCARD'; holderName: string; design: string }>({
     number: '\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022',
     expiry: '\u2022\u2022/\u2022\u2022',
@@ -588,15 +589,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           // set_wallet must complete first so RLS policies allow the queries
           try {
             await setWallet(address);
-            const [vcc, dbCard, dbTxs, variants, kycRecord, dbNetworksRes, bizRecord] = await Promise.all([
+            const [vcc, dbCard, dbTxs, variants, kycRecord, dbNetworksRes, bizRecord, pPriority] = await Promise.all([
               vccService.getCard(address),
               dbCardService.getCard(address),
               txService.getAll(address, 200),
               cardVariantService.getVariants(),
               kycService.getStatus(address),
               supabase.from('admin_networks').select('*').eq('is_active', true),
-              import('../services/merchantService').then(m => m.businessKYCService.getStatus(address)).catch(() => null)
+              import('../services/merchantService').then(m => m.businessKYCService.getStatus(address)).catch(() => null),
+              adminSettingsService.getSetting<string[]>('payment_asset_priority', ['USDT', 'BTC', 'ETH', 'BNB', 'TRX'])
             ]);
+            setPaymentPriority(pPriority);
 
             // Inject Dynamic Networks from Admin Dashboard
             if (dbNetworksRes?.data && dbNetworksRes.data.length > 0) {
@@ -1623,74 +1626,94 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, [prices, walletAddress, addTx]);
 
   const topupCard = useCallback((coin: string, amount: number): boolean => {
-    const coinPrice = prices[coin]?.usd ?? 1;
-    const usd       = +(amount * coinPrice).toFixed(2);
-    let newBalance = 0;
-    setCardBalance(prev => {
-      newBalance = +(prev + usd).toFixed(2);
-      return newBalance;
-    });
-    // Use setTimeout to ensure newBalance is set after state update
-    const cardTx: Omit<CardTransaction, 'id' | 'timestamp'> = { type: 'topup', amount: usd, label: `Top-up via ${coin}`, coin, coinAmount: amount, status: 'success' };
-    const newCardTx: CardTransaction = { ...cardTx, id: Date.now().toString(), timestamp: new Date().toISOString() };
-    setCardTransactions(prev => {
-      const updated = [newCardTx, ...prev];
-      AsyncStorage.setItem('cw_card_transactions', JSON.stringify(updated)).catch(() => {});
-      return updated;
-    });
-    addTx({ type: 'card_topup', coin, amount: amount.toString(), usdValue: usd.toFixed(2), address: 'Virtual Card', status: 'success' });
-    // Log to Supabase + update card balance (use functional read to get latest)
-    txService.log({
-      wallet_address: walletAddress,
-      type:      'card_topup',
-      token:     coin,
-      amount,
-      usd_value: usd,
-      status:    'success',
-      label:     `Top-up via ${coin}`,
-    }).catch(() => {});
-    // Persist new balance to AsyncStorage immediately
-    setCardBalance(prev => {
-      const finalBal = +(prev).toFixed(2);
-      AsyncStorage.setItem('cw_card_balance', String(finalBal)).catch(() => {});
-      dbCardService.updateBalance(walletAddress, finalBal).catch(() => {});
-      vccService.updateBalance(walletAddress, finalBal).catch(() => {});
-      return prev;
-    });
-    return true;
-  }, [prices, walletAddress, addTx]);
+    // Deprecated: VCC Top-up flow removed
+    return false;
+  }, []);
 
   const spendCard = useCallback((coin: string, amountUSD: number, label: string): boolean => {
     if (cardFrozen) return false;
-    if (amountUSD > cardBalance) return false;
-    const cardTx: Omit<CardTransaction, 'id' | 'timestamp'> = { type: 'spend', amount: amountUSD, label, coin, status: 'success' };
-    const newCardTx: CardTransaction = { ...cardTx, id: Date.now().toString(), timestamp: new Date().toISOString() };
+    
+    // 1. Calculate total available USD balance from priority assets
+    let totalAvailableUSD = 0;
+    const availableAssets: { coin: string, balance: number, usdPrice: number, usdValue: number }[] = [];
+    
+    for (const pCoin of paymentPriority) {
+      const balance = pCoin === 'ETH' ? parseFloat(ethBalance || '0') : (balances[pCoin] || 0);
+      if (balance > 0) {
+        const usdPrice = prices[pCoin]?.usd || 0;
+        if (usdPrice > 0) {
+          const usdValue = balance * usdPrice;
+          totalAvailableUSD += usdValue;
+          availableAssets.push({ coin: pCoin, balance, usdPrice, usdValue });
+        }
+      }
+    }
+    
+    // 2. Reject if insufficient combined balance
+    if (amountUSD > totalAvailableUSD) {
+      return false;
+    }
+    
+    // 3. Deduct from assets progressively
+    let remainingUSD = amountUSD;
+    let newEthBalance = parseFloat(ethBalance || '0');
+    const newBalances = { ...balances };
+    const updatedCardTxs: CardTransaction[] = [];
+    const timestamp = new Date().toISOString();
+    
+    for (const asset of availableAssets) {
+      if (remainingUSD <= 0) break;
+      
+      const deductUSD = Math.min(asset.usdValue, remainingUSD);
+      const deductAmount = deductUSD / asset.usdPrice;
+      
+      if (asset.coin === 'ETH') {
+        newEthBalance = Math.max(0, newEthBalance - deductAmount);
+      } else {
+        newBalances[asset.coin] = Math.max(0, (newBalances[asset.coin] || 0) - deductAmount);
+      }
+      
+      remainingUSD -= deductUSD;
+      
+      // Record transaction
+      const cardTx: CardTransaction = {
+        id: Date.now().toString() + '_' + asset.coin,
+        timestamp,
+        type: 'spend',
+        amount: deductUSD,
+        label,
+        coin: asset.coin,
+        status: 'success'
+      };
+      updatedCardTxs.push(cardTx);
+      
+      addTx({ type: 'card_spend', coin: asset.coin, amount: deductAmount.toFixed(6), usdValue: deductUSD.toFixed(2), address: label, status: 'success' });
+      
+      txService.log({
+        wallet_address: walletAddress,
+        type:      'card_spend',
+        token:     asset.coin,
+        amount:    deductAmount,
+        usd_value: deductUSD,
+        status:    'success',
+        label,
+      }).catch(() => {});
+    }
+    
+    // 4. Update local state
+    setBalances(newBalances);
+    balancesRef.current = newBalances;
+    AsyncStorage.setItem('cw_token_balances', JSON.stringify(newBalances)).catch(() => {});
+    setEthBalance(newEthBalance.toFixed(6));
+    
     setCardTransactions(prev => {
-      const updated = [newCardTx, ...prev];
+      const updated = [...updatedCardTxs, ...prev];
       AsyncStorage.setItem('cw_card_transactions', JSON.stringify(updated)).catch(() => {});
       return updated;
     });
-    setCardBalance(prev => +(prev - amountUSD).toFixed(2));
-    addTx({ type: 'card_spend', coin, amount: amountUSD.toFixed(2), usdValue: amountUSD.toFixed(2), address: label, status: 'success' });
-    // Log to Supabase + update card balance
-    txService.log({
-      wallet_address: walletAddress,
-      type:      'card_spend',
-      token:     coin,
-      amount:    amountUSD,
-      usd_value: amountUSD,
-      status:    'success',
-      label,
-    }).catch(() => {});
-    setCardBalance(prev => {
-      const finalBal = +(prev).toFixed(2);
-      AsyncStorage.setItem('cw_card_balance', String(finalBal)).catch(() => {});
-      dbCardService.updateBalance(walletAddress, finalBal).catch(() => {});
-      vccService.updateBalance(walletAddress, finalBal).catch(() => {});
-      return prev;
-    });
+    
     return true;
-  }, [cardFrozen, cardBalance, walletAddress, addTx]);
+  }, [cardFrozen, balances, ethBalance, prices, walletAddress, addTx]);
 
   const generateCardDetails = useCallback(() => {
     // no-op: card details are set at creation time and restored from Supabase
@@ -1701,12 +1724,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (!walletAddress) return;
     try {
       await setWallet(walletAddress);
-      const [vcc, dbCard, dbTxs, variants] = await Promise.all([
+      const [vcc, dbCard, dbTxs, variants, priorityData] = await Promise.all([
         vccService.getCard(walletAddress),
         dbCardService.getCard(walletAddress),
         txService.getAll(walletAddress, 200),
         cardVariantService.getVariants(),
+        adminSettingsService.getSetting<string[]>('payment_asset_priority', ['USDT', 'BTC', 'ETH', 'BNB', 'TRX']),
       ]);
+      setPaymentPriority(priorityData);
       if (vcc) {
         // Try Supabase decrypt; fall back to current state (already loaded from AsyncStorage)
         const decryptedNumber = dbCard ? dbCardService.decryptNumber(dbCard, walletAddress) : '';
