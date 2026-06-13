@@ -713,72 +713,59 @@ export default function CardScreen({ navigation, route }: any) {
               ))}
             </View>
 
-            {/* Secure Credentials — Production CardCredentialsWidget */}
-            <CardCredentialsWidget
-              cardNumber={cardCreated ? cardDetails.number : '0000000000000000'}
-              expiry={cardDetails.expiry}
-              cvv={cardDetails.cvv}
-              holderName={cardDetails.holderName || 'CARD HOLDER'}
-              textColor={T.text}
-              accentColor={T.primary}
-              mutedColor={T.textDim}
-              widgetBg={T.surface}
-              widgetBorder={T.border}
-            />
-
-            {/* Premium Ledger Balance Widget */}
-            <View style={[styles.premiumWidget, { backgroundColor: T.surface, borderColor: T.border }, styles.shadowWrapper]}>
-              <View style={styles.premiumWidgetHeader}>
-                <View style={styles.premiumTitleWrap}>
-                  <View style={[styles.premiumIconBadge, { backgroundColor: 'rgba(0,200,83,0.08)' }]}>
-                    <Feather name="layers" size={14} color="#00C853" />
-                  </View>
-                  <Text style={[styles.premiumWidgetTitle, { color: T.textMuted }]}>Wallet Spend Power</Text>
-                </View>
-                <TouchableOpacity onPress={() => setBalanceHidden(v => !v)} activeOpacity={0.7}>
-                  <Feather name={balanceHidden ? 'eye-off' : 'eye'} size={15} color={T.textDim} />
+            {/* Action buttons (RedotPay style) */}
+            <View style={styles.circularActionsContainer}>
+              <View style={styles.circularActionWrap}>
+                <TouchableOpacity 
+                  style={[styles.circularBtn, { backgroundColor: T.surface, borderColor: T.border }]} 
+                  onPress={() => navigation.navigate('VCCCardDetail')} 
+                  activeOpacity={0.7}
+                >
+                  <Feather name="eye" size={20} color={T.text} />
                 </TouchableOpacity>
-              </View>
-              
-              <View style={styles.balanceContainer}>
-                {!balanceHidden && <Text style={[styles.activeCurrencySymbol, { color: T.text }]}>{fiatSymbol}</Text>}
-                <Text style={[styles.activeBalanceText, { color: T.text }]}>
-                  {balanceHidden ? '••••••' : convertFiat(Object.keys(balances).reduce((sum, key) => sum + (balances[key] * (prices[key]?.usd || 0)), parseFloat(ethBalance) * (prices['ETH']?.usd || 0))).toFixed(2)}
-                </Text>
-                {!balanceHidden && <Text style={[styles.activeUsdtTag, { color: T.textDim }]}>{fiatCurrency}</Text>}
+                <Text style={[styles.circularActionLabel, { color: T.text }]}>View</Text>
               </View>
 
-              <View style={[styles.activeNetworkRow, { borderTopColor: T.border }]}>
-                <View style={[styles.networkStatusDot, { backgroundColor: T.success }]} />
-                <Text style={[styles.activeNetworkText, { color: T.textDim }]}>
-                  {network.toUpperCase()} SECURE GATEWAY ENCRYPTED
-                </Text>
+              <View style={styles.circularActionWrap}>
+                <TouchableOpacity 
+                  style={[styles.circularBtn, { backgroundColor: T.surface, borderColor: T.border }]} 
+                  onPress={toggleFreezeCard} 
+                  activeOpacity={0.7}
+                >
+                  <Feather name={cardFrozen ? 'loader' : 'wind'} size={20} color={cardFrozen ? T.primary : T.text} />
+                </TouchableOpacity>
+                <Text style={[styles.circularActionLabel, { color: T.text }]}>{cardFrozen ? 'Unfreeze' : 'Freeze'}</Text>
+              </View>
+
+              <View style={styles.circularActionWrap}>
+                <TouchableOpacity 
+                  style={[styles.circularBtn, { backgroundColor: T.surface, borderColor: T.border }]} 
+                  onPress={() => setShowSpend(v => !v)} 
+                  activeOpacity={0.7}
+                >
+                  <Feather name="sliders" size={20} color={T.text} />
+                </TouchableOpacity>
+                <Text style={[styles.circularActionLabel, { color: T.text }]}>Pay</Text>
+              </View>
+
+              <View style={styles.circularActionWrap}>
+                <TouchableOpacity 
+                  style={[styles.circularBtn, { backgroundColor: T.surface, borderColor: T.border }]} 
+                  activeOpacity={0.7}
+                >
+                  <Feather name="settings" size={20} color={T.text} />
+                </TouchableOpacity>
+                <Text style={[styles.circularActionLabel, { color: T.text }]}>Settings</Text>
               </View>
             </View>
 
-            {/* Action buttons */}
-            <View style={styles.actionsContainer}>
-              <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: T.text }]}
-                onPress={() => { setShowSpend(v => !v); }}
-                activeOpacity={0.9}
-              >
-                <Feather name="shopping-bag" size={17} color={T.background} />
-                <Text style={[styles.actionBtnText, { color: T.background }]}>Pay Now</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.freezeBtn, { backgroundColor: T.surface, borderWidth: 1, borderColor: T.border }]}
-                onPress={toggleFreezeCard}
-                activeOpacity={0.7}
-              >
-                <Feather
-                  name={cardFrozen ? 'unlock' : 'lock'}
-                  size={17}
-                  color={cardFrozen ? T.success : T.primary}
-                />
-              </TouchableOpacity>
-            </View>
+            {/* Apple Wallet Button */}
+            <TouchableOpacity style={[styles.appleWalletBtn, { backgroundColor: T.surface, borderColor: T.border }]} activeOpacity={0.8}>
+              <View style={styles.appleWalletIconWrap}>
+                 <Feather name="credit-card" size={16} color={T.text} />
+              </View>
+              <Text style={[styles.appleWalletText, { color: T.text }]}>Add to Apple Wallet</Text>
+            </TouchableOpacity>
 
 
 
@@ -864,19 +851,19 @@ export default function CardScreen({ navigation, route }: any) {
 
             {/* Ledger Transactions */}
             <View style={[styles.premiumWidget, { backgroundColor: T.surface, borderColor: T.border, padding: 6 }, styles.shadowWrapper]}>
-              {cardTransactions.length === 0 ? (
+              {cardTransactions.filter(tx => tx.type !== 'topup').length === 0 ? (
                 <View style={styles.emptyActivity}>
                   <Feather name="activity" size={24} color={T.textDim} />
                   <Text style={[styles.emptyTextTitle, { color: T.textDim }]}>No transactions recorded</Text>
                 </View>
               ) : (
-                cardTransactions.slice(0, 5).map((tx, i) => (
+                cardTransactions.filter(tx => tx.type !== 'topup').slice(0, 5).map((tx, i, arr) => (
                   <View
                     key={tx.id}
                     style={[
                       styles.txRow,
                       { borderBottomColor: T.border },
-                      i < Math.min(cardTransactions.length, 5) - 1 && styles.txBorder,
+                      i < arr.length - 1 && styles.txBorder,
                     ]}
                   >
                     <View style={[
@@ -1314,41 +1301,62 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  actionsContainer: {
+  circularActionsContainer: {
     flexDirection: 'row',
-    gap: 12,
+    justifyContent: 'space-around',
+    paddingHorizontal: 16,
     marginBottom: 24,
+    marginTop: 8,
   },
-  actionBtn: {
-    flex: 2,
-    height: 54,
-    borderRadius: 16,
-    flexDirection: 'row',
+  circularActionWrap: {
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 2,
+    gap: 10,
   },
-  actionBtnText: {
-    fontSize: 15,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
-  freezeBtn: {
+  circularBtn: {
     width: 54,
     height: 54,
-    borderRadius: 16,
+    borderRadius: 27,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  circularActionLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  appleWalletBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    gap: 12,
+    marginBottom: 32,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.03,
     shadowRadius: 4,
     elevation: 2,
+  },
+  appleWalletIconWrap: {
+    width: 32,
+    height: 22,
+    backgroundColor: 'rgba(120,120,120,0.1)',
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  appleWalletText: {
+    fontSize: 15,
+    fontWeight: '800',
   },
 
   interactivePanel: {
