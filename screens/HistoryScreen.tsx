@@ -127,8 +127,8 @@ const sk = StyleSheet.create({
 });
 
 // ─── Transaction row ──────────────────────────────────────────────────────────
-const TxRow = memo(({ tx, T, cfg, onPress }: {
-  tx: UnifiedTx; T: any; cfg: TxConfig; onPress: () => void;
+const TxRow = memo(({ tx, T, cfg, onPress, formatFiat }: {
+  tx: UnifiedTx; T: any; cfg: TxConfig; onPress: () => void; formatFiat: (amount: number) => string;
 }) => {
   const scale = useRef(new Animated.Value(1)).current;
   const isDebit  = tx.type === 'send' || (tx.type === 'card' && !tx.label.includes('Top-up'));
@@ -171,7 +171,7 @@ const TxRow = memo(({ tx, T, cfg, onPress }: {
             )} {tx.token}
           </Text>
           <Text style={[styles.txUsd, { color: T.textMuted }]}>
-            ${parseFloat(tx.usdValue || '0').toFixed(2)}
+            {formatFiat(parseFloat(tx.usdValue || '0'))}
           </Text>
           <StatusBadge status={tx.status} T={T} />
         </View>
@@ -183,8 +183,8 @@ const TxRow = memo(({ tx, T, cfg, onPress }: {
 });
 
 // ─── Detail modal ─────────────────────────────────────────────────────────────
-const DetailModal = memo(({ tx, T, cfg, network, onClose }: {
-  tx: UnifiedTx | null; T: any; cfg: TxConfig | null; network: string; onClose: () => void;
+const DetailModal = memo(({ tx, T, cfg, network, onClose, formatFiat }: {
+  tx: UnifiedTx | null; T: any; cfg: TxConfig | null; network: string; onClose: () => void; formatFiat: (amount: number) => string;
 }) => {
   if (!tx || !cfg) return null;
   const isDebit  = tx.type === 'send' || (tx.type === 'card' && !tx.label.includes('Top-up'));
@@ -227,7 +227,7 @@ const DetailModal = memo(({ tx, T, cfg, network, onClose }: {
               )} {tx.token}
             </Text>
             <Text style={[modal.heroUsd, { color: T.textMuted }]}>
-              ≈ ${parseFloat(tx.usdValue || '0').toFixed(2)} USD
+              ≈ {formatFiat(parseFloat(tx.usdValue || '0'))}
             </Text>
             <StatusBadge status={tx.status} T={T} />
           </View>
@@ -303,7 +303,7 @@ const EmptyState = memo(({ filter, T }: { filter: Filter; T: any }) => (
 // ─── Main screen ──────────────────────────────────────────────────────────────
 export default function HistoryScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
-  const { isDarkMode, network, walletAddress } = useWallet();
+  const { isDarkMode, network, walletAddress, formatFiat } = useWallet();
   const { prices } = useMarket();
   const T       = isDarkMode ? Theme.colors : Theme.lightColors;
   const cfgMap  = useTxConfig(T);
@@ -399,6 +399,7 @@ export default function HistoryScreen({ navigation }: any) {
         cfg={selectedTx ? getTxConfig(selectedTx, cfgMap) : null}
         network={network}
         onClose={() => setSelectedTx(null)}
+        formatFiat={formatFiat}
       />
 
       {/* ── Header ── */}
@@ -501,6 +502,7 @@ export default function HistoryScreen({ navigation }: any) {
               T={T}
               cfg={getTxConfig(tx, cfgMap)}
               onPress={() => setSelectedTx(tx)}
+              formatFiat={formatFiat}
             />
           ))
         )}

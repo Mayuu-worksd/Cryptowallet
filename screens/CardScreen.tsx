@@ -44,11 +44,11 @@ const PHYSICAL_DESCRIPTIONS: Record<PhysicalTier, string> = {
   Travel:   'Deep Aero Indigo composite shell card. Zero foreign transaction fees and accelerated flight points.',
 };
 
-const PHYSICAL_PRICES: Record<PhysicalTier, string> = {
-  Classic:  'FREE',
-  Gold:     '$49.99/year',
-  Platinum: '$99.99/year',
-  Travel:   '$79.99/year',
+const PHYSICAL_PRICES_USD: Record<PhysicalTier, number> = {
+  Classic:  0,
+  Gold:     49.99,
+  Platinum: 99.99,
+  Travel:   79.99,
 };
 
 export default function CardScreen({ navigation, route }: any) {
@@ -60,7 +60,8 @@ export default function CardScreen({ navigation, route }: any) {
     isDarkMode, network,
     createCard, updateCardDetails, kycStatus,
     refreshCardData, refreshBalance, accountType,
-  } = useWallet();
+    formatFiat, fiatSymbol, fiatCurrency, convertFiat,
+  } = useWallet() as any;
   const { prices } = useMarket();
 
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
@@ -122,7 +123,7 @@ export default function CardScreen({ navigation, route }: any) {
 
   const topupUSD = useMemo(() => {
     const amt = parseFloat(topupAmount);
-    return isNaN(amt) ? 0 : +(amt * topupRate).toFixed(2);
+    return isNaN(amt) ? 0 : +(amt * topupRate);
   }, [topupAmount, topupRate]);
 
   const handleCardCreated = (holderName: string) => {
@@ -140,7 +141,7 @@ export default function CardScreen({ navigation, route }: any) {
     const ok = topupCard(topupToken, amt);
     setTopupLoading(false);
     if (ok) {
-      showToast(`$${topupUSD.toFixed(2)} added to card balance`, 'success');
+      showToast(`${formatFiat(topupUSD)} added to card balance`, 'success');
       setTopupAmount('');
       setShowTopup(false);
     } else showToast('Top-up failed. Check balance.', 'error');
@@ -150,7 +151,7 @@ export default function CardScreen({ navigation, route }: any) {
     const amtUSD = parseFloat(merchant.amount);
     if (!merchant.name.trim()) { showToast('Enter a merchant name', 'error'); return; }
     if (isNaN(amtUSD) || amtUSD <= 0) { showToast('Enter a valid amount', 'error'); return; }
-    if (amtUSD > 1000) { showToast('Exceeds limit ($1000)', 'error'); return; }
+    if (amtUSD > 1000) { showToast(`Exceeds limit (${formatFiat(1000)})`, 'error'); return; }
     if (cardFrozen) { showToast('Card is frozen. Unfreeze to spend.', 'error'); return; }
     if (amtUSD > cardBalance) { showToast('Insufficient card balance. Top up first.', 'error'); return; }
 
@@ -159,7 +160,7 @@ export default function CardScreen({ navigation, route }: any) {
     const ok = spendCard(topupToken, amtUSD, `${merchant.icon} ${merchant.name.trim()}`);
     setLoading(false);
     if (ok) {
-      showToast(`Paid $${amtUSD.toFixed(2)} to ${merchant.name.trim()}`, 'success');
+      showToast(`Paid ${formatFiat(amtUSD)} to ${merchant.name.trim()}`, 'success');
       setMerchant({ name: '', amount: '', icon: '🛍️' });
       setShowSpend(false);
     } else showToast('Payment failed. Try again.', 'error');
@@ -611,7 +612,7 @@ export default function CardScreen({ navigation, route }: any) {
               >
                 <Text style={[styles.applyButtonText, { color: T.background }]}>
                   {kycStatus === 'verified' 
-                    ? `Order ${physicalTier} Card · ${PHYSICAL_PRICES[physicalTier] === 'FREE' ? 'Free' : PHYSICAL_PRICES[physicalTier].split('/')[0]}` 
+                    ? `Order ${physicalTier} Card · ${PHYSICAL_PRICES_USD[physicalTier] === 0 ? 'Free' : formatFiat(PHYSICAL_PRICES_USD[physicalTier])}` 
                     : 'Verify KYC to order'}
                 </Text>
               </TouchableOpacity>
@@ -771,11 +772,11 @@ export default function CardScreen({ navigation, route }: any) {
               </View>
               
               <View style={styles.balanceContainer}>
-                {!balanceHidden && <Text style={[styles.activeCurrencySymbol, { color: T.text }]}>$</Text>}
+                {!balanceHidden && <Text style={[styles.activeCurrencySymbol, { color: T.text }]}>{fiatSymbol}</Text>}
                 <Text style={[styles.activeBalanceText, { color: T.text }]}>
-                  {balanceHidden ? '••••••' : cardBalance.toFixed(2)}
+                  {balanceHidden ? '••••••' : convertFiat(cardBalance).toFixed(2)}
                 </Text>
-                {!balanceHidden && <Text style={[styles.activeUsdtTag, { color: T.textDim }]}>USD</Text>}
+                {!balanceHidden && <Text style={[styles.activeUsdtTag, { color: T.textDim }]}>{fiatCurrency}</Text>}
               </View>
 
               <View style={[styles.activeNetworkRow, { borderTopColor: T.border }]}>
@@ -871,7 +872,7 @@ export default function CardScreen({ navigation, route }: any) {
                     Available: {topupTokenBalance.toFixed(4)} {topupToken}
                   </Text>
                   {topupUSD > 0 && (
-                    <Text style={[styles.successText, { color: T.success }]}>+${topupUSD.toFixed(2)} USD</Text>
+                    <Text style={[styles.successText, { color: T.success }]}>+{formatFiat(topupUSD)}</Text>
                   )}
                 </View>
 
@@ -885,7 +886,7 @@ export default function CardScreen({ navigation, route }: any) {
                     <ActivityIndicator color="#FFFFFF" />
                   ) : (
                     <Text style={styles.panelConfirmBtnText}>
-                      {topupUSD > 0 ? `Add $${topupUSD.toFixed(2)} to Card` : 'Enter Amount'}
+                      {topupUSD > 0 ? `Add ${formatFiat(topupUSD)} to Card` : 'Enter Amount'}
                     </Text>
                   )}
                 </TouchableOpacity>
@@ -931,9 +932,9 @@ export default function CardScreen({ navigation, route }: any) {
                   />
                 </View>
 
-                <Text style={[styles.inputLabel, { color: T.textDim }]}>AMOUNT (USD)</Text>
+                <Text style={[styles.inputLabel, { color: T.textDim }]}>AMOUNT ({fiatCurrency})</Text>
                 <View style={[styles.inputPill, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
-                  <Text style={{ color: T.text, fontSize: 15, marginRight: 6 }}>$</Text>
+                  <Text style={{ color: T.text, fontSize: 15, marginRight: 6 }}>{fiatSymbol}</Text>
                   <TextInput
                     style={[styles.textInput, { color: T.text }]}
                     placeholder="0.00"
@@ -956,7 +957,7 @@ export default function CardScreen({ navigation, route }: any) {
                   ) : (
                     <Text style={[styles.panelConfirmBtnText, { color: T.background }]}>
                       {merchant.name.trim() && merchant.amount
-                        ? `Pay $${parseFloat(merchant.amount).toFixed(2)}`
+                        ? `Pay ${formatFiat(parseFloat(merchant.amount))}`
                         : 'Confirm Swipe'}
                     </Text>
                   )}
@@ -1008,7 +1009,7 @@ export default function CardScreen({ navigation, route }: any) {
                     </View>
 
                     <Text style={[styles.txAmount, { color: tx.type === 'topup' ? '#00C853' : T.text }]}>
-                      {tx.type === 'topup' ? '+' : '−'}${tx.amount.toFixed(2)}
+                      {tx.type === 'topup' ? '+' : '−'}{formatFiat(tx.amount)}
                     </Text>
                   </View>
                 ))

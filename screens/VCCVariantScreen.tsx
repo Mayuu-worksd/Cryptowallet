@@ -11,7 +11,7 @@ import { useWallet } from '../store/WalletContext';
 import { cardVariantService, VCCCardVariant } from '../services/supabaseService';
 
 export default function VCCVariantScreen({ navigation }: any) {
-  const { isDarkMode } = useWallet();
+  const { isDarkMode, formatFiat } = useWallet() as any;
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const insets = useSafeAreaInsets();
   const [variants, setVariants] = useState<VCCCardVariant[]>([]);
@@ -124,13 +124,13 @@ export default function VCCVariantScreen({ navigation }: any) {
                     <View style={s.feeItem}>
                       <Text style={[s.feeLabel, { color: T.textDim }]}>Annual Fee</Text>
                       <Text style={[s.feeValue, { color: T.text }]}>
-                        {v.annual_fee_usd === 0 ? 'Free' : `$${v.annual_fee_usd.toFixed(2)}`}
+                        {v.annual_fee_usd === 0 ? 'Free' : formatFiat(v.annual_fee_usd)}
                       </Text>
                     </View>
                     <View style={[s.feeDivider, { backgroundColor: T.border }]} />
                     <View style={s.feeItem}>
                       <Text style={[s.feeLabel, { color: T.textDim }]}>Tx Limit</Text>
-                      <Text style={[s.feeValue, { color: T.text }]}>${v.transaction_limit_usd.toLocaleString()}</Text>
+                      <Text style={[s.feeValue, { color: T.text }]}>{formatFiat(v.transaction_limit_usd)}</Text>
                     </View>
                     <View style={[s.feeDivider, { backgroundColor: T.border }]} />
                     <View style={s.feeItem}>

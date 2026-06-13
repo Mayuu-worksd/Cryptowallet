@@ -445,11 +445,11 @@ export default function CoinChartScreen({ route, navigation }: any) {
            <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 24 }}>
               <View style={{ width: '50%' }}>
                  <Text style={[styles.statLabel, { color: T.textMuted }]}>Market Cap</Text>
-                 <Text style={[styles.statValue, { color: T.text }]}>$45.68B</Text>
+                 <Text style={[styles.statValue, { color: T.text }]}>{fiatInfo.symbol}{(45.68 * fiatInfo.rate).toFixed(2)}B</Text>
               </View>
               <View style={{ width: '50%' }}>
                  <Text style={[styles.statLabel, { color: T.textMuted }]}>24h Volume</Text>
-                 <Text style={[styles.statValue, { color: T.text }]}>$3.65B</Text>
+                 <Text style={[styles.statValue, { color: T.text }]}>{fiatInfo.symbol}{(3.65 * fiatInfo.rate).toFixed(2)}B</Text>
               </View>
               <View style={{ width: '50%' }}>
                  <Text style={[styles.statLabel, { color: T.textMuted }]}>Holders</Text>

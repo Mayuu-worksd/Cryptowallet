@@ -164,7 +164,7 @@ export default function PortfolioScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const {
     ethBalance, balances, isDarkMode, walletAddress, lockedBalance,
-    formatFiat, convertFiat, fiatSymbol, fiatCurrency, setFiatCurrency,
+    formatFiat, convertFiat, fiatSymbol, fiatCurrency, setFiatCurrency, formatOrderFiat,
     balanceVisible, toggleBalanceVisible
   } = useWallet();
   const { prices } = useMarket();
@@ -268,11 +268,11 @@ export default function PortfolioScreen({ navigation }: any) {
   // Mock fiat wallets with a gorgeous setup
   const fiatWalletsList = useMemo(() => {
     return [
-      { code: 'USD', name: 'US Dollar Wallet',      formattedBalance: balanceVisible ? '$0.00'    : '••••' },
-      { code: 'EUR', name: 'Euro Wallet',             formattedBalance: balanceVisible ? '€0.00'    : '••••' },
-      { code: 'INR', name: 'Indian Rupee Wallet',     formattedBalance: balanceVisible ? '₹0.00'    : '••••' },
-      { code: 'GBP', name: 'British Pound Wallet',    formattedBalance: balanceVisible ? '£0.00'    : '••••' },
-      { code: 'AED', name: 'UAE Dirham Wallet',       formattedBalance: balanceVisible ? 'د.إ0.00'  : '••••' }
+      { code: 'USD', name: 'US Dollar Wallet',      formattedBalance: balanceVisible ? formatOrderFiat(0, 'USD') : '••••' },
+      { code: 'EUR', name: 'Euro Wallet',           formattedBalance: balanceVisible ? formatOrderFiat(0, 'EUR') : '••••' },
+      { code: 'INR', name: 'Indian Rupee Wallet',   formattedBalance: balanceVisible ? formatOrderFiat(0, 'INR') : '••••' },
+      { code: 'GBP', name: 'British Pound Wallet',  formattedBalance: balanceVisible ? formatOrderFiat(0, 'GBP') : '••••' },
+      { code: 'AED', name: 'UAE Dirham Wallet',     formattedBalance: balanceVisible ? formatOrderFiat(0, 'AED') : '••••' }
     ];
   }, [balanceVisible]);
 
@@ -472,7 +472,7 @@ export default function PortfolioScreen({ navigation }: any) {
                   </View>
                   <View style={styles.orderRight}>
                     <Text style={[styles.orderFiatText, { color: T.text }]}>
-                      {formatFiat(order.fiat_total)}
+                      {formatOrderFiat(order.fiat_total || 0, order.fiat_currency)}
                     </Text>
                     <Feather name="chevron-right" size={14} color={T.textDim} style={{ marginLeft: 6 }} />
                   </View>

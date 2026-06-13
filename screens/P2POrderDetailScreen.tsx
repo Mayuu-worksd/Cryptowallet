@@ -62,7 +62,7 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
   const openChatOnMount = route?.params?.openChat === true;
   const { 
     walletAddress, tronAddress, isDarkMode, balances, ethBalance, lockBalance, unlockBalance, 
-    addTx, updateTxStatus, lockedBalance, refreshBalance, creditP2PBalance, network 
+    addTx, updateTxStatus, lockedBalance, refreshBalance, creditP2PBalance, network, formatOrderFiat 
   } = useWallet() as any;
   
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
@@ -329,7 +329,7 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
     }
     Alert.alert(
       'Confirm Purchase',
-      `You are about to lock ${currentOrder.amount} ${currentOrder.token} in escrow.\n\nTotal to pay: ${Number(currentOrder.fiat_total || currentOrder.amount * currentOrder.rate || 0).toFixed(2)} ${currentOrder.fiat_currency}\n\nYour balance: ${Number(buyerBalance || 0).toFixed(6)} ${currentOrder.token}\n\nFunds will be locked until the seller confirms payment received.${!isTestnet ? '\n\n[NOTICE]: Mainnet Escrow smart contract is pending deployment. This is a simulated placeholder flow.' : ''}`,
+      `You are about to lock ${currentOrder.amount} ${currentOrder.token} in escrow.\n\nTotal to pay: ${formatOrderFiat(Number(currentOrder.fiat_total || currentOrder.amount * currentOrder.rate || 0), currentOrder.fiat_currency)}\n\nYour balance: ${Number(buyerBalance || 0).toFixed(6)} ${currentOrder.token}\n\nFunds will be locked until the seller confirms payment received.${!isTestnet ? '\n\n[NOTICE]: Mainnet Escrow smart contract is pending deployment. This is a simulated placeholder flow.' : ''}`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Lock & Buy', style: 'default', onPress: async () => {
@@ -559,13 +559,13 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
             <View>
               <Text style={[styles.secondaryLabel, { color: T.textDim }]}>Settlement Amount</Text>
               <Text style={[styles.settlementValue, { color: T.primary }]}>
-                {Number(currentOrder.fiat_total || 0).toFixed(2)} <Text style={{ fontSize: 13, color: T.textMuted }}>{currentOrder.fiat_currency}</Text>
+                {formatOrderFiat(Number(currentOrder.fiat_total || 0), currentOrder.fiat_currency)}
               </Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <Text style={[styles.secondaryLabel, { color: T.textDim }]}>Rate</Text>
               <Text style={[styles.rateValue, { color: T.text }]}>
-                {Number(currentOrder.rate || 0).toFixed(2)} {currentOrder.fiat_currency}
+                {formatOrderFiat(Number(currentOrder.rate || 0), currentOrder.fiat_currency)}
               </Text>
             </View>
           </View>
@@ -703,7 +703,7 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
                   <View style={[styles.infoBanner, { backgroundColor: T.primary + '06', borderColor: T.primary + '15' }]}>
                     <Feather name="shield" size={14} color={T.primary} style={{ marginTop: 2 }} />
                     <Text style={{ fontSize: 12, fontFamily: Fonts.medium, color: T.textDim, flex: 1, lineHeight: 18 }}>
-                      Seller's crypto is locked inside secure escrow. Pay exactly <Text style={{ color: T.primary, fontFamily: Fonts.bold }}>{Number(currentOrder.fiat_total || currentOrder.amount * currentOrder.rate || 0).toFixed(2)} {currentOrder.fiat_currency}</Text> via <Text style={{ color: T.text, fontFamily: Fonts.bold }}>{currentOrder.payment_method}</Text>.
+                      Seller's crypto is locked inside secure escrow. Pay exactly <Text style={{ color: T.primary, fontFamily: Fonts.bold }}>{formatOrderFiat(Number(currentOrder.fiat_total || currentOrder.amount * currentOrder.rate || 0), currentOrder.fiat_currency)}</Text> via <Text style={{ color: T.text, fontFamily: Fonts.bold }}>{currentOrder.payment_method}</Text>.
                     </Text>
                   </View>
 
@@ -906,11 +906,11 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
                   </View>
                   <View style={styles.flexRowBetween}>
                     <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: T.textDim }}>Fiat Settlement</Text>
-                    <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.primary }}>{Number(currentOrder.fiat_total || 0).toFixed(2)} {currentOrder.fiat_currency}</Text>
+                    <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.primary }}>{formatOrderFiat(Number(currentOrder.fiat_total || 0), currentOrder.fiat_currency)}</Text>
                   </View>
                   <View style={styles.flexRowBetween}>
                     <Text style={{ fontSize: 12, fontFamily: Fonts.bold, color: T.textDim }}>Rate</Text>
-                    <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.text }}>{Number(currentOrder.rate || 0).toFixed(2)} {currentOrder.fiat_currency}</Text>
+                    <Text style={{ fontSize: 13, fontFamily: Fonts.bold, color: T.text }}>{formatOrderFiat(Number(currentOrder.rate || 0), currentOrder.fiat_currency)}</Text>
                   </View>
                 </View>
               </View>
@@ -1300,7 +1300,7 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
                     <View style={styles.flexRowBetween}>
                       <Text style={{ fontSize: 10, fontFamily: Fonts.medium, color: T.textMuted }}>Fiat Amount</Text>
                       <Text style={{ fontSize: 10, fontFamily: Fonts.bold, color: '#F59E0B' }}>
-                        {Number(currentOrder.fiat_total || 0).toFixed(2)} {currentOrder.fiat_currency}
+                        {formatOrderFiat(Number(currentOrder.fiat_total || 0), currentOrder.fiat_currency)}
                       </Text>
                     </View>
                   </View>

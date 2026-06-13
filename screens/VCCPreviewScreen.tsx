@@ -11,7 +11,7 @@ import { vccService, VCCCardVariant } from '../services/supabaseService';
 
 export default function VCCPreviewScreen({ navigation, route }: any) {
   const variant: VCCCardVariant = route?.params?.variant;
-  const { isDarkMode, walletAddress } = useWallet() as any;
+  const { isDarkMode, walletAddress, formatFiat } = useWallet() as any;
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const insets = useSafeAreaInsets();
 
@@ -118,11 +118,11 @@ export default function VCCPreviewScreen({ navigation, route }: any) {
           ))}
           <View style={[s.featureRow, { borderTopWidth: 1, borderTopColor: T.border, paddingTop: 12, marginTop: 4 }]}>
             <Feather name="dollar-sign" size={15} color={T.textDim} />
-            <Text style={[s.featureText, { color: T.textMuted }]}>Annual fee: {variant.annual_fee_usd === 0 ? 'Free' : `$${variant.annual_fee_usd}/yr`}</Text>
+            <Text style={[s.featureText, { color: T.textMuted }]}>Annual fee: {variant.annual_fee_usd === 0 ? 'Free' : `${formatFiat(variant.annual_fee_usd)}/yr`}</Text>
           </View>
           <View style={s.featureRow}>
             <Feather name="trending-up" size={15} color={T.textDim} />
-            <Text style={[s.featureText, { color: T.textMuted }]}>Transaction limit: ${variant.transaction_limit_usd.toLocaleString()}/transaction</Text>
+            <Text style={[s.featureText, { color: T.textMuted }]}>Transaction limit: {formatFiat(variant.transaction_limit_usd)}/transaction</Text>
           </View>
         </View>
 

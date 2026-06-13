@@ -591,7 +591,7 @@ export default function SwapScreen({ navigation, route }: any) {
                       </Text>
                       {usdValue > 0 && (
                         <Text style={[styles.tokenItemUsd, { color: T.textDim }]}>
-                          ≈ ${usdValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          ≈ {formatFiat(usdValue)}
                         </Text>
                       )}
                     </View>

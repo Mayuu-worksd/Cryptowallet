@@ -10,7 +10,7 @@ import { useWallet } from '../store/WalletContext';
 import { shippingFeeService, ShippingFee, VCCCardVariant } from '../services/supabaseService';
 
 export default function VCCPhysicalScreen({ navigation, route }: any) {
-  const { isDarkMode } = useWallet();
+  const { isDarkMode, formatFiat } = useWallet() as any;
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const insets = useSafeAreaInsets();
   const { variant, holderName, previewNumber, previewExpiry, previewCVV }: { variant: VCCCardVariant; holderName: string; previewNumber?: string; previewExpiry?: string; previewCVV?: string } = route?.params ?? {};
@@ -79,7 +79,7 @@ export default function VCCPhysicalScreen({ navigation, route }: any) {
                 >
                   <Text style={[s.countryName, { color: T.text }]}>{sf.country_name}</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={[s.countryFee, { color: T.textMuted }]}>${sf.fee_usd.toFixed(2)} shipping</Text>
+                    <Text style={[s.countryFee, { color: T.textMuted }]}>{formatFiat(sf.fee_usd)} shipping</Text>
                     {selectedCountry?.country_name === sf.country_name && <Feather name="check" size={16} color={T.primary} />}
                   </View>
                 </TouchableOpacity>
@@ -112,7 +112,7 @@ export default function VCCPhysicalScreen({ navigation, route }: any) {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[s.optionTitle, { color: T.text }]}>Yes, send me a physical card</Text>
-              <Text style={[s.optionSub, { color: T.textMuted }]}>Base fee: ${PHYSICAL_BASE_FEE} + shipping by country</Text>
+              <Text style={[s.optionSub, { color: T.textMuted }]}>Base fee: {formatFiat(PHYSICAL_BASE_FEE)} + shipping by country</Text>
             </View>
           </View>
         </TouchableOpacity>
@@ -138,8 +138,8 @@ export default function VCCPhysicalScreen({ navigation, route }: any) {
                 {selectedCountry && (
                   <View style={[s.costBreakdown, { backgroundColor: T.surface }]}>
                     {[
-                      { label: 'Physical Card Fee', value: `$${PHYSICAL_BASE_FEE.toFixed(2)}` },
-                      { label: `Shipping to ${selectedCountry.country_name}`, value: `$${shippingFee.toFixed(2)}` },
+                      { label: 'Physical Card Fee', value: formatFiat(PHYSICAL_BASE_FEE) },
+                      { label: `Shipping to ${selectedCountry.country_name}`, value: formatFiat(shippingFee) },
                     ].map(row => (
                       <View key={row.label} style={s.costRow}>
                         <Text style={[s.costLabel, { color: T.textMuted }]}>{row.label}</Text>
@@ -148,7 +148,7 @@ export default function VCCPhysicalScreen({ navigation, route }: any) {
                     ))}
                     <View style={[s.costRow, s.totalRow, { borderTopColor: T.border }]}>
                       <Text style={[s.totalLabel, { color: T.text }]}>Total</Text>
-                      <Text style={[s.totalValue, { color: T.primary }]}>${total.toFixed(2)}</Text>
+                      <Text style={[s.totalValue, { color: T.primary }]}>{formatFiat(total)}</Text>
                     </View>
                   </View>
                 )}

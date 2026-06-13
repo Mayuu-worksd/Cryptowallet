@@ -335,6 +335,8 @@ const MarketTicker = memo(
     isInitialLoad: boolean;
     onCoinPress: (sym: string) => void;
     onRefresh: () => void;
+    fiatSymbol: string;
+    convertFiat: (usd: number) => number;
   }) => {
     const translateX = useRef(new Animated.Value(0)).current;
     const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -510,9 +512,9 @@ const MarketTicker = memo(
                             ]}
                           >
                             {usdVal !== null
-                              ? usdVal >= 1
-                                ? `$${usdVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                                : `$${usdVal.toFixed(4)}`
+                              ? convertFiat(usdVal) >= 1
+                                ? `${fiatSymbol}${convertFiat(usdVal).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                : `${fiatSymbol}${convertFiat(usdVal).toFixed(4)}`
                               : "—"}
                           </Text>
                         </View>
@@ -1578,6 +1580,8 @@ export default function HomeScreen({ navigation }: any) {
             navigation.navigate("CoinChart", { symbol: sym })
           }
           onRefresh={refreshPrices}
+          fiatSymbol={fiatSymbol}
+          convertFiat={convertFiat}
         />
 
         {/* ── Trending News ── */}

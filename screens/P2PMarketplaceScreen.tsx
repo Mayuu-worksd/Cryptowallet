@@ -109,7 +109,7 @@ function formatDateTime(dateStr?: string): string {
   return `${month} ${day}, ${formattedHr}:${min} ${ampm}`;
 }
 
-function OrderCard({ order, onPress, T, walletAddress }: { order: P2POrder; onPress: () => void; T: any; walletAddress: string }) {
+function OrderCard({ order, onPress, T, walletAddress, formatOrderFiat }: { order: P2POrder; onPress: () => void; T: any; walletAddress: string; formatOrderFiat: (amt: number, curr: string) => string; }) {
   const isMine   = order.seller_wallet.toLowerCase() === walletAddress.toLowerCase();
   const isBuying = order.buyer_wallet?.toLowerCase() === walletAddress.toLowerCase();
 
@@ -172,7 +172,7 @@ function OrderCard({ order, onPress, T, walletAddress }: { order: P2POrder; onPr
         </View>
         <View style={s.statLine}>
           <Text style={[s.statLabel, { color: T.textMuted }]}>Total Price</Text>
-          <Text style={[s.statValueBig, { color: T.primary }]}>{Number(order.fiat_total || 0).toFixed(2)} {order.fiat_currency}</Text>
+          <Text style={[s.statValueBig, { color: T.primary }]}>{formatOrderFiat(Number(order.fiat_total || 0), order.fiat_currency)}</Text>
         </View>
       </View>
 
@@ -204,10 +204,10 @@ function OrderCard({ order, onPress, T, walletAddress }: { order: P2POrder; onPr
 const SCREEN_W = Dimensions.get('window').width;
 
 function RateChart({
-  token, fiat, liveRate, liveRateLoading, rateHistory, sellRate, onRateSelect, T
+  token, fiat, liveRate, liveRateLoading, rateHistory, sellRate, onRateSelect, T, formatOrderFiat
 }: {
   token: string; fiat: string; liveRate: number | null; liveRateLoading: boolean;
-  rateHistory: number[]; sellRate: string; onRateSelect: (r: string) => void; T: any;
+  rateHistory: number[]; sellRate: string; onRateSelect: (r: string) => void; T: any; formatOrderFiat: (amt: number, curr: string) => string;
 }) {
   const W = SCREEN_W - 48; // card padding
   const H = 160;
@@ -287,8 +287,7 @@ function RateChart({
           ) : liveRate ? (
             <>
               <Text style={[rc.livePrice, { color: T.text }]}>
-                {liveRate.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                <Text style={[rc.liveFiat, { color: T.textDim }]}> {fiat}</Text>
+                {formatOrderFiat(liveRate, fiat)}
               </Text>
               <View style={[rc.changeBadge, { backgroundColor: isUp ? '#10B98118' : '#EC262918' }]}>
                 <Text style={[rc.changeText, { color: isUp ? '#10B981' : '#EC2629' }]}>
@@ -436,9 +435,8 @@ function RateChart({
             {selectedRate > 0 ? (
               <>
                 <Text style={[rc.selectedRate, { color: T.text }]}>
-                  {selectedRate.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {formatOrderFiat(selectedRate, fiat)}
                 </Text>
-                <Text style={[rc.selectedFiat, { color: T.textDim }]}>{fiat}</Text>
               </>
             ) : (
               <Text style={[rc.selectedRate, { color: T.textDim }]}>Tap a preset above</Text>
@@ -630,7 +628,7 @@ function ProfessionalRateChart({ sellAmount, sellRate, sellFiat, sellToken, live
 
 export default function P2PMarketplaceScreen({ navigation, route }: any) {
   const insets = useSafeAreaInsets();
-  const { walletAddress, isDarkMode, balances, ethBalance, lockedBalance, lockBalance, resetLockedBalances, p2pCountry, p2pCurrency, accountType, network } = useWallet();
+  const { walletAddress, isDarkMode, balances, ethBalance, lockedBalance, lockBalance, resetLockedBalances, p2pCountry, p2pCurrency, accountType, network, formatOrderFiat } = useWallet() as any;
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const isBusiness = accountType === 'business';
 
@@ -1064,6 +1062,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
                     sellRate={sellRate}
                     onRateSelect={setSellRate}
                     T={T}
+                    formatOrderFiat={formatOrderFiat}
                   />
 
                   {/* Live preview */}
@@ -1071,7 +1070,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
                     <View style={[s.previewBanner, { backgroundColor: T.primary + '10', borderColor: T.primary + '30' }]}>
                       <Feather name="trending-up" size={14} color={T.primary} />
                       <Text style={{ color: T.primary, fontSize: 13, fontWeight: '700', flex: 1 }}>
-                        You'll receive ~{(parseFloat(sellAmount) * parseFloat(sellRate) * 0.995).toFixed(2)} {sellFiat} after fees
+                        You'll receive ~{formatOrderFiat(parseFloat(sellAmount) * parseFloat(sellRate) * 0.995, sellFiat)} after fees
                       </Text>
                     </View>
                   )}
@@ -1165,10 +1164,10 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
                     <View style={{ alignItems: 'center', gap: 4 }}>
                       <Text style={[s.reviewHeroAmount, { color: T.text }]}>{sellAmount} {sellToken}</Text>
                       <Text style={[s.reviewHeroFiat, { color: T.primary }]}>
-                        {(parseFloat(sellAmount) * parseFloat(sellRate)).toFixed(2)} {sellFiat}
+                        {formatOrderFiat(parseFloat(sellAmount) * parseFloat(sellRate), sellFiat)}
                       </Text>
                       <Text style={[s.reviewHeroRate, { color: T.textDim }]}>
-                        @ {parseFloat(sellRate).toFixed(2)} {sellFiat}/{sellToken}
+                        @ {formatOrderFiat(parseFloat(sellRate), sellFiat)}/{sellToken}
                       </Text>
                     </View>
                   </View>
@@ -1193,17 +1192,17 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
                   <View style={[s.feeSummary, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
                     <View style={s.feeSummaryRow}>
                       <Text style={[s.feeSummaryLabel, { color: T.textDim }]}>Gross total</Text>
-                      <Text style={[s.feeSummaryValue, { color: T.text }]}>{(parseFloat(sellAmount) * parseFloat(sellRate)).toFixed(2)} {sellFiat}</Text>
+                      <Text style={[s.feeSummaryValue, { color: T.text }]}>{formatOrderFiat(parseFloat(sellAmount) * parseFloat(sellRate), sellFiat)}</Text>
                     </View>
                     <View style={[s.feeSummaryDivider, { backgroundColor: T.border }]} />
                     <View style={s.feeSummaryRow}>
                       <Text style={[s.feeSummaryLabel, { color: T.textDim }]}>Platform fee (0.5%)</Text>
-                      <Text style={{ color: T.error, fontSize: 13, fontWeight: '700' }}>−{(parseFloat(sellAmount) * parseFloat(sellRate) * 0.005).toFixed(2)} {sellFiat}</Text>
+                      <Text style={{ color: T.error, fontSize: 13, fontWeight: '700' }}>−{formatOrderFiat(parseFloat(sellAmount) * parseFloat(sellRate) * 0.005, sellFiat)}</Text>
                     </View>
                     <View style={[s.feeSummaryDivider, { backgroundColor: T.border }]} />
                     <View style={s.feeSummaryRow}>
                       <Text style={[s.feeSummaryLabel, { color: T.text, fontWeight: '800' }]}>You receive</Text>
-                      <Text style={{ color: T.success, fontSize: 16, fontWeight: '900' }}>{(parseFloat(sellAmount) * parseFloat(sellRate) * 0.995).toFixed(2)} {sellFiat}</Text>
+                      <Text style={{ color: T.success, fontSize: 16, fontWeight: '900' }}>{formatOrderFiat(parseFloat(sellAmount) * parseFloat(sellRate) * 0.995, sellFiat)}</Text>
                     </View>
                   </View>
                   {network !== 'Sepolia' && network !== 'TRON Nile' && (
@@ -1351,7 +1350,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
                   <>
                     <Text style={[s.sectionLabel, { color: T.textDim }]}>MY SELL LISTINGS</Text>
                     {selling.map(item => (
-                      <OrderCard key={item.id} order={item} T={T} walletAddress={walletAddress}
+                      <OrderCard key={item.id} order={item} T={T} walletAddress={walletAddress} formatOrderFiat={formatOrderFiat}
                         onPress={() => navigation.navigate('P2POrderDetail', { order: item })} />
                     ))}
                   </>
@@ -1360,7 +1359,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
                   <>
                     <Text style={[s.sectionLabel, { color: T.textDim, marginTop: selling.length > 0 ? 8 : 0 }]}>ORDERS I'M BUYING</Text>
                     {buying.map(item => (
-                      <OrderCard key={item.id} order={item} T={T} walletAddress={walletAddress}
+                      <OrderCard key={item.id} order={item} T={T} walletAddress={walletAddress} formatOrderFiat={formatOrderFiat}
                         onPress={() => navigation.navigate('P2POrderDetail', { order: item })} />
                     ))}
                   </>
@@ -1387,7 +1386,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
           data={orders}
           keyExtractor={(item, index) => item.id ?? String(index)}
           renderItem={({ item }) => (
-            <OrderCard order={item} T={T} walletAddress={walletAddress}
+            <OrderCard order={item} T={T} walletAddress={walletAddress} formatOrderFiat={formatOrderFiat}
               onPress={() => navigation.navigate('P2POrderDetail', { order: item })} />
           )}
           contentContainerStyle={s.list}

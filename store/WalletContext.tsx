@@ -1887,6 +1887,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     })}`;
   }, [fiatCurrency]);
 
+  const formatOrderFiat = useCallback((amountLocal: number, currencyCode: string) => {
+    const fiat = SUPPORTED_FIAT_CURRENCIES[currencyCode] || SUPPORTED_FIAT_CURRENCIES['USD'];
+    if (fiat.code === 'JPY' || fiat.code === 'VND') {
+      return `${fiat.symbol}${Math.round(amountLocal).toLocaleString(fiat.locale)}`;
+    }
+    return `${fiat.symbol}${amountLocal.toLocaleString(fiat.locale, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })}`;
+  }, []);
+
   const marketValue = useMemo(() => ({
     prices, isPricesLoading, priceError, news, isNewsLoading,
     refreshPrices: fetchPrices, refreshNews: fetchNews,
@@ -1910,7 +1921,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     generateMnemonic: () => walletService.generateMnemonic(),
     createWallet, importWallet, deleteWallet, enterReadOnlyMode, refreshBalance, refreshCardData, fetchBalance,
     sendETH, sendCrypto, topupCard, spendCard, toggleFreezeCard, applySwapBalances, switchNetwork,
-    fiatCurrency, setFiatCurrency, formatFiat, convertFiat, fiatSymbol,
+    fiatCurrency, setFiatCurrency, formatFiat, convertFiat, fiatSymbol, formatOrderFiat,
     isGlobalLoading,
     setGlobalLoading: (loading: boolean, msg?: string) => {
       if (msg) setGlobalLoadingMessage(msg);
@@ -1927,7 +1938,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     cardDetails, cardCreated, createCard, updateCardDetails, generateCardDetails, cardTransactions,
     createWallet, importWallet, deleteWallet, enterReadOnlyMode, refreshBalance, refreshCardData, fetchBalance,
     sendETH, sendCrypto, topupCard, spendCard, toggleFreezeCard, applySwapBalances, switchNetwork,
-    fiatCurrency, setFiatCurrency, formatFiat, convertFiat, fiatSymbol,
+    fiatCurrency, setFiatCurrency, formatFiat, convertFiat, fiatSymbol, formatOrderFiat,
     isGlobalLoading,
     globalLoadingMessage
   ]);
