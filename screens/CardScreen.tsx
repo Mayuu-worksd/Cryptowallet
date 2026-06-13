@@ -759,13 +759,7 @@ export default function CardScreen({ navigation, route }: any) {
               </View>
             </View>
 
-            {/* Apple Wallet Button */}
-            <TouchableOpacity style={[styles.appleWalletBtn, { backgroundColor: T.surface, borderColor: T.border }]} activeOpacity={0.8}>
-              <View style={styles.appleWalletIconWrap}>
-                 <Feather name="credit-card" size={16} color={T.text} />
-              </View>
-              <Text style={[styles.appleWalletText, { color: T.text }]}>Add to Apple Wallet</Text>
-            </TouchableOpacity>
+
 
 
 
