@@ -328,6 +328,8 @@ const MarketTicker = memo(
     isInitialLoad,
     onCoinPress,
     onRefresh,
+    fiatSymbol,
+    convertFiat,
   }: {
     prices: any;
     T: any;
