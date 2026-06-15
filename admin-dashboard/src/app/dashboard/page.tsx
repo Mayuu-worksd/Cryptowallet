@@ -50,11 +50,11 @@ export default function OverviewPage() {
       const totalTransactions = transactions?.length ?? 0;
       const totalP2P = p2pOrders?.length ?? 0;
 
-      const kycPending = (personalKyc ?? []).filter(k => k.status === 'pending' || k.status === 'under_review').length;
-      const kycVerified = (personalKyc ?? []).filter(k => k.status === 'verified').length;
-      const kycRejected = (personalKyc ?? []).filter(k => k.status === 'rejected').length;
-      const merchantPending = (businessKyc ?? []).filter(b => b.status === 'pending' || b.status === 'under_review').length;
-      const merchantApproved = (businessKyc ?? []).filter(b => b.status === 'approved').length;
+      const kycPending = (personalKyc ?? []).filter((k: any) => k.status === 'pending' || k.status === 'under_review').length;
+      const kycVerified = (personalKyc ?? []).filter((k: any) => k.status === 'verified').length;
+      const kycRejected = (personalKyc ?? []).filter((k: any) => k.status === 'rejected').length;
+      const merchantPending = (businessKyc ?? []).filter((b: any) => b.status === 'pending' || b.status === 'under_review').length;
+      const merchantApproved = (businessKyc ?? []).filter((b: any) => b.status === 'approved').length;
 
       // Real revenue from actual transactions
       const swapUsd = (transactions ?? [])
