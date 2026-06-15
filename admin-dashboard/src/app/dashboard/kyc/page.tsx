@@ -67,10 +67,10 @@ export default function KycPage() {
       const kList = allKyc || [];
       return {
         total: kList.length,
-        pending: kList.filter(k => k.status === 'pending').length,
-        under_review: kList.filter(k => k.status === 'under_review').length,
-        verified: kList.filter(k => k.status === 'verified').length,
-        rejected: kList.filter(k => k.status === 'rejected').length,
+        pending: kList.filter((k: any) => k.status === 'pending').length,
+        under_review: kList.filter((k: any) => k.status === 'under_review').length,
+        verified: kList.filter((k: any) => k.status === 'verified').length,
+        rejected: kList.filter((k: any) => k.status === 'rejected').length,
       };
     },
   });
