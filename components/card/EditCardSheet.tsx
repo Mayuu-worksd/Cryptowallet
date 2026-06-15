@@ -39,99 +39,122 @@ export default function EditCardSheet({ visible, currentName, currentDesign, car
   };
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : 'overFullScreen'} onRequestClose={onClose}>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={styles.container}>
-          {/* Handle */}
-          <View style={styles.handle} />
+    <Modal visible={visible} transparent={true} animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.modalOverlay} onPress={onClose}>
+        <KeyboardAvoidingView
+          style={styles.keyboardAvoid}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <Pressable style={styles.sheetContainer} onPress={e => e.stopPropagation()}>
+            {/* Handle */}
+            <View style={styles.handle} />
 
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <Feather name="x" size={18} color="rgba(255,255,255,0.6)" />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Edit Card</Text>
-            <TouchableOpacity onPress={handleSave} style={styles.saveBtn}>
-              <Text style={styles.saveBtnText}>Save</Text>
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-            {/* Live preview */}
-            <View style={styles.previewWrap}>
-              <CardPreview
-                cardNumber={cardNumber}
-                holderName={name.toUpperCase() || currentName}
-                expiry={expiry}
-                designKey={design}
-              />
+            {/* Header */}
+            <View style={styles.header}>
+              <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+                <Feather name="x" size={18} color="rgba(255,255,255,0.6)" />
+              </TouchableOpacity>
+              <Text style={styles.headerTitle}>Edit Card</Text>
+              <TouchableOpacity onPress={handleSave} style={styles.saveBtn}>
+                <Text style={styles.saveBtnText}>Save</Text>
+              </TouchableOpacity>
             </View>
 
-            {/* Name field */}
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>CARD HOLDER NAME</Text>
-              <TextInput
-                style={[styles.input, nameError ? styles.inputError : null]}
-                value={name}
-                onChangeText={t => { setName(t.toUpperCase()); setNameError(''); }}
-                autoCapitalize="characters"
-                maxLength={26}
-                placeholderTextColor="rgba(255,255,255,0.2)"
-              />
-              {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
-            </View>
-
-            {/* Locked fields notice */}
-            <View style={styles.lockedNotice}>
-              <Feather name="lock" size={13} color="rgba(255,255,255,0.3)" />
-              <Text style={styles.lockedText}>Card number, CVV and expiry cannot be changed</Text>
-            </View>
-
-            {/* Design picker */}
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>CARD DESIGN</Text>
-              <View style={styles.designGrid}>
-                {CARD_DESIGNS.map(d => (
-                  <TouchableOpacity
-                    key={d.key}
-                    onPress={() => setDesign(d.key)}
-                    activeOpacity={0.8}
-                    style={[styles.designOption, design === d.key && styles.designOptionSelected]}
-                  >
-                    <CardPreview
-                      cardNumber={cardNumber}
-                      holderName={name.toUpperCase() || currentName}
-                      expiry={expiry}
-                      designKey={d.key}
-                      compact
-                    />
-                    <View style={styles.designLabelRow}>
-                      <Text style={[styles.designLabel, design === d.key && styles.designLabelActive]}>
-                        {d.label}
-                      </Text>
-                      {design === d.key && <Feather name="check-circle" size={13} color="#FF3B3B" />}
-                    </View>
-                  </TouchableOpacity>
-                ))}
+            <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+              {/* Live preview */}
+              <View style={styles.previewWrap}>
+                <CardPreview
+                  cardNumber={cardNumber}
+                  holderName={name.toUpperCase() || currentName}
+                  expiry={expiry}
+                  designKey={design}
+                />
               </View>
-            </View>
 
-            {/* Save CTA */}
-            <TouchableOpacity onPress={handleSave} activeOpacity={0.85}>
-              <LinearGradient colors={['#ff544e', '#8b201f']} style={styles.saveFullBtn}>
-                <Text style={styles.saveFullBtnText}>Save Changes</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
+              {/* Name field */}
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>CARD HOLDER NAME</Text>
+                <TextInput
+                  style={[styles.input, nameError ? styles.inputError : null]}
+                  value={name}
+                  onChangeText={t => { setName(t.toUpperCase()); setNameError(''); }}
+                  autoCapitalize="characters"
+                  maxLength={26}
+                  placeholderTextColor="rgba(255,255,255,0.2)"
+                />
+                {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
+              </View>
+
+              {/* Locked fields notice */}
+              <View style={styles.lockedNotice}>
+                <Feather name="lock" size={13} color="rgba(255,255,255,0.3)" />
+                <Text style={styles.lockedText}>Card number, CVV and expiry cannot be changed</Text>
+              </View>
+
+              {/* Design picker */}
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>CARD DESIGN</Text>
+                <View style={styles.designGrid}>
+                  {CARD_DESIGNS.map(d => (
+                    <TouchableOpacity
+                      key={d.key}
+                      onPress={() => setDesign(d.key)}
+                      activeOpacity={0.8}
+                      style={[styles.designOption, design === d.key && styles.designOptionSelected]}
+                    >
+                      <CardPreview
+                        cardNumber={cardNumber}
+                        holderName={name.toUpperCase() || currentName}
+                        expiry={expiry}
+                        designKey={d.key}
+                        compact
+                      />
+                      <View style={styles.designLabelRow}>
+                        <Text style={[styles.designLabel, design === d.key && styles.designLabelActive]}>
+                          {d.label}
+                        </Text>
+                        {design === d.key && <Feather name="check-circle" size={13} color="#FF3B3B" />}
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Save CTA */}
+              <TouchableOpacity onPress={handleSave} activeOpacity={0.85}>
+                <LinearGradient colors={['#ff544e', '#8b201f']} style={styles.saveFullBtn}>
+                  <Text style={styles.saveFullBtnText}>Save Changes</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </ScrollView>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Pressable>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  container: { flex: 1, backgroundColor: '#101114' },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    justifyContent: 'flex-end',
+  },
+  keyboardAvoid: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  sheetContainer: {
+    backgroundColor: '#101114',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '90%',
+    width: '100%',
+    maxWidth: Platform.OS === 'web' ? 550 : undefined,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    paddingBottom: Platform.OS === 'ios' ? 34 : 24,
+  },
   handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.15)', alignSelf: 'center', marginTop: 12, marginBottom: 4 },
   header: {
     flexDirection: 'row',

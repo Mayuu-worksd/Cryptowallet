@@ -13,6 +13,7 @@ import {
   CardVariant, ShippingFee, FiatCurrency,
 } from '../services/supabaseService';
 import { LinearGradient } from 'expo-linear-gradient';
+import { SUPPORTED_FIAT_CURRENCIES } from '../constants/currencyConfig';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CRIMSON = '#EC2629';
@@ -105,7 +106,7 @@ const FALLBACK_SHIPPING_FEES: Record<string, number> = {
 const FALLBACK_COUNTRIES = Object.keys(FALLBACK_SHIPPING_FEES);
 
 export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
-  const { isDarkMode, walletAddress, kycStatus, cardDetails, p2pCurrency, accountType } = useWallet() as any;
+  const { isDarkMode, walletAddress, kycStatus, cardDetails, p2pCurrency, accountType, formatFiat } = useWallet() as any;
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const insets = useSafeAreaInsets();
 
@@ -129,7 +130,6 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
   // Dynamic pricing & currency states
   const [shippingFeesList, setShippingFeesList] = useState<ShippingFee[]>([]);
   const [fiatCurrencies, setFiatCurrencies] = useState<FiatCurrency[]>([]);
-  const [selectedFiat, setSelectedFiat] = useState<string>('USD');
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'error') =>
     setToast({ visible: true, message, type });
@@ -159,10 +159,7 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
       setShippingFeesList(shippingList ?? []);
       setFiatCurrencies(fiatList ?? []);
 
-      // Pre-select user's default P2P currency if it is configured
-      const defaultCurrency = (p2pCurrency || 'USD').toUpperCase();
-      const hasFiat = (fiatList ?? []).some(f => f.code.toUpperCase() === defaultCurrency);
-      setSelectedFiat(hasFiat ? defaultCurrency : 'USD');
+
     }).catch(() => {
       // Fallback on supabase connection failure
       const searchName = preselectedVariant || 'Classic';
@@ -186,7 +183,7 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
         { code: 'GBP', symbol: '£', name: 'British Pound', rate: 0.79 },
       ];
       setFiatCurrencies(fallbackFiats);
-      setSelectedFiat('USD');
+
     }).finally(() => {
       setLoadingVariants(false);
       setCheckingExisting(false);
@@ -203,20 +200,8 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
 
   const totalCostUSD = cardPriceUSD + activationFeeUSD + shippingFeeUSD;
 
-  // Currency multiplier conversion helpers
-  const selectedFiatObj = fiatCurrencies.find(f => f.code === selectedFiat) || { code: 'USD', symbol: '$', rate: 1.0 };
-  const fiatSymbol = selectedFiatObj.symbol ?? '$';
-  const fiatRate = selectedFiatObj.rate ?? 1.0;
-
   const formatLocalFiat = (amountUSD: number) => {
-    const converted = amountUSD * fiatRate;
-    if (selectedFiat === 'JPY' || selectedFiat === 'VND') {
-      return `${fiatSymbol}${Math.round(converted).toLocaleString()}`;
-    }
-    return `${fiatSymbol}${converted.toLocaleString(undefined, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    })}`;
+    return formatFiat(amountUSD);
   };
 
   const handleSubmit = async () => {
@@ -636,42 +621,7 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
           <Feather name="chevron-down" size={16} color={T.textDim} />
         </TouchableOpacity>
 
-        {/* Billing Currency Selection Segment */}
-        {selectedVariant && selectedCountry && fiatCurrencies.length > 0 && (
-          <View style={{ marginBottom: 16 }}>
-            <Text style={[styles.sectionTitle, { color: T.textMuted, marginBottom: 8, marginLeft: 2 }]}>SELECT BILLING CURRENCY</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
-              {fiatCurrencies.map(fc => {
-                const isSelected = fc.code === selectedFiat;
-                return (
-                  <TouchableOpacity
-                    key={fc.code}
-                    onPress={() => setSelectedFiat(fc.code)}
-                    activeOpacity={0.8}
-                    style={{
-                      paddingHorizontal: 16,
-                      paddingVertical: 10,
-                      borderRadius: 14,
-                      borderWidth: isSelected ? 2 : 1,
-                      borderColor: isSelected ? CRIMSON : T.border,
-                      backgroundColor: isSelected ? 'rgba(236,38,41,0.06)' : T.surface,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 6,
-                    }}
-                  >
-                    <Text style={{ fontSize: 13, fontWeight: '900', color: isSelected ? CRIMSON : T.text }}>
-                      {fc.symbol} {fc.code}
-                    </Text>
-                    <Text style={{ fontSize: 10, fontWeight: '700', color: T.textMuted }}>
-                      ({fc.rate}x)
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-        )}
+
 
         {/* Transparent billing review ledger */}
         {selectedVariant && selectedCountry && (

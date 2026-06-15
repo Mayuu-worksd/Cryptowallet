@@ -13,6 +13,7 @@ import { CurrencySelector } from '../components/CurrencySelector';
 import { haptics } from '../utils/haptics';
 import { supabase } from '../services/supabaseClient';
 import { P2POrder } from '../services/merchantService';
+import { SUPPORTED_FIAT_CURRENCIES } from '../constants/currencyConfig';
 
 const CoinIcon = memo(({ symbol, size = 40 }: { symbol: string; size?: number }) => {
   const meta = COIN_META[symbol];
@@ -54,6 +55,12 @@ const FIAT_META: Record<string, { flag: string; color: string }> = {
   CAD: { flag: '🇨🇦', color: '#BF360C' },
   AUD: { flag: '🇦🇺', color: '#0D47A1' },
   BRL: { flag: '🇧🇷', color: '#1B5E20' },
+  THB: { flag: '🇹🇭', color: '#0288D1' },
+  BHD: { flag: '🇧🇭', color: '#D32F2F' },
+  VND: { flag: '🇻🇳', color: '#C62828' },
+  SAR: { flag: '🇸🇦', color: '#2E7D32' },
+  KWD: { flag: '🇰🇼', color: '#00897B' },
+  RUB: { flag: '🇷🇺', color: '#1976D2' },
 };
 
 const FiatIcon = memo(({ code, size = 40 }: { code: string; size?: number }) => {
@@ -265,15 +272,12 @@ export default function PortfolioScreen({ navigation }: any) {
 
   const totalUsd = useMemo(() => assetsList.reduce((acc, a) => acc + a.usd, 0), [assetsList]);
 
-  // Mock fiat wallets with a gorgeous setup
   const fiatWalletsList = useMemo(() => {
-    return [
-      { code: 'USD', name: 'US Dollar Wallet',      formattedBalance: balanceVisible ? formatOrderFiat(0, 'USD') : '••••' },
-      { code: 'EUR', name: 'Euro Wallet',           formattedBalance: balanceVisible ? formatOrderFiat(0, 'EUR') : '••••' },
-      { code: 'INR', name: 'Indian Rupee Wallet',   formattedBalance: balanceVisible ? formatOrderFiat(0, 'INR') : '••••' },
-      { code: 'GBP', name: 'British Pound Wallet',  formattedBalance: balanceVisible ? formatOrderFiat(0, 'GBP') : '••••' },
-      { code: 'AED', name: 'UAE Dirham Wallet',     formattedBalance: balanceVisible ? formatOrderFiat(0, 'AED') : '••••' }
-    ];
+    return Object.values(SUPPORTED_FIAT_CURRENCIES).map(f => ({
+      code: f.code,
+      name: `${f.name} Wallet`,
+      formattedBalance: balanceVisible ? formatOrderFiat(0, f.code) : '••••'
+    }));
   }, [balanceVisible]);
 
   return (
@@ -392,7 +396,7 @@ export default function PortfolioScreen({ navigation }: any) {
 
           <View style={styles.mainBalanceRow}>
             <Text style={[styles.mainBalanceNum, { color: T.text }]}>
-              {balanceVisible ? convertFiat(totalUsd).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '••••••'}
+              {balanceVisible ? formatFiat(totalUsd) : `${fiatSymbol} ••••••`}
             </Text>
             
             <TouchableOpacity

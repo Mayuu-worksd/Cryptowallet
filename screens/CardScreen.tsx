@@ -13,6 +13,7 @@ import { useWallet, useMarket } from '../store/WalletContext';
 import Toast from '../components/Toast';
 import CreateCardFlow from '../components/card/CreateCardFlow';
 import { CardCredentialsWidget } from '../components/card/CardNumberDisplay';
+import EditCardSheet from '../components/card/EditCardSheet';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CRIMSON = '#EC2629';
@@ -76,6 +77,7 @@ export default function CardScreen({ navigation, route }: any) {
 
   const [showCreate, setShowCreate] = useState(false);
   const [showSpend, setShowSpend] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
   const [balanceHidden, setBalanceHidden] = useState(false);
 
   const [merchant, setMerchant] = useState<CustomMerchant>({ name: '', amount: '', icon: '🛍️' });
@@ -751,6 +753,7 @@ export default function CardScreen({ navigation, route }: any) {
               <View style={styles.circularActionWrap}>
                 <TouchableOpacity 
                   style={[styles.circularBtn, { backgroundColor: T.surface, borderColor: T.border }]} 
+                  onPress={() => setShowEdit(true)}
                   activeOpacity={0.7}
                 >
                   <Feather name="settings" size={20} color={T.text} />
@@ -888,6 +891,21 @@ export default function CardScreen({ navigation, route }: any) {
           </View>
         )}
       </ScrollView>
+
+      {cardCreated && (
+        <EditCardSheet
+          visible={showEdit}
+          currentName={cardDetails?.holderName || ''}
+          currentDesign={cardDetails?.design || 'dark'}
+          cardNumber={cardDetails?.number || ''}
+          expiry={cardDetails?.expiry || ''}
+          onSave={(patch) => {
+            updateCardDetails(patch);
+            showToast('Card updated successfully', 'success');
+          }}
+          onClose={() => setShowEdit(false)}
+        />
+      )}
     </View>
   );
 }

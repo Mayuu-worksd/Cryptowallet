@@ -30,6 +30,7 @@ import * as Clipboard from "expo-clipboard";
 import { Feather, MaterialIcons } from "@expo/vector-icons";
 import { useWallet, useMarket } from "../store/WalletContext";
 import { COIN_META, COIN_COLORS } from "../constants";
+import { SUPPORTED_FIAT_CURRENCIES } from "../constants/currencyConfig";
 import { NewsItem } from "../services/marketService";
 import { NetworkSelector } from "../components/NetworkSelector";
 import { CurrencySelector } from "../components/CurrencySelector";
@@ -330,6 +331,7 @@ const MarketTicker = memo(
     onRefresh,
     fiatSymbol,
     convertFiat,
+    fiatCurrency,
   }: {
     prices: any;
     T: any;
@@ -339,6 +341,7 @@ const MarketTicker = memo(
     onRefresh: () => void;
     fiatSymbol: string;
     convertFiat: (usd: number) => number;
+    fiatCurrency: string;
   }) => {
     const translateX = useRef(new Animated.Value(0)).current;
     const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -514,9 +517,18 @@ const MarketTicker = memo(
                             ]}
                           >
                             {usdVal !== null
-                              ? convertFiat(usdVal) >= 1
-                                ? `${fiatSymbol}${convertFiat(usdVal).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                                : `${fiatSymbol}${convertFiat(usdVal).toFixed(4)}`
+                              ? (() => {
+                                  const fiat = SUPPORTED_FIAT_CURRENCIES[fiatCurrency];
+                                  if (!fiat) return `$${usdVal.toFixed(2)}`;
+                                  const converted = usdVal * fiat.rate;
+                                  if (converted >= 1000) {
+                                    return `${fiat.symbol}${converted.toLocaleString(fiat.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                                  }
+                                  if (converted >= 1) {
+                                    return `${fiat.symbol}${converted.toLocaleString(fiat.locale, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}`;
+                                  }
+                                  return `${fiat.symbol}${converted.toLocaleString(fiat.locale, { minimumFractionDigits: 6, maximumFractionDigits: 6 })}`;
+                                })()
                               : "—"}
                           </Text>
                         </View>
@@ -1584,6 +1596,7 @@ export default function HomeScreen({ navigation }: any) {
           onRefresh={refreshPrices}
           fiatSymbol={fiatSymbol}
           convertFiat={convertFiat}
+          fiatCurrency={fiatCurrency}
         />
 
         {/* ── Trending News ── */}

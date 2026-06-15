@@ -37,7 +37,7 @@ type CardData = {
 
 export default function VCCCardDetailScreen({ navigation }: any) {
   usePreventScreenCapture();
-  const { walletAddress, isDarkMode, cardDetails, cardCreated, formatFiat, fiatCurrency } = useWallet() as any;
+  const { walletAddress, isDarkMode, cardDetails, cardCreated, formatFiat, fiatCurrency, cardBalance } = useWallet() as any;
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const insets = useSafeAreaInsets();
 
@@ -53,80 +53,84 @@ export default function VCCCardDetailScreen({ navigation }: any) {
 
   const load = useCallback(async () => {
     setLoading(true);
+    let vcc = null;
+    let dbCard = null;
+    let allVariants: any[] = [];
     try {
-      const [vcc, dbCard, allVariants] = await Promise.all([
-        vccService.getCard(walletAddress),
-        dbCardService.getCard(walletAddress),
+      const [vccRes, dbCardRes, variantsRes] = await Promise.all([
+        vccService.getCard(walletAddress).catch(() => null),
+        dbCardService.getCard(walletAddress).catch(() => null),
         cardVariantService.getVariants().catch(() => []),
       ]);
-
-      let activeVariantId = 'classic';
-      let activeNetwork = 'Visa';
-
-      if (vcc) {
-        activeVariantId = vcc.card_variant || 'classic';
-        activeNetwork = vcc.card_network || 'Visa';
-        // Decrypt from Supabase — source of truth
-        const decryptedNumber = dbCard ? dbCardService.decryptNumber(dbCard, walletAddress) : '';
-        const decryptedCvv    = dbCard ? dbCardService.decryptCvv(dbCard, walletAddress)    : '';
-        setCardData({
-          cardNumber:  decryptedNumber || `•••• •••• •••• ${vcc.card_last4}`,
-          holderName:  vcc.card_holder_name,
-          expiryMmYy:  vcc.expiry_mm_yy,
-          cvv:         decryptedCvv || '•••',
-          balance:     vcc.balance,
-          status:      vcc.card_status,
-          network:     vcc.card_network,
-          variant:     vcc.card_variant,
-        });
-      } else if (dbCard) {
-        activeVariantId = dbCard.card_type || 'classic';
-        const decryptedNumber = dbCardService.decryptNumber(dbCard, walletAddress);
-        const decryptedCvv    = dbCardService.decryptCvv(dbCard, walletAddress);
-        setCardData({
-          cardNumber:  decryptedNumber || `•••• •••• •••• ${dbCard.card_last4}`,
-          holderName:  dbCard.holder_name,
-          expiryMmYy:  `${dbCard.expiry_month}/${dbCard.expiry_year}`,
-          cvv:         decryptedCvv || '•••',
-          balance:     dbCard.balance,
-          status:      dbCard.status,
-          network:     'Visa',
-          variant:     dbCard.card_type,
-        });
-      } else if (cardCreated && cardDetails) {
-        activeVariantId = 'classic';
-        activeNetwork = cardDetails.brand || 'Visa';
-        setCardData({
-          cardNumber:  cardDetails.number,
-          holderName:  cardDetails.holderName,
-          expiryMmYy:  cardDetails.expiry,
-          cvv:         cardDetails.cvv,
-          balance:     cardBalance,
-          status:      'active',
-          network:     cardDetails.brand,
-          variant:     'classic',
-        });
-      }
-
-      // Configure Dynamic Colors
-      const matched = allVariants.find(v => v.id.toLowerCase() === activeVariantId.toLowerCase());
-      if (matched?.gradient_colors && matched.gradient_colors.length >= 2) {
-        setGradientColors(matched.gradient_colors);
-      } else if (matched?.card_color_hex) {
-        setGradientColors([matched.card_color_hex, matched.color_hex || '#1a1a1a']);
-      } else {
-        if (activeNetwork === 'Mastercard') {
-          setGradientColors(['#1A1A2E', '#16213E']);
-        } else {
-          setGradientColors(['#1C1C2E', '#2D1B69']);
-        }
-      }
-
+      vcc = vccRes;
+      dbCard = dbCardRes;
+      allVariants = variantsRes;
     } catch (e: any) {
-      showToast('Failed to load card details', 'error');
-    } finally {
-      setLoading(false);
+      console.warn('Error fetching card from database, using local state fallback:', e);
     }
+
+    let activeVariantId = 'classic';
+    let activeNetwork = 'Visa';
+
+    if (vcc) {
+      activeVariantId = vcc.card_variant || 'classic';
+      activeNetwork = vcc.card_network || 'Visa';
+      // Decrypt from Supabase — source of truth
+      const decryptedNumber = dbCard ? dbCardService.decryptNumber(dbCard, walletAddress) : '';
+      const decryptedCvv    = dbCard ? dbCardService.decryptCvv(dbCard, walletAddress)    : '';
+      setCardData({
+        cardNumber:  decryptedNumber || `•••• •••• •••• ${vcc.card_last4}`,
+        holderName:  vcc.card_holder_name,
+        expiryMmYy:  vcc.expiry_mm_yy,
+        cvv:         decryptedCvv || '•••',
+        balance:     vcc.balance,
+        status:      vcc.card_status,
+        network:     vcc.card_network,
+        variant:     vcc.card_variant,
+      });
+    } else if (dbCard) {
+      activeVariantId = dbCard.card_type || 'classic';
+      const decryptedNumber = dbCardService.decryptNumber(dbCard, walletAddress);
+      const decryptedCvv    = dbCardService.decryptCvv(dbCard, walletAddress);
+      setCardData({
+        cardNumber:  decryptedNumber || `•••• •••• •••• ${dbCard.card_last4}`,
+        holderName:  dbCard.holder_name,
+        expiryMmYy:  `${dbCard.expiry_month}/${dbCard.expiry_year}`,
+        cvv:         decryptedCvv || '•••',
+        balance:     dbCard.balance,
+        status:      dbCard.status,
+        network:     'Visa',
+        variant:     dbCard.card_type,
+      });
+    } else if (cardCreated && cardDetails) {
+      activeVariantId = 'classic';
+      activeNetwork = cardDetails.brand || 'Visa';
+      setCardData({
+        cardNumber:  cardDetails.number,
+        holderName:  cardDetails.holderName,
+        expiryMmYy:  cardDetails.expiry,
+        cvv:         cardDetails.cvv,
+        balance:     cardBalance,
+        status:      'active',
+        network:     cardDetails.brand,
+        variant:     'classic',
+      });
+    }
+
+    // Configure Dynamic Colors
+    const matched = allVariants.find(v => v.id.toLowerCase() === activeVariantId.toLowerCase());
+    if (matched?.gradient_colors && matched.gradient_colors.length >= 2) {
+      setGradientColors(matched.gradient_colors);
+    } else if (matched?.card_color_hex) {
+      setGradientColors([matched.card_color_hex, matched.color_hex || '#1a1a1a']);
+    } else {
+      if (activeNetwork === 'Mastercard') {
+        setGradientColors(['#1A1A2E', '#16213E']);
+      } else {
+        setGradientColors(['#1C1C2E', '#2D1B69']);
+      }
+    }
+    setLoading(false);
   }, [walletAddress, cardCreated, cardDetails, cardBalance]);
 
   useEffect(() => { load(); }, [load]);
@@ -237,7 +241,11 @@ export default function VCCCardDetailScreen({ navigation }: any) {
         </LinearGradient>
 
         {/* ── Balance ── */}
-
+        <View style={[s.balanceCard, { backgroundColor: T.surface, borderColor: T.border }]}>
+          <Text style={[s.balanceLabel, { color: T.textDim }]}>CARD BALANCE</Text>
+          <Text style={[s.balanceValue, { color: T.text }]}>{formatFiat(cardData.balance)}</Text>
+          <Text style={[s.balanceSub, { color: T.textMuted }]}>Direct settlement from crypto assets</Text>
+        </View>
 
         {/* ── Card Details ── */}
         <Text style={[s.sectionTitle, { color: T.textDim }]}>CARD INFORMATION</Text>

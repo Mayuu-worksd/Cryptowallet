@@ -53,10 +53,10 @@ interface TradingChartProps {
   prices: number[];
   color: string;
   isDark: boolean;
-  fiatSymbol: string;
+  formatPrice: (p: number) => string;
 }
 
-const TradingChart = React.memo(({ prices, color, isDark, fiatSymbol }: TradingChartProps) => {
+const TradingChart = React.memo(({ prices, color, isDark, formatPrice }: TradingChartProps) => {
   const [crosshair, setCrosshair] = useState<{ xi: number } | null>(null);
 
   const tooltipBg  = isDark ? '#2A2B31' : '#ffffff';
@@ -82,10 +82,8 @@ const TradingChart = React.memo(({ prices, color, isDark, fiatSymbol }: TradingC
   const linePath = useMemo(() => buildBezierPath(xs, ys), [xs, ys]);
 
   const fmtTooltip = useCallback((p: number): string => {
-    if (p >= 1_000) return `${fiatSymbol}${p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    if (p >= 1)     return `${fiatSymbol}${p.toFixed(4)}`;
-    return `${fiatSymbol}${p.toFixed(6)}`;
-  }, [fiatSymbol]);
+    return formatPrice(p);
+  }, [formatPrice]);
 
   // Crosshair data
   const cx = crosshair != null ? xs[crosshair.xi] : null;
@@ -251,9 +249,13 @@ export default function CoinChartScreen({ route, navigation }: any) {
   const formatPrice = useCallback((p: number) => {
     const converted = p * fiatInfo.rate;
     if (typeof converted !== 'number' || !isFinite(converted) || converted <= 0) return `${fiatInfo.symbol}0.00`;
-    if (converted >= 1000) return `${fiatInfo.symbol}${converted.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    if (converted >= 1)    return `${fiatInfo.symbol}${converted.toFixed(4)}`;
-    return `${fiatInfo.symbol}${converted.toFixed(6)}`;
+    if (converted >= 1000) {
+      return `${fiatInfo.symbol}${converted.toLocaleString(fiatInfo.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+    if (converted >= 1) {
+      return `${fiatInfo.symbol}${converted.toLocaleString(fiatInfo.locale, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}`;
+    }
+    return `${fiatInfo.symbol}${converted.toLocaleString(fiatInfo.locale, { minimumFractionDigits: 6, maximumFractionDigits: 6 })}`;
   }, [fiatInfo]);
 
   const safeNum = (n: number) => (typeof n === 'number' && isFinite(n) ? n : 0);
@@ -322,7 +324,7 @@ export default function CoinChartScreen({ route, navigation }: any) {
                 prices={chartData}
                 color={chartLineColor}
                 isDark={isDarkMode}
-                fiatSymbol={fiatSymbolStr}
+                formatPrice={formatPrice}
               />
             </Animated.View>
           )}

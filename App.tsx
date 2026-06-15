@@ -159,6 +159,7 @@ import ApplyPhysicalCardScreen from "./screens/ApplyPhysicalCardScreen";
 import BusinessKYCFormScreen from "./screens/BusinessKYCFormScreen";
 import BusinessKYCDocumentScreen from "./screens/BusinessKYCDocumentScreen";
 import BusinessKYCResultScreen from "./screens/BusinessKYCResultScreen";
+import VCCCardDetailScreen from "./screens/VCCCardDetailScreen";
 import MerchantDashboardScreen from "./screens/MerchantDashboardScreen";
 import MerchantQRScreen from "./screens/MerchantQRScreen";
 import MessagesScreen from "./screens/MessagesScreen";
@@ -1135,6 +1136,10 @@ function MobileNavigator() {
               component={ApplyPhysicalCardScreen}
             />
             <Stack.Screen
+              name="VCCCardDetail"
+              component={VCCCardDetailScreen}
+            />
+            <Stack.Screen
               name="BusinessKYCForm"
               component={BusinessKYCFormScreen}
             />
@@ -1294,6 +1299,8 @@ function WebApp() {
         return <VCCProcessingScreen navigation={nav} route={route} />;
       case "VCCSuccess":
         return <VCCSuccessScreen navigation={nav} route={route} />;
+      case "VCCCardDetail":
+        return <VCCCardDetailScreen navigation={nav} route={route} />;
       case "ApplyPhysicalCard":
         return <ApplyPhysicalCardScreen navigation={nav} route={route} />;
       case "P2P":
