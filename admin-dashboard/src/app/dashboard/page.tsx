@@ -58,11 +58,11 @@ export default function OverviewPage() {
 
       // Real revenue from actual transactions
       const swapUsd = (transactions ?? [])
-        .filter(t => t.type === 'swap' && t.status === 'success')
-        .reduce((acc, t) => acc + Number(t.usd_value || 0), 0);
+        .filter((t: any) => t.type === 'swap' && t.status === 'success')
+        .reduce((acc: number, t: any) => acc + Number(t.usd_value || 0), 0);
       const p2pUsd = (p2pOrders ?? [])
-        .filter(o => o.status === 'completed')
-        .reduce((acc, o) => acc + Number(o.fiat_total || 0), 0);
+        .filter((o: any) => o.status === 'completed')
+        .reduce((acc: number, o: any) => acc + Number(o.fiat_total || 0), 0);
       const totalRevenue = (swapUsd * 0.001) + (p2pUsd * 0.0015);
 
       // Build last-7-days chart data from real transactions
@@ -78,21 +78,21 @@ export default function OverviewPage() {
 
       const volumeByDay = last7.map(({ date }) => {
         return (transactions ?? [])
-          .filter(t => t.created_at?.slice(0, 10) === date)
-          .reduce((acc, t) => acc + Number(t.usd_value || 0), 0);
+          .filter((t: any) => t.created_at?.slice(0, 10) === date)
+          .reduce((acc: number, t: any) => acc + Number(t.usd_value || 0), 0);
       });
 
       // Build user growth: cumulative count per day
       const usersByDay = last7.map(({ date }) => {
-        return (profiles ?? []).filter(p => p.created_at?.slice(0, 10) <= date).length;
+        return (profiles ?? []).filter((p: any) => p.created_at?.slice(0, 10) <= date).length;
       });
 
       const recentKyc = (personalKyc ?? [])
-        .filter(k => k.status === 'pending' || k.status === 'under_review')
+        .filter((k: any) => k.status === 'pending' || k.status === 'under_review')
         .slice(0, 5);
 
       const recentTransactions = [...(transactions ?? [])]
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         .slice(0, 5);
 
       return {
