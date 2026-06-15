@@ -8,10 +8,7 @@ import {
 import * as Clipboard from 'expo-clipboard';
 import { haptics } from '../utils/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Feather } from '@expo/vector-icons';
-import { useWallet, useMarket } from '../store/WalletContext';
-import Toast from '../components/Toast';
-import CreateCardFlow from '../components/card/CreateCardFlow';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { CardCredentialsWidget } from '../components/card/CardNumberDisplay';
 import EditCardSheet from '../components/card/EditCardSheet';
 
@@ -146,7 +143,7 @@ export default function CardScreen({ navigation, route }: any) {
   const formattedCardNumber = useMemo(() => {
     if (!cardCreated) return '•••• •••• •••• ••••';
     const num = cardDetails.number.replace(/\s/g, '');
-    return `•••• •••• •••• ${num.slice(-4)}`;
+    return `•• ${num.slice(-4)}`;
   }, [cardDetails.number, cardCreated]);
 
   // Skin configurations for virtual
@@ -621,17 +618,16 @@ export default function CardScreen({ navigation, route }: any) {
                       <View style={[styles.brandDot, { backgroundColor: '#EC2629' }]} />
                       <Text style={styles.brandRotatedText}>CRYPTOWALLET</Text>
                     </View>
-                    <View style={styles.cardFaceHolderWrap}>
-                      <Text style={styles.cardFaceHolderLabel}>CARD HOLDER</Text>
-                      <Text style={styles.cardFaceHolderName}>{cardFaceHolderName}</Text>
+                    <View style={[styles.cardFaceHolderWrap, { bottom: 20, left: 24 }]}>
+                      <Text style={[styles.cardFaceHolderName, { fontSize: 18, fontFamily: 'Inter_700Bold', letterSpacing: 1.5 }]}>{formattedCardNumber}</Text>
                     </View>
-                    <View style={styles.visaRotatedContainer}>
-                      <Text style={styles.visaRotatedText}>VISA</Text>
+                    <View style={[styles.visaRotatedContainer, { right: 24, bottom: 20, transform: [] }]}>
+                      <Text style={[styles.visaRotatedText, { fontSize: 24, fontStyle: 'italic', fontFamily: 'Inter_900Black' }]}>VISA</Text>
                     </View>
                     {cardFrozen && (
-                      <View style={styles.frozenOverlay}>
-                        <Feather name="lock" size={32} color="#FFFFFF" />
-                        <Text style={styles.frozenText}>CARD LOCKED</Text>
+                      <View style={[styles.frozenOverlay, { backgroundColor: 'rgba(236,38,41,0.4)', borderRadius: 24 }]}>
+                        <MaterialCommunityIcons name="snowflake" size={36} color="#FFFFFF" />
+                        <Text style={[styles.frozenText, { fontSize: 16, marginTop: 8 }]}>Frozen</Text>
                       </View>
                     )}
                   </LinearGradient>
@@ -652,17 +648,16 @@ export default function CardScreen({ navigation, route }: any) {
                       <View style={[styles.brandDot, { backgroundColor: '#14F195' }]} />
                       <Text style={styles.brandRotatedText}>SOLANA EDITION</Text>
                     </View>
-                    <View style={styles.cardFaceHolderWrap}>
-                      <Text style={styles.cardFaceHolderLabel}>CARD HOLDER</Text>
-                      <Text style={styles.cardFaceHolderName}>{cardFaceHolderName}</Text>
+                    <View style={[styles.cardFaceHolderWrap, { bottom: 20, left: 24 }]}>
+                      <Text style={[styles.cardFaceHolderName, { fontSize: 18, fontFamily: 'Inter_700Bold', letterSpacing: 1.5 }]}>{formattedCardNumber}</Text>
                     </View>
-                    <View style={styles.visaRotatedContainer}>
-                      <Text style={styles.visaRotatedText}>VISA</Text>
+                    <View style={[styles.visaRotatedContainer, { right: 24, bottom: 20, transform: [] }]}>
+                      <Text style={[styles.visaRotatedText, { fontSize: 24, fontStyle: 'italic', fontFamily: 'Inter_900Black' }]}>VISA</Text>
                     </View>
                     {cardFrozen && (
-                      <View style={styles.frozenOverlay}>
-                        <Feather name="lock" size={32} color="#FFFFFF" />
-                        <Text style={styles.frozenText}>CARD LOCKED</Text>
+                      <View style={[styles.frozenOverlay, { backgroundColor: 'rgba(236,38,41,0.4)', borderRadius: 24 }]}>
+                        <MaterialCommunityIcons name="snowflake" size={36} color="#FFFFFF" />
+                        <Text style={[styles.frozenText, { fontSize: 16, marginTop: 8 }]}>Frozen</Text>
                       </View>
                     )}
                   </LinearGradient>
@@ -683,17 +678,16 @@ export default function CardScreen({ navigation, route }: any) {
                       <View style={[styles.brandDot, { backgroundColor: '#10B981' }]} />
                       <Text style={styles.brandRotatedText}>ORGANIC LEAF</Text>
                     </View>
-                    <View style={styles.cardFaceHolderWrap}>
-                      <Text style={styles.cardFaceHolderLabel}>CARD HOLDER</Text>
-                      <Text style={styles.cardFaceHolderName}>{cardFaceHolderName}</Text>
+                    <View style={[styles.cardFaceHolderWrap, { bottom: 20, left: 24 }]}>
+                      <Text style={[styles.cardFaceHolderName, { fontSize: 18, fontFamily: 'Inter_700Bold', letterSpacing: 1.5 }]}>{formattedCardNumber}</Text>
                     </View>
-                    <View style={styles.visaRotatedContainer}>
-                      <Text style={styles.visaRotatedText}>VISA</Text>
+                    <View style={[styles.visaRotatedContainer, { right: 24, bottom: 20, transform: [] }]}>
+                      <Text style={[styles.visaRotatedText, { fontSize: 24, fontStyle: 'italic', fontFamily: 'Inter_900Black' }]}>VISA</Text>
                     </View>
                     {cardFrozen && (
-                      <View style={styles.frozenOverlay}>
-                        <Feather name="lock" size={32} color="#FFFFFF" />
-                        <Text style={styles.frozenText}>CARD LOCKED</Text>
+                      <View style={[styles.frozenOverlay, { backgroundColor: 'rgba(236,38,41,0.4)', borderRadius: 24 }]}>
+                        <MaterialCommunityIcons name="snowflake" size={36} color="#FFFFFF" />
+                        <Text style={[styles.frozenText, { fontSize: 16, marginTop: 8 }]}>Frozen</Text>
                       </View>
                     )}
                   </LinearGradient>
@@ -717,54 +711,100 @@ export default function CardScreen({ navigation, route }: any) {
             </View>
 
             {/* Action buttons (RedotPay style) */}
-            <View style={styles.circularActionsContainer}>
-              <View style={styles.circularActionWrap}>
-                <TouchableOpacity 
-                  style={[styles.circularBtn, { backgroundColor: showCreds ? T.primary + '20' : T.surface, borderColor: showCreds ? T.primary : T.border }]} 
-                  onPress={() => setShowCreds(v => !v)} 
-                  activeOpacity={0.7}
-                >
-                  <Feather name={showCreds ? "eye-off" : "eye"} size={20} color={showCreds ? T.primary : T.text} />
-                </TouchableOpacity>
-                <Text style={[styles.circularActionLabel, { color: T.text }]}>View</Text>
-              </View>
+            <View style={[styles.circularActionsContainer, { marginBottom: 20 }]}>
+              {cardFrozen ? (
+                <>
+                  <View style={styles.circularActionWrap}>
+                    <TouchableOpacity style={[styles.circularBtn, { backgroundColor: T.surface, borderColor: T.border }]} activeOpacity={0.7}>
+                      <Feather name="credit-card" size={22} color={T.text} />
+                    </TouchableOpacity>
+                    <Text style={[styles.circularActionLabel, { color: T.text }]}>Report lost</Text>
+                  </View>
 
-              <View style={styles.circularActionWrap}>
-                <TouchableOpacity 
-                  style={[styles.circularBtn, { backgroundColor: T.surface, borderColor: T.border }]} 
-                  onPress={toggleFreezeCard} 
-                  activeOpacity={0.7}
-                >
-                  <Feather name={cardFrozen ? 'loader' : 'wind'} size={20} color={cardFrozen ? T.primary : T.text} />
-                </TouchableOpacity>
-                <Text style={[styles.circularActionLabel, { color: T.text }]}>{cardFrozen ? 'Unfreeze' : 'Freeze'}</Text>
-              </View>
+                  <View style={styles.circularActionWrap}>
+                    <TouchableOpacity 
+                      style={[styles.circularBtn, { backgroundColor: T.text, borderColor: T.text }]} 
+                      onPress={() => { toggleFreezeCard(); }} 
+                      activeOpacity={0.7}
+                    >
+                      <MaterialCommunityIcons name="snowflake" size={24} color={T.background} />
+                    </TouchableOpacity>
+                    <Text style={[styles.circularActionLabel, { color: T.text }]}>Unfreeze</Text>
+                  </View>
 
-              <View style={styles.circularActionWrap}>
-                <TouchableOpacity 
-                  style={[styles.circularBtn, { backgroundColor: T.surface, borderColor: T.border }]} 
-                  onPress={() => setShowSpend(v => !v)} 
-                  activeOpacity={0.7}
-                >
-                  <Feather name="sliders" size={20} color={T.text} />
-                </TouchableOpacity>
-                <Text style={[styles.circularActionLabel, { color: T.text }]}>Pay</Text>
-              </View>
+                  <View style={styles.circularActionWrap}>
+                    <TouchableOpacity style={[styles.circularBtn, { backgroundColor: T.surface, borderColor: T.border }]} activeOpacity={0.7}>
+                      <Feather name="trash-2" size={22} color={T.text} />
+                    </TouchableOpacity>
+                    <Text style={[styles.circularActionLabel, { color: T.text }]}>Delete card</Text>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <View style={styles.circularActionWrap}>
+                    <TouchableOpacity 
+                      style={[styles.circularBtn, { backgroundColor: showCreds ? T.primary + '20' : T.surface, borderColor: showCreds ? T.primary : T.border }]} 
+                      onPress={() => setShowCreds(v => !v)} 
+                      activeOpacity={0.7}
+                    >
+                      <Feather name={showCreds ? "eye-off" : "eye"} size={22} color={showCreds ? T.primary : T.text} />
+                    </TouchableOpacity>
+                    <Text style={[styles.circularActionLabel, { color: T.text }]}>View</Text>
+                  </View>
 
-              <View style={styles.circularActionWrap}>
-                <TouchableOpacity 
-                  style={[styles.circularBtn, { backgroundColor: T.surface, borderColor: T.border }]} 
-                  onPress={() => setShowEdit(true)}
-                  activeOpacity={0.7}
-                >
-                  <Feather name="settings" size={20} color={T.text} />
-                </TouchableOpacity>
-                <Text style={[styles.circularActionLabel, { color: T.text }]}>Settings</Text>
-              </View>
+                  <View style={styles.circularActionWrap}>
+                    <TouchableOpacity 
+                      style={[styles.circularBtn, { backgroundColor: T.surface, borderColor: T.border }]} 
+                      onPress={() => { setShowCreds(false); setShowSpend(false); toggleFreezeCard(); }} 
+                      activeOpacity={0.7}
+                    >
+                      <MaterialCommunityIcons name="snowflake" size={24} color={T.text} />
+                    </TouchableOpacity>
+                    <Text style={[styles.circularActionLabel, { color: T.text }]}>Freeze</Text>
+                  </View>
+
+                  <View style={styles.circularActionWrap}>
+                    <TouchableOpacity 
+                      style={[styles.circularBtn, { backgroundColor: T.surface, borderColor: T.border }]} 
+                      onPress={() => setShowSpend(v => !v)} 
+                      activeOpacity={0.7}
+                    >
+                      <Feather name="sliders" size={22} color={T.text} />
+                    </TouchableOpacity>
+                    <Text style={[styles.circularActionLabel, { color: T.text }]}>Limit</Text>
+                  </View>
+
+                  <View style={styles.circularActionWrap}>
+                    <TouchableOpacity 
+                      style={[styles.circularBtn, { backgroundColor: T.surface, borderColor: T.border }]} 
+                      onPress={() => setShowEdit(true)}
+                      activeOpacity={0.7}
+                    >
+                      <Feather name="settings" size={22} color={T.text} />
+                    </TouchableOpacity>
+                    <Text style={[styles.circularActionLabel, { color: T.text }]}>Settings</Text>
+                  </View>
+                </>
+              )}
             </View>
 
+            {/* Apple Wallet Button - only when active */}
+            {!cardFrozen && (
+              <View style={{ alignItems: 'center', marginBottom: 24 }}>
+                <TouchableOpacity style={[styles.appleWalletBtn, { backgroundColor: T.surfaceLow, borderColor: T.border, borderWidth: 1 }]}>
+                  <View style={[styles.appleWalletIconWrap, { backgroundColor: T.text }]}>
+                    <Feather name="credit-card" size={14} color={T.background} />
+                  </View>
+                  <View style={{ flexDirection: 'column' }}>
+                    <Text style={[styles.appleWalletText, { color: T.text, fontSize: 10, fontFamily: 'Inter_600SemiBold', marginBottom: 2 }]}>Add to</Text>
+                    <Text style={[styles.appleWalletText, { color: T.text, fontSize: 14, fontFamily: 'Inter_700Bold' }]}>Apple Wallet</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+            )}
+
             {/* Credentials Panel */}
-            {showCreds && (
+            {!cardFrozen && showCreds && (
               <View style={{ paddingHorizontal: 20, marginTop: 10 }}>
                 <CardCredentialsWidget
                   cardNumber={cardDetails?.number || ''}

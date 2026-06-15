@@ -221,21 +221,25 @@ const DetailModal = memo(({ tx, T, cfg, network, onClose, formatFiat }: {
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
       <View style={modal.overlay}>
-        <View style={[modal.sheet, { backgroundColor: T.surface }]}>
+        <View style={[modal.sheet, { backgroundColor: T.surface, borderColor: T.border }]}>
           <View style={[modal.handle, { backgroundColor: T.border }]} />
 
           {/* Header */}
           <View style={modal.header}>
             <Text style={[modal.title, { color: T.text }]}>Transaction Detail</Text>
             <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Feather name="x" size={22} color={T.textMuted} />
+              <View style={[modal.closeBtn, { backgroundColor: T.surfaceLow }]}>
+                <Feather name="x" size={20} color={T.textMuted} />
+              </View>
             </TouchableOpacity>
           </View>
 
           {/* Amount hero */}
           <View style={modal.hero}>
-            <View style={[modal.heroIcon, { backgroundColor: cfg.bg }]}>
-              {cfg.icon}
+            <View style={[modal.heroIconWrap, { borderColor: cfg.color + '40' }]}>
+              <View style={[modal.heroIcon, { backgroundColor: cfg.bg }]}>
+                {React.cloneElement(cfg.icon as React.ReactElement, { size: 28 })}
+              </View>
             </View>
             <Text style={[modal.heroAmount, { color: amtColor }]}>
               {isDebit ? '−' : '+'}{parseFloat(tx.amount).toFixed(
@@ -245,16 +249,15 @@ const DetailModal = memo(({ tx, T, cfg, network, onClose, formatFiat }: {
             <Text style={[modal.heroUsd, { color: T.textMuted }]}>
               ≈ {formatFiat(parseFloat(tx.usdValue || '0'))}
             </Text>
-            <StatusBadge status={tx.status} T={T} />
+            <View style={{ marginTop: 6 }}>
+              <StatusBadge status={tx.status} T={T} />
+            </View>
           </View>
 
-          {/* Detail rows */}
-          <View style={[modal.detailBox, { backgroundColor: T.surfaceLow }]}>
+          {/* Receipt Style Detail Rows */}
+          <View style={[modal.receiptBox, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
             {rows.map((row, i) => (
-              <View
-                key={row.label}
-                style={[modal.detailRow, i < rows.length - 1 && { borderBottomWidth: 1, borderBottomColor: T.border }]}
-              >
+              <View key={row.label} style={[modal.detailRow, i < rows.length - 1 && { borderBottomWidth: 1, borderStyle: 'dashed', borderBottomColor: T.border }]}>
                 <Text style={[modal.detailLabel, { color: T.textMuted }]}>{row.label}</Text>
                 <Text style={[modal.detailValue, { color: T.text }]} numberOfLines={1}>{row.value}</Text>
               </View>
@@ -264,7 +267,7 @@ const DetailModal = memo(({ tx, T, cfg, network, onClose, formatFiat }: {
           {/* Explorer link */}
           {tx.hash && explorerUrl && (
             <TouchableOpacity
-              style={[modal.explorerBtn, { backgroundColor: T.primary + '18' }]}
+              style={[modal.explorerBtn, { backgroundColor: T.primary + '18', borderColor: T.primary + '40' }]}
               onPress={() => {
                 try {
                   const u = new URL(explorerUrl);
@@ -273,8 +276,8 @@ const DetailModal = memo(({ tx, T, cfg, network, onClose, formatFiat }: {
               }}
               activeOpacity={0.8}
             >
-              <Feather name="external-link" size={16} color={T.primary} />
-              <Text style={[modal.explorerText, { color: T.primary }]}>View on Explorer</Text>
+              <Feather name="external-link" size={18} color={T.primary} />
+              <Text style={[modal.explorerText, { color: T.primary }]}>View Receipt on Explorer</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -284,21 +287,23 @@ const DetailModal = memo(({ tx, T, cfg, network, onClose, formatFiat }: {
 });
 
 const modal = StyleSheet.create({
-  overlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  sheet:       { borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, paddingBottom: 32 },
-  handle:      { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
-  header:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-  title:       { fontSize: 18, fontFamily: Fonts.extraBold },
-  hero:        { alignItems: 'center', marginBottom: 24, gap: 8 },
-  heroIcon:    { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
-  heroAmount:  { fontSize: 30, fontFamily: Fonts.extraBold, letterSpacing: -1 },
-  heroUsd:     { fontSize: 15, fontFamily: Fonts.semiBold },
-  detailBox:   { borderRadius: 20, marginBottom: 20, overflow: 'hidden' },
-  detailRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 13 },
-  detailLabel: { fontSize: 13, fontFamily: Fonts.semiBold },
-  detailValue: { fontSize: 13, fontFamily: Fonts.bold, maxWidth: '55%', textAlign: 'right' },
-  explorerBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16, borderRadius: 16 },
-  explorerText:{ fontSize: 14, fontFamily: Fonts.bold },
+  overlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'flex-end' },
+  sheet:       { borderTopLeftRadius: 36, borderTopRightRadius: 36, padding: 24, paddingBottom: 40, borderWidth: 1, borderBottomWidth: 0 },
+  handle:      { width: 44, height: 5, borderRadius: 3, alignSelf: 'center', marginBottom: 24 },
+  header:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 },
+  title:       { fontSize: 20, fontFamily: Fonts.extraBold },
+  closeBtn:    { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  hero:        { alignItems: 'center', marginBottom: 36, gap: 6 },
+  heroIconWrap:{ padding: 6, borderRadius: 50, borderWidth: 2, borderStyle: 'dashed', marginBottom: 10 },
+  heroIcon:    { width: 68, height: 68, borderRadius: 34, alignItems: 'center', justifyContent: 'center' },
+  heroAmount:  { fontSize: 34, fontFamily: Fonts.extraBold, letterSpacing: -1.5 },
+  heroUsd:     { fontSize: 16, fontFamily: Fonts.bold },
+  receiptBox:  { borderRadius: 24, borderWidth: 1, borderStyle: 'dashed', paddingVertical: 8, paddingHorizontal: 4, marginBottom: 28 },
+  detailRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14 },
+  detailLabel: { fontSize: 14, fontFamily: Fonts.semiBold },
+  detailValue: { fontSize: 14, fontFamily: Fonts.extraBold, maxWidth: '55%', textAlign: 'right' },
+  explorerBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 18, borderRadius: 20, borderWidth: 1 },
+  explorerText:{ fontSize: 15, fontFamily: Fonts.extraBold },
 });
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
