@@ -93,6 +93,40 @@ export default function CardScreen({ navigation, route }: any) {
   });
   const [refreshing, setRefreshing] = useState(false);
 
+  const STABLE_FALLBACK: Record<string, number> = {
+    ETH: 3500, BTC: 65000, USDT: 1, USDC: 1, SOL: 150, BNB: 600, XRP: 0.5, TON: 7.5, TRX: 0.12, SUI: 1.8,
+  };
+
+  const realBalances = useMemo(() => {
+    const isTron = network === "TRON" || network === "TRON Nile";
+    return {
+      ETH: isTron ? 0 : parseFloat(ethBalance || '0') || 0,
+      TRX: isTron ? (balances.TRX ?? 0) : 0,
+      USDC: isTron
+        ? (balances.USDC_TRC20 ?? balances.USDC ?? 0)
+        : (balances.USDC_ERC20 ?? balances.USDC ?? 0),
+      USDT: isTron
+        ? (balances.USDT_TRC20 ?? balances.USDT ?? 0)
+        : (balances.USDT_ERC20 ?? balances.USDT ?? 0),
+      BTC: balances.BTC ?? 0,
+      SOL: balances.SOL ?? 0,
+      BNB: balances.BNB ?? 0,
+      XRP: balances.XRP ?? 0,
+      TON: balances.TON ?? 0,
+      SUI: balances.SUI ?? 0,
+    };
+  }, [ethBalance, balances, network]);
+
+  const totalWalletUsd = useMemo(() => {
+    let total = 0;
+    for (const [sym, amount] of Object.entries(realBalances)) {
+      const livePrice = prices[sym]?.usd;
+      const price = livePrice !== undefined && livePrice > 0 ? livePrice : (STABLE_FALLBACK[sym] ?? 0);
+      total += amount * price;
+    }
+    return total;
+  }, [realBalances, prices]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await Promise.all([refreshCardData(), refreshBalance()]);
@@ -600,7 +634,7 @@ export default function CardScreen({ navigation, route }: any) {
             <View style={{ alignItems: 'center', marginBottom: 16 }}>
               <Text style={{ fontSize: 13, color: T.textMuted, fontFamily: 'Inter_600SemiBold', marginBottom: 4 }}>Card Balance</Text>
               <Text style={{ fontSize: 32, color: T.text, fontFamily: 'Inter_800ExtraBold', letterSpacing: -1 }}>
-                {balanceHidden ? '****' : formatFiat(cardBalance)}
+                {balanceHidden ? '****' : formatFiat(totalWalletUsd)}
               </Text>
             </View>
             
