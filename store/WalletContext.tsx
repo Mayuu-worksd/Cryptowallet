@@ -1740,12 +1740,19 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setCardBalance(vcc.balance);
         setCardFrozen(vcc.card_status === 'frozen');
         setCardDetails(prev => {
-          const hasValidPrev = /^\d{4}\s\d{4}\s\d{4}\s\d{4}$/.test(prev.number);
-          const hasValidPrevCvv = /^\d{3}$/.test(prev.cvv);
+          // A valid prev number contains at least 15 digits (VISA/Mastercard). Don't overwrite it with dots if decryption fails.
+          const prevDigitsLength = String(prev.number).replace(/\s/g, '').replace(/\D/g, '').length;
+          const hasValidPrev = prevDigitsLength >= 15;
+          const hasValidPrevCvv = String(prev.cvv).replace(/\D/g, '').length >= 3;
+          
           const newNum = decryptedNumber || (hasValidPrev ? prev.number : ('•••• •••• •••• ' + vcc.card_last4));
           const newCvv = decryptedCvv    || (hasValidPrevCvv ? prev.cvv : '•••');
+          
           if (prev.number === newNum && prev.cvv === newCvv && prev.holderName === vcc.card_holder_name && prev.expiry === vcc.expiry_mm_yy) return prev;
-          return { ...prev, number: newNum, cvv: newCvv, holderName: vcc.card_holder_name, expiry: vcc.expiry_mm_yy };
+          
+          const nextDetails = { ...prev, number: newNum, cvv: newCvv, holderName: vcc.card_holder_name, expiry: vcc.expiry_mm_yy };
+          AsyncStorage.setItem('cw_card_details', JSON.stringify(nextDetails)).catch(() => {});
+          return nextDetails;
         });
         AsyncStorage.multiSet([['cw_card_balance', String(vcc.balance)]]).catch(() => {});
       } else if (dbCard) {
@@ -1755,12 +1762,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setCardBalance(dbCard.balance);
         setCardFrozen(dbCard.status === 'frozen');
         setCardDetails(prev => {
-          const hasValidPrev = /^\d{4}\s\d{4}\s\d{4}\s\d{4}$/.test(prev.number);
-          const hasValidPrevCvv = /^\d{3}$/.test(prev.cvv);
+          const prevDigitsLength = String(prev.number).replace(/\s/g, '').replace(/\D/g, '').length;
+          const hasValidPrev = prevDigitsLength >= 15;
+          const hasValidPrevCvv = String(prev.cvv).replace(/\D/g, '').length >= 3;
+          
           const newNum = decryptedNumber || (hasValidPrev ? prev.number : ('•••• •••• •••• ' + dbCard.card_last4));
           const newCvv = decryptedCvv    || (hasValidPrevCvv ? prev.cvv : '•••');
+          
           if (prev.number === newNum && prev.cvv === newCvv) return prev;
-          return { ...prev, number: newNum, cvv: newCvv, holderName: dbCard.holder_name, expiry: dbCard.expiry_month + '/' + dbCard.expiry_year };
+          
+          const nextDetails = { ...prev, number: newNum, cvv: newCvv, holderName: dbCard.holder_name, expiry: dbCard.expiry_month + '/' + dbCard.expiry_year };
+          AsyncStorage.setItem('cw_card_details', JSON.stringify(nextDetails)).catch(() => {});
+          return nextDetails;
         });
         AsyncStorage.setItem('cw_card_balance', String(dbCard.balance)).catch(() => {});
       }

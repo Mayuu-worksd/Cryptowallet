@@ -83,6 +83,16 @@ export function CardCredentialsWidget({
 
   const handleToggle = useCallback(() => {
     if (loading) return;
+    
+    // Check if we actually have real data to reveal (not just bullets)
+    if (!hasFullNumber(realNumber) || realCvv.includes('•') || realExpiry.includes('•')) {
+      haptics.error();
+      // Use standard alert to inform user that credentials need to be fetched
+      // since the context currently holds the fallback masked version.
+      alert('Secure credentials unavailable. Please pull down to refresh the card data.');
+      return;
+    }
+
     haptics.selection();
     if (!revealed) {
       setLoading(true);
@@ -90,7 +100,7 @@ export function CardCredentialsWidget({
     } else {
       setRevealed(false);
     }
-  }, [loading, revealed]);
+  }, [loading, revealed, realNumber, realCvv, realExpiry]);
 
   const displayNumber = revealed && realNumber ? realNumber : maskNumber(realNumber);
   const displayCvv    = revealed && realCvv    ? realCvv    : '•••';
