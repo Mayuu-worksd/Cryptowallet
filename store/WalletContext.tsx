@@ -43,6 +43,12 @@ export type CardTransaction = {
   coinAmount?: number;
   status: 'success';
   timestamp: string;
+  merchantCategory?: string;
+  country?: string;
+  currencyUsed?: string;
+  exchangeRate?: number;
+  cardUsed?: string;
+  settlementBreakdown?: Record<string, number>;
 };
 
 export type CoinPrice = { usd: number; change24h: number };
@@ -106,9 +112,11 @@ type WalletContextType = {
   sendETH: (toAddress: string, amount: string) => Promise<{ success: boolean; error?: string; hash?: string }>;
   sendCrypto: (coin: string, amount: number, label: string) => void;
   topupCard: (coin: string, amount: number) => boolean;
-  spendCard: (coin: string, amountUSD: number, label: string) => boolean;
+  spendCard: (coin: string, amountUSD: number, label: string, currency?: string) => boolean;
   toggleFreezeCard: () => void;
   cardTransactions: CardTransaction[];
+  enabledCardCurrencies: Record<string, boolean>;
+  setEnabledCardCurrencies: (currencies: Record<string, boolean>) => Promise<void>;
   cardDetails: { number: string; expiry: string; cvv: string; brand: 'VISA' | 'MASTERCARD'; holderName: string; design: string };
   setCardDetails: (details: any) => void;
   cardCreated: boolean;
@@ -159,6 +167,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [cardBalance,      setCardBalance]      = useState(0);
   const [cardFrozen,       setCardFrozen]       = useState(false);
   const [cardTransactions, setCardTransactions] = useState<CardTransaction[]>([]);
+  const [enabledCardCurrencies, setEnabledCardCurrenciesState] = useState<Record<string, boolean>>({ USD: true, EUR: true, HKD: true, JPY: true, SGD: true, AED: true });
   const [cardCreated,      setCardCreated]      = useState(false);
   const [paymentPriority,  setPaymentPriority]  = useState<string[]>(['USDT', 'BTC', 'ETH', 'BNB', 'TRX']);
   const [cardDetails,      setCardDetails]      = useState<{ number: string; expiry: string; cvv: string; brand: 'VISA' | 'MASTERCARD'; holderName: string; design: string }>({
@@ -236,6 +245,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (walletAddress) {
       profileService.upsert(walletAddress, { p2p_country: country, p2p_currency: currency }).catch(() => {});
     }
+  }, [walletAddress]);
+
+  const setEnabledCardCurrencies = useCallback(async (currencies: Record<string, boolean>) => {
+    setEnabledCardCurrenciesState(currencies);
+    await AsyncStorage.setItem('cw_card_currencies', JSON.stringify(currencies));
+    if (walletAddress) profileService.upsert(walletAddress, { card_currencies: currencies }).catch(() => {});
   }, [walletAddress]);
 
   const lockBalance = useCallback((token: string, amount: number) => {
@@ -457,13 +472,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const startup = async () => {
       try {
         // Load UI preferences first (fastest)
-        const [savedDarkMode, savedAccountType, savedP2PCountry, savedP2PCurrency, savedLockedBal, savedFiatCurrency] = await Promise.all([
+        const [savedDarkMode, savedAccountType, savedP2PCountry, savedP2PCurrency, savedLockedBal, savedFiatCurrency, savedCardCurrencies] = await Promise.all([
           AsyncStorage.getItem('cw_is_dark_mode'),
           AsyncStorage.getItem('cw_account_type'),
           AsyncStorage.getItem('cw_p2p_country'),
           AsyncStorage.getItem('cw_p2p_currency'),
           AsyncStorage.getItem('cw_locked_balance'),
           AsyncStorage.getItem('cw_fiat_currency'),
+          AsyncStorage.getItem('cw_card_currencies'),
         ]);
 
         if (savedDarkMode !== null) setIsDarkMode(savedDarkMode === 'true');
@@ -472,6 +488,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         if (savedP2PCountry)  setP2PCountryState(savedP2PCountry);
         if (savedP2PCurrency) setP2PCurrencyState(savedP2PCurrency);
         if (savedLockedBal)   setLockedBalance(JSON.parse(savedLockedBal));
+        if (savedCardCurrencies) {
+          try { setEnabledCardCurrenciesState(JSON.parse(savedCardCurrencies)); } catch {}
+        }
 
         if (savedAccountType && savedP2PCountry && savedP2PCurrency) {
           setAccountTypeSet(true);
@@ -1732,8 +1751,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return false;
   }, []);
 
-  const spendCard = useCallback((coin: string, amountUSD: number, label: string): boolean => {
+  const spendCard = useCallback((coin: string, amountUSD: number, label: string, currency: string = 'USD'): boolean => {
     if (cardFrozen) return false;
+    
+    if (currency && enabledCardCurrencies[currency] === false) {
+      // Transaction declined because currency is disabled
+      return false;
+    }
     
     // 1. Calculate required USD including Card Fee
     const cardFeeUSD = commissionService.calculateFee('card_fee', amountUSD);
@@ -1768,11 +1792,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     let remainingUSD = totalRequiredUSD;
     let newEthBalance = parseFloat(ethBalance || '0');
     const newBalances = { ...balances };
-    const updatedCardTxs: CardTransaction[] = [];
     const timestamp = new Date().toISOString();
     
     let totalCardFeeDeducted = 0;
     let totalSettlementFeeDeducted = 0;
+    
+    const settlementBreakdown: Record<string, number> = {};
     
     for (const asset of availableAssets) {
       if (remainingUSD <= 0) break;
@@ -1809,6 +1834,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       remainingUSD -= deductUsableUSD;
       totalSettlementFeeDeducted += settlementFeeUSD;
       
+      settlementBreakdown[asset.coin] = (settlementBreakdown[asset.coin] || 0) + deductUsableUSD;
+      
       // If it's not the settlement currency, log the auto-swap
       if (!asset.isSettlement) {
         addTx({ type: 'swap', coin: `${asset.coin} \u2192 ${SETTLEMENT_CURRENCY}`, amount: deductAmount.toFixed(6), usdValue: totalDeductUSD.toFixed(2), address: 'Auto Settlement', status: 'success' });
@@ -1824,18 +1851,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           swap_to_amount: totalDeductUSD // Note: Assuming USD value maps 1:1 with USDT for simplicity
         }).catch(() => {});
       }
-      
-      // Record transaction
-      const cardTx: CardTransaction = {
-        id: Date.now().toString() + '_' + asset.coin,
-        timestamp,
-        type: 'spend',
-        amount: deductUsableUSD,
-        label,
-        coin: asset.coin,
-        status: 'success'
-      };
-      updatedCardTxs.push(cardTx);
       
       addTx({ type: 'card_spend', coin: asset.coin, amount: (deductUsableUSD / asset.usdPrice).toFixed(6), usdValue: deductUsableUSD.toFixed(2), address: label, status: 'success' });
       
@@ -1855,6 +1870,20 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       return false;
     }
     
+    // Create ONE consolidated CardTransaction
+    const cardTx: CardTransaction = {
+      id: Date.now().toString(),
+      timestamp,
+      type: 'spend',
+      amount: amountUSD,
+      label,
+      status: 'success',
+      currencyUsed: currency,
+      settlementBreakdown,
+      merchantCategory: 'Retail', // Default mock
+      country: 'USA', // Default mock
+    };
+    
     // 5. Log Fees
     if (cardFeeUSD > 0) {
       addTx({ type: 'fee', coin: 'USD', amount: cardFeeUSD.toFixed(2), usdValue: cardFeeUSD.toFixed(2), address: 'Card Fee', status: 'success' });
@@ -1872,13 +1901,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setEthBalance(newEthBalance.toFixed(6));
     
     setCardTransactions(prev => {
-      const updated = [...updatedCardTxs, ...prev];
+      const updated = [cardTx, ...prev];
       AsyncStorage.setItem('cw_card_transactions', JSON.stringify(updated)).catch(() => {});
       return updated;
     });
     
     return true;
-  }, [cardFrozen, balances, ethBalance, prices, walletAddress, addTx, paymentPriority]);
+  }, [cardFrozen, balances, ethBalance, prices, walletAddress, addTx, paymentPriority, enabledCardCurrencies]);
 
   const generateCardDetails = useCallback(() => {
     // no-op: card details are set at creation time and restored from Supabase
@@ -2118,6 +2147,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     ethBalance, isLoadingBalance, hasWallet, isLoadingWallet, isReadOnly, isSyncing,
     balances, cardBalance, cardFrozen, network, transactions,
     cardDetails, cardCreated, createCard, updateCardDetails, generateCardDetails, cardTransactions,
+    enabledCardCurrencies, setEnabledCardCurrencies,
     setCardDetails,
     addTx,
     updateTxStatus,
@@ -2139,6 +2169,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     ethBalance, isLoadingBalance, hasWallet, isLoadingWallet, isReadOnly, isSyncing,
     balances, cardBalance, cardFrozen, network, transactions,
     cardDetails, cardCreated, createCard, updateCardDetails, generateCardDetails, cardTransactions,
+    enabledCardCurrencies, setEnabledCardCurrencies,
     createWallet, importWallet, deleteWallet, enterReadOnlyMode, refreshBalance, refreshCardData, fetchBalance,
     sendETH, sendCrypto, topupCard, spendCard, toggleFreezeCard, applySwapBalances, switchNetwork,
     fiatCurrency, setFiatCurrency, formatFiat, convertFiat, fiatSymbol, formatOrderFiat,

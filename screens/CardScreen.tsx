@@ -14,13 +14,15 @@ import Toast from '../components/Toast';
 import CreateCardFlow from '../components/card/CreateCardFlow';
 import { CardCredentialsWidget } from '../components/card/CardNumberDisplay';
 import EditCardSheet from '../components/card/EditCardSheet';
+import SetCurrenciesSheet from '../components/card/SetCurrenciesSheet';
+import TransactionDetailsSheet from '../components/card/TransactionDetailsSheet';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CRIMSON = '#EC2629';
 const COINS = ['ETH', 'USDT'] as const;
 const ICONS = ['🛍️','🍔','☕','🎬','✈️','🏥','🎮','🏠','⚡','💊','📦','🎵'];
 
-type CustomMerchant = { name: string; amount: string; icon: string };
+type CustomMerchant = { name: string; amount: string; icon: string; currency?: string };
 type CardSkin = 'standard' | 'solana' | 'nature';
 type PhysicalTier = 'Classic' | 'Gold' | 'Platinum' | 'Travel';
 
@@ -79,9 +81,11 @@ export default function CardScreen({ navigation, route }: any) {
   const [showSpend, setShowSpend] = useState(false);
   const [showCreds, setShowCreds] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
+  const [showCurrencies, setShowCurrencies] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
   const [balanceHidden, setBalanceHidden] = useState(false);
 
-  const [merchant, setMerchant] = useState<CustomMerchant>({ name: '', amount: '', icon: '🛍️' });
+  const [merchant, setMerchant] = useState<CustomMerchant>({ name: '', amount: '', icon: '🛍️', currency: 'USD' });
   const [loading, setLoading] = useState(false);
   
   const [toast, setToast] = useState({
@@ -129,10 +133,10 @@ export default function CardScreen({ navigation, route }: any) {
 
     setLoading(true);
     await new Promise(r => setTimeout(r, 900));
-    const ok = spendCard(amtUSD, `${merchant.icon} ${merchant.name.trim()}`);
+    const ok = spendCard('ETH', amtUSD, `${merchant.icon} ${merchant.name.trim()}`, merchant.currency || 'USD');
     setLoading(false);
     if (ok) {
-      showToast(`Paid ${formatFiat(amtUSD)} to ${merchant.name.trim()}`, 'success');
+      showToast(`Paid ${amtUSD.toFixed(2)} ${merchant.currency || 'USD'} to ${merchant.name.trim()}`, 'success');
       setMerchant({ name: '', amount: '', icon: '🛍️' });
       setShowSpend(false);
     } else showToast('Insufficient combined wallet balance.', 'error');
@@ -791,6 +795,17 @@ export default function CardScreen({ navigation, route }: any) {
                     </TouchableOpacity>
                     <Text style={[styles.circularActionLabel, { color: T.text }]}>Settings</Text>
                   </View>
+
+                  <View style={styles.circularActionWrap}>
+                    <TouchableOpacity 
+                      style={[styles.circularBtn, { backgroundColor: T.surface, borderColor: T.border }]} 
+                      onPress={() => setShowCurrencies(true)}
+                      activeOpacity={0.7}
+                    >
+                      <Feather name="dollar-sign" size={22} color={T.text} />
+                    </TouchableOpacity>
+                    <Text style={[styles.circularActionLabel, { color: T.text }]}>Currency</Text>
+                  </View>
                 </>
               )}
             </View>
@@ -851,9 +866,24 @@ export default function CardScreen({ navigation, route }: any) {
                   />
                 </View>
 
-                <Text style={[styles.inputLabel, { color: T.textDim }]}>AMOUNT ({fiatCurrency})</Text>
-                <View style={[styles.inputPill, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
-                  <Text style={{ color: T.text, fontSize: 15, marginRight: 6 }}>{fiatSymbol}</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <Text style={[styles.inputLabel, { color: T.textDim, marginBottom: 0 }]}>AMOUNT</Text>
+                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                    {['USD', 'EUR', 'AED'].map(cur => (
+                      <TouchableOpacity 
+                        key={cur}
+                        onPress={() => setMerchant(p => ({ ...p, currency: cur }))}
+                        style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: merchant.currency === cur ? T.primary + '30' : T.surfaceLow, borderWidth: 1, borderColor: merchant.currency === cur ? T.primary : T.border }}
+                      >
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: merchant.currency === cur ? T.primary : T.textDim }}>{cur}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+                <View style={[styles.inputPill, { backgroundColor: T.surfaceLow, borderColor: T.border, marginTop: 0 }]}>
+                  <Text style={{ color: T.text, fontSize: 15, marginRight: 6 }}>
+                    {merchant.currency === 'USD' ? '$' : merchant.currency === 'EUR' ? '€' : merchant.currency === 'AED' ? 'د.إ' : '$'}
+                  </Text>
                   <TextInput
                     style={[styles.textInput, { color: T.text }]}
                     placeholder="0.00"
@@ -901,13 +931,15 @@ export default function CardScreen({ navigation, route }: any) {
                 </View>
               ) : (
                 cardTransactions.filter(tx => tx.type !== 'topup').slice(0, 5).map((tx, i, arr) => (
-                  <View
+                  <TouchableOpacity
                     key={tx.id}
                     style={[
                       styles.txRow,
                       { borderBottomColor: T.border },
                       i < arr.length - 1 && styles.txBorder,
                     ]}
+                    onPress={() => setSelectedTransaction(tx)}
+                    activeOpacity={0.7}
                   >
                     <View style={[
                       styles.txIconWrap,
@@ -930,13 +962,25 @@ export default function CardScreen({ navigation, route }: any) {
                     <Text style={[styles.txAmount, { color: tx.type === 'topup' ? '#00C853' : T.text }]}>
                       {tx.type === 'topup' ? '+' : '−'}{formatFiat(tx.amount)}
                     </Text>
-                  </View>
+                  </TouchableOpacity>
                 ))
               )}
             </View>
           </View>
         )}
       </ScrollView>
+
+      <SetCurrenciesSheet 
+        visible={showCurrencies}
+        onClose={() => setShowCurrencies(false)}
+        cardNumber={cardDetails?.number || ''}
+      />
+      
+      <TransactionDetailsSheet 
+        visible={!!selectedTransaction}
+        transaction={selectedTransaction}
+        onClose={() => setSelectedTransaction(null)}
+      />
 
       {cardCreated && (
         <EditCardSheet
