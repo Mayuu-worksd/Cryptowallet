@@ -170,10 +170,18 @@ const TxRow = memo(({ tx, T, cfg, onPress, formatFiat }: {
               tx.token === 'USD' ? 2 : tx.token === 'ETH' ? 5 : 4
             )} {tx.token}
           </Text>
-          <Text style={[styles.txUsd, { color: T.textMuted }]}>
-            {formatFiat(parseFloat(tx.usdValue || '0'))}
-          </Text>
-          <StatusBadge status={tx.status} T={T} />
+          {tx.type === 'swap' && tx.swapToToken ? (
+            <Text style={[styles.txAmount, { color: T.success, fontSize: 12, marginTop: 1 }]}>
+              +{parseFloat(tx.swapToAmount || '0').toFixed(tx.swapToToken === 'ETH' ? 5 : 4)} {tx.swapToToken}
+            </Text>
+          ) : (
+            <Text style={[styles.txUsd, { color: T.textMuted }]}>
+              {formatFiat(parseFloat(tx.usdValue || '0'))}
+            </Text>
+          )}
+          <View style={{ marginTop: 4 }}>
+            <StatusBadge status={tx.status} T={T} />
+          </View>
         </View>
  
         <Feather name="chevron-right" size={13} color={T.border} style={{ marginLeft: 4 }} />
