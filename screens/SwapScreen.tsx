@@ -13,6 +13,7 @@ import { swapService, SwapQuote, SUPPORTED_TOKENS, parseSwapError } from '../ser
 import { haptics } from '../utils/haptics';
 import { notificationService } from '../services/notificationService';
 import TransactionLoader from '../components/ui/TransactionLoader';
+import { commissionService } from '../services/commissionService';
 
 import { SUPPORTED_TOKENS as CONFIG_SUPPORTED_TOKENS } from '../constants/currencyConfig';
 
@@ -205,16 +206,33 @@ export default function SwapScreen({ navigation, route }: any) {
       );
       if (result.success) {
         const capturedSell = sellAmount;
-        const capturedBuy  = quote.buyAmount;
+        let finalBuyAmtNum = parseFloat(quote.buyAmount);
+        
+        // Calculate swap fee
+        const swapUsdValue = parseFloat(sellAmount) * sellPrice;
+        const swapFeeUSD = commissionService.calculateFee('swap_fee', swapUsdValue);
+        let feeDeductedFromBuy = 0;
+        
+        if (swapFeeUSD > 0) {
+          feeDeductedFromBuy = swapFeeUSD / buyPrice;
+          finalBuyAmtNum = Math.max(0, finalBuyAmtNum - feeDeductedFromBuy);
+          // Log the fee
+          const { txService } = await import('../services/supabaseService');
+          addTx({ type: 'fee', coin: 'USD', amount: swapFeeUSD.toFixed(2), usdValue: swapFeeUSD.toFixed(2), address: 'Swap Fee', status: 'success' });
+          txService.log({ wallet_address: walletAddress, type: 'fee', token: 'USD', amount: swapFeeUSD, usd_value: swapFeeUSD, status: 'success', label: 'Swap Fee' }).catch(() => {});
+        }
+        
+        const capturedBuy  = finalBuyAmtNum.toString();
         setSwapResult({ sellAmt: capturedSell, sellTok: sellToken, buyAmt: capturedBuy, buyTok: buyToken });
-        await applySwapBalances(sellToken, parseFloat(sellAmount), buyToken, parseFloat(quote.buyAmount));
+        await applySwapBalances(sellToken, parseFloat(sellAmount), buyToken, finalBuyAmtNum);
+        
         addTx({
           type:      'swap',
           coin:      sellToken,
           amount:    sellAmount,
           buyToken:  buyToken,
-          buyAmount: quote.buyAmount,
-          usdValue:  (parseFloat(sellAmount) * sellPrice).toFixed(2),
+          buyAmount: capturedBuy,
+          usdValue:  swapUsdValue.toFixed(2),
           address:   `${sellToken} → ${buyToken}`,
           status:    'success',
           txHash:    result.hash ?? undefined,

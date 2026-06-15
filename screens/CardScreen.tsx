@@ -767,8 +767,8 @@ export default function CardScreen({ navigation, route }: any) {
             {showCreds && (
               <View style={{ paddingHorizontal: 20, marginTop: 10 }}>
                 <CardCredentialsWidget
-                  cardNumber={cardDetails?.cardNumber || ''}
-                  expiry={cardDetails?.expiryMmYy || ''}
+                  cardNumber={cardDetails?.number || ''}
+                  expiry={cardDetails?.expiry || ''}
                   cvv={cardDetails?.cvv || ''}
                   holderName={cardDetails?.holderName || ''}
                   textColor={T.text}

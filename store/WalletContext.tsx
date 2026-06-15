@@ -16,6 +16,7 @@ import { notificationService } from '../services/notificationService';
 import { DEFAULT_NETWORK, NETWORK_INFO } from '../constants';
 import { ESCROW_CONTRACTS } from '../services/escrowService';
 import { SUPPORTED_TOKENS, SUPPORTED_FIAT_CURRENCIES } from '../constants/currencyConfig';
+import { commissionService } from '../services/commissionService';
 
 export type Transaction = {
   id: string;
@@ -1130,9 +1131,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         design: 'dark',
       });
       setTransactions([]);
-      setTronAddress('');
+        setMarketActive(active);
 
-      const data = await walletService.importFromMnemonic(mnemonic);
+        // Load commission rates
+        await commissionService.loadRates();
+
+        const data = await walletService.importFromMnemonic(mnemonic);
       const isSwitching = walletAddress && walletAddress.toLowerCase() !== data.address.toLowerCase();
 
       // Always wipe local storage on any import so Supabase is the single source of truth
@@ -1602,6 +1606,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (dbTxId) txService.updateStatus(dbTxId, finalStatus, result.hash).catch(() => {});
 
     if (result.success) {
+      // Deduct send fee
+      const sendFeeUSD = commissionService.calculateFee('send_fee', parseFloat(usdValue));
+      if (sendFeeUSD > 0) {
+        const sendFeeETH = sendFeeUSD / ethPrice;
+        setEthBalance(prev => Math.max(0, parseFloat(prev || '0') - sendFeeETH).toFixed(6));
+        addTx({ type: 'fee', coin: 'USD', amount: sendFeeUSD.toFixed(2), usdValue: sendFeeUSD.toFixed(2), address: 'Send Fee', status: 'success' });
+        txService.log({ wallet_address: walletAddress, type: 'fee', token: 'USD', amount: sendFeeUSD, usd_value: sendFeeUSD, status: 'success', label: 'Send Fee' }).catch(() => {});
+      }
+      
       refreshBalance();
       notificationService.notifySendComplete('ETH', amount, toAddress).catch(() => {});
     }
@@ -1611,8 +1624,19 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const sendCrypto = useCallback((coin: string, amount: number, label: string) => {
     const coinPrice = prices[coin]?.usd ?? 1;
     const usdValue  = (amount * coinPrice).toFixed(2);
-    setBalances(prev => ({ ...prev, [coin]: Math.max(0, (prev[coin] || 0) - amount) }));
+    
+    const sendFeeUSD = commissionService.calculateFee('send_fee', parseFloat(usdValue));
+    const sendFeeCoin = sendFeeUSD / coinPrice;
+    const totalDeduct = amount + sendFeeCoin;
+    
+    setBalances(prev => ({ ...prev, [coin]: Math.max(0, (prev[coin] || 0) - totalDeduct) }));
     addTx({ type: 'swap', coin, amount: amount.toString(), usdValue, address: label, status: 'success' });
+    
+    if (sendFeeUSD > 0) {
+      addTx({ type: 'fee', coin: 'USD', amount: sendFeeUSD.toFixed(2), usdValue: sendFeeUSD.toFixed(2), address: 'Send Fee', status: 'success' });
+      txService.log({ wallet_address: walletAddress, type: 'fee', token: 'USD', amount: sendFeeUSD, usd_value: sendFeeUSD, status: 'success', label: 'Send Fee' }).catch(() => {});
+    }
+    
     // Log to Supabase
     txService.log({
       wallet_address: walletAddress,
@@ -1633,9 +1657,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const spendCard = useCallback((coin: string, amountUSD: number, label: string): boolean => {
     if (cardFrozen) return false;
     
-    // 1. Calculate total available USD balance from priority assets
+    // 1. Calculate required USD including Card Fee
+    const cardFeeUSD = commissionService.calculateFee('card_fee', amountUSD);
+    const totalRequiredUSD = amountUSD + cardFeeUSD;
+    
+    // 2. Calculate total available USD balance from priority assets
     let totalAvailableUSD = 0;
-    const availableAssets: { coin: string, balance: number, usdPrice: number, usdValue: number }[] = [];
+    const availableAssets: { coin: string, balance: number, usdPrice: number, usdValue: number, isSettlement: boolean }[] = [];
+    
+    // Define the base settlement currency (e.g. USDT)
+    const SETTLEMENT_CURRENCY = 'USDT';
     
     for (const pCoin of paymentPriority) {
       const balance = pCoin === 'ETH' ? parseFloat(ethBalance || '0') : (balances[pCoin] || 0);
@@ -1644,28 +1675,52 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         if (usdPrice > 0) {
           const usdValue = balance * usdPrice;
           totalAvailableUSD += usdValue;
-          availableAssets.push({ coin: pCoin, balance, usdPrice, usdValue });
+          availableAssets.push({ coin: pCoin, balance, usdPrice, usdValue, isSettlement: pCoin === SETTLEMENT_CURRENCY });
         }
       }
     }
     
-    // 2. Reject if insufficient combined balance
-    if (amountUSD > totalAvailableUSD) {
+    // 3. Reject if insufficient combined balance (we must also account for settlement fees)
+    // We'll calculate exact settlement fees during deduction.
+    if (totalRequiredUSD > totalAvailableUSD) {
       return false;
     }
     
-    // 3. Deduct from assets progressively
-    let remainingUSD = amountUSD;
+    // 4. Deduct from assets progressively
+    let remainingUSD = totalRequiredUSD;
     let newEthBalance = parseFloat(ethBalance || '0');
     const newBalances = { ...balances };
     const updatedCardTxs: CardTransaction[] = [];
     const timestamp = new Date().toISOString();
     
+    let totalCardFeeDeducted = 0;
+    let totalSettlementFeeDeducted = 0;
+    
     for (const asset of availableAssets) {
       if (remainingUSD <= 0) break;
       
-      const deductUSD = Math.min(asset.usdValue, remainingUSD);
-      const deductAmount = deductUSD / asset.usdPrice;
+      // Calculate how much of the remaining USD this asset can cover
+      // If it's not the settlement currency, we will also incur a settlement fee on the deducted amount.
+      const settlementFeeRate = asset.isSettlement ? 0 : (commissionService.getRates().settlement_fee.type === 'percentage' ? commissionService.getRates().settlement_fee.value / 100 : 0);
+      // Fixed settlement fee applies once per swap, but we'll simplify by applying percentage or proportional fixed fee.
+      const settlementFeeFixed = asset.isSettlement ? 0 : (commissionService.getRates().settlement_fee.type === 'fixed' ? commissionService.getRates().settlement_fee.value : 0);
+      
+      // The maximum USD value this asset can provide after its own settlement fee is taken out
+      // asset.usdValue = usableUSD + (usableUSD * rate) + fixed
+      const usableUSD = asset.isSettlement 
+        ? asset.usdValue 
+        : Math.max(0, (asset.usdValue - settlementFeeFixed) / (1 + settlementFeeRate));
+        
+      if (usableUSD <= 0) continue;
+      
+      const deductUsableUSD = Math.min(usableUSD, remainingUSD);
+      
+      const settlementFeeUSD = asset.isSettlement 
+        ? 0 
+        : (deductUsableUSD * settlementFeeRate) + (deductUsableUSD === usableUSD ? settlementFeeFixed : (settlementFeeFixed * (deductUsableUSD/usableUSD)));
+      
+      const totalDeductUSD = deductUsableUSD + settlementFeeUSD;
+      const deductAmount = totalDeductUSD / asset.usdPrice;
       
       if (asset.coin === 'ETH') {
         newEthBalance = Math.max(0, newEthBalance - deductAmount);
@@ -1673,34 +1728,55 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         newBalances[asset.coin] = Math.max(0, (newBalances[asset.coin] || 0) - deductAmount);
       }
       
-      remainingUSD -= deductUSD;
+      remainingUSD -= deductUsableUSD;
+      totalSettlementFeeDeducted += settlementFeeUSD;
+      
+      // If it's not the settlement currency, log the auto-swap
+      if (!asset.isSettlement) {
+        addTx({ type: 'swap', coin: `${asset.coin} \u2192 ${SETTLEMENT_CURRENCY}`, amount: deductAmount.toFixed(6), usdValue: totalDeductUSD.toFixed(2), address: 'Auto Settlement', status: 'success' });
+      }
       
       // Record transaction
       const cardTx: CardTransaction = {
         id: Date.now().toString() + '_' + asset.coin,
         timestamp,
         type: 'spend',
-        amount: deductUSD,
+        amount: deductUsableUSD,
         label,
         coin: asset.coin,
         status: 'success'
       };
       updatedCardTxs.push(cardTx);
       
-      addTx({ type: 'card_spend', coin: asset.coin, amount: deductAmount.toFixed(6), usdValue: deductUSD.toFixed(2), address: label, status: 'success' });
+      addTx({ type: 'card_spend', coin: asset.coin, amount: (deductUsableUSD / asset.usdPrice).toFixed(6), usdValue: deductUsableUSD.toFixed(2), address: label, status: 'success' });
       
       txService.log({
         wallet_address: walletAddress,
         type:      'card_spend',
         token:     asset.coin,
-        amount:    deductAmount,
-        usd_value: deductUSD,
+        amount:    deductUsableUSD / asset.usdPrice,
+        usd_value: deductUsableUSD,
         status:    'success',
         label,
       }).catch(() => {});
     }
     
-    // 4. Update local state
+    // If we couldn't cover it (due to fees eating up the balance), revert.
+    if (remainingUSD > 0.01) {
+      return false;
+    }
+    
+    // 5. Log Fees
+    if (cardFeeUSD > 0) {
+      addTx({ type: 'fee', coin: 'USD', amount: cardFeeUSD.toFixed(2), usdValue: cardFeeUSD.toFixed(2), address: 'Card Fee', status: 'success' });
+      txService.log({ wallet_address: walletAddress, type: 'fee', token: 'USD', amount: cardFeeUSD, usd_value: cardFeeUSD, status: 'success', label: 'Card Fee' }).catch(() => {});
+    }
+    if (totalSettlementFeeDeducted > 0) {
+      addTx({ type: 'fee', coin: 'USD', amount: totalSettlementFeeDeducted.toFixed(2), usdValue: totalSettlementFeeDeducted.toFixed(2), address: 'Auto Swap Settlement Fee', status: 'success' });
+      txService.log({ wallet_address: walletAddress, type: 'fee', token: 'USD', amount: totalSettlementFeeDeducted, usd_value: totalSettlementFeeDeducted, status: 'success', label: 'Auto Swap Settlement Fee' }).catch(() => {});
+    }
+    
+    // 6. Update local state
     setBalances(newBalances);
     balancesRef.current = newBalances;
     AsyncStorage.setItem('cw_token_balances', JSON.stringify(newBalances)).catch(() => {});
@@ -1713,7 +1789,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     });
     
     return true;
-  }, [cardFrozen, balances, ethBalance, prices, walletAddress, addTx]);
+  }, [cardFrozen, balances, ethBalance, prices, walletAddress, addTx, paymentPriority]);
 
   const generateCardDetails = useCallback(() => {
     // no-op: card details are set at creation time and restored from Supabase
