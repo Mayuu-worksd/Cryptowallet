@@ -718,7 +718,11 @@ export default function CardScreen({ navigation, route }: any) {
               {cardFrozen ? (
                 <>
                   <View style={styles.circularActionWrap}>
-                    <TouchableOpacity style={[styles.circularBtn, { backgroundColor: T.surface, borderColor: T.border }]} activeOpacity={0.7}>
+                    <TouchableOpacity 
+                      style={[styles.circularBtn, { backgroundColor: T.surface, borderColor: T.border }]} 
+                      onPress={() => showToast('Report sent to admin. Support will contact you shortly.', 'info')}
+                      activeOpacity={0.7}
+                    >
                       <Feather name="credit-card" size={22} color={T.text} />
                     </TouchableOpacity>
                     <Text style={[styles.circularActionLabel, { color: T.text }]}>Report lost</Text>
@@ -791,21 +795,6 @@ export default function CardScreen({ navigation, route }: any) {
               )}
             </View>
 
-            {/* Apple Wallet Button - only when active */}
-            {!cardFrozen && (
-              <View style={{ alignItems: 'center', marginBottom: 24 }}>
-                <TouchableOpacity style={[styles.appleWalletBtn, { backgroundColor: T.surfaceLow, borderColor: T.border, borderWidth: 1 }]}>
-                  <View style={[styles.appleWalletIconWrap, { backgroundColor: T.text }]}>
-                    <Feather name="credit-card" size={14} color={T.background} />
-                  </View>
-                  <View style={{ flexDirection: 'column' }}>
-                    <Text style={[styles.appleWalletText, { color: T.text, fontSize: 10, fontFamily: 'Inter_600SemiBold', marginBottom: 2 }]}>Add to</Text>
-                    <Text style={[styles.appleWalletText, { color: T.text, fontSize: 14, fontFamily: 'Inter_700Bold' }]}>Apple Wallet</Text>
-                  </View>
-                </TouchableOpacity>
-              </View>
-            )}
-
             {/* Credentials Panel */}
             {!cardFrozen && showCreds && (
               <View style={{ paddingHorizontal: 20, marginTop: 10 }}>
@@ -827,7 +816,7 @@ export default function CardScreen({ navigation, route }: any) {
             {showSpend && (
               <View style={[styles.interactivePanel, { backgroundColor: T.surface, borderColor: T.border }, styles.shadowWrapper]}>
                 <View style={styles.panelHeader}>
-                  <Text style={[styles.panelTitle, { color: T.text }]}>Simulate Card Swipe</Text>
+                  <Text style={[styles.panelTitle, { color: T.text }]}>Card Payment</Text>
                   <TouchableOpacity onPress={() => { setShowSpend(false); setMerchant({ name: '', amount: '', icon: '🛍️' }); }}>
                     <Feather name="x" size={16} color={T.textDim} />
                   </TouchableOpacity>
