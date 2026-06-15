@@ -131,7 +131,7 @@ const TxRow = memo(({ tx, T, cfg, onPress, formatFiat }: {
   tx: UnifiedTx; T: any; cfg: TxConfig; onPress: () => void; formatFiat: (amount: number) => string;
 }) => {
   const scale = useRef(new Animated.Value(1)).current;
-  const isDebit  = tx.type === 'send' || (tx.type === 'card' && !tx.label.includes('Top-up'));
+  const isDebit  = tx.type === 'send' || tx.type === 'swap' || tx.label.includes('Fee') || (tx.type === 'card' && !tx.label.includes('Top-up'));
   const amtColor = isDebit ? T.error : T.success;
   const sign     = isDebit ? '−' : '+';
 
@@ -147,7 +147,7 @@ const TxRow = memo(({ tx, T, cfg, onPress, formatFiat }: {
         <View style={[styles.txIcon, { backgroundColor: cfg.bg }]}>
           {cfg.icon}
         </View>
-
+ 
         <View style={styles.txMid}>
           <Text style={[styles.txLabel, { color: T.text }]} numberOfLines={1}>{tx.label}</Text>
           <Text style={[styles.txAddr, { color: T.textMuted }]} numberOfLines={1}>
@@ -163,7 +163,7 @@ const TxRow = memo(({ tx, T, cfg, onPress, formatFiat }: {
             {transactionService.formatDate(tx.date)}
           </Text>
         </View>
-
+ 
         <View style={styles.txRight}>
           <Text style={[styles.txAmount, { color: amtColor }]}>
             {sign}{parseFloat(tx.amount).toFixed(
@@ -175,23 +175,31 @@ const TxRow = memo(({ tx, T, cfg, onPress, formatFiat }: {
           </Text>
           <StatusBadge status={tx.status} T={T} />
         </View>
-
+ 
         <Feather name="chevron-right" size={13} color={T.border} style={{ marginLeft: 4 }} />
       </View>
     </TouchableOpacity>
   );
 });
-
+ 
 // ─── Detail modal ─────────────────────────────────────────────────────────────
 const DetailModal = memo(({ tx, T, cfg, network, onClose, formatFiat }: {
   tx: UnifiedTx | null; T: any; cfg: TxConfig | null; network: string; onClose: () => void; formatFiat: (amount: number) => string;
 }) => {
   if (!tx || !cfg) return null;
-  const isDebit  = tx.type === 'send' || (tx.type === 'card' && !tx.label.includes('Top-up'));
+  const isDebit  = tx.type === 'send' || tx.type === 'swap' || tx.label.includes('Fee') || (tx.type === 'card' && !tx.label.includes('Top-up'));
   const amtColor = isDebit ? T.error : T.success;
   const explorerBase = EXPLORER[network] ?? EXPLORER.Sepolia;
-
-  const rows = [
+ 
+  const isSwap = tx.type === 'swap' && !tx.label.includes('Fee');
+  const rows = isSwap ? [
+    { label: 'Type',   value: 'Swap' },
+    { label: 'Status', value: tx.status.charAt(0).toUpperCase() + tx.status.slice(1) },
+    { label: 'Date',   value: transactionService.formatDate(tx.date) },
+    { label: 'Sold',   value: `${parseFloat(tx.amount).toFixed(tx.token === 'ETH' ? 6 : 4)} ${tx.token}` },
+    ...(tx.swapToToken ? [{ label: 'Received', value: `${parseFloat(tx.swapToAmount || '0').toFixed(tx.swapToToken === 'ETH' ? 6 : 4)} ${tx.swapToToken}` }] : []),
+    ...(tx.hash ? [{ label: 'Tx Hash', value: `${tx.hash.slice(0, 14)}…${tx.hash.slice(-8)}` }] : []),
+  ] : [
     { label: 'Type',   value: cfg.label },
     { label: 'Status', value: tx.status.charAt(0).toUpperCase() + tx.status.slice(1) },
     { label: 'Date',   value: transactionService.formatDate(tx.date) },
@@ -199,7 +207,7 @@ const DetailModal = memo(({ tx, T, cfg, network, onClose, formatFiat }: {
     { label: 'To',     value: tx.to.length   > 28 ? `${tx.to.slice(0, 12)}…${tx.to.slice(-8)}`   : tx.to   },
     ...(tx.hash ? [{ label: 'Tx Hash', value: `${tx.hash.slice(0, 14)}…${tx.hash.slice(-8)}` }] : []),
   ];
-
+ 
   const explorerUrl = tx.hash ? getExplorerUrl(tx.hash, network) : null;
 
   return (

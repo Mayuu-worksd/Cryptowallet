@@ -136,6 +136,8 @@ export type DBTransaction = {
   to_address?: string;
   description?: string;
   created_at?: string;
+  swap_to_token?: string;
+  swap_to_amount?: number;
 };
 
 // ─── Shipping fees (static fallback) ─────────────────────────────────────────

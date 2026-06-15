@@ -37,12 +37,14 @@ export type UnifiedTx = {
   to:       string;
   hash:     string | null;
   label:    string;
+  swapToToken?: string;
+  swapToAmount?: string;
 };
 
 // ─── Internal storage shapes (matching WalletContext) ─────────────────────────
 type LocalTx = {
   id:              string;
-  type:            'sent' | 'received' | 'card_topup' | 'card_spend' | 'swap';
+  type:            'sent' | 'received' | 'card_topup' | 'card_spend' | 'swap' | 'fee';
   coin:            string;
   amount:          string;
   usdValue:        string;
@@ -53,6 +55,8 @@ type LocalTx = {
   contractAddress?: string;
   rawDate?:        number;
   isInternal?:     boolean;
+  buyToken?:       string;
+  buyAmount?:      string;
 };
 
 type CardTx = {
@@ -84,15 +88,25 @@ function localStatusToUnified(s: 'success' | 'pending' | 'failed'): UnifiedTx['s
 
 // ─── Converters ───────────────────────────────────────────────────────────────
 function fromLocalTx(tx: LocalTx): UnifiedTx {
-  const type: UnifiedTx['type'] =
-    tx.type === 'sent'       ? 'send'    :
-    tx.type === 'received'   ? 'receive' :
-    tx.type === 'swap'       ? 'swap'    : 'card';
+  let type: UnifiedTx['type'] = 'card';
+  if (tx.type === 'sent') type = 'send';
+  else if (tx.type === 'received') type = 'receive';
+  else if (tx.type === 'swap') type = 'swap';
+  else if (tx.type === 'fee') {
+    if (tx.address?.includes('Swap')) {
+      type = 'swap';
+    } else if (tx.address?.includes('Send')) {
+      type = 'send';
+    } else {
+      type = 'card';
+    }
+  }
 
   const label =
     tx.type === 'sent'       ? `Sent ${tx.coin}`     :
     tx.type === 'received'   ? `Received ${tx.coin}` :
     tx.type === 'swap'       ? tx.address            : // swap address field holds "ETH → USDC" label
+    tx.type === 'fee'        ? tx.address            :
     tx.type === 'card_topup' ? `Card Top-up (${tx.coin})` :
                                `Card Payment`;
 
@@ -111,6 +125,8 @@ function fromLocalTx(tx: LocalTx): UnifiedTx {
     to:       tx.type === 'sent' ? tx.address : 'You',
     hash:     tx.txHash ?? null,
     label,
+    swapToToken: tx.buyToken,
+    swapToAmount: tx.buyAmount,
   };
 }
 
@@ -189,6 +205,8 @@ export const transactionService = {
       to:       s.toToken ?? '',
       hash:     s.txHash ?? null,
       label:    `${s.fromToken ?? '?'} → ${s.toToken ?? '?'}`,
+      swapToToken: s.toToken,
+      swapToAmount: s.toAmount ?? s.buyAmount,
     }));
 
     // ── TRON networks: use TronGrid instead of Etherscan ──

@@ -237,6 +237,20 @@ export default function SwapScreen({ navigation, route }: any) {
           status:    'success',
           txHash:    result.hash ?? undefined,
         } as any);
+
+        const { txService } = await import('../services/supabaseService');
+        txService.log({
+          wallet_address: walletAddress,
+          type: 'swap',
+          token: sellToken,
+          amount: parseFloat(sellAmount),
+          usd_value: swapUsdValue,
+          status: 'success',
+          tx_hash: result.hash ?? undefined,
+          label: `${sellToken} → ${buyToken}`,
+          swap_to_token: buyToken,
+          swap_to_amount: parseFloat(capturedBuy)
+        }).catch(() => {});
         haptics.success();
         notificationService.notifySwapComplete(sellToken, buyToken, parseFloat(quote.buyAmount).toFixed(4)).catch(() => {});
         setStep('success');

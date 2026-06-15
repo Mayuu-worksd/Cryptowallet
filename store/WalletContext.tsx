@@ -20,7 +20,7 @@ import { commissionService } from '../services/commissionService';
 
 export type Transaction = {
   id: string;
-  type: 'sent' | 'received' | 'card_topup' | 'card_spend' | 'swap';
+  type: 'sent' | 'received' | 'card_topup' | 'card_spend' | 'swap' | 'fee';
   coin: string;
   amount: string;
   usdValue: string;
@@ -30,6 +30,8 @@ export type Transaction = {
   txHash?: string;
   contractAddress?: string;
   isInternal?: boolean;
+  buyToken?: string;
+  buyAmount?: string;
 };
 
 export type CardTransaction = {
@@ -847,6 +849,80 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     startup();
   }, []);
 
+  // ── Auto-Sync Local Transactions to Supabase ──
+  useEffect(() => {
+    if (!walletAddress || !hasWallet) return;
+    const syncToSupabase = async () => {
+      try {
+        const [savedTxs, savedSwapTxs] = await Promise.all([
+          AsyncStorage.getItem('cw_transactions'),
+          AsyncStorage.getItem('swap_transactions'),
+        ]);
+        const localTxs: any[] = savedTxs ? JSON.parse(savedTxs) : [];
+        const localSwaps: any[] = savedSwapTxs ? JSON.parse(savedSwapTxs) : [];
+        
+        const dbTxs = await txService.getAll(walletAddress, 500);
+        const existingTxHashes = new Set(dbTxs.map(t => t.tx_hash).filter(Boolean));
+        // Add existing IDs or labels to prevent duplicates
+        const existingLabels = new Set(dbTxs.map(t => `${t.type}-${t.amount}-${t.token}-${t.status}`));
+
+        // 1. Sync standard local txs (including fees)
+        for (const tx of localTxs) {
+          if (tx.type === 'card_topup' || tx.type === 'card_spend' || tx.type === 'swap') continue; // handled elsewhere
+          const isFee = tx.type === 'fee';
+          const typeStr = isFee ? 'fee' : (tx.type === 'sent' ? 'send' : 'receive');
+          const token = tx.coin;
+          const amt = parseFloat(tx.amount || '0');
+          const hash = tx.txHash;
+          if (hash && existingTxHashes.has(hash)) continue;
+          const sig = `${typeStr}-${amt}-${token}-${tx.status === 'completed' ? 'success' : tx.status}`;
+          if (existingLabels.has(sig)) continue;
+          
+          await txService.log({
+            wallet_address: walletAddress,
+            type: typeStr as any,
+            token,
+            amount: amt,
+            usd_value: parseFloat(tx.usdValue || '0'),
+            status: (tx.status === 'completed' || tx.status === 'success') ? 'success' : (tx.status === 'failed' ? 'failed' : 'pending'),
+            tx_hash: hash,
+            label: tx.address || tx.label,
+          }).catch(() => {});
+          existingLabels.add(sig);
+          if (hash) existingTxHashes.add(hash);
+        }
+
+        // 2. Sync local swap transactions
+        for (const swap of localSwaps) {
+          const hash = swap.txHash;
+          if (hash && existingTxHashes.has(hash)) continue;
+          const token = swap.fromToken || swap.sellToken || 'ETH';
+          const amt = parseFloat(swap.fromAmount || swap.sellAmount || '0');
+          const sig = `swap-${amt}-${token}-${swap.status === 'completed' ? 'success' : swap.status}`;
+          if (existingLabels.has(sig)) continue;
+
+          await txService.log({
+            wallet_address: walletAddress,
+            type: 'swap',
+            token,
+            amount: amt,
+            usd_value: parseFloat(swap.usdValue || '0'),
+            status: (swap.status === 'completed' || swap.status === 'success') ? 'success' : (swap.status === 'failed' ? 'failed' : 'pending'),
+            tx_hash: hash,
+            label: `${token} → ${swap.toToken || swap.buyToken || '?'}`,
+            swap_to_token: swap.toToken || swap.buyToken,
+            swap_to_amount: parseFloat(swap.toAmount || swap.buyAmount || '0')
+          }).catch(() => {});
+          existingLabels.add(sig);
+          if (hash) existingTxHashes.add(hash);
+        }
+      } catch (e) {
+        console.log('[syncLocalTransactionsToSupabase] Error:', e);
+      }
+    };
+    syncToSupabase();
+  }, [walletAddress, hasWallet]);
+
 
 
   const refreshBalance = useCallback(async () => {
@@ -1413,7 +1489,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           card_topup: 'card_topup', card_spend: 'card_spend',
         };
         const restoredTxs: Transaction[] = dbTxs
-          .filter(t => !['card_topup', 'card_spend', 'fee'].includes(t.type))
+          .filter(t => !['card_topup', 'card_spend'].includes(t.type))
           .map(t => ({
             id:       t.id ?? Date.now().toString(),
             type:     (typeMap[t.type] ?? t.type) as Transaction['type'],
@@ -1426,6 +1502,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
               ? new Date(t.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
               : new Date().toLocaleDateString(),
             txHash:   t.tx_hash,
+            buyToken: t.swap_to_token,
+            buyAmount: t.swap_to_amount !== undefined && t.swap_to_amount !== null ? String(t.swap_to_amount) : undefined,
           }));
 
         if (restoredTxs.length > 0) {
@@ -1734,6 +1812,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       // If it's not the settlement currency, log the auto-swap
       if (!asset.isSettlement) {
         addTx({ type: 'swap', coin: `${asset.coin} \u2192 ${SETTLEMENT_CURRENCY}`, amount: deductAmount.toFixed(6), usdValue: totalDeductUSD.toFixed(2), address: 'Auto Settlement', status: 'success' });
+        txService.log({
+          wallet_address: walletAddress,
+          type: 'swap',
+          token: asset.coin,
+          amount: deductAmount,
+          usd_value: totalDeductUSD,
+          status: 'success',
+          label: `${asset.coin} \u2192 ${SETTLEMENT_CURRENCY}`,
+          swap_to_token: SETTLEMENT_CURRENCY,
+          swap_to_amount: totalDeductUSD // Note: Assuming USD value maps 1:1 with USDT for simplicity
+        }).catch(() => {});
       }
       
       // Record transaction
