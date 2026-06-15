@@ -120,6 +120,29 @@ export const storageService = {
     return !!address;
   },
 
+  async saveCardDetails(details: any): Promise<void> {
+    if (Platform.OS === 'web') {
+      localStorage.setItem('cw_card_details', xorEncode(JSON.stringify(details), WEB_SALT));
+    } else {
+      await SecureStore.setItemAsync('cw_card_details', JSON.stringify(details));
+    }
+  },
+
+  async getCardDetails(): Promise<any | null> {
+    if (Platform.OS === 'web') {
+      const val = localStorage.getItem('cw_card_details');
+      if (!val) return null;
+      try { return JSON.parse(xorDecode(val, WEB_SALT)); } catch { return null; }
+    }
+    const val = await SecureStore.getItemAsync('cw_card_details');
+    return val ? JSON.parse(val) : null;
+  },
+
+  async clearCardDetails(): Promise<void> {
+    if (Platform.OS === 'web') localStorage.removeItem('cw_card_details');
+    else await SecureStore.deleteItemAsync('cw_card_details');
+  },
+
   async clearWallet(): Promise<void> {
     if (Platform.OS === 'web') {
       localStorage.removeItem(KEYS.PRIVATE_KEY);
@@ -128,6 +151,7 @@ export const storageService = {
       localStorage.removeItem(KEYS.WALLET_NAME);
       localStorage.removeItem(KEYS.TRON_ADDRESS);      // ← fix: clear TRON address too
       localStorage.removeItem(KEYS.TRON_PRIV_KEY);
+      this.clearCardDetails();
     } else {
       await Promise.all([
         SecureStore.deleteItemAsync(KEYS.PRIVATE_KEY),
@@ -135,6 +159,7 @@ export const storageService = {
         AsyncStorage.removeItem(KEYS.WALLET_ADDRESS),
         AsyncStorage.removeItem(KEYS.WALLET_NAME),
         AsyncStorage.removeItem(KEYS.TRON_ADDRESS),    // ← fix: clear TRON address too
+        this.clearCardDetails(),
       ]);
     }
   },
@@ -146,12 +171,14 @@ export const storageService = {
       localStorage.removeItem(KEYS.WALLET_ADDRESS);
       localStorage.removeItem(KEYS.TRON_ADDRESS);      // ← fix
       localStorage.removeItem(KEYS.TRON_PRIV_KEY);
+      this.clearCardDetails();
     } else {
       await Promise.all([
         SecureStore.deleteItemAsync(KEYS.PRIVATE_KEY),
         SecureStore.deleteItemAsync(KEYS.MNEMONIC),
         AsyncStorage.removeItem(KEYS.WALLET_ADDRESS),
         AsyncStorage.removeItem(KEYS.TRON_ADDRESS),    // ← fix
+        this.clearCardDetails(),
       ]);
     }
   },

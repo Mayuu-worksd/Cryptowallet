@@ -170,6 +170,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [enabledCardCurrencies, setEnabledCardCurrenciesState] = useState<Record<string, boolean>>({ USD: true, EUR: true, HKD: true, JPY: true, SGD: true, AED: true });
   const [cardCreated,      setCardCreated]      = useState(false);
   const [paymentPriority,  setPaymentPriority]  = useState<string[]>(['USDT', 'BTC', 'ETH', 'BNB', 'TRX']);
+
+  useEffect(() => {
+    adminSettingsService.getSetting<string[]>('payment_priority', ['USDT', 'BTC', 'ETH', 'BNB', 'TRX'])
+      .then(setPaymentPriority).catch(() => {});
+  }, []);
   const [cardDetails,      setCardDetails]      = useState<{ number: string; expiry: string; cvv: string; brand: 'VISA' | 'MASTERCARD'; holderName: string; design: string }>({
     number: '\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022',
     expiry: '\u2022\u2022/\u2022\u2022',
@@ -521,7 +526,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             storageService.getWalletName(),
             AsyncStorage.getItem('cw_transactions'),
             AsyncStorage.getItem('cw_card_balance'),
-            AsyncStorage.getItem('cw_card_details'),
+            storageService.getCardDetails(),
             AsyncStorage.getItem('cw_card_created'),
             AsyncStorage.getItem('cw_token_balances'),
             cardService.getCardFrozen(),
@@ -576,7 +581,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           if (savedCardCreated) setCardCreated(savedCardCreated === 'true');
           if (savedCardTxs)     setCardTransactions(JSON.parse(savedCardTxs));
           if (savedDetails) {
-            const parsed = JSON.parse(savedDetails);
+            const parsed = typeof savedDetails === 'string' ? JSON.parse(savedDetails) : savedDetails;
             // Normalize number to "XXXX XXXX XXXX XXXX" format
             if (parsed?.number) {
               const digits = String(parsed.number).replace(/\s/g, '').replace(/\D/g, '');
@@ -584,7 +589,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
                 const fixed = `${digits.slice(0,4)} ${digits.slice(4,8)} ${digits.slice(8,12)} ${digits.slice(12,16)}`;
                 if (parsed.number !== fixed) {
                   parsed.number = fixed;
-                  AsyncStorage.setItem('cw_card_details', JSON.stringify(parsed)).catch(() => {});
+                  storageService.saveCardDetails().catch(() => {});
                 }
               }
             }
@@ -765,8 +770,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
               await AsyncStorage.multiSet([
                 ['cw_card_created', 'true'],
                 ['cw_card_balance', String(vcc.balance)],
-                ['cw_card_details', JSON.stringify(restoredDetails)],
               ]);
+              storageService.saveCardDetails(restoredDetails).catch(() => {});
             } else if (dbCard) {
               let finalNumber = dbCardService.decryptNumber(dbCard, address);
               let finalCvv    = dbCardService.decryptCvv(dbCard, address);
@@ -811,14 +816,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
               await AsyncStorage.multiSet([
                 ['cw_card_created', 'true'],
                 ['cw_card_balance', String(dbCard.balance)],
-                ['cw_card_details', JSON.stringify(restoredDetails)],
               ]);
+              storageService.saveCardDetails(restoredDetails).catch(() => {});
             } else if (savedCardCreated === 'true' && savedDetails) {
               // Local card exists but not yet in Supabase — this is a leaked/stale card from another session!
               // Wipe local card storage to prevent contamination
               await AsyncStorage.multiRemove([
-                'cw_card_created', 'cw_card_balance', 'cw_card_details', 'cw_card_transactions'
+                'cw_card_created', 'cw_card_balance', 'cw_card_transactions'
               ]);
+              storageService.clearCardDetails().catch(() => {});
               setCardCreated(false);
               setCardBalance(0);
               setCardDetails({
@@ -1241,8 +1247,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         'cw_locked_balance', 'cw_read_only',
         'tx_history_cache', 'swap_transactions',
         'cw_card_created', 'cw_card_balance',
-        'cw_card_details', 'cw_card_transactions',
+        'cw_card_transactions',
       ]);
+      await storageService.clearCardDetails();
 
       if (isNew || isSwitching) {
         setBalances({ USDT: 0, USDC: 0, ETH: 0, BTC: 0, SOL: 0, BNB: 0, XRP: 0, TON: 0, TRX: 0, SUI: 0 });
@@ -1406,7 +1413,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           await AsyncStorage.multiSet([
             ['cw_card_created', 'true'],
             ['cw_card_balance', String(vcc.balance)],
-            ['cw_card_details', JSON.stringify(restoredDetails)],
+            
           ]);
         } else if (dbCard) {
           let decryptedNumber = dbCardService.decryptNumber(dbCard, data.address);
@@ -1466,7 +1473,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           await AsyncStorage.multiSet([
             ['cw_card_created', 'true'],
             ['cw_card_balance', String(dbCard.balance)],
-            ['cw_card_details', JSON.stringify(restoredDetails)],
+            
           ]);
         } else {
           setCardCreated(false);
@@ -1592,8 +1599,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     await clearPin();
     await AsyncStorage.removeItem('cw_read_only');
     await AsyncStorage.multiRemove([
-      'cw_card_created', 'cw_card_balance', 'cw_card_details', 'cw_card_transactions'
+      'cw_card_created', 'cw_card_balance', 'cw_card_transactions'
     ]);
+    await storageService.clearCardDetails();
     // Fully reset in-memory state → App.tsx re-renders Landing stack
     setHasWallet(false);
     setWalletAddress('');
@@ -1622,9 +1630,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     await clearPin();
     // Wipe local transaction/card data but keep address + balances
     await AsyncStorage.multiRemove([
-      'cw_transactions', 'cw_card_balance', 'cw_card_details',
+      'cw_transactions', 'cw_card_balance',
       'cw_card_transactions', 'cw_card_created',
     ]);
+    await storageService.clearCardDetails();
     await AsyncStorage.setItem('cw_read_only', 'true');
     // Clear in-memory sensitive data
     setPinEnabled(false);
@@ -1641,9 +1650,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     await storageService.clearWallet();
     await clearPin();
     await AsyncStorage.multiRemove([
-      'cw_transactions', 'cw_card_balance', 'cw_card_details',
+      'cw_transactions', 'cw_card_balance',
       'cw_card_transactions', 'cw_card_created', 'cw_token_balances'
     ]);
+    await storageService.clearCardDetails();
     setHasWallet(false);
     setWalletAddress('');
     setEthBalance('0.0');
@@ -1945,7 +1955,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           if (prev.number === newNum && prev.cvv === newCvv && prev.holderName === vcc.card_holder_name && prev.expiry === vcc.expiry_mm_yy) return prev;
           
           const nextDetails = { ...prev, number: newNum, cvv: newCvv, holderName: vcc.card_holder_name, expiry: vcc.expiry_mm_yy };
-          AsyncStorage.setItem('cw_card_details', JSON.stringify(nextDetails)).catch(() => {});
+          storageService.saveCardDetails().catch(() => {});
           return nextDetails;
         });
         AsyncStorage.multiSet([['cw_card_balance', String(vcc.balance)]]).catch(() => {});
@@ -1966,7 +1976,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           if (prev.number === newNum && prev.cvv === newCvv) return prev;
           
           const nextDetails = { ...prev, number: newNum, cvv: newCvv, holderName: dbCard.holder_name, expiry: dbCard.expiry_month + '/' + dbCard.expiry_year };
-          AsyncStorage.setItem('cw_card_details', JSON.stringify(nextDetails)).catch(() => {});
+          storageService.saveCardDetails().catch(() => {});
           return nextDetails;
         });
         AsyncStorage.setItem('cw_card_balance', String(dbCard.balance)).catch(() => {});
@@ -2030,7 +2040,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setCardDetails(details);
     setCardCreated(true);
     // Always persist to AsyncStorage so reveal works immediately even if Supabase is slow
-    AsyncStorage.setItem('cw_card_details', JSON.stringify(details)).catch(() => {});
+    storageService.saveCardDetails().catch(() => {});
     AsyncStorage.setItem('cw_card_created', 'true').catch(() => {});
 
     // Save to Supabase as primary store — encrypted number + CVV
@@ -2060,7 +2070,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const updateCardDetails = useCallback((patch: { holderName?: string; design?: string }) => {
     setCardDetails(prev => {
       const updated = { ...prev, ...patch };
-      AsyncStorage.setItem('cw_card_details', JSON.stringify(updated)).catch(() => {});
+      storageService.saveCardDetails().catch(() => {});
       return updated;
     });
     // Persist to Supabase

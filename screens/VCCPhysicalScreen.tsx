@@ -7,7 +7,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
-import { shippingFeeService, ShippingFee, VCCCardVariant } from '../services/supabaseService';
+import { adminSettingsService, shippingFeeService, ShippingFee, VCCCardVariant } from '../services/supabaseService';
 
 export default function VCCPhysicalScreen({ navigation, route }: any) {
   const { isDarkMode, formatFiat } = useWallet() as any;
@@ -15,7 +15,12 @@ export default function VCCPhysicalScreen({ navigation, route }: any) {
   const insets = useSafeAreaInsets();
   const { variant, holderName, previewNumber, previewExpiry, previewCVV }: { variant: VCCCardVariant; holderName: string; previewNumber?: string; previewExpiry?: string; previewCVV?: string } = route?.params ?? {};
 
-  const PHYSICAL_BASE_FEE = variant?.price ?? 50;
+  const [baseFeeFallback, setBaseFeeFallback] = useState(50);
+  useEffect(() => {
+    adminSettingsService.getSetting('physical_base_fee', 50).then(setBaseFeeFallback).catch(() => {});
+  }, []);
+
+  const PHYSICAL_BASE_FEE = variant?.price ?? baseFeeFallback;
 
   const [shippingFees,    setShippingFees]    = useState<ShippingFee[]>([]);
   const [selectedCountry, setSelectedCountry] = useState<ShippingFee | null>(null);

@@ -12,6 +12,7 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useWallet, useMarket } from '../store/WalletContext';
 import Toast from '../components/Toast';
 import CreateCardFlow from '../components/card/CreateCardFlow';
+import { adminSettingsService } from '../services/supabaseService';
 import { CardCredentialsWidget } from '../components/card/CardNumberDisplay';
 import EditCardSheet from '../components/card/EditCardSheet';
 import SetCurrenciesSheet from '../components/card/SetCurrenciesSheet';
@@ -47,7 +48,7 @@ const PHYSICAL_DESCRIPTIONS: Record<PhysicalTier, string> = {
   Travel:   'Deep Aero Indigo composite shell card. Zero foreign transaction fees and accelerated flight points.',
 };
 
-const PHYSICAL_PRICES_USD: Record<PhysicalTier, number> = {
+const DEFAULT_PHYSICAL_PRICES_USD: Record<PhysicalTier, number> = {
   Classic:  0,
   Gold:     49.99,
   Platinum: 99.99,
@@ -92,6 +93,12 @@ export default function CardScreen({ navigation, route }: any) {
     visible: false, message: '', type: 'success' as 'success' | 'error' | 'info',
   });
   const [refreshing, setRefreshing] = useState(false);
+
+  const [physicalPrices, setPhysicalPrices] = useState(DEFAULT_PHYSICAL_PRICES_USD);
+  useEffect(() => {
+    adminSettingsService.getSetting('physical_card_prices', DEFAULT_PHYSICAL_PRICES_USD)
+      .then(setPhysicalPrices).catch(() => {});
+  }, []);
 
   const STABLE_FALLBACK: Record<string, number> = {
     ETH: 3500, BTC: 65000, USDT: 1, USDC: 1, SOL: 150, BNB: 600, XRP: 0.5, TON: 7.5, TRX: 0.12, SUI: 1.8,
@@ -622,7 +629,7 @@ export default function CardScreen({ navigation, route }: any) {
               >
                 <Text style={[styles.applyButtonText, { color: T.background }]}>
                   {kycStatus === 'verified' 
-                    ? `Order ${physicalTier} Card · ${PHYSICAL_PRICES_USD[physicalTier] === 0 ? 'Free' : formatFiat(PHYSICAL_PRICES_USD[physicalTier])}` 
+                    ? `Order ${physicalTier} Card · ${physicalPrices[physicalTier] === 0 ? 'Free' : formatFiat(physicalPrices[physicalTier])}` 
                     : 'Verify KYC to order'}
                 </Text>
               </TouchableOpacity>
@@ -666,7 +673,7 @@ export default function CardScreen({ navigation, route }: any) {
                       <Text style={styles.brandRotatedText}>CRYPTOWALLET</Text>
                     </View>
                     <View style={[styles.cardFaceHolderWrap, { bottom: 20, left: 24 }]}>
-                      <Text style={[styles.cardFaceHolderName, { fontSize: 18, fontFamily: 'Inter_700Bold', letterSpacing: 1.5 }]}>{formattedCardNumber}</Text>
+                      <Text style={[styles.cardFaceHolderName, { fontSize: 18, fontFamily: 'Inter_700Bold', letterSpacing: 1.5 }]}>{cardFrozen ? '**** **** **** ****' : formattedCardNumber}</Text>
                     </View>
                     <View style={[styles.visaRotatedContainer, { right: 24, bottom: 20, transform: [{ rotate: '0deg' }] }]}>
                       <Text style={[styles.visaRotatedText, { fontSize: 24, fontStyle: 'italic', fontFamily: 'Inter_900Black' }]}>VISA</Text>
@@ -696,7 +703,7 @@ export default function CardScreen({ navigation, route }: any) {
                       <Text style={styles.brandRotatedText}>SOLANA EDITION</Text>
                     </View>
                     <View style={[styles.cardFaceHolderWrap, { bottom: 20, left: 24 }]}>
-                      <Text style={[styles.cardFaceHolderName, { fontSize: 18, fontFamily: 'Inter_700Bold', letterSpacing: 1.5 }]}>{formattedCardNumber}</Text>
+                      <Text style={[styles.cardFaceHolderName, { fontSize: 18, fontFamily: 'Inter_700Bold', letterSpacing: 1.5 }]}>{cardFrozen ? '**** **** **** ****' : formattedCardNumber}</Text>
                     </View>
                     <View style={[styles.visaRotatedContainer, { right: 24, bottom: 20, transform: [{ rotate: '0deg' }] }]}>
                       <Text style={[styles.visaRotatedText, { fontSize: 24, fontStyle: 'italic', fontFamily: 'Inter_900Black' }]}>VISA</Text>
@@ -726,7 +733,7 @@ export default function CardScreen({ navigation, route }: any) {
                       <Text style={styles.brandRotatedText}>ORGANIC LEAF</Text>
                     </View>
                     <View style={[styles.cardFaceHolderWrap, { bottom: 20, left: 24 }]}>
-                      <Text style={[styles.cardFaceHolderName, { fontSize: 18, fontFamily: 'Inter_700Bold', letterSpacing: 1.5 }]}>{formattedCardNumber}</Text>
+                      <Text style={[styles.cardFaceHolderName, { fontSize: 18, fontFamily: 'Inter_700Bold', letterSpacing: 1.5 }]}>{cardFrozen ? '**** **** **** ****' : formattedCardNumber}</Text>
                     </View>
                     <View style={[styles.visaRotatedContainer, { right: 24, bottom: 20, transform: [{ rotate: '0deg' }] }]}>
                       <Text style={[styles.visaRotatedText, { fontSize: 24, fontStyle: 'italic', fontFamily: 'Inter_900Black' }]}>VISA</Text>
