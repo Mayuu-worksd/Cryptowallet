@@ -25,6 +25,7 @@ import {
   CreditCard,
   Landmark,
   Network,
+  Settings,
 } from 'lucide-react';
 
 interface SidebarItem {
@@ -122,6 +123,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'Card Requests', href: '/dashboard/cards', icon: CreditCard },
     { name: 'Bank Accounts', href: '/dashboard/bank-accounts', icon: Landmark },
     { name: 'Networks', href: '/dashboard/networks', icon: Network },
+    { name: 'App Settings', href: '/dashboard/settings', icon: Settings },
     { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
   ];
 
