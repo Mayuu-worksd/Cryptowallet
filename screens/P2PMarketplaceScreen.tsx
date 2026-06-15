@@ -8,6 +8,7 @@ import { useWallet } from '../store/WalletContext';
 import { Theme } from '../constants';
 import { p2pService, P2POrder, FIAT_CURRENCIES, PAYMENT_METHODS, getLiveRate, calcPlatformFee } from '../services/merchantService';
 import TransactionLoader from '../components/ui/TransactionLoader';
+import { SUPPORTED_FIAT_CURRENCIES } from '../constants/currencyConfig';
 import { supabase } from '../services/supabaseClient';
 
 const TOKENS   = ['ETH', 'USDC', 'USDT', 'BTC', 'SOL', 'BNB', 'XRP', 'TON', 'TRX', 'SUI'];
@@ -109,7 +110,7 @@ function formatDateTime(dateStr?: string): string {
   return `${month} ${day}, ${formattedHr}:${min} ${ampm}`;
 }
 
-function OrderCard({ order, onPress, T, walletAddress, formatOrderFiat }: { order: P2POrder; onPress: () => void; T: any; walletAddress: string; formatOrderFiat: (amt: number, curr: string) => string; }) {
+function OrderCard({ order, onPress, T, walletAddress, formatOrderFiat, formatFiat, globalFiatCurrency }: { order: P2POrder; onPress: () => void; T: any; walletAddress: string; formatOrderFiat: (amt: number, curr: string) => string; formatFiat: (usd: number) => string; globalFiatCurrency: string; }) {
   const isMine   = order.seller_wallet.toLowerCase() === walletAddress.toLowerCase();
   const isBuying = order.buyer_wallet?.toLowerCase() === walletAddress.toLowerCase();
 
@@ -172,7 +173,14 @@ function OrderCard({ order, onPress, T, walletAddress, formatOrderFiat }: { orde
         </View>
         <View style={s.statLine}>
           <Text style={[s.statLabel, { color: T.textMuted }]}>Total Price</Text>
-          <Text style={[s.statValueBig, { color: T.primary }]}>{formatOrderFiat(Number(order.fiat_total || 0), order.fiat_currency)}</Text>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={[s.statValueBig, { color: T.primary }]}>{formatOrderFiat(Number(order.fiat_total || 0), order.fiat_currency)}</Text>
+            {globalFiatCurrency !== order.fiat_currency && (
+              <Text style={{ fontSize: 11, color: T.textDim, fontWeight: '600', marginTop: 2 }}>
+                ≈ {formatFiat(Number(order.fiat_total || 0) / (SUPPORTED_FIAT_CURRENCIES[order.fiat_currency]?.rate || 1))}
+              </Text>
+            )}
+          </View>
         </View>
       </View>
 
@@ -628,7 +636,7 @@ function ProfessionalRateChart({ sellAmount, sellRate, sellFiat, sellToken, live
 
 export default function P2PMarketplaceScreen({ navigation, route }: any) {
   const insets = useSafeAreaInsets();
-  const { walletAddress, isDarkMode, balances, ethBalance, lockedBalance, lockBalance, resetLockedBalances, p2pCountry, p2pCurrency, accountType, network, formatOrderFiat } = useWallet() as any;
+  const { walletAddress, isDarkMode, balances, ethBalance, lockedBalance, lockBalance, resetLockedBalances, p2pCountry, p2pCurrency, accountType, network, formatOrderFiat, formatFiat, fiatCurrency } = useWallet() as any;
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const isBusiness = accountType === 'business';
 
@@ -1350,7 +1358,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
                   <>
                     <Text style={[s.sectionLabel, { color: T.textDim }]}>MY SELL LISTINGS</Text>
                     {selling.map(item => (
-                      <OrderCard key={item.id} order={item} T={T} walletAddress={walletAddress} formatOrderFiat={formatOrderFiat}
+                      <OrderCard key={item.id} order={item} T={T} walletAddress={walletAddress} formatOrderFiat={formatOrderFiat} formatFiat={formatFiat} globalFiatCurrency={fiatCurrency}
                         onPress={() => navigation.navigate('P2POrderDetail', { order: item })} />
                     ))}
                   </>
@@ -1359,7 +1367,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
                   <>
                     <Text style={[s.sectionLabel, { color: T.textDim, marginTop: selling.length > 0 ? 8 : 0 }]}>ORDERS I'M BUYING</Text>
                     {buying.map(item => (
-                      <OrderCard key={item.id} order={item} T={T} walletAddress={walletAddress} formatOrderFiat={formatOrderFiat}
+                      <OrderCard key={item.id} order={item} T={T} walletAddress={walletAddress} formatOrderFiat={formatOrderFiat} formatFiat={formatFiat} globalFiatCurrency={fiatCurrency}
                         onPress={() => navigation.navigate('P2POrderDetail', { order: item })} />
                     ))}
                   </>
@@ -1386,7 +1394,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
           data={orders}
           keyExtractor={(item, index) => item.id ?? String(index)}
           renderItem={({ item }) => (
-            <OrderCard order={item} T={T} walletAddress={walletAddress} formatOrderFiat={formatOrderFiat}
+            <OrderCard order={item} T={T} walletAddress={walletAddress} formatOrderFiat={formatOrderFiat} formatFiat={formatFiat} globalFiatCurrency={fiatCurrency}
               onPress={() => navigation.navigate('P2POrderDetail', { order: item })} />
           )}
           contentContainerStyle={s.list}
