@@ -59,7 +59,7 @@ export default function CardScreen({ navigation, route }: any) {
   const {
     cardFrozen, toggleFreezeCard,
     cardDetails, cardTransactions, cardCreated,
-    balances, ethBalance, spendCard,
+    balances, ethBalance, spendCard, cardBalance,
     isDarkMode, network,
     createCard, updateCardDetails, kycStatus,
     refreshCardData, refreshBalance, accountType,
@@ -597,6 +597,12 @@ export default function CardScreen({ navigation, route }: any) {
         ) : (
           /* ────────────────── ACTIVE WALLET LEDGER STATE ────────────────── */
           <View style={styles.activeWrapper}>
+            <View style={{ alignItems: 'center', marginBottom: 16 }}>
+              <Text style={{ fontSize: 13, color: T.textMuted, fontFamily: 'Inter_600SemiBold', marginBottom: 4 }}>Card Balance</Text>
+              <Text style={{ fontSize: 32, color: T.text, fontFamily: 'Inter_800ExtraBold', letterSpacing: -1 }}>
+                {balanceHidden ? '****' : formatFiat(cardBalance)}
+              </Text>
+            </View>
             
             {/* Swipable active card preview */}
             <View style={styles.carouselWrapper}>
@@ -917,7 +923,7 @@ export default function CardScreen({ navigation, route }: any) {
             {/* Transactions Header */}
             <View style={styles.transactionsHeader}>
               <Text style={[styles.transactionsTitle, { color: T.text }]}>Recent Transactions</Text>
-              <TouchableOpacity onPress={() => navigation.navigate('History')}>
+              <TouchableOpacity onPress={() => navigation.navigate('History', { filter: 'Card' })}>
                 <Text style={[styles.viewAllText, { color: T.primary }]}>View All</Text>
               </TouchableOpacity>
             </View>

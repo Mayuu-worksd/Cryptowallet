@@ -13,8 +13,8 @@ type Props = {
   cardNumber: string;
 };
 
-// Filtered list based on the user's reference image
-const DISPLAY_CURRENCIES = ['USD', 'EUR', 'HKD', 'JPY', 'SGD', 'AED'];
+// Use all supported fiat currencies from config
+const DISPLAY_CURRENCIES = Object.keys(SUPPORTED_FIAT_CURRENCIES);
 
 // Add HKD and JPY if not in config
 const getCurrencyDetails = (code: string) => {

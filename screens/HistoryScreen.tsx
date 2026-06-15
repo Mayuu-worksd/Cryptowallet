@@ -322,7 +322,7 @@ const EmptyState = memo(({ filter, T }: { filter: Filter; T: any }) => (
 ));
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
-export default function HistoryScreen({ navigation }: any) {
+export default function HistoryScreen({ navigation, route }: any) {
   const insets = useSafeAreaInsets();
   const { isDarkMode, network, walletAddress, formatFiat } = useWallet();
   const { prices } = useMarket();
@@ -333,7 +333,7 @@ export default function HistoryScreen({ navigation }: any) {
   const [loading,      setLoading]      = useState(true);
   const [refreshing,   setRefreshing]   = useState(false);
   const [fromCache,    setFromCache]    = useState(false);
-  const [activeFilter, setActiveFilter] = useState<Filter>('All');
+  const [activeFilter, setActiveFilter] = useState<Filter>(route?.params?.filter || 'All');
   const [selectedTx,   setSelectedTx]  = useState<UnifiedTx | null>(null);
   const [toast,        setToast]        = useState({ visible: false, message: '', type: 'success' as 'success' | 'error' | 'info' });
 
