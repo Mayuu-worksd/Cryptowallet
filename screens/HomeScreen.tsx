@@ -1361,7 +1361,7 @@ export default function HomeScreen({ navigation }: any) {
                   <Text
                     style={[styles.currencyToggleText, { color: T.textMuted }]}
                   >
-                    {fiatSymbol} {fiatCurrency}
+                    {SUPPORTED_FIAT_CURRENCIES[fiatCurrency]?.flag || fiatSymbol} {fiatCurrency}
                   </Text>
                   <Feather name="chevron-down" size={12} color={T.textMuted} />
                 </TouchableOpacity>

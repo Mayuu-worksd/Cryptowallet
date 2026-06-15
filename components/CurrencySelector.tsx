@@ -46,7 +46,7 @@ export const CurrencySelector = memo(({ visible, onClose, currentCurrency, onSel
                   activeOpacity={0.7}
                 >
                   <View style={[styles.symbolBox, { backgroundColor: active ? T.primary : T.surfaceLow, borderColor: active ? T.primary : T.border }]}>
-                    <Text style={[styles.symbol, { color: active ? '#FFF' : T.text }]}>{currency.symbol}</Text>
+                    <Text style={[styles.symbol, { color: active ? '#FFF' : T.text }]}>{currency.flag || currency.symbol}</Text>
                   </View>
                   <View style={styles.rowInfo}>
                     <Text style={[styles.code, { color: T.text }]}>{currency.code}</Text>

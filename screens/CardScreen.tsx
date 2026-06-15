@@ -77,6 +77,7 @@ export default function CardScreen({ navigation, route }: any) {
 
   const [showCreate, setShowCreate] = useState(false);
   const [showSpend, setShowSpend] = useState(false);
+  const [showCreds, setShowCreds] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [balanceHidden, setBalanceHidden] = useState(false);
 
@@ -719,11 +720,11 @@ export default function CardScreen({ navigation, route }: any) {
             <View style={styles.circularActionsContainer}>
               <View style={styles.circularActionWrap}>
                 <TouchableOpacity 
-                  style={[styles.circularBtn, { backgroundColor: T.surface, borderColor: T.border }]} 
-                  onPress={() => navigation.navigate('VCCCardDetail')} 
+                  style={[styles.circularBtn, { backgroundColor: showCreds ? T.primary + '20' : T.surface, borderColor: showCreds ? T.primary : T.border }]} 
+                  onPress={() => setShowCreds(v => !v)} 
                   activeOpacity={0.7}
                 >
-                  <Feather name="eye" size={20} color={T.text} />
+                  <Feather name={showCreds ? "eye-off" : "eye"} size={20} color={showCreds ? T.primary : T.text} />
                 </TouchableOpacity>
                 <Text style={[styles.circularActionLabel, { color: T.text }]}>View</Text>
               </View>
@@ -762,9 +763,22 @@ export default function CardScreen({ navigation, route }: any) {
               </View>
             </View>
 
-
-
-
+            {/* Credentials Panel */}
+            {showCreds && (
+              <View style={{ paddingHorizontal: 20, marginTop: 10 }}>
+                <CardCredentialsWidget
+                  cardNumber={cardDetails?.cardNumber || ''}
+                  expiry={cardDetails?.expiryMmYy || ''}
+                  cvv={cardDetails?.cvv || ''}
+                  holderName={cardDetails?.holderName || ''}
+                  textColor={T.text}
+                  accentColor={T.primary}
+                  mutedColor={T.textMuted}
+                  widgetBg={T.surfaceLow}
+                  widgetBorder={T.border}
+                />
+              </View>
+            )}
 
             {/* Pay Collapsible Panel */}
             {showSpend && (
