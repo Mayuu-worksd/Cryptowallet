@@ -621,7 +621,7 @@ export default function CardScreen({ navigation, route }: any) {
                     <View style={[styles.cardFaceHolderWrap, { bottom: 20, left: 24 }]}>
                       <Text style={[styles.cardFaceHolderName, { fontSize: 18, fontFamily: 'Inter_700Bold', letterSpacing: 1.5 }]}>{formattedCardNumber}</Text>
                     </View>
-                    <View style={[styles.visaRotatedContainer, { right: 24, bottom: 20, transform: [] }]}>
+                    <View style={[styles.visaRotatedContainer, { right: 24, bottom: 20, transform: [{ rotate: '0deg' }] }]}>
                       <Text style={[styles.visaRotatedText, { fontSize: 24, fontStyle: 'italic', fontFamily: 'Inter_900Black' }]}>VISA</Text>
                     </View>
                     {cardFrozen && (
@@ -651,7 +651,7 @@ export default function CardScreen({ navigation, route }: any) {
                     <View style={[styles.cardFaceHolderWrap, { bottom: 20, left: 24 }]}>
                       <Text style={[styles.cardFaceHolderName, { fontSize: 18, fontFamily: 'Inter_700Bold', letterSpacing: 1.5 }]}>{formattedCardNumber}</Text>
                     </View>
-                    <View style={[styles.visaRotatedContainer, { right: 24, bottom: 20, transform: [] }]}>
+                    <View style={[styles.visaRotatedContainer, { right: 24, bottom: 20, transform: [{ rotate: '0deg' }] }]}>
                       <Text style={[styles.visaRotatedText, { fontSize: 24, fontStyle: 'italic', fontFamily: 'Inter_900Black' }]}>VISA</Text>
                     </View>
                     {cardFrozen && (
@@ -681,7 +681,7 @@ export default function CardScreen({ navigation, route }: any) {
                     <View style={[styles.cardFaceHolderWrap, { bottom: 20, left: 24 }]}>
                       <Text style={[styles.cardFaceHolderName, { fontSize: 18, fontFamily: 'Inter_700Bold', letterSpacing: 1.5 }]}>{formattedCardNumber}</Text>
                     </View>
-                    <View style={[styles.visaRotatedContainer, { right: 24, bottom: 20, transform: [] }]}>
+                    <View style={[styles.visaRotatedContainer, { right: 24, bottom: 20, transform: [{ rotate: '0deg' }] }]}>
                       <Text style={[styles.visaRotatedText, { fontSize: 24, fontStyle: 'italic', fontFamily: 'Inter_900Black' }]}>VISA</Text>
                     </View>
                     {cardFrozen && (
