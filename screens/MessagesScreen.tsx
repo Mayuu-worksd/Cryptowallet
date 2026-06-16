@@ -157,6 +157,22 @@ export default function MessagesScreen({ navigation }: any) {
     <View style={[styles.root, { backgroundColor: T.background }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
+      {/* Premium cyber-fintech faded logo and concentric ring background design */}
+      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+        <Image 
+          source={require('../assets/logo.png')} 
+          style={{ width: 280, height: 280, opacity: isDarkMode ? 0.015 : 0.025, tintColor: T.primary }} 
+          resizeMode="contain" 
+        />
+        {/* Concentric Cyber Rings (Top Right) */}
+        <View style={{ position: 'absolute', top: -40, right: -60, width: 240, height: 240, borderRadius: 120, borderWidth: 1.5, borderColor: T.primary + '10', backgroundColor: 'transparent' }} />
+        <View style={{ position: 'absolute', top: -70, right: -90, width: 300, height: 300, borderRadius: 150, borderWidth: 1, borderColor: T.primary + '05', backgroundColor: 'transparent' }} />
+        
+        {/* Concentric Cyber Rings (Bottom Left) */}
+        <View style={{ position: 'absolute', bottom: -50, left: -70, width: 280, height: 280, borderRadius: 140, borderWidth: 1.5, borderColor: T.primary + '08', backgroundColor: 'transparent' }} />
+        <View style={{ position: 'absolute', bottom: -90, left: -110, width: 360, height: 360, borderRadius: 180, borderWidth: 1, borderColor: T.primary + '04', backgroundColor: 'transparent' }} />
+      </View>
+
       {/* Modern Fintech Header */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -204,7 +220,19 @@ export default function MessagesScreen({ navigation }: any) {
             return (
               <TouchableOpacity
                 key={order.id}
-                style={[styles.row, { backgroundColor: T.surface, borderColor: T.border + '40' }]}
+                style={[
+                  styles.row, 
+                  { 
+                    backgroundColor: T.surfaceLow, 
+                    borderColor: T.border + '30', 
+                    borderWidth: 1,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.03,
+                    shadowRadius: 10,
+                    elevation: 2,
+                  }
+                ]}
                 onPress={() => openChat(order)}
                 activeOpacity={0.8}
               >

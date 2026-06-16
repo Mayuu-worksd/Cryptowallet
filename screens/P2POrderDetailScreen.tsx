@@ -1202,7 +1202,7 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
               keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
             >
           {/* Chat Header */}
-          <View style={[styles.chatHeader, { backgroundColor: T.surface, borderBottomColor: T.border, paddingTop: insets.top + 12, borderBottomWidth: 1 }]}>
+          <View style={[styles.chatHeader, { backgroundColor: T.surface, paddingTop: insets.top + 12, borderBottomWidth: 0, shadowColor: '#000', shadowOffset: {width: 0, height: 4}, shadowOpacity: 0.05, shadowRadius: 10, elevation: 3, zIndex: 10 }]}>
             <TouchableOpacity onPress={() => setShowChatModal(false)} style={styles.chatHeaderBackBtn}>
               <Feather name="chevron-left" size={26} color={T.text} />
             </TouchableOpacity>
@@ -1242,7 +1242,7 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
           </View>
 
           {/* Chat Escrow Banner */}
-          <View style={[styles.chatEscrowBanner, { backgroundColor: T.success + '08', borderBottomColor: T.border + '40', borderBottomWidth: 1, paddingVertical: 10 }]}>
+          <View style={[styles.chatEscrowBanner, { backgroundColor: T.success + '08', paddingVertical: 12 }]}>
             <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: T.success + '15', alignItems: 'center', justifyContent: 'center' }}>
               <Feather name="shield" size={12} color={T.success} />
             </View>
@@ -1519,8 +1519,8 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
           </View>
 
           {/* Chat Input Bar */}
-          <View style={[styles.chatInputBar, { backgroundColor: T.surface, borderTopColor: T.border, paddingTop: 12, paddingBottom: Platform.OS === 'ios' ? (keyboardVisible ? 12 : insets.bottom + 8) : (keyboardVisible ? 12 : 20), borderTopWidth: 1 }]}>
-            <View style={[styles.chatInputWrap, { backgroundColor: T.surfaceLow, borderColor: T.border, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, gap: 8 }]}>
+          <View style={[styles.chatInputBar, { backgroundColor: T.surface, paddingTop: 14, paddingBottom: Platform.OS === 'ios' ? (keyboardVisible ? 12 : insets.bottom + 8) : (keyboardVisible ? 12 : 20), shadowColor: '#000', shadowOffset: {width: 0, height: -4}, shadowOpacity: 0.03, shadowRadius: 10, elevation: 4 }]}>
+            <View style={[styles.chatInputWrap, { backgroundColor: T.surfaceLow, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, gap: 8 }]}>
               <TouchableOpacity 
                 style={{ padding: 4 }}
                 onPress={() => {
@@ -1980,8 +1980,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   chatMessages: {
-    padding: 16,
-    gap: 8,
+    padding: 20,
+    gap: 14,
   },
   chatEmpty: {
     alignItems: 'center',
@@ -2007,12 +2007,16 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   bubble: {
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    maxWidth: '78%',
-    borderWidth: 1,
-    borderColor: 'transparent',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    maxWidth: '82%',
+    borderWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
   },
   senderLabel: {
     fontSize: 10,
@@ -2066,11 +2070,10 @@ const styles = StyleSheet.create({
   },
   chatInputWrap: {
     flex: 1,
-    borderRadius: 20,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    minHeight: 40,
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    minHeight: 46,
     justifyContent: 'center',
   },
   chatTextInput: {

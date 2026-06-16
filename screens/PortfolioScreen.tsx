@@ -11,6 +11,7 @@ import { COIN_META, COIN_COLORS } from '../constants';
 import Toast from '../components/Toast';
 import { CurrencySelector } from '../components/CurrencySelector';
 import { haptics } from '../utils/haptics';
+import CurrencyDisplay from '../components/CurrencyDisplay';
 import { supabase } from '../services/supabaseClient';
 import { P2POrder } from '../services/merchantService';
 import { SUPPORTED_FIAT_CURRENCIES } from '../constants/currencyConfig';
@@ -125,9 +126,14 @@ const CryptoAssetRow = memo(({ a, T, isUp, prices, formatFiat, balanceVisible, o
           <Text style={[styles.assetAmountNum, { color: T.text }]}>
             {balanceVisible ? a.available.toFixed(4) : '••••'}
           </Text>
-          <Text style={[styles.assetUsd, { color: T.textDim }]}>
-            {balanceVisible ? `≈ ${formatFiat(usdValue)}` : '≈ ••••'}
-          </Text>
+          {balanceVisible ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' }}>
+              <Text style={[styles.assetUsd, { color: T.textDim, marginRight: 2 }]}>≈</Text>
+              <CurrencyDisplay amountUSD={usdValue} style={[styles.assetUsd, { color: T.textDim }]} />
+            </View>
+          ) : (
+            <Text style={[styles.assetUsd, { color: T.textDim }]}>≈ ••••</Text>
+          )}
         </View>
       </Animated.View>
     </TouchableOpacity>
@@ -395,9 +401,13 @@ export default function PortfolioScreen({ navigation }: any) {
           </TouchableOpacity>
 
           <View style={styles.mainBalanceRow}>
-            <Text style={[styles.mainBalanceNum, { color: T.text }]}>
-              {balanceVisible ? formatFiat(totalUsd) : `${fiatSymbol} \u2022\u2022\u2022\u2022\u2022\u2022`}
-            </Text>
+            {balanceVisible ? (
+              <CurrencyDisplay amountUSD={totalUsd} style={[styles.mainBalanceNum, { color: T.text }]} />
+            ) : (
+              <Text style={[styles.mainBalanceNum, { color: T.text }]}>
+                {fiatSymbol} ••••••
+              </Text>
+            )}
             
             <TouchableOpacity
               onPress={() => {

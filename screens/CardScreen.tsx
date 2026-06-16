@@ -1108,14 +1108,13 @@ const styles = StyleSheet.create({
   scroll: { paddingBottom: 120 },
   
   landingWrapper: {
-    alignItems: 'center',
-    paddingHorizontal: 24,
+    alignItems: 'stretch',
+    paddingHorizontal: 0,
   },
   carouselWrapper: {
     width: SCREEN_WIDTH,
     height: 390,
     marginBottom: 16,
-    marginHorizontal: -24,
   },
   carouselScroll: {
     flex: 1,

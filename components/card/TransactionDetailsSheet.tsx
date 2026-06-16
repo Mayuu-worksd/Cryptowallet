@@ -4,6 +4,7 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { CardTransaction } from '../../store/WalletContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type Props = {
   visible: boolean;
@@ -12,6 +13,7 @@ type Props = {
 };
 
 export default function TransactionDetailsSheet({ visible, transaction, onClose }: Props) {
+  const insets = useSafeAreaInsets();
   if (!transaction) return null;
 
   const formatDate = (isoString: string) => {
@@ -26,7 +28,7 @@ export default function TransactionDetailsSheet({ visible, transaction, onClose 
   return (
     <Modal visible={visible} transparent={true} animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.modalOverlay} onPress={onClose}>
-        <Pressable style={styles.sheetContainer} onPress={e => e.stopPropagation()}>
+        <Pressable style={[styles.sheetContainer, { paddingBottom: Math.max(insets.bottom, 24) }]} onPress={e => e.stopPropagation()}>
           <View style={styles.handle} />
           
           <View style={styles.header}>
@@ -110,7 +112,6 @@ const styles = StyleSheet.create({
     maxWidth: Platform.OS === 'web' ? 550 : undefined,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.06)',
-    paddingBottom: Platform.OS === 'ios' ? 34 : 24,
   },
   handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.15)', alignSelf: 'center', marginTop: 12, marginBottom: 4 },
   header: {

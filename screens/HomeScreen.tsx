@@ -33,6 +33,7 @@ import { COIN_META, COIN_COLORS } from "../constants";
 import { SUPPORTED_FIAT_CURRENCIES } from "../constants/currencyConfig";
 import { NewsItem } from "../services/marketService";
 import { NetworkSelector } from "../components/NetworkSelector";
+import CurrencyDisplay from "../components/CurrencyDisplay";
 import { CurrencySelector } from "../components/CurrencySelector";
 import { haptics } from "../utils/haptics";
 
@@ -296,9 +297,7 @@ const TokenRow = memo(
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
             <View style={{ alignItems: "flex-end" }}>
-              <Text style={[styles.tokenUsd, { color: T.text }]}>
-                {hideBalance ? "••••" : formatFiat(safeUsd)}
-              </Text>
+              <CurrencyDisplay amountUSD={safeUsd} hideBalance={hideBalance} style={[styles.tokenUsd, { color: T.text }]} />
               <Text
                 style={{
                   fontSize: 12,
@@ -1334,19 +1333,30 @@ export default function HomeScreen({ navigation }: any) {
                   transform: [{ scale: balanceScale }],
                 }}
               >
-                <Text
-                  style={[
-                    styles.balanceValue,
-                    {
-                      color: T.text,
-                      fontSize: totalConverted > 9999999 ? 32 : 44,
-                    },
-                  ]}
-                >
-                  {balanceVisible
-                    ? fmtBalance(totalUsd)
-                    : fiatSymbol + " ••••••"}
-                </Text>
+                {balanceVisible ? (
+                  <CurrencyDisplay
+                    amountUSD={totalUsd}
+                    style={[
+                      styles.balanceValue,
+                      {
+                        color: T.text,
+                        fontSize: totalConverted > 9999999 ? 32 : 44,
+                      },
+                    ]}
+                  />
+                ) : (
+                  <Text
+                    style={[
+                      styles.balanceValue,
+                      {
+                        color: T.text,
+                        fontSize: totalConverted > 9999999 ? 32 : 44,
+                      },
+                    ]}
+                  >
+                    {fiatSymbol} ••••••
+                  </Text>
+                )}
                 <TouchableOpacity
                   onPress={() => {
                     haptics.selection();
