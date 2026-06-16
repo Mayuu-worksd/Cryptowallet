@@ -6,6 +6,7 @@ import Svg, { Polyline, Line, Circle, Defs, LinearGradient as SvgGradient, Stop,
 import { useFocusEffect } from '@react-navigation/native';
 import { useWallet } from '../store/WalletContext';
 import { Theme } from '../constants';
+import { AedSymbol } from '../components/AedSymbol';
 import { p2pService, P2POrder, FIAT_CURRENCIES, PAYMENT_METHODS, getLiveRate, calcPlatformFee } from '../services/merchantService';
 import TransactionLoader from '../components/ui/TransactionLoader';
 import { SUPPORTED_FIAT_CURRENCIES } from '../constants/currencyConfig';
@@ -285,7 +286,7 @@ function RateChart({
           <TokenSymbolIcon token={token} size={28} />
           <View>
             <Text style={[rc.headerTitle, { color: T.text }]}>
-              {token}/{fiat}
+              {token}/{fiat === 'AED' ? 'AED' : fiat}
             </Text>
             <Text style={[rc.headerSub, { color: T.textDim }]}>7-day price trend</Text>
           </View>
@@ -296,7 +297,8 @@ function RateChart({
           ) : liveRate ? (
             <>
               <Text style={[rc.livePrice, { color: T.text }]}>
-                <CurrencyText amount={liveRate} code={fiat} skipConversion />
+                {fiat === 'AED' ? <AedSymbol size={16} color={T.text} /> : null}
+                <CurrencyText amount={liveRate} code={fiat === 'AED' ? '' : fiat} skipConversion />
               </Text>
               <View style={[rc.changeBadge, { backgroundColor: isUp ? '#10B98118' : '#EC262918' }]}>
                 <Text style={[rc.changeText, { color: isUp ? '#10B981' : '#EC2629' }]}>
@@ -444,7 +446,8 @@ function RateChart({
             {selectedRate > 0 ? (
               <>
                 <Text style={[rc.selectedRate, { color: T.text }]}>
-                  <CurrencyText amount={selectedRate} code={fiat} skipConversion />
+                  {fiat === 'AED' ? <AedSymbol size={18} color={T.text} /> : null}
+                  <CurrencyText amount={selectedRate} code={fiat === 'AED' ? '' : fiat} skipConversion />
                 </Text>
               </>
             ) : (
@@ -555,7 +558,7 @@ function ProfessionalRateChart({ sellAmount, sellRate, sellFiat, sellToken, live
           <Text style={[s.chartLabel, { color: T.textDim }]}>GROSS TOTAL</Text>
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4, marginTop: 2 }}>
             <Text style={[s.chartGross, { color: T.primary }]}>{gross.toFixed(2)}</Text>
-            <Text style={[s.chartFiatLabel, { color: T.textMuted }]}>{sellFiat}</Text>
+            {sellFiat === 'AED' ? <AedSymbol size={13} color={T.textMuted} /> : <Text style={[s.chartFiatLabel, { color: T.textMuted }]}>{sellFiat}</Text>}
           </View>
         </View>
         <View style={{ alignItems: 'flex-end', gap: 6 }}>
@@ -605,7 +608,7 @@ function ProfessionalRateChart({ sellAmount, sellRate, sellFiat, sellToken, live
           <View style={s.chartFooter}>
             <Text style={[s.chartFooterText, { color: T.textDim }]}>7-day trend</Text>
             <Text style={[s.chartFooterText, { color: T.textDim }]}>
-              {rateHistory[0]?.toFixed(2)} → {rateHistory[rateHistory.length - 1]?.toFixed(2)} {sellFiat}
+              {rateHistory[0]?.toFixed(2)} → {rateHistory[rateHistory.length - 1]?.toFixed(2)} {sellFiat === 'AED' ? <AedSymbol size={10} color={T.textDim} /> : sellFiat}
             </Text>
           </View>
         </View>
@@ -1079,7 +1082,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
                     <View style={[s.previewBanner, { backgroundColor: T.primary + '10', borderColor: T.primary + '30' }]}>
                       <Feather name="trending-up" size={14} color={T.primary} />
                       <Text style={{ color: T.primary, fontSize: 13, fontWeight: '700', flex: 1 }}>
-                        You'll receive ~<CurrencyText amount={parseFloat(sellAmount) * parseFloat(sellRate) * 0.995} code={sellFiat} /> after fees
+                        You'll receive ~{sellFiat === 'AED' ? <AedSymbol size={13} color={T.primary} /> : null}<CurrencyText amount={parseFloat(sellAmount) * parseFloat(sellRate) * 0.995} code={sellFiat === 'AED' ? '' : sellFiat} /> after fees
                       </Text>
                     </View>
                   )}
@@ -1173,10 +1176,12 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
                     <View style={{ alignItems: 'center', gap: 4 }}>
                       <Text style={[s.reviewHeroAmount, { color: T.text }]}>{sellAmount} {sellToken}</Text>
                       <Text style={[s.reviewHeroFiat, { color: T.primary }]}>
-                        <CurrencyText amount={parseFloat(sellAmount) * parseFloat(sellRate)} code={sellFiat} />
+                        {sellFiat === 'AED' ? <AedSymbol size={16} color={T.primary} /> : null}
+                        <CurrencyText amount={parseFloat(sellAmount) * parseFloat(sellRate)} code={sellFiat === 'AED' ? '' : sellFiat} />
                       </Text>
                       <Text style={[s.reviewHeroRate, { color: T.textDim }]}>
-                        @ <CurrencyText amount={parseFloat(sellRate)} code={sellFiat} />/{sellToken}
+                        @ {sellFiat === 'AED' ? <AedSymbol size={12} color={T.textDim} /> : null}
+                        <CurrencyText amount={parseFloat(sellRate)} code={sellFiat === 'AED' ? '' : sellFiat} />/{sellToken}
                       </Text>
                     </View>
                   </View>
@@ -1185,7 +1190,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
                   {[
                     { icon: 'credit-card', label: 'Payment', value: sellMethod, color: T.primary },
                     { icon: 'map-pin',    label: 'Country',  value: sellCountry, color: '#6366F1' },
-                    { icon: 'dollar-sign', label: 'Currency', value: sellFiat, color: T.success },
+                    { icon: 'dollar-sign', label: 'Currency', value: sellFiat === 'AED' ? <AedSymbol size={15} color={T.success} /> : sellFiat, color: T.success },
                     { icon: 'edit-3',      label: 'Details',  value: sellPaymentDetails.trim() ? (sellPaymentDetails.trim().length > 20 ? `${sellPaymentDetails.trim().slice(0, 20)}…` : sellPaymentDetails.trim()) : 'Simulated Defaults', color: '#F59E0B' },
                   ].map(row => (
                     <View key={row.label} style={[s.reviewRow, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
@@ -1307,9 +1312,13 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 6 }}>
             {['ALL', ...FIAT_CURRENCIES].map(f => (
               <TouchableOpacity key={f}
-                style={[s.chip, { backgroundColor: filterFiat === f ? T.primary : T.surface, borderColor: filterFiat === f ? T.primary : T.border, paddingHorizontal: 14, paddingVertical: 6 }]}
+                style={[s.chip, { backgroundColor: filterFiat === f ? T.primary : T.surface, borderColor: filterFiat === f ? T.primary : T.border, paddingHorizontal: 14, paddingVertical: 6, flexDirection: 'row', alignItems: 'center' }]}
                 onPress={() => setFilterFiat(f)}>
-                <Text style={[s.chipText, { color: filterFiat === f ? '#FFF' : T.text }]}>{f}</Text>
+                {f === 'AED' ? (
+                  <AedSymbol size={14} color={filterFiat === f ? '#FFF' : T.text} />
+                ) : (
+                  <Text style={[s.chipText, { color: filterFiat === f ? '#FFF' : T.text }]}>{f}</Text>
+                )}
               </TouchableOpacity>
             ))}
           </ScrollView>
