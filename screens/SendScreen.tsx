@@ -15,8 +15,6 @@ import { haptics } from '../utils/haptics';
 import TransactionLoader from '../components/ui/TransactionLoader';
 import { tronService } from '../services/tronService';
 import { storageService } from '../services/storageService';
-import CurrencyDisplay from '../components/CurrencyDisplay';
-
 const CoinIcon = memo(({ symbol, size = 24 }: { symbol: string; size?: number }) => {
   const meta  = COIN_META[symbol];
   const color = COIN_COLORS[symbol] || '#888';
@@ -459,8 +457,7 @@ export default function SendScreen({ navigation, route }: any) {
           </View>
           <Text style={styles.balanceAmount}>{availBal.toFixed(6)} {coinLabel}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={styles.balanceUsd}>Total Value: </Text>
-            <CurrencyDisplay amountUSD={availBal * coinPrice} style={styles.balanceUsd} />
+            <Text style={styles.balanceUsd}>{formatFiat(availBal * coinPrice)}</Text>
           </View>
         </View>
 
@@ -528,8 +525,7 @@ export default function SendScreen({ navigation, route }: any) {
             </View>
             <View style={styles.usdPreviewContainer}>
                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                 <Text style={styles.usdPreviewText}>≈ </Text>
-                 <CurrencyDisplay amountUSD={parsedAmount * coinPrice} style={styles.usdPreviewText} />
+                 <Text style={styles.usdPreviewText}>{formatFiat(parsedAmount * coinPrice)}</Text>
                </View>
             </View>
           </View>
@@ -643,7 +639,7 @@ export default function SendScreen({ navigation, route }: any) {
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
                       <Text style={{ color: T.text, fontFamily: Fonts.bold, fontSize: 14 }}>{tokenBal.toFixed(4)}</Text>
-                      <CurrencyDisplay amountUSD={tokenBal * priceVal} style={{ color: T.textDim, fontSize: 11, fontFamily: Fonts.medium }} />
+                      <Text style={{ color: T.textDim, fontSize: 11, fontFamily: Fonts.medium }}>{formatFiat(tokenBal * priceVal)}</Text>
                     </View>
                   </TouchableOpacity>
                 );

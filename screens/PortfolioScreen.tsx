@@ -128,8 +128,7 @@ const CryptoAssetRow = memo(({ a, T, isUp, prices, formatFiat, balanceVisible, o
           </Text>
           {balanceVisible ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' }}>
-              <Text style={[styles.assetUsd, { color: T.textDim, marginRight: 2 }]}>≈</Text>
-              <CurrencyDisplay amountUSD={usdValue} style={[styles.assetUsd, { color: T.textDim }]} />
+              <Text style={[styles.assetUsd, { color: T.textDim }]}>{formatFiat(usdValue)}</Text>
             </View>
           ) : (
             <Text style={[styles.assetUsd, { color: T.textDim }]}>≈ ••••</Text>
@@ -402,7 +401,7 @@ export default function PortfolioScreen({ navigation }: any) {
 
           <View style={styles.mainBalanceRow}>
             {balanceVisible ? (
-              <CurrencyDisplay amountUSD={totalUsd} style={[styles.mainBalanceNum, { color: T.text }]} />
+              <Text style={[styles.mainBalanceNum, { color: T.text }]}>{formatFiat(totalUsd)}</Text>
             ) : (
               <Text style={[styles.mainBalanceNum, { color: T.text }]}>
                 {fiatSymbol} ••••••
