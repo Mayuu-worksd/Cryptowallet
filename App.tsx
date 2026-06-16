@@ -25,6 +25,7 @@ import {
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Feather } from "@expo/vector-icons";
 import * as Updates from "expo-updates";
+import * as Notifications from "expo-notifications";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   useFonts,
@@ -119,6 +120,7 @@ class ErrorBoundary extends React.Component<
 
 import { WalletProvider, useWallet } from "./store/WalletContext";
 import { PinSetupContext } from "./store/PinSetupContext";
+import { NotificationProvider } from "./store/NotificationContext";
 import { notificationService } from "./services/notificationService";
 import {
   SafeAreaProvider,
@@ -177,6 +179,7 @@ import WebLayout from "./components/WebLayout";
 import CloudBackupScreen from "./screens/CloudBackupScreen";
 import RecoverySettingsScreen from "./screens/RecoverySettingsScreen";
 import RecoverWalletScreen from "./screens/RecoverWalletScreen";
+import NotificationsScreen from "./screens/NotificationsScreen";
 import EarnScreen from "./screens/EarnScreen";
 import CreditScreen from "./screens/CreditScreen";
 import MoreScreen from "./screens/MoreScreen";
@@ -1310,6 +1313,8 @@ function WebApp() {
         return <P2POrderDetailScreen navigation={nav} route={route} />;
       case "Messages":
         return <MessagesScreen navigation={nav} route={route} />;
+      case "Notifications":
+        return <NotificationsScreen /> as any;
       case "MerchantDashboard":
         return <MerchantDashboardScreen navigation={nav} route={route} />;
       case "MerchantQR":
@@ -1408,21 +1413,22 @@ export default function App() {
       });
     notificationService.requestPermissions().catch(() => {});
 
-    // OTA Update Check — only runs in standalone builds, not Expo Go
+    // OTA Update Check & Version Tracking
     async function onFetchUpdateAsync() {
       try {
         if (!__DEV__ && Updates.isEmbeddedLaunch !== undefined) {
+          // Check if we just updated
+          const currentVersion = Updates.updateId || 'dev';
+          const lastVersion = await AsyncStorage.getItem('cw_last_update_id');
+          if (lastVersion && lastVersion !== currentVersion && currentVersion !== 'dev') {
+            await notificationService.notifyAppUpdatedSuccessfully(currentVersion.substring(0, 8));
+          }
+          await AsyncStorage.setItem('cw_last_update_id', currentVersion);
+
           const update = await Updates.checkForUpdateAsync();
           if (update.isAvailable) {
             await Updates.fetchUpdateAsync();
-            Alert.alert(
-              'Update Ready',
-              'A new update has been downloaded in the background. Would you like to restart the app now to apply it?',
-              [
-                { text: 'Not Now', style: 'cancel' },
-                { text: 'Restart', onPress: () => Updates.reloadAsync() }
-              ]
-            );
+            await notificationService.notifyAppUpdateAvailable(update.manifest?.version || 'Latest');
           }
         }
       } catch (_error) {
@@ -1437,8 +1443,31 @@ export default function App() {
       }
     });
 
+    const notifSubscription = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data;
+      if (navigationRef.isReady()) {
+        if (data?.type === 'card' || data?.type === 'card_transaction') {
+          navigationRef.navigate('Card');
+        } else if (data?.type === 'history' || data?.type === 'received' || data?.type === 'sent' || data?.type === 'swap') {
+          navigationRef.navigate('History');
+        } else if (data?.type === 'settings') {
+          navigationRef.navigate('Settings');
+        } else if (data?.type === 'update') {
+          Alert.alert(
+            'Update Ready',
+            'A new update has been downloaded. Restart the app now to apply it?',
+            [
+              { text: 'Not Now', style: 'cancel' },
+              { text: 'Restart', onPress: () => Updates.reloadAsync() }
+            ]
+          );
+        }
+      }
+    });
+
     return () => {
       appStateSubscription.remove();
+      notifSubscription.remove();
     };
   }, []);
 
@@ -1466,8 +1495,10 @@ export default function App() {
             style={{ flex: 1, backgroundColor: "#101114" }}
           >
             <WalletProvider>
-              <WebApp />
-              <GlobalLoadingOverlay />
+              <NotificationProvider>
+                <WebApp />
+                <GlobalLoadingOverlay />
+              </NotificationProvider>
             </WalletProvider>
           </GestureHandlerRootView>
         </SafeAreaProvider>
@@ -1483,7 +1514,9 @@ export default function App() {
             style={{ flex: 1, backgroundColor: "#101114" }}
           >
             <WalletProvider>
-              <OnboardingScreen onFinish={() => setShowOnboarding(false)} />
+              <NotificationProvider>
+                <OnboardingScreen onFinish={() => setShowOnboarding(false)} />
+              </NotificationProvider>
             </WalletProvider>
           </GestureHandlerRootView>
         </SafeAreaProvider>
@@ -1496,33 +1529,35 @@ export default function App() {
       <SafeAreaProvider>
         <GestureHandlerRootView style={{ flex: 1, backgroundColor: "#101114" }}>
           <WalletProvider>
-            <NavigationContainer
-              ref={navigationRef}
-              theme={{
-                ...DefaultTheme,
-                dark: true,
-                colors: {
-                  ...DefaultTheme.colors,
-                  primary: Theme.colors.primary,
-                  background: Theme.colors.background,
-                  card: Theme.colors.background,
-                  text: Theme.colors.text,
-                  border: Theme.colors.border,
-                  notification: Theme.colors.primary,
-                },
-              }}
-              onStateChange={async (state) => {
-                if (state) {
-                  await AsyncStorage.setItem(
-                    "cw_nav_state",
-                    JSON.stringify(state),
-                  ).catch(() => {});
-                }
-              }}
-            >
-              <MobileNavigator />
-              <GlobalLoadingOverlay />
-            </NavigationContainer>
+              <NotificationProvider>
+                <NavigationContainer
+                  ref={navigationRef}
+                  theme={{
+                    ...DefaultTheme,
+                    dark: true,
+                    colors: {
+                      ...DefaultTheme.colors,
+                      primary: Theme.colors.primary,
+                      background: Theme.colors.background,
+                      card: Theme.colors.background,
+                      text: Theme.colors.text,
+                      border: Theme.colors.border,
+                      notification: Theme.colors.primary,
+                    },
+                  }}
+                  onStateChange={async (state) => {
+                    if (state) {
+                      await AsyncStorage.setItem(
+                        "cw_nav_state",
+                        JSON.stringify(state),
+                      ).catch(() => {});
+                    }
+                  }}
+                >
+                  <MobileNavigator />
+                  <GlobalLoadingOverlay />
+                </NavigationContainer>
+              </NotificationProvider>
           </WalletProvider>
           {showSplash && (
             <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: "#000000", zIndex: 9999 }}>

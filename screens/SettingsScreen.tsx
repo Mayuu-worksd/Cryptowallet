@@ -14,6 +14,7 @@ import { Feather } from '@expo/vector-icons';
 import * as Updates from 'expo-updates';
 import { useWallet, useMarket } from '../store/WalletContext';
 import { storageService } from '../services/storageService';
+import { useNotifications } from '../store/NotificationContext';
 import { COIN_META, COIN_COLORS } from '../constants';
 import Toast from '../components/Toast';
 import { haptics } from '../utils/haptics';
@@ -87,6 +88,7 @@ export default function SettingsScreen({ navigation }: any) {
   const secondaryAddress = isTronNetwork ? (walletAddress || '') : (tronAddress || '');
   const { prices } = useMarket();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
+  const { unreadCount } = useNotifications();
 
   // Refresh pin badge whenever screen comes into focus
   React.useEffect(() => {
@@ -498,7 +500,18 @@ export default function SettingsScreen({ navigation }: any) {
           <Feather name="arrow-left" size={24} color={T.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Profile & Settings</Text>
-        <View style={{ width: 40 }} />
+        <TouchableOpacity 
+          style={styles.headerRightBtn} 
+          onPress={() => navigation.navigate("Notifications")}
+          activeOpacity={0.7}
+        >
+          <Feather name="bell" size={24} color={T.text} />
+          {unreadCount > 0 && (
+            <View style={[styles.notifBadge, { backgroundColor: T.error }]}>
+              <Text style={{ color: '#FFF', fontSize: 9, fontWeight: 'bold' }}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -1070,6 +1083,19 @@ const makeStyles = (T: any, insets: any) => StyleSheet.create({
     backgroundColor: T.background,
   },
   backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center', borderRadius: 22, backgroundColor: T.surfaceLow },
+  headerRightBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center', borderRadius: 22, backgroundColor: T.surfaceLow },
+  notifBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    minWidth: 14,
+    height: 14,
+    borderRadius: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: T.background,
+  },
   headerTitle: { fontSize: isSmall ? 16 : 18, fontFamily: Fonts.extraBold, color: T.text, letterSpacing: -0.5 },
   scroll: { paddingHorizontal: isSmall ? 16 : 24, paddingBottom: insets.bottom + 120, paddingTop: 12 },
 
