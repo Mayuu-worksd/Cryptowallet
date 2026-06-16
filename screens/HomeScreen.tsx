@@ -233,6 +233,7 @@ const TokenRow = memo(
     hideBalance,
     onPress,
     formatFiat,
+    fiatCurrency,
   }: {
     symbol: string;
     amount: number;
@@ -242,6 +243,7 @@ const TokenRow = memo(
     hideBalance: boolean;
     onPress: () => void;
     formatFiat: (usd: number) => string;
+    fiatCurrency: string;
   }) => {
     const scale = useRef(new Animated.Value(1)).current;
     const safeChange =
@@ -1581,6 +1583,7 @@ export default function HomeScreen({ navigation }: any) {
                   T={T}
                   hideBalance={!balanceVisible}
                   formatFiat={formatFiat}
+                  fiatCurrency={fiatCurrency}
                   onPress={() =>
                     navigation.navigate("CoinChart", { symbol: a.symbol })
                   }
