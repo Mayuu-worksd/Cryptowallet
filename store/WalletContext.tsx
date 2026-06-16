@@ -599,7 +599,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
                 const fixed = `${digits.slice(0,4)} ${digits.slice(4,8)} ${digits.slice(8,12)} ${digits.slice(12,16)}`;
                 if (parsed.number !== fixed) {
                   parsed.number = fixed;
-                  storageService.saveCardDetails().catch(() => {});
+                  storageService.saveCardDetails(parsed).catch(() => {});
                 }
               }
             }
@@ -1992,7 +1992,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           if (prev.number === newNum && prev.cvv === newCvv && prev.holderName === vcc.card_holder_name && prev.expiry === vcc.expiry_mm_yy) return prev;
           
           const nextDetails = { ...prev, number: newNum, cvv: newCvv, holderName: vcc.card_holder_name, expiry: vcc.expiry_mm_yy };
-          storageService.saveCardDetails().catch(() => {});
+          storageService.saveCardDetails(nextDetails).catch(() => {});
           return nextDetails;
         });
         AsyncStorage.multiSet([['cw_card_balance', String(vcc.balance)]]).catch(() => {});
@@ -2013,7 +2013,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           if (prev.number === newNum && prev.cvv === newCvv) return prev;
           
           const nextDetails = { ...prev, number: newNum, cvv: newCvv, holderName: dbCard.holder_name, expiry: dbCard.expiry_month + '/' + dbCard.expiry_year };
-          storageService.saveCardDetails().catch(() => {});
+          storageService.saveCardDetails(nextDetails).catch(() => {});
           return nextDetails;
         });
         AsyncStorage.setItem('cw_card_balance', String(dbCard.balance)).catch(() => {});
@@ -2077,7 +2077,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setCardDetails(details);
     setCardCreated(true);
     // Always persist to AsyncStorage so reveal works immediately even if Supabase is slow
-    storageService.saveCardDetails().catch(() => {});
+    storageService.saveCardDetails(details).catch(() => {});
     AsyncStorage.setItem('cw_card_created', 'true').catch(() => {});
 
     // Save to Supabase as primary store — encrypted number + CVV
@@ -2107,7 +2107,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const updateCardDetails = useCallback((patch: { holderName?: string; design?: string }) => {
     setCardDetails(prev => {
       const updated = { ...prev, ...patch };
-      storageService.saveCardDetails().catch(() => {});
+      storageService.saveCardDetails(updated).catch(() => {});
       return updated;
     });
     // Persist to Supabase
