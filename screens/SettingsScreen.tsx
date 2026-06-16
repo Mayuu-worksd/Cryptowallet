@@ -19,6 +19,7 @@ import Toast from '../components/Toast';
 import { haptics } from '../utils/haptics';
 import PinScreen from './PinScreen';
 import { clearPin as removePin } from '../services/pinService';
+import { CurrencyText } from '../components/CurrencyText';
 
 const NETWORKS = [
   { name: 'Sepolia',    type: 'Testnet', color: '#F59E0B', iconUrl: 'https://coin-images.coingecko.com/coins/images/279/large/ethereum.png' },
@@ -78,7 +79,7 @@ export default function SettingsScreen({ navigation }: any) {
     walletName, setWalletName,
     deleteWallet, enterReadOnlyMode, isDarkMode, toggleTheme, balances, ethBalance,
     pinEnabled, refreshPinEnabled, isReadOnly, kycStatus, accountType, setAccountType,
-    p2pCountry, p2pCurrency, setP2PPreferences, setFiatCurrency, formatFiat,
+    p2pCountry, p2pCurrency, setP2PPreferences, setFiatCurrency, formatFiat, fiatCurrency
   } = useWallet() as any;
   const isTronNetwork = network === 'TRON' || network === 'TRON Nile';
   // Show EVM address on EVM networks, TRON address on TRON networks
@@ -563,7 +564,7 @@ export default function SettingsScreen({ navigation }: any) {
                     <Text style={[styles.menuSub, { color: T.textMuted }]}>{amt.toFixed(4)} {sym}</Text>
                   </View>
                 </View>
-                <Text style={[styles.menuLabel, { color: T.text }]}>{formatFiat(usd)}</Text>
+                <CurrencyText amount={usd} code={fiatCurrency} style={[styles.menuLabel, { color: T.text }]} />
               </TouchableOpacity>
             );
           })}

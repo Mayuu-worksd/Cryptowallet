@@ -9,9 +9,10 @@ import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useWallet } from '../store/WalletContext';
 import { cardVariantService, VCCCardVariant } from '../services/supabaseService';
+import { CurrencyText } from '../components/CurrencyText';
 
 export default function VCCVariantScreen({ navigation }: any) {
-  const { isDarkMode, formatFiat } = useWallet() as any;
+  const { isDarkMode, formatFiat, fiatCurrency } = useWallet() as any;
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const insets = useSafeAreaInsets();
   const [variants, setVariants] = useState<VCCCardVariant[]>([]);
@@ -124,13 +125,13 @@ export default function VCCVariantScreen({ navigation }: any) {
                     <View style={s.feeItem}>
                       <Text style={[s.feeLabel, { color: T.textDim }]}>Annual Fee</Text>
                       <Text style={[s.feeValue, { color: T.text }]}>
-                        {v.annual_fee_usd === 0 ? 'Free' : formatFiat(v.annual_fee_usd)}
+                        {v.annual_fee_usd === 0 ? 'Free' : <CurrencyText amount={v.annual_fee_usd} code={fiatCurrency} />}
                       </Text>
                     </View>
                     <View style={[s.feeDivider, { backgroundColor: T.border }]} />
                     <View style={s.feeItem}>
                       <Text style={[s.feeLabel, { color: T.textDim }]}>Tx Limit</Text>
-                      <Text style={[s.feeValue, { color: T.text }]}>{formatFiat(v.transaction_limit_usd)}</Text>
+                      <Text style={[s.feeValue, { color: T.text }]}><CurrencyText amount={v.transaction_limit_usd} code={fiatCurrency} /></Text>
                     </View>
                     <View style={[s.feeDivider, { backgroundColor: T.border }]} />
                     <View style={s.feeItem}>

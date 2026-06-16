@@ -14,6 +14,7 @@ import {
 } from '../services/supabaseService';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SUPPORTED_FIAT_CURRENCIES } from '../constants/currencyConfig';
+import { CurrencyText } from '../components/CurrencyText';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CRIMSON = '#EC2629';
@@ -106,7 +107,7 @@ const FALLBACK_SHIPPING_FEES: Record<string, number> = {
 const FALLBACK_COUNTRIES = Object.keys(FALLBACK_SHIPPING_FEES);
 
 export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
-  const { isDarkMode, walletAddress, kycStatus, cardDetails, p2pCurrency, accountType, formatFiat } = useWallet() as any;
+  const { isDarkMode, walletAddress, kycStatus, cardDetails, p2pCurrency, accountType, formatFiat, fiatCurrency } = useWallet() as any;
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const insets = useSafeAreaInsets();
 
@@ -201,7 +202,7 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
   const totalCostUSD = cardPriceUSD + activationFeeUSD + shippingFeeUSD;
 
   const formatLocalFiat = (amountUSD: number) => {
-    return formatFiat(amountUSD);
+    return <CurrencyText amount={amountUSD} code={fiatCurrency} />;
   };
 
   const handleSubmit = async () => {
@@ -579,7 +580,7 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <Text style={[styles.tierName, { color: T.text }]}>{selectedVariant.name} Metal Spec</Text>
               <Text style={[styles.tierPrice, { color: selectedVariant.name === 'Gold' ? '#E5A93C' : CRIMSON }]}>
-                {yearlyFeeUSD === 0 ? 'FREE' : `${formatLocalFiat(yearlyFeeUSD)}/yr`}
+                {yearlyFeeUSD === 0 ? 'FREE' : <>{formatLocalFiat(yearlyFeeUSD)}/yr</>}
               </Text>
             </View>
             {activationFeeUSD > 0 && (
@@ -661,7 +662,7 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
             <>
               <Feather name="credit-card" size={16} color={T.background} />
               <Text style={[styles.submitBtnText, { color: T.background }]}>
-                {selectedVariant && selectedCountry ? `Pay & Order · ${formatLocalFiat(totalCostUSD)}` : 'Confirm Order'}
+                {selectedVariant && selectedCountry ? <>Pay & Order · {formatLocalFiat(totalCostUSD)}</> : 'Confirm Order'}
               </Text>
             </>
           )}

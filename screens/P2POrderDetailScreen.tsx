@@ -75,7 +75,7 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
   const [currentOrder, setCurrentOrder] = useState<P2POrder>(order);
   const [orderLoading, setOrderLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(0);
-  const [showChatModal, setShowChatModal] = useState(false);
+  const [showChatModal, setShowChatModal] = useState(openChatOnMount);
   const [messages, setMessages] = useState<any[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -1197,8 +1197,8 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
             </View>
 
             <KeyboardAvoidingView
-              style={[styles.chatModal, { backgroundColor: 'transparent' }]}
-              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              style={[styles.chatModal, { backgroundColor: 'transparent', flex: 1 }]}
+              behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
               keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
             >
           {/* Chat Header */}

@@ -15,6 +15,7 @@ import { haptics } from '../utils/haptics';
 import TransactionLoader from '../components/ui/TransactionLoader';
 import { tronService } from '../services/tronService';
 import { storageService } from '../services/storageService';
+import { CurrencyText } from '../components/CurrencyText';
 const CoinIcon = memo(({ symbol, size = 24 }: { symbol: string; size?: number }) => {
   const meta  = COIN_META[symbol];
   const color = COIN_COLORS[symbol] || '#888';
@@ -40,7 +41,7 @@ export default function SendScreen({ navigation, route }: any) {
   const { 
     ethBalance, sendETH, isDarkMode, walletAddress, tronAddress, 
     network, balances, addTx, updateTxStatus, refreshBalance,
-    applySwapBalances, formatFiat 
+    applySwapBalances, formatFiat, fiatCurrency, fiatSymbol
   } = useWallet();
   const { prices } = useMarket();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
@@ -118,9 +119,11 @@ export default function SendScreen({ navigation, route }: any) {
   const availBal     = selectedToken === 'ETH' ? (parseFloat(ethBalance) || 0) : (balances[selectedToken] ?? 0);
 
   // Dynamic fiat conversions using selected fiat currency formatter formatFiat!
-  const fiatAmount   = formatFiat(parsedAmount * coinPrice);
-  const fiatGas      = formatFiat(gasEthNum * coinPrice);
-  const fiatTotal    = formatFiat((parsedAmount + gasEthNum) * coinPrice);
+  const fiatAmountNum = parsedAmount * coinPrice;
+  const fiatGasNum    = gasEthNum * coinPrice;
+  const fiatTotalNum  = (parsedAmount + gasEthNum) * coinPrice;
+  
+  const fiatAmountDisplay = `${fiatSymbol} ${formatFiat(fiatAmountNum)}`;
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') =>
     setToast({ visible: true, message, type });
@@ -259,7 +262,7 @@ export default function SendScreen({ navigation, route }: any) {
       const { Alert } = require('react-native');
       Alert.alert(
         '⚠️ Real Funds Warning',
-        `You are on ${network} Mainnet. This transaction uses REAL ${coinLabel}.\n\nAmount: ${parsedAmount.toFixed(6)} ${coinLabel} (${fiatAmount})`,
+        `You are on ${network} Mainnet. This transaction uses REAL ${coinLabel}.\n\nAmount: ${parsedAmount.toFixed(6)} ${coinLabel} (${fiatAmountDisplay})`,
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'I Understand, Continue', style: 'destructive', onPress: () => setShowConfirm(true) },
@@ -384,14 +387,16 @@ export default function SendScreen({ navigation, route }: any) {
             <View style={styles.modalDetails}>
               {[
                 { label: 'Recipient',   value: `${address.slice(0, 10)}...${address.slice(-10)}` },
-                { label: 'Amount',      value: `${parsedAmount.toFixed(6)} ${coinLabel}`, sub: `${fiatAmount}` },
-                { label: 'Network Fee', value: gasEth ? `${parseFloat(gasEth).toFixed(6)} ${coinLabel}` : 'Estimating...', sub: gasEth ? `${fiatGas}` : '' },
+                { label: 'Amount',      value: `${parsedAmount.toFixed(6)} ${coinLabel}`, sub: fiatAmountNum },
+                { label: 'Network Fee', value: gasEth ? `${parseFloat(gasEth).toFixed(6)} ${coinLabel}` : 'Estimating...', sub: gasEth ? fiatGasNum : null },
               ].map((row, i) => (
                 <View key={row.label} style={styles.detailRow}>
                   <Text style={styles.detailLabel}>{row.label}</Text>
                   <View style={{ alignItems: 'flex-end' }}>
                     <Text style={styles.detailValue}>{row.value}</Text>
-                    {!!row.sub && <Text style={styles.detailSub}>{row.sub}</Text>}
+                    {row.sub !== null && row.sub !== undefined && row.sub !== '' ? (
+                      <CurrencyText amount={row.sub as number} code={fiatCurrency} style={styles.detailSub} />
+                    ) : null}
                   </View>
                 </View>
               ))}
@@ -400,7 +405,7 @@ export default function SendScreen({ navigation, route }: any) {
                 <Text style={styles.totalLabel}>Total Deducted from Wallet</Text>
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={styles.totalValue}>{totalETH} {coinLabel}</Text>
-                  <Text style={styles.totalSub}>{fiatTotal}</Text>
+                  <CurrencyText amount={fiatTotalNum} code={fiatCurrency} style={styles.totalSub} />
                 </View>
               </View>
             </View>
@@ -457,7 +462,7 @@ export default function SendScreen({ navigation, route }: any) {
           </View>
           <Text style={styles.balanceAmount}>{availBal.toFixed(6)} {coinLabel}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={styles.balanceUsd}>{formatFiat(availBal * coinPrice)}</Text>
+            <CurrencyText amount={availBal * coinPrice} code={fiatCurrency} style={styles.balanceUsd} />
           </View>
         </View>
 
@@ -525,7 +530,7 @@ export default function SendScreen({ navigation, route }: any) {
             </View>
             <View style={styles.usdPreviewContainer}>
                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                 <Text style={styles.usdPreviewText}>{formatFiat(parsedAmount * coinPrice)}</Text>
+                 <CurrencyText amount={parsedAmount * coinPrice} code={fiatCurrency} style={styles.usdPreviewText} />
                </View>
             </View>
           </View>
@@ -639,7 +644,7 @@ export default function SendScreen({ navigation, route }: any) {
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
                       <Text style={{ color: T.text, fontFamily: Fonts.bold, fontSize: 14 }}>{tokenBal.toFixed(4)}</Text>
-                      <Text style={{ color: T.textDim, fontSize: 11, fontFamily: Fonts.medium }}>{formatFiat(tokenBal * priceVal)}</Text>
+                      <CurrencyText amount={tokenBal * priceVal} code={fiatCurrency} style={{ color: T.textDim, fontSize: 11, fontFamily: Fonts.medium }} />
                     </View>
                   </TouchableOpacity>
                 );

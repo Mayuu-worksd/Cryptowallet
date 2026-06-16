@@ -34,6 +34,7 @@ import { SUPPORTED_FIAT_CURRENCIES } from "../constants/currencyConfig";
 import { NewsItem } from "../services/marketService";
 import { NetworkSelector } from "../components/NetworkSelector";
 import { CurrencySelector } from "../components/CurrencySelector";
+import { CurrencyText } from "../components/CurrencyText";
 import { haptics } from "../utils/haptics";
 
 const { width } = Dimensions.get("window");
@@ -296,9 +297,7 @@ const TokenRow = memo(
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
             <View style={{ alignItems: "flex-end" }}>
-              <Text style={[styles.tokenUsd, { color: T.text }]}>
-                {hideBalance ? "****" : formatFiat(safeUsd)}
-              </Text>
+              <CurrencyText amount={safeUsd} code={fiatCurrency} hideBalance={hideBalance} style={[styles.tokenUsd, { color: T.text }]} />
               <Text
                 style={{
                   fontSize: 12,
@@ -1335,7 +1334,9 @@ export default function HomeScreen({ navigation }: any) {
                 }}
               >
                 {balanceVisible ? (
-                  <Text
+                  <CurrencyText
+                    amount={totalUsd}
+                    code={fiatCurrency}
                     style={[
                       styles.balanceValue,
                       {
@@ -1343,9 +1344,7 @@ export default function HomeScreen({ navigation }: any) {
                         fontSize: totalConverted > 9999999 ? 32 : 44,
                       },
                     ]}
-                  >
-                    {formatFiat(totalUsd)}
-                  </Text>
+                  />
                 ) : (
                   <Text
                     style={[

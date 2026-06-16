@@ -6,6 +6,7 @@ import { walletService } from '../services/walletService';
 import { ethereumService } from '../services/ethereumService';
 import { getWalletBalances } from '../services/balanceService';
 import { storageService } from '../services/storageService';
+import getSymbolFromCurrency from 'currency-symbol-map';
 import { marketService, NewsItem } from '../services/marketService';
 import { hasPinSetup, clearPin } from '../services/pinService';
 import { kycService, KYCStatus, txService, dbCardService, vccService, cardVariantService, VCCCard, profileService, adminSettingsService, adminAlertsService } from '../services/supabaseService';
@@ -2190,7 +2191,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, [walletAddress]);
 
   const fiatSymbol = useMemo(() => {
-    return SUPPORTED_FIAT_CURRENCIES[fiatCurrency]?.symbol ?? '$';
+    if (fiatCurrency === 'AED') return 'AED'; // The UI will render the SVG
+    return getSymbolFromCurrency(fiatCurrency) || '$';
   }, [fiatCurrency]);
 
   const convertFiat = useCallback((amountUSD: number) => {
@@ -2200,28 +2202,28 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const formatFiat = useCallback((amountUSD: number) => {
     const fiat = SUPPORTED_FIAT_CURRENCIES[fiatCurrency];
-    if (!fiat) return `$ ${amountUSD.toFixed(2)}`;
+    if (!fiat) return amountUSD.toFixed(2);
     const converted = amountUSD * fiat.rate;
     
     if (fiat.code === 'JPY' || fiat.code === 'VND') {
-      return `${fiat.symbol} ${Math.round(converted).toLocaleString(fiat.locale)}`;
+      return Math.round(converted).toLocaleString(fiat.locale);
     }
     
-    return `${fiat.symbol} ${converted.toLocaleString(fiat.locale, {
+    return converted.toLocaleString(fiat.locale, {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
-    })}`;
+    });
   }, [fiatCurrency]);
 
   const formatOrderFiat = useCallback((amountLocal: number, currencyCode: string) => {
     const fiat = SUPPORTED_FIAT_CURRENCIES[currencyCode] || SUPPORTED_FIAT_CURRENCIES['USD'];
     if (fiat.code === 'JPY' || fiat.code === 'VND') {
-      return `${fiat.symbol} ${Math.round(amountLocal).toLocaleString(fiat.locale)}`;
+      return Math.round(amountLocal).toLocaleString(fiat.locale);
     }
-    return `${fiat.symbol} ${amountLocal.toLocaleString(fiat.locale, {
+    return amountLocal.toLocaleString(fiat.locale, {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
-    })}`;
+    });
   }, []);
 
   const marketValue = useMemo(() => ({

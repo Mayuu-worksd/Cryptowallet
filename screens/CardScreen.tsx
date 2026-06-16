@@ -17,6 +17,7 @@ import { CardCredentialsWidget } from '../components/card/CardNumberDisplay';
 import EditCardSheet from '../components/card/EditCardSheet';
 import SetCurrenciesSheet from '../components/card/SetCurrenciesSheet';
 import TransactionDetailsSheet from '../components/card/TransactionDetailsSheet';
+import { CurrencyText } from '../components/CurrencyText';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CRIMSON = '#EC2629';
@@ -169,7 +170,7 @@ export default function CardScreen({ navigation, route }: any) {
     const amtUSD = parseFloat(merchant.amount);
     if (!merchant.name.trim()) { showToast('Enter a merchant name', 'error'); return; }
     if (isNaN(amtUSD) || amtUSD <= 0) { showToast('Enter a valid amount', 'error'); return; }
-    if (amtUSD > 10000) { showToast(`Exceeds limit (${formatFiat(10000)})`, 'error'); return; }
+    if (amtUSD > 10000) { showToast(`Exceeds limit (10,000)`, 'error'); return; }
     if (cardFrozen) { showToast('Card is frozen. Unfreeze to spend.', 'error'); return; }
 
     setLoading(true);
@@ -629,7 +630,7 @@ export default function CardScreen({ navigation, route }: any) {
               >
                 <Text style={[styles.applyButtonText, { color: T.background }]}>
                   {kycStatus === 'verified' 
-                    ? `Order ${physicalTier} Card · ${physicalPrices[physicalTier] === 0 ? 'Free' : formatFiat(physicalPrices[physicalTier])}` 
+                    ? <>Order {physicalTier} Card · {physicalPrices[physicalTier] === 0 ? 'Free' : <CurrencyText amount={physicalPrices[physicalTier]} code={fiatCurrency} />}</>
                     : 'Verify KYC to order'}
                 </Text>
               </TouchableOpacity>
@@ -641,12 +642,12 @@ export default function CardScreen({ navigation, route }: any) {
             <View style={{ alignItems: 'center', marginBottom: 16 }}>
               <Text style={{ fontSize: 13, color: T.textMuted, fontFamily: 'Inter_600SemiBold', marginBottom: 4 }}>Card Balance</Text>
               <Text style={{ fontSize: 32, color: T.text, fontFamily: 'Inter_800ExtraBold', letterSpacing: -1 }}>
-                {balanceHidden ? '****' : formatFiat(totalWalletUsd)}
+                {balanceHidden ? '****' : <CurrencyText amount={totalWalletUsd} code={fiatCurrency} />}
               </Text>
             </View>
             
             {/* Swipable active card preview */}
-            <View style={styles.carouselWrapper}>
+            <View style={[styles.carouselWrapper, { marginLeft: -24 }]}>
               <ScrollView
                 ref={virtualScrollRef}
                 horizontal
@@ -1014,7 +1015,8 @@ export default function CardScreen({ navigation, route }: any) {
                     </View>
 
                     <Text style={[styles.txAmount, { color: tx.type === 'topup' ? '#00C853' : T.text }]}>
-                      {tx.type === 'topup' ? '+' : '−'}{formatFiat(tx.amount)}
+                      {tx.type === 'topup' ? '+' : '−'}
+                      <CurrencyText amount={tx.amount} code={fiatCurrency} />
                     </Text>
                   </TouchableOpacity>
                 ))

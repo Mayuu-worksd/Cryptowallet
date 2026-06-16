@@ -10,6 +10,7 @@ import { p2pService, P2POrder, FIAT_CURRENCIES, PAYMENT_METHODS, getLiveRate, ca
 import TransactionLoader from '../components/ui/TransactionLoader';
 import { SUPPORTED_FIAT_CURRENCIES } from '../constants/currencyConfig';
 import { supabase } from '../services/supabaseClient';
+import { CurrencyText } from '../components/CurrencyText';
 
 const TOKENS   = ['ETH', 'USDC', 'USDT', 'BTC', 'SOL', 'BNB', 'XRP', 'TON', 'TRX', 'SUI'];
 const COUNTRIES = ['United States','United Kingdom','India','UAE','Singapore','Germany','France','Australia','Canada','Brazil','Other'];
@@ -174,10 +175,10 @@ function OrderCard({ order, onPress, T, walletAddress, formatOrderFiat, formatFi
         <View style={s.statLine}>
           <Text style={[s.statLabel, { color: T.textMuted }]}>Total Price</Text>
           <View style={{ alignItems: 'flex-end' }}>
-            <Text style={[s.statValueBig, { color: T.primary }]}>{formatOrderFiat(Number(order.fiat_total || 0), order.fiat_currency)}</Text>
+            <CurrencyText amount={Number(order.fiat_total || 0)} code={order.fiat_currency} style={[s.statValueBig, { color: T.primary }]} />
             {globalFiatCurrency !== order.fiat_currency && (
               <Text style={{ fontSize: 11, color: T.textDim, fontWeight: '600', marginTop: 2 }}>
-                ≈ {formatFiat(Number(order.fiat_total || 0) / (SUPPORTED_FIAT_CURRENCIES[order.fiat_currency]?.rate || 1))}
+                ≈ <CurrencyText amount={Number(order.fiat_total || 0) / (SUPPORTED_FIAT_CURRENCIES[order.fiat_currency]?.rate || 1)} code={globalFiatCurrency} />
               </Text>
             )}
           </View>
@@ -295,7 +296,7 @@ function RateChart({
           ) : liveRate ? (
             <>
               <Text style={[rc.livePrice, { color: T.text }]}>
-                {formatOrderFiat(liveRate, fiat)}
+                <CurrencyText amount={liveRate} code={fiat} />
               </Text>
               <View style={[rc.changeBadge, { backgroundColor: isUp ? '#10B98118' : '#EC262918' }]}>
                 <Text style={[rc.changeText, { color: isUp ? '#10B981' : '#EC2629' }]}>
@@ -443,7 +444,7 @@ function RateChart({
             {selectedRate > 0 ? (
               <>
                 <Text style={[rc.selectedRate, { color: T.text }]}>
-                  {formatOrderFiat(selectedRate, fiat)}
+                  <CurrencyText amount={selectedRate} code={fiat} />
                 </Text>
               </>
             ) : (
@@ -1078,7 +1079,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
                     <View style={[s.previewBanner, { backgroundColor: T.primary + '10', borderColor: T.primary + '30' }]}>
                       <Feather name="trending-up" size={14} color={T.primary} />
                       <Text style={{ color: T.primary, fontSize: 13, fontWeight: '700', flex: 1 }}>
-                        You'll receive ~{formatOrderFiat(parseFloat(sellAmount) * parseFloat(sellRate) * 0.995, sellFiat)} after fees
+                        You'll receive ~<CurrencyText amount={parseFloat(sellAmount) * parseFloat(sellRate) * 0.995} code={sellFiat} /> after fees
                       </Text>
                     </View>
                   )}
@@ -1172,10 +1173,10 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
                     <View style={{ alignItems: 'center', gap: 4 }}>
                       <Text style={[s.reviewHeroAmount, { color: T.text }]}>{sellAmount} {sellToken}</Text>
                       <Text style={[s.reviewHeroFiat, { color: T.primary }]}>
-                        {formatOrderFiat(parseFloat(sellAmount) * parseFloat(sellRate), sellFiat)}
+                        <CurrencyText amount={parseFloat(sellAmount) * parseFloat(sellRate)} code={sellFiat} />
                       </Text>
                       <Text style={[s.reviewHeroRate, { color: T.textDim }]}>
-                        @ {formatOrderFiat(parseFloat(sellRate), sellFiat)}/{sellToken}
+                        @ <CurrencyText amount={parseFloat(sellRate)} code={sellFiat} />/{sellToken}
                       </Text>
                     </View>
                   </View>
@@ -1200,17 +1201,17 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
                   <View style={[s.feeSummary, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
                     <View style={s.feeSummaryRow}>
                       <Text style={[s.feeSummaryLabel, { color: T.textDim }]}>Gross total</Text>
-                      <Text style={[s.feeSummaryValue, { color: T.text }]}>{formatOrderFiat(parseFloat(sellAmount) * parseFloat(sellRate), sellFiat)}</Text>
+                      <CurrencyText amount={parseFloat(sellAmount) * parseFloat(sellRate)} code={sellFiat} style={[s.feeSummaryValue, { color: T.text }]} />
                     </View>
                     <View style={[s.feeSummaryDivider, { backgroundColor: T.border }]} />
                     <View style={s.feeSummaryRow}>
                       <Text style={[s.feeSummaryLabel, { color: T.textDim }]}>Platform fee (0.5%)</Text>
-                      <Text style={{ color: T.error, fontSize: 13, fontWeight: '700' }}>−{formatOrderFiat(parseFloat(sellAmount) * parseFloat(sellRate) * 0.005, sellFiat)}</Text>
+                      <Text style={{ color: T.error, fontSize: 13, fontWeight: '700' }}>−<CurrencyText amount={parseFloat(sellAmount) * parseFloat(sellRate) * 0.005} code={sellFiat} /></Text>
                     </View>
                     <View style={[s.feeSummaryDivider, { backgroundColor: T.border }]} />
                     <View style={s.feeSummaryRow}>
                       <Text style={[s.feeSummaryLabel, { color: T.text, fontWeight: '800' }]}>You receive</Text>
-                      <Text style={{ color: T.success, fontSize: 16, fontWeight: '900' }}>{formatOrderFiat(parseFloat(sellAmount) * parseFloat(sellRate) * 0.995, sellFiat)}</Text>
+                      <Text style={{ color: T.success, fontSize: 16, fontWeight: '900' }}><CurrencyText amount={parseFloat(sellAmount) * parseFloat(sellRate) * 0.995} code={sellFiat} /></Text>
                     </View>
                   </View>
                   {network !== 'Sepolia' && network !== 'TRON Nile' && (

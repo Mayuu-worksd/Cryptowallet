@@ -174,8 +174,11 @@ export default function MessagesScreen({ navigation }: any) {
       </View>
 
       {/* Modern Fintech Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+      <View style={[styles.header, { paddingTop: insets.top + 12, paddingHorizontal: 20, paddingBottom: 16 }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: T.surfaceLow, alignItems: 'center', justifyContent: 'center' }}>
+            <Feather name="chevron-left" size={24} color={T.text} />
+          </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: T.text }]}>Messages</Text>
           {totalUnread > 0 && (
             <View style={[styles.totalBadge, { backgroundColor: T.primary }]}>

@@ -24,6 +24,7 @@ import { Theme } from '../constants';
 import { vccService, dbCardService, cardVariantService } from '../services/supabaseService';
 import Toast from '../components/Toast';
 import { usePreventScreenCapture } from 'expo-screen-capture';
+import { CurrencyText } from '../components/CurrencyText';
 type CardData = {
   cardNumber: string;   // full 16-digit (shown masked by default)
   holderName: string;
@@ -243,7 +244,7 @@ export default function VCCCardDetailScreen({ navigation }: any) {
         {/* ── Balance ── */}
         <View style={[s.balanceCard, { backgroundColor: T.surface, borderColor: T.border }]}>
           <Text style={[s.balanceLabel, { color: T.textDim }]}>CARD BALANCE</Text>
-          <Text style={[s.balanceValue, { color: T.text }]}>{formatFiat(cardData.balance)}</Text>
+          <CurrencyText amount={cardData.balance} code={fiatCurrency} style={[s.balanceValue, { color: T.text }]} />
           <Text style={[s.balanceSub, { color: T.textMuted }]}>Direct settlement from crypto assets</Text>
         </View>
 

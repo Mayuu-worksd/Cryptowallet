@@ -8,10 +8,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
 import { vccService, VCCCardVariant } from '../services/supabaseService';
+import { CurrencyText } from '../components/CurrencyText';
 
 export default function VCCPreviewScreen({ navigation, route }: any) {
   const variant: VCCCardVariant = route?.params?.variant;
-  const { isDarkMode, walletAddress, formatFiat } = useWallet() as any;
+  const { isDarkMode, walletAddress, formatFiat, fiatCurrency } = useWallet() as any;
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const insets = useSafeAreaInsets();
 
@@ -118,11 +119,15 @@ export default function VCCPreviewScreen({ navigation, route }: any) {
           ))}
           <View style={[s.featureRow, { borderTopWidth: 1, borderTopColor: T.border, paddingTop: 12, marginTop: 4 }]}>
             <Feather name="dollar-sign" size={15} color={T.textDim} />
-            <Text style={[s.featureText, { color: T.textMuted }]}>Annual fee: {variant.annual_fee_usd === 0 ? 'Free' : `${formatFiat(variant.annual_fee_usd)}/yr`}</Text>
+            <Text style={[s.featureText, { color: T.textMuted }]}>
+              Annual fee: {variant.annual_fee_usd === 0 ? 'Free' : <><CurrencyText amount={variant.annual_fee_usd} code={fiatCurrency} />/yr</>}
+            </Text>
           </View>
           <View style={s.featureRow}>
             <Feather name="trending-up" size={15} color={T.textDim} />
-            <Text style={[s.featureText, { color: T.textMuted }]}>Transaction limit: {formatFiat(variant.transaction_limit_usd)}/transaction</Text>
+            <Text style={[s.featureText, { color: T.textMuted }]}>
+              Transaction limit: <CurrencyText amount={variant.transaction_limit_usd} code={fiatCurrency} />/transaction
+            </Text>
           </View>
         </View>
 

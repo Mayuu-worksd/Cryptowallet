@@ -10,6 +10,7 @@ import { useWallet, useMarket } from '../store/WalletContext';
 import { COIN_META, COIN_COLORS } from '../constants';
 import Toast from '../components/Toast';
 import { CurrencySelector } from '../components/CurrencySelector';
+import { CurrencyText } from '../components/CurrencyText';
 import { haptics } from '../utils/haptics';
 import CurrencyDisplay from '../components/CurrencyDisplay';
 import { supabase } from '../services/supabaseClient';
@@ -92,7 +93,7 @@ const STABLE_FALLBACK: Record<string, number> = {
 };
 
 // Sleek redotpay styled crypto row
-const CryptoAssetRow = memo(({ a, T, isUp, prices, formatFiat, balanceVisible, onPress }: any) => {
+const CryptoAssetRow = memo(({ a, T, isUp, prices, formatFiat, balanceVisible, onPress, fiatCurrency }: any) => {
   const scale = useRef(new Animated.Value(1)).current;
   const usdValue = a.available * (prices[a.symbol]?.usd ?? STABLE_FALLBACK[a.symbol] ?? 0);
   const changePercent = prices[a.symbol]?.change24h ?? a.change24h ?? 0;
@@ -128,7 +129,7 @@ const CryptoAssetRow = memo(({ a, T, isUp, prices, formatFiat, balanceVisible, o
           </Text>
           {balanceVisible ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' }}>
-              <Text style={[styles.assetUsd, { color: T.textDim }]}>{formatFiat(usdValue)}</Text>
+              <CurrencyText amount={usdValue} code={fiatCurrency} style={[styles.assetUsd, { color: T.textDim }]} />
             </View>
           ) : (
             <Text style={[styles.assetUsd, { color: T.textDim }]}>≈ ••••</Text>
@@ -401,11 +402,9 @@ export default function PortfolioScreen({ navigation }: any) {
 
           <View style={styles.mainBalanceRow}>
             {balanceVisible ? (
-              <Text style={[styles.mainBalanceNum, { color: T.text }]}>{formatFiat(totalUsd)}</Text>
+              <CurrencyText amount={totalUsd} code={fiatCurrency} style={[styles.mainBalanceNum, { color: T.text }]} />
             ) : (
-              <Text style={[styles.mainBalanceNum, { color: T.text }]}>
-                {fiatSymbol} ••••••
-              </Text>
+              <CurrencyText amount={0} code={fiatCurrency} hideBalance={true} style={[styles.mainBalanceNum, { color: T.text }]} />
             )}
             
             <TouchableOpacity
@@ -542,6 +541,7 @@ export default function PortfolioScreen({ navigation }: any) {
                   isUp={isUp}
                   prices={prices}
                   formatFiat={formatFiat}
+                  fiatCurrency={fiatCurrency}
                   balanceVisible={balanceVisible}
                   onPress={() => { haptics.selection(); navigation.navigate('CoinChart', { symbol: a.symbol }); }}
                 />

@@ -14,6 +14,7 @@ import { haptics } from '../utils/haptics';
 import { notificationService } from '../services/notificationService';
 import TransactionLoader from '../components/ui/TransactionLoader';
 import { commissionService } from '../services/commissionService';
+import { CurrencyText } from '../components/CurrencyText';
 
 import { SUPPORTED_TOKENS as CONFIG_SUPPORTED_TOKENS } from '../constants/currencyConfig';
 
@@ -66,7 +67,7 @@ const NETWORK_TOKENS: Record<string, string[]> = {
 
 export default function SwapScreen({ navigation, route }: any) {
   const insets = useSafeAreaInsets();
-  const { balances, ethBalance, isDarkMode, network, refreshBalance, walletAddress, applySwapBalances, addTx, formatFiat } = useWallet();
+  const { balances, ethBalance, isDarkMode, network, refreshBalance, walletAddress, applySwapBalances, addTx, formatFiat, fiatCurrency } = useWallet();
   const { prices } = useMarket();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const styles = React.useMemo(() => makeStyles(T), [T]);
@@ -105,12 +106,11 @@ export default function SwapScreen({ navigation, route }: any) {
   const buyPrice     = prices[buyToken]?.usd  ?? STABLE_FALLBACK[buyToken]  ?? customTokens[buyToken]?.price ?? 1;
   const sellBalance  = sellToken === 'ETH' ? parseFloat(ethBalance) || 0 : (balances[sellToken] ?? 0);
   const buyBalance   = buyToken === 'ETH' ? parseFloat(ethBalance) || 0 : (balances[buyToken] ?? 0);
-  const sellAmtNum   = parseFloat(sellAmount.replace(',', '.')) || 0;
-  const sellUsdValue = sellAmtNum > 0 ? formatFiat(sellAmtNum * sellPrice) : formatFiat(0);
+  const sellUsdNum   = sellAmtNum > 0 ? sellAmtNum * sellPrice : 0;
   
   const buyAmount    = quote?.buyAmount ?? '';
   const buyAmtNum    = parseFloat(buyAmount) || 0;
-  const buyUsdValue  = buyAmtNum > 0 ? formatFiat(buyAmtNum * buyPrice) : formatFiat(0);
+  const buyUsdNum    = buyAmtNum > 0 ? buyAmtNum * buyPrice : 0;
   
   const isSimulated = quote?.isSimulated === true;
   const isMainnet = network === 'Ethereum' || network === 'Polygon' || network === 'Arbitrum' || network === 'TRON';
@@ -452,7 +452,7 @@ export default function SwapScreen({ navigation, route }: any) {
             </View>
             
             <View style={styles.cardFooterRow}>
-              <Text style={[styles.usdValue, { color: T.textDim }]}>≈ {sellUsdValue}</Text>
+              <Text style={[styles.usdValue, { color: T.textDim }]}>≈ <CurrencyText amount={sellUsdNum} code={fiatCurrency} /></Text>
               {hasInsufficientBalance && (
                 <Text style={styles.insufficientText}>Insufficient balance</Text>
               )}
@@ -496,7 +496,7 @@ export default function SwapScreen({ navigation, route }: any) {
             </View>
             
             <View style={styles.cardFooterRow}>
-              <Text style={[styles.usdValue, { color: T.textDim }]}>≈ {buyUsdValue}</Text>
+              <Text style={[styles.usdValue, { color: T.textDim }]}>≈ <CurrencyText amount={buyUsdNum} code={fiatCurrency} /></Text>
             </View>
           </View>
         </View>
@@ -623,8 +623,8 @@ export default function SwapScreen({ navigation, route }: any) {
                       </Text>
                       {usdValue > 0 && (
                         <Text style={[styles.tokenItemUsd, { color: T.textDim }]}>
-                          ≈ {formatFiat(usdValue)}
-                        </Text>
+                        ≈ <CurrencyText amount={usdValue} code={fiatCurrency} />
+                      </Text>
                       )}
                     </View>
                   </TouchableOpacity>
