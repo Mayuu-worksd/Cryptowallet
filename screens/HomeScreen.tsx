@@ -519,15 +519,15 @@ const MarketTicker = memo(
                             {usdVal !== null
                               ? (() => {
                                   const fiat = SUPPORTED_FIAT_CURRENCIES[fiatCurrency];
-                                  if (!fiat) return `\u200E$ ${usdVal.toFixed(2)}`;
+                                  if (!fiat) return `$ ${usdVal.toFixed(2)}`;
                                   const converted = usdVal * fiat.rate;
                                   if (converted >= 1000) {
-                                    return `\u200E${fiat.symbol} ${converted.toLocaleString(fiat.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                                    return `${fiat.symbol} ${converted.toLocaleString(fiat.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
                                   }
                                   if (converted >= 1) {
-                                    return `\u200E${fiat.symbol} ${converted.toLocaleString(fiat.locale, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}`;
+                                    return `${fiat.symbol} ${converted.toLocaleString(fiat.locale, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}`;
                                   }
-                                  return `\u200E${fiat.symbol} ${converted.toLocaleString(fiat.locale, { minimumFractionDigits: 6, maximumFractionDigits: 6 })}`;
+                                  return `${fiat.symbol} ${converted.toLocaleString(fiat.locale, { minimumFractionDigits: 6, maximumFractionDigits: 6 })}`;
                                 })()
                               : "—"}
                           </Text>
@@ -1345,7 +1345,7 @@ export default function HomeScreen({ navigation }: any) {
                 >
                   {balanceVisible
                     ? fmtBalance(totalUsd)
-                    : "\u200E" + fiatSymbol + " ••••••"}
+                    : fiatSymbol + " ••••••"}
                 </Text>
                 <TouchableOpacity
                   onPress={() => {

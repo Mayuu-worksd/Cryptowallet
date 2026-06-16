@@ -72,8 +72,8 @@ export const getCurrencyMeta = (code: CurrencyCode) =>
 export const formatCurrency = (amount: number, currency: CurrencyCode) => {
   const meta = getCurrencyMeta(currency);
   const converted = amount * meta.rate;
-  if (currency === 'JPY' || currency === 'VND') return `\u200E${meta.symbol} ${Math.round(converted).toLocaleString()}`;
-  return `\u200E${meta.symbol} ${converted.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (currency === 'JPY' || currency === 'VND') return `${meta.symbol} ${Math.round(converted).toLocaleString()}`;
+  return `${meta.symbol} ${converted.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
 const styles = StyleSheet.create({

@@ -396,7 +396,7 @@ export default function PortfolioScreen({ navigation }: any) {
 
           <View style={styles.mainBalanceRow}>
             <Text style={[styles.mainBalanceNum, { color: T.text }]}>
-              {balanceVisible ? formatFiat(totalUsd) : `\u200E${fiatSymbol} \u2022\u2022\u2022\u2022\u2022\u2022`}
+              {balanceVisible ? formatFiat(totalUsd) : `${fiatSymbol} \u2022\u2022\u2022\u2022\u2022\u2022`}
             </Text>
             
             <TouchableOpacity

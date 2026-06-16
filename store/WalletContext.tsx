@@ -2200,14 +2200,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const formatFiat = useCallback((amountUSD: number) => {
     const fiat = SUPPORTED_FIAT_CURRENCIES[fiatCurrency];
-    if (!fiat) return `\u200E$ ${amountUSD.toFixed(2)}`;
+    if (!fiat) return `$ ${amountUSD.toFixed(2)}`;
     const converted = amountUSD * fiat.rate;
     
     if (fiat.code === 'JPY' || fiat.code === 'VND') {
-      return `\u200E${fiat.symbol} ${Math.round(converted).toLocaleString(fiat.locale)}`;
+      return `${fiat.symbol} ${Math.round(converted).toLocaleString(fiat.locale)}`;
     }
     
-    return `\u200E${fiat.symbol} ${converted.toLocaleString(fiat.locale, {
+    return `${fiat.symbol} ${converted.toLocaleString(fiat.locale, {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     })}`;
@@ -2216,9 +2216,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const formatOrderFiat = useCallback((amountLocal: number, currencyCode: string) => {
     const fiat = SUPPORTED_FIAT_CURRENCIES[currencyCode] || SUPPORTED_FIAT_CURRENCIES['USD'];
     if (fiat.code === 'JPY' || fiat.code === 'VND') {
-      return `\u200E${fiat.symbol} ${Math.round(amountLocal).toLocaleString(fiat.locale)}`;
+      return `${fiat.symbol} ${Math.round(amountLocal).toLocaleString(fiat.locale)}`;
     }
-    return `\u200E${fiat.symbol} ${amountLocal.toLocaleString(fiat.locale, {
+    return `${fiat.symbol} ${amountLocal.toLocaleString(fiat.locale, {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     })}`;
