@@ -7,7 +7,7 @@ if (typeof global.crypto !== 'object') {
 
 if (typeof global.crypto.getRandomValues !== 'function') {
   // Fallback only if native module didn't load
-  global.crypto.getRandomValues = function(array: any) {
+  global.crypto.getRandomValues = function(array) {
     for (let i = 0; i < array.length; i++) {
       array[i] = Math.floor(Math.random() * 256);
     }

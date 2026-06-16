@@ -36,7 +36,7 @@ import { NetworkSelector } from "../components/NetworkSelector";
 import { CurrencySelector } from "../components/CurrencySelector";
 import { CurrencyText } from "../components/CurrencyText";
 import { haptics } from "../utils/haptics";
-import { useNotifications } from "../store/NotificationContext";
+
 
 const { width } = Dimensions.get("window");
 
@@ -825,7 +825,6 @@ export default function HomeScreen({ navigation }: any) {
     isNewsLoading,
     refreshNews,
   } = useMarket();
-  const { unreadCount } = useNotifications();
 
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
 
@@ -1249,18 +1248,6 @@ export default function HomeScreen({ navigation }: any) {
             activeOpacity={0.7}
           >
             <Feather name="clock" size={20} color={T.text} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.headerBtn}
-            onPress={() => navigation.navigate("Notifications")}
-            activeOpacity={0.7}
-          >
-            <Feather name="bell" size={20} color={T.text} />
-            {unreadCount > 0 && (
-              <View style={[styles.notifBadge, { backgroundColor: T.error }]}>
-                <Text style={{ color: '#FFF', fontSize: 9, fontWeight: 'bold' }}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
-              </View>
-            )}
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.headerBtn}
@@ -1737,18 +1724,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
-  },
-  notifBadge: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    minWidth: 14,
-    height: 14,
-    borderRadius: 7,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#101114',
   },
   walletLabel: {
     fontSize: 15,
