@@ -295,9 +295,11 @@ const TokenRow = memo(
             </View>
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <View style={{ alignItems: "flex-end" }}>
               <Text style={[styles.tokenUsd, { color: T.text }]}>
                 {hideBalance ? "****" : formatFiat(safeUsd)}
               </Text>
+              <Text
                 style={{
                   fontSize: 12,
                   fontFamily: Fonts.semiBold,
