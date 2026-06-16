@@ -418,6 +418,25 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     });
   }, [walletAddress]);
 
+  const reportLostCard = useCallback(async () => {
+    if (!walletAddress) return;
+    try {
+      cardService.setCardFrozen(true);
+      setCardFrozen(true);
+      await dbCardService.updateStatus(walletAddress, 'frozen').catch(() => {});
+      await vccService.updateStatus(walletAddress, 'frozen').catch(() => {});
+      
+      const message = `User ${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)} reported their card as LOST.`;
+      await adminAlertsService.logAlert(
+        'card_lost',
+        message,
+        walletAddress
+      );
+    } catch (e) {
+      console.warn('[reportLostCard] Failed to report lost card:', e);
+    }
+  }, [walletAddress]);
+
   const refreshPinEnabled = useCallback(async () => {
     setPinEnabled(await hasPinSetup());
   }, []);
@@ -2228,7 +2247,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     updateTxStatus,
     generateMnemonic: () => walletService.generateMnemonic(),
     createWallet, importWallet, deleteWallet, enterReadOnlyMode, refreshBalance, refreshCardData, fetchBalance,
-    sendETH, sendCrypto, topupCard, spendCard, toggleFreezeCard, applySwapBalances, switchNetwork,
+    sendETH, sendCrypto, topupCard, spendCard, toggleFreezeCard, reportLostCard, applySwapBalances, switchNetwork,
     fiatCurrency, setFiatCurrency, formatFiat, convertFiat, fiatSymbol, formatOrderFiat,
     isGlobalLoading,
     setGlobalLoading: (loading: boolean, msg?: string) => {
@@ -2246,7 +2265,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     cardDetails, cardCreated, createCard, updateCardDetails, generateCardDetails, cardTransactions,
     enabledCardCurrencies, setEnabledCardCurrencies,
     createWallet, importWallet, deleteWallet, enterReadOnlyMode, refreshBalance, refreshCardData, fetchBalance,
-    sendETH, sendCrypto, topupCard, spendCard, toggleFreezeCard, applySwapBalances, switchNetwork,
+    sendETH, sendCrypto, topupCard, spendCard, toggleFreezeCard, reportLostCard, applySwapBalances, switchNetwork,
     fiatCurrency, setFiatCurrency, formatFiat, convertFiat, fiatSymbol, formatOrderFiat,
     isGlobalLoading,
     globalLoadingMessage

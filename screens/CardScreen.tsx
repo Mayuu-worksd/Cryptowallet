@@ -58,7 +58,7 @@ const DEFAULT_PHYSICAL_PRICES_USD: Record<PhysicalTier, number> = {
 export default function CardScreen({ navigation, route }: any) {
   const insets = useSafeAreaInsets();
   const {
-    cardFrozen, toggleFreezeCard,
+    cardFrozen, toggleFreezeCard, reportLostCard,
     cardDetails, cardTransactions, cardCreated,
     balances, ethBalance, spendCard, cardBalance,
     isDarkMode, network,
@@ -771,7 +771,14 @@ export default function CardScreen({ navigation, route }: any) {
                   <View style={styles.circularActionWrap}>
                     <TouchableOpacity 
                       style={[styles.circularBtn, { backgroundColor: T.surface, borderColor: T.border }]} 
-                      onPress={() => showToast('Report sent to admin. Support will contact you shortly.', 'info')}
+                      onPress={async () => {
+                        try {
+                          await reportLostCard();
+                          showToast('Report sent to admin. Support will contact you shortly.', 'info');
+                        } catch (e) {
+                          showToast('Failed to send report. Please try again.', 'error');
+                        }
+                      }}
                       activeOpacity={0.7}
                     >
                       <Feather name="credit-card" size={22} color={T.text} />

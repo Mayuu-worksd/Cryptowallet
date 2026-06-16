@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { AdminToast, Toast } from '@/components/AdminToast';
@@ -28,6 +29,7 @@ import {
   Landmark,
   Network,
   Settings,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface SidebarItem {
@@ -40,6 +42,20 @@ interface SidebarItem {
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+
+  // Query unread alerts count
+  const { data: unreadAlertsCount } = useQuery({
+    queryKey: ['admin-unread-alerts-count'],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('admin_alerts')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_read', false);
+      if (error) throw error;
+      return count || 0;
+    },
+    refetchInterval: 10000,
+  });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState('');
   const [loggingOut, setLoggingOut] = useState(false);
@@ -148,6 +164,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'P2P & Escrow', href: '/dashboard/p2p', icon: RefreshCw },
     { name: 'Transactions', href: '/dashboard/transactions', icon: ArrowLeftRight },
     { name: 'Card Requests', href: '/dashboard/cards', icon: CreditCard },
+    { name: 'Alerts Log', href: '/dashboard/alerts', icon: AlertTriangle },
     { name: 'Bank Accounts', href: '/dashboard/bank-accounts', icon: Landmark },
     { name: 'Networks', href: '/dashboard/networks', icon: Network },
     { name: 'App Settings', href: '/dashboard/settings', icon: Settings },
@@ -213,6 +230,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <item.icon className="h-5 w-5 text-[var(--foreground)]" />
                   <span>{item.name}</span>
                 </div>
+                {item.name === 'Alerts Log' && unreadAlertsCount && unreadAlertsCount > 0 ? (
+                  <span className="px-1.5 py-0.5 border border-[#1a1a1a] bg-[#e63b2e] text-white text-[9px] font-extrabold rounded-none shadow-[1px_1px_0px_0px_rgba(26,26,26,1)] font-mono">
+                    {unreadAlertsCount}
+                  </span>
+                ) : null}
               </Link>
             );
           })}
@@ -279,14 +301,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     key={item.name}
                     href={item.href}
                     onClick={() => setMobileMenuOpen(false)}
-                    className={`flex items-center gap-3 px-4 py-3 border-2 border-transparent transition-all uppercase tracking-wider text-xs font-bold font-display ${
+                    className={`flex items-center justify-between px-4 py-3 border-2 border-transparent transition-all uppercase tracking-wider text-xs font-bold font-display ${
                       isActive
                         ? 'text-[#1a1a1a] bg-[var(--accent-yellow)]/20 border-[var(--border-color)] shadow-[2px_2px_0px_0px_var(--border-color)]'
                         : 'text-[var(--foreground)] hover:bg-[var(--background)]'
                     }`}
                   >
-                    <item.icon className="h-5 w-5 text-[var(--foreground)]" />
-                    <span>{item.name}</span>
+                    <div className="flex items-center gap-3">
+                      <item.icon className="h-5 w-5 text-[var(--foreground)]" />
+                      <span>{item.name}</span>
+                    </div>
+                    {item.name === 'Alerts Log' && unreadAlertsCount && unreadAlertsCount > 0 ? (
+                      <span className="px-1.5 py-0.5 border border-[#1a1a1a] bg-[#e63b2e] text-white text-[9px] font-extrabold rounded-none shadow-[1px_1px_0px_0px_rgba(26,26,26,1)] font-mono">
+                        {unreadAlertsCount}
+                      </span>
+                    ) : null}
                   </Link>
                 );
               })}

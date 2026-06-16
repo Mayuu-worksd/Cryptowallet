@@ -110,6 +110,33 @@ export default function OverviewPage() {
     refetchInterval: 15000,
   });
 
+  const { data: recentAlerts, isLoading: alertsLoading } = useQuery({
+    queryKey: ['dashboard-recent-alerts'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('admin_alerts')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(3);
+      if (error) throw error;
+      return data || [];
+    },
+    refetchInterval: 10000,
+  });
+
+  const { data: unreadAlertsCount } = useQuery({
+    queryKey: ['dashboard-unread-alerts-count'],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('admin_alerts')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_read', false);
+      if (error) throw error;
+      return count || 0;
+    },
+    refetchInterval: 10000,
+  });
+
   const activeChart = activeTab === 'volume'
     ? (stats?.volumeByDay ?? [0, 0, 0, 0, 0, 0, 0])
     : (stats?.usersByDay ?? [0, 0, 0, 0, 0, 0, 0]);
@@ -317,50 +344,108 @@ export default function OverviewPage() {
 
       </div>
 
-      {/* System Health Status Grid */}
-      <div className="brutalist-card p-6">
-        <h2 className="text-xl font-extrabold text-[#1a1a1a] font-display uppercase tracking-tight mb-2">System Health</h2>
-        <p className="text-xs text-gray-500 font-mono mb-6">Real-time status monitor for critical platform microservices and blockchain gateways.</p>
+      {/* System Health & Security Alerts Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* System Health Status Grid */}
+        <div className="lg:col-span-2 brutalist-card p-6 flex flex-col justify-between">
+          <div>
+            <h2 className="text-xl font-extrabold text-[#1a1a1a] font-display uppercase tracking-tight mb-2">System Health</h2>
+            <p className="text-xs text-gray-500 font-mono mb-6">Real-time status monitor for critical platform microservices and blockchain gateways.</p>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          
-          {/* Database */}
-          <div className="p-4 border-2 border-[#1a1a1a] bg-[#f5f0e8] flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Database className="h-5 w-5 text-[#0055ff]" />
-              <div>
-                <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Database Node</p>
-                <p className="text-xs font-bold text-[#1a1a1a] uppercase font-display">Supabase Database</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              
+              {/* Database */}
+              <div className="p-4 border-2 border-[#1a1a1a] bg-[#f5f0e8] flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Database className="h-5 w-5 text-[#0055ff]" />
+                  <div>
+                    <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Database Node</p>
+                    <p className="text-xs font-bold text-[#1a1a1a] uppercase font-display">Supabase Database</p>
+                  </div>
+                </div>
+                <span className="px-2 py-0.5 border border-[#1a1a1a] bg-white text-emerald-600 font-mono text-[9px] font-bold">ONLINE</span>
               </div>
-            </div>
-            <span className="px-2 py-0.5 border border-[#1a1a1a] bg-white text-emerald-600 font-mono text-[9px] font-bold">ONLINE</span>
-          </div>
 
-          {/* Gateway APIs */}
-          <div className="p-4 border-2 border-[#1a1a1a] bg-[#f5f0e8] flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Globe className="h-5 w-5 text-[#ffcc00]" />
-              <div>
-                <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Gateway APIs</p>
-                <p className="text-xs font-bold text-[#1a1a1a] uppercase font-display">REST_API Gate</p>
+              {/* Gateway APIs */}
+              <div className="p-4 border-2 border-[#1a1a1a] bg-[#f5f0e8] flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Globe className="h-5 w-5 text-[#ffcc00]" />
+                  <div>
+                    <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Gateway APIs</p>
+                    <p className="text-xs font-bold text-[#1a1a1a] uppercase font-display">REST_API Gate</p>
+                  </div>
+                </div>
+                <span className="px-2 py-0.5 border border-[#1a1a1a] bg-white text-emerald-600 font-mono text-[9px] font-bold">ACTIVE</span>
               </div>
-            </div>
-            <span className="px-2 py-0.5 border border-[#1a1a1a] bg-white text-emerald-600 font-mono text-[9px] font-bold">ACTIVE</span>
-          </div>
 
-          {/* Blockchain Node */}
-          <div className="p-4 border-2 border-[#1a1a1a] bg-[#f5f0e8] flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Radio className="h-5 w-5 text-[#e63b2e]" />
-              <div>
-                <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">RPC Interface</p>
-                <p className="text-xs font-bold text-[#1a1a1a] uppercase font-display">ETH_NODE_04</p>
+              {/* Blockchain Node */}
+              <div className="p-4 border-2 border-[#1a1a1a] bg-[#f5f0e8] flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Radio className="h-5 w-5 text-[#e63b2e]" />
+                  <div>
+                    <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">RPC Interface</p>
+                    <p className="text-xs font-bold text-[#1a1a1a] uppercase font-display">ETH_NODE_04</p>
+                  </div>
+                </div>
+                <span className="px-2 py-0.5 border border-[#1a1a1a] bg-[#ffcc00] text-[#1a1a1a] font-mono text-[9px] font-bold animate-pulse">LATENCY</span>
               </div>
-            </div>
-            <span className="px-2 py-0.5 border border-[#1a1a1a] bg-[#ffcc00] text-[#1a1a1a] font-mono text-[9px] font-bold animate-pulse">LATENCY</span>
-          </div>
 
+            </div>
+          </div>
         </div>
+
+        {/* Security Alerts Widget */}
+        <div className="brutalist-card p-6 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-extrabold text-[#1a1a1a] font-display uppercase tracking-tight">Security Alerts</h2>
+              {unreadAlertsCount && unreadAlertsCount > 0 ? (
+                <span className="px-2 py-0.5 border-2 border-[#1a1a1a] bg-[#e63b2e] text-white text-[10px] font-bold uppercase tracking-wider">
+                  {unreadAlertsCount} New
+                </span>
+              ) : null}
+            </div>
+            <p className="text-xs text-gray-500 font-mono mb-4">Recent card actions requiring admin audit.</p>
+
+            <div className="space-y-3 font-mono">
+              {alertsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-5 w-5 animate-spin text-[#1a1a1a]" />
+                </div>
+              ) : (recentAlerts ?? []).length === 0 ? (
+                <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-[#1a1a1a] bg-[#f5f0e8] text-[#1a1a1a]">
+                  <CheckCircle className="h-8 w-8 text-emerald-600 mb-2" />
+                  <p className="text-xs font-bold font-display uppercase">Incident Log Clean</p>
+                  <p className="text-[10px] text-gray-500 mt-1">No security reports logged.</p>
+                </div>
+              ) : (
+                (recentAlerts ?? []).map((alertItem: any, idx: number) => {
+                  const isLost = alertItem.type === 'card_lost';
+                  const isFrozen = alertItem.type === 'card_frozen';
+                  return (
+                    <div key={idx} className="p-2.5 border-2 border-[#1a1a1a] bg-[#f5f0e8] flex items-center justify-between shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`w-1.5 h-1.5 rounded-full ${isLost ? 'bg-[#e63b2e]' : isFrozen ? 'bg-[#ffcc00]' : 'bg-[#0055ff]'}`} />
+                          <p className="text-[10px] font-bold text-[#1a1a1a] uppercase truncate">{alertItem.type.replace('_', ' ')}</p>
+                        </div>
+                        <p className="text-[9px] text-gray-500 mt-0.5 truncate">{alertItem.message}</p>
+                      </div>
+                      <Link href="/dashboard/alerts" className="h-6 w-6 border-2 border-[#1a1a1a] bg-white hover:bg-[#ffcc00] text-[#1a1a1a] flex items-center justify-center transition-all shadow-[1px_1px_0px_0px_rgba(26,26,26,1)] ml-2 shrink-0">
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </Link>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+          <Link href="/dashboard/alerts" className="w-full mt-6 py-2.5 border-2 border-[#1a1a1a] bg-[#e63b2e] text-white hover:bg-[#1a1a1a] text-xs font-bold font-display uppercase tracking-widest text-center shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[3px_3px_0px_0px_rgba(26,26,26,1)] transition-all">
+            <span>Manage Security Desk</span>
+          </Link>
+        </div>
+
       </div>
 
       {/* Recent Transactions Ledger */}
