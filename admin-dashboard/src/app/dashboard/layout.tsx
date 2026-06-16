@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { supabase } from '@/lib/supabase';
+import { AdminToast, Toast } from '@/components/AdminToast';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
@@ -41,6 +43,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState('');
   const [loggingOut, setLoggingOut] = useState(false);
+  const [toast, setToast] = useState<Toast | null>(null);
+  
+  // Listen to admin_alerts
+  useEffect(() => {
+    const channel = supabase
+      .channel('admin_alerts_changes')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'admin_alerts' },
+        (payload) => {
+          const newAlert = payload.new;
+          setToast({
+            id: newAlert.id,
+            title: newAlert.type.replace('_', ' ').toUpperCase(),
+            message: newAlert.message,
+            type: newAlert.type.includes('frozen') ? 'warning' : 'info'
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
   
   // Collapsible sidebar state (persisted)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -344,6 +371,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {children}
         </main>
       </div>
+
+      {/* Real-time Toast Notifications */}
+      {toast && <AdminToast toast={toast} onClose={() => setToast(null)} />}
     </div>
   );
 }

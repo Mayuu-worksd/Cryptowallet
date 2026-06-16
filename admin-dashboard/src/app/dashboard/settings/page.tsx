@@ -35,7 +35,7 @@ export default function AppSettingsPage() {
     fetchSettings();
   }, []);
 
-  const fetchSettings = async () => {
+  async function fetchSettings() {
     setLoading(true);
     try {
       const { data, error } = await supabase.from('admin_settings').select('*');

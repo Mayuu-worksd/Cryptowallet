@@ -826,6 +826,200 @@ export const adminSettingsService = {
     try {
       const { data, error } = await supabase
         .from('admin_settings')
+export const shippingFeeService = {
+  async getAll(): Promise<ShippingFee[]> {
+    try {
+      const { data, error } = await supabase
+        .from('shipping_fees')
+        .select('*')
+        .order('country_name', { ascending: true });
+      if (error || !data || data.length === 0) {
+        return Object.entries(SHIPPING_FEES).map(([country_name, fee_usd]) => ({
+          country_name, country_code: '', fee_usd,
+        }));
+      }
+      return data;
+    } catch {
+      return Object.entries(SHIPPING_FEES).map(([country_name, fee_usd]) => ({
+        country_name, country_code: '', fee_usd,
+      }));
+    }
+  },
+};
+
+// ─── Physical Card Requests ───────────────────────────────────────────────────
+
+export const cardRequestService = {
+  async getRequests(walletAddress: string): Promise<CardRequest[]> {
+    const { data, error } = await supabase
+      .from('card_requests')
+      .select('*')
+      .eq('wallet_address', walletAddress.toLowerCase())
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data ?? [];
+  },
+
+  async hasPendingRequest(walletAddress: string): Promise<boolean> {
+    const { data } = await supabase
+      .from('card_requests')
+      .select('id')
+      .eq('wallet_address', walletAddress.toLowerCase())
+      .eq('status', 'pending')
+      .maybeSingle();
+    return !!data;
+  },
+
+  async submitRequest(req: Omit<CardRequest, 'id' | 'created_at' | 'status'>): Promise<CardRequest> {
+    const { data, error } = await supabase
+      .from('card_requests')
+      .insert({ ...req, wallet_address: req.wallet_address.toLowerCase(), status: 'pending' })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+};
+
+// ─── Wallet Profile Service ─────────────────────────────────────────────────
+
+export type WalletProfile = {
+  wallet_address:  string;
+  wallet_name:     string;
+  account_type:    'personal' | 'business';
+  p2p_country:     string;
+  p2p_currency:    string;
+  tron_address?:   string | null;
+  network?:        string | null;
+  is_dark_mode?:   boolean | null;
+  token_balances?: Record<string, number> | null;
+  locked_balances?: Record<string, number> | null;
+};
+
+export const profileService = {
+
+  async get(walletAddress: string): Promise<WalletProfile | null> {
+    const { data, error } = await supabase.rpc('get_wallet_profile', {
+      p_wallet: walletAddress.toLowerCase(),
+    });
+    if (error) throw error;
+    if (!data) return null;
+    const profile = { ...data };
+    if (typeof profile.token_balances === 'string') {
+      try {
+        profile.token_balances = JSON.parse(profile.token_balances);
+      } catch {
+        profile.token_balances = null;
+      }
+    }
+    if (typeof profile.locked_balances === 'string') {
+      try {
+        profile.locked_balances = JSON.parse(profile.locked_balances);
+      } catch {
+        profile.locked_balances = null;
+      }
+    }
+    return profile as WalletProfile;
+  },
+
+  async upsert(
+    walletAddress: string,
+    patch: Partial<Omit<WalletProfile, 'wallet_address'>>
+  ): Promise<void> {
+    const { error } = await supabase.rpc('upsert_wallet_profile', {
+      p_wallet:          walletAddress.toLowerCase(),
+      p_name:            patch.wallet_name     ?? null,
+      p_account_type:    patch.account_type    ?? null,
+      p_p2p_country:     patch.p2p_country     ?? null,
+      p_p2p_currency:    patch.p2p_currency    ?? null,
+      p_tron_address:    patch.tron_address    ?? null,
+      p_network:         patch.network         ?? null,
+      p_is_dark_mode:    patch.is_dark_mode    ?? null,
+      p_token_balances:  patch.token_balances  ?? null,
+      p_locked_balances: patch.locked_balances ?? null,
+    });
+    if (error) throw error;
+  },
+};
+
+// ─── Transaction Service ──────────────────────────────────────────────────────
+
+export const txService = {
+
+  async log(tx: Omit<DBTransaction, 'id' | 'created_at'>): Promise<DBTransaction> {
+    const { data, error } = await supabase
+      .from('transactions')
+      .insert({ ...tx, wallet_address: tx.wallet_address.toLowerCase() })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async updateStatus(id: string, status: TxStatus, tx_hash?: string): Promise<void> {
+    const { error } = await supabase
+      .from('transactions')
+      .update({ status, ...(tx_hash ? { tx_hash } : {}) })
+      .eq('id', id);
+    if (error) throw error;
+  },
+
+  async getAll(walletAddress: string, limit = 50): Promise<DBTransaction[]> {
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('wallet_address', walletAddress.toLowerCase())
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+    return data ?? [];
+  },
+
+  async getByType(walletAddress: string, type: TxType): Promise<DBTransaction[]> {
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('wallet_address', walletAddress.toLowerCase())
+      .eq('type', type)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data ?? [];
+  },
+};
+
+// ─── Fiat Currency Service ────────────────────────────────────────────────────
+
+export interface FiatCurrency {
+  code: string;
+  symbol: string;
+  name: string;
+  rate: number;
+  locale?: string;
+  format?: string;
+}
+
+export const fiatCurrencyService = {
+  async getAll(): Promise<FiatCurrency[]> {
+    try {
+      const { data, error } = await supabase
+        .from('fiat_currencies')
+        .select('*')
+        .order('code', { ascending: true });
+      if (error || !data || data.length === 0) return [];
+      return data as FiatCurrency[];
+    } catch {
+      return [];
+    }
+  }
+};
+
+// ─── Admin Settings Service ───────────────────────────────────────────────────
+
+export const adminSettingsService = {
+  async getSetting<T>(key: string, defaultValue: T): Promise<T> {
+    try {
+      const { data, error } = await supabase
+        .from('admin_settings')
         .select('value')
         .eq('key', key)
         .maybeSingle();
@@ -833,6 +1027,26 @@ export const adminSettingsService = {
       return data.value as T;
     } catch {
       return defaultValue;
+    }
+  }
+};
+
+// ─── Admin Alerts Service ─────────────────────────────────────────────────────
+
+export const adminAlertsService = {
+  async logAlert(type: string, message: string, walletAddress: string): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('admin_alerts')
+        .insert({
+          type,
+          message,
+          wallet_address: walletAddress.toLowerCase(),
+          is_read: false
+        });
+      if (error) console.warn('[adminAlertsService] Failed to log alert:', error.message);
+    } catch (e) {
+      console.warn('[adminAlertsService] Error:', e);
     }
   }
 };

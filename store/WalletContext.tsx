@@ -8,7 +8,7 @@ import { getWalletBalances } from '../services/balanceService';
 import { storageService } from '../services/storageService';
 import { marketService, NewsItem } from '../services/marketService';
 import { hasPinSetup, clearPin } from '../services/pinService';
-import { kycService, KYCStatus, txService, dbCardService, vccService, cardVariantService, VCCCard, profileService, adminSettingsService } from '../services/supabaseService';
+import { kycService, KYCStatus, txService, dbCardService, vccService, cardVariantService, VCCCard, profileService, adminSettingsService, adminAlertsService } from '../services/supabaseService';
 import { transactionService } from '../services/transactionService';
 import { cardService } from '../services/cardService';
 import { supabase, setWallet, clearWalletSession } from '../services/supabaseClient';
@@ -404,6 +404,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       // Persist freeze state to Supabase (check both tables for safety during migration)
       dbCardService.updateStatus(walletAddress, newVal ? 'frozen' : 'active').catch(() => {});
       vccService.updateStatus(walletAddress, newVal ? 'frozen' : 'active').catch(() => {});
+      
+      // Log alert to admin dashboard
+      const action = newVal ? 'frozen' : 'unfrozen';
+      const message = `User ${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)} has ${action} their card.`;
+      adminAlertsService.logAlert(
+        `card_${action}`,
+        message,
+        walletAddress
+      ).catch(() => {});
+      
       return newVal;
     });
   }, [walletAddress]);
