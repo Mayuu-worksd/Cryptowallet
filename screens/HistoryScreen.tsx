@@ -194,6 +194,7 @@ const TxRow = memo(({ tx, T, cfg, onPress, formatFiat }: {
 const DetailModal = memo(({ tx, T, cfg, network, onClose, formatFiat }: {
   tx: UnifiedTx | null; T: any; cfg: TxConfig | null; network: string; onClose: () => void; formatFiat: (amount: number) => string;
 }) => {
+  const insets = useSafeAreaInsets();
   if (!tx || !cfg) return null;
   const isDebit  = tx.type === 'send' || tx.type === 'swap' || tx.label.includes('Fee') || (tx.type === 'card' && !tx.label.includes('Top-up'));
   const amtColor = isDebit ? T.error : T.success;
@@ -218,10 +219,12 @@ const DetailModal = memo(({ tx, T, cfg, network, onClose, formatFiat }: {
  
   const explorerUrl = tx.hash ? getExplorerUrl(tx.hash, network) : null;
 
+  const bottomPadding = Math.max(40, insets.bottom + 16);
+
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <View style={modal.overlay}>
-        <View style={[modal.sheet, { backgroundColor: T.surface, borderColor: T.border }]}>
+        <View style={[modal.sheet, { backgroundColor: T.surface, borderColor: T.border, paddingBottom: bottomPadding }]}>
           <View style={[modal.handle, { backgroundColor: T.border }]} />
 
           {/* Header */}

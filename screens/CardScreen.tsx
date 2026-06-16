@@ -1115,6 +1115,7 @@ const styles = StyleSheet.create({
     width: SCREEN_WIDTH,
     height: 390,
     marginBottom: 16,
+    marginHorizontal: -24,
   },
   carouselScroll: {
     flex: 1,
