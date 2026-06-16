@@ -15,6 +15,7 @@ import { useWallet, useMarket } from '../store/WalletContext';
 import { COIN_META, COIN_COLORS } from '../constants';
 import { SYMBOL_TO_COINGECKO_ID } from '../services/marketService';
 import { SUPPORTED_FIAT_CURRENCIES } from '../constants/currencyConfig';
+import { CurrencyText } from '../components/CurrencyText';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -246,17 +247,18 @@ export default function CoinChartScreen({ route, navigation }: any) {
   }, [chartData, change24h]);
   const chartUp = pctChange >= 0;
 
-  const formatPrice = useCallback((p: number) => {
+  const formatPriceNum = useCallback((p: number) => {
+    return p; // CurrencyText handles the multiplication and formatting internally now, wait, tooltip still needs formatted string.
+  }, []);
+
+  const formatTooltip = useCallback((p: number) => {
     const converted = p * fiatInfo.rate;
-    if (typeof converted !== 'number' || !isFinite(converted) || converted <= 0) return `${fiatInfo.symbol}0.00`;
-    if (converted >= 1000) {
-      return `${fiatInfo.symbol}${converted.toLocaleString(fiatInfo.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    }
-    if (converted >= 1) {
-      return `${fiatInfo.symbol}${converted.toLocaleString(fiatInfo.locale, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}`;
-    }
-    return `${fiatInfo.symbol}${converted.toLocaleString(fiatInfo.locale, { minimumFractionDigits: 6, maximumFractionDigits: 6 })}`;
-  }, [fiatInfo]);
+    const pre = fiatCurrency === 'AED' ? '' : fiatInfo.symbol;
+    if (typeof converted !== 'number' || !isFinite(converted) || converted <= 0) return `${pre}0.00`;
+    if (converted >= 1000) return `${pre}${converted.toLocaleString(fiatInfo.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    if (converted >= 1) return `${pre}${converted.toLocaleString(fiatInfo.locale, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}`;
+    return `${pre}${converted.toLocaleString(fiatInfo.locale, { minimumFractionDigits: 6, maximumFractionDigits: 6 })}`;
+  }, [fiatInfo, fiatCurrency]);
 
   const safeNum = (n: number) => (typeof n === 'number' && isFinite(n) ? n : 0);
   const chartLineColor = chartUp ? T.success : T.error;
@@ -298,7 +300,7 @@ export default function CoinChartScreen({ route, navigation }: any) {
         </View>
 
         <View style={{ alignItems: 'flex-end' }}>
-          <Text style={[styles.priceTop, { color: T.text }]}>{formatPrice(priceNow)}</Text>
+          <CurrencyText amount={priceNow} code={fiatCurrency} style={[styles.priceTop, { color: T.text }]} />
           <Text style={[styles.changeTop, { color: chartLineColor }]}>
             {chartUp ? '+' : ''}{(typeof pctChange === 'number' && isFinite(pctChange) ? pctChange : 0).toFixed(2)}%
           </Text>
@@ -324,7 +326,7 @@ export default function CoinChartScreen({ route, navigation }: any) {
                 prices={chartData}
                 color={chartLineColor}
                 isDark={isDarkMode}
-                formatPrice={formatPrice}
+                formatPrice={formatTooltip}
               />
             </Animated.View>
           )}
@@ -352,9 +354,7 @@ export default function CoinChartScreen({ route, navigation }: any) {
            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
              <Text style={[styles.sectionTitle, { color: T.text }]}>Your balance</Text>
              <View style={{ alignItems: 'flex-end' }}>
-                <Text style={[styles.balanceFiat, { color: T.text }]}>
-                   {formatFiat(typeof usdValue === 'number' && isFinite(usdValue) ? usdValue : 0)}
-                </Text>
+                <CurrencyText amount={usdValue} code={fiatCurrency} style={[styles.balanceFiat, { color: T.text }]} />
                 <Text style={[styles.balanceToken, { color: T.textMuted }]}>
                    {balance.toFixed(4)} {symbol}
                 </Text>
@@ -430,9 +430,9 @@ export default function CoinChartScreen({ route, navigation }: any) {
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
                       <Text style={[styles.txAmount, { color: amountColor }]}>{amountText}</Text>
-                      <Text style={[styles.txUsd, { color: T.textMuted }]}>
-                         {tx.usdValue ? formatFiat(parseFloat(tx.usdValue)) : ''}
-                      </Text>
+                      {tx.usdValue ? (
+                        <CurrencyText amount={parseFloat(tx.usdValue)} code={fiatCurrency} style={[styles.txUsd, { color: T.textMuted }]} />
+                      ) : <Text style={[styles.txUsd, { color: T.textMuted }]} />}
                     </View>
                   </TouchableOpacity>
                 );
@@ -447,11 +447,11 @@ export default function CoinChartScreen({ route, navigation }: any) {
            <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 24 }}>
               <View style={{ width: '50%' }}>
                  <Text style={[styles.statLabel, { color: T.textMuted }]}>Market Cap</Text>
-                 <Text style={[styles.statValue, { color: T.text }]}>{fiatInfo.symbol}{(45.68 * fiatInfo.rate).toFixed(2)}B</Text>
+                 <CurrencyText amount={45.68} code={fiatCurrency} style={[styles.statValue, { color: T.text }]} skipConversion={true} />
               </View>
               <View style={{ width: '50%' }}>
                  <Text style={[styles.statLabel, { color: T.textMuted }]}>24h Volume</Text>
-                 <Text style={[styles.statValue, { color: T.text }]}>{fiatInfo.symbol}{(3.65 * fiatInfo.rate).toFixed(2)}B</Text>
+                 <CurrencyText amount={3.65} code={fiatCurrency} style={[styles.statValue, { color: T.text }]} skipConversion={true} />
               </View>
               <View style={{ width: '50%' }}>
                  <Text style={[styles.statLabel, { color: T.textMuted }]}>Holders</Text>

@@ -1203,42 +1203,54 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
             >
           {/* Chat Header */}
           <View style={[styles.chatHeader, { backgroundColor: T.surface, paddingTop: insets.top + 12, borderBottomWidth: 0, shadowColor: '#000', shadowOffset: {width: 0, height: 4}, shadowOpacity: 0.05, shadowRadius: 10, elevation: 3, zIndex: 10 }]}>
-            <TouchableOpacity onPress={() => setShowChatModal(false)} style={styles.chatHeaderBackBtn}>
+            <TouchableOpacity onPress={() => {
+              if (route.params?.openChat) {
+                navigation.goBack();
+              } else {
+                setShowChatModal(false);
+              }
+            }} style={styles.chatHeaderBackBtn}>
               <Feather name="chevron-left" size={26} color={T.text} />
             </TouchableOpacity>
 
-            <View style={[styles.chatAvatar, { backgroundColor: T.primary + '15' }]}>
-              <Text style={{ fontSize: 13, fontFamily: Fonts.extraBold, color: T.primary }}>
-                {(isSeller ? (currentOrder.buyer_wallet || '') : currentOrder.seller_wallet).slice(0, 2).toUpperCase()}
-              </Text>
-            </View>
-            
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={[styles.chatCounterpartyName, { color: T.text }]}>
-                  {isSeller
-                    ? formatAddress(currentOrder.buyer_wallet || '')
-                    : formatAddress(currentOrder.seller_wallet)}
+            <TouchableOpacity 
+              activeOpacity={0.7} 
+              onPress={() => setShowChatModal(false)} 
+              style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 10 }}
+            >
+              <View style={[styles.chatAvatar, { backgroundColor: T.primary + '15' }]}>
+                <Text style={{ fontSize: 13, fontFamily: Fonts.extraBold, color: T.primary }}>
+                  {(isSeller ? (currentOrder.buyer_wallet || '') : currentOrder.seller_wallet).slice(0, 2).toUpperCase()}
                 </Text>
-                <View style={{ backgroundColor: (isSeller ? T.primary : '#F59E0B') + '15', paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 6, borderWidth: 0.5, borderColor: (isSeller ? T.primary : '#F59E0B') + '30' }}>
-                  <Text style={{ fontSize: 9, fontFamily: Fonts.extraBold, color: isSeller ? T.primary : '#F59E0B' }}>
-                    {isSeller ? 'BUYER' : 'SELLER'}
+              </View>
+            
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={[styles.chatCounterpartyName, { color: T.text }]}>
+                    {isSeller
+                      ? formatAddress(currentOrder.buyer_wallet || '')
+                      : formatAddress(currentOrder.seller_wallet)}
+                  </Text>
+                  <View style={{ backgroundColor: (isSeller ? T.primary : '#F59E0B') + '15', paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 6, borderWidth: 0.5, borderColor: (isSeller ? T.primary : '#F59E0B') + '30' }}>
+                    <Text style={{ fontSize: 9, fontFamily: Fonts.extraBold, color: isSeller ? T.primary : '#F59E0B' }}>
+                      {isSeller ? 'BUYER' : 'SELLER'}
+                    </Text>
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 }}>
+                  <View style={[styles.onlineDot, { backgroundColor: T.success }]} />
+                  <Text style={[styles.chatHeaderStatusText, { color: T.textMuted }]}>
+                    {isSeller ? 'Personal User' : (currentOrder.is_merchant ? 'Merchant Account' : 'Personal User')} · Secured
                   </Text>
                 </View>
               </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 }}>
-                <View style={[styles.onlineDot, { backgroundColor: T.success }]} />
-                <Text style={[styles.chatHeaderStatusText, { color: T.textMuted }]}>
-                  {isSeller ? 'Personal User' : (currentOrder.is_merchant ? 'Merchant Account' : 'Personal User')} · Secured
+
+              <View style={[styles.chatHeaderOrderPill, { backgroundColor: T.surfaceHigh, borderColor: T.border, borderWidth: 1 }]}>
+                <Text style={{ fontSize: 10, fontFamily: Fonts.extraBold, color: T.text }}>
+                  {currentOrder.amount} {currentOrder.token}
                 </Text>
               </View>
-            </View>
-
-            <View style={[styles.chatHeaderOrderPill, { backgroundColor: T.surfaceHigh, borderColor: T.border, borderWidth: 1 }]}>
-              <Text style={{ fontSize: 10, fontFamily: Fonts.extraBold, color: T.text }}>
-                {currentOrder.amount} {currentOrder.token}
-              </Text>
-            </View>
+            </TouchableOpacity>
           </View>
 
           {/* Chat Escrow Banner */}

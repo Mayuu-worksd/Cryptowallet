@@ -175,7 +175,7 @@ function OrderCard({ order, onPress, T, walletAddress, formatOrderFiat, formatFi
         <View style={s.statLine}>
           <Text style={[s.statLabel, { color: T.textMuted }]}>Total Price</Text>
           <View style={{ alignItems: 'flex-end' }}>
-            <CurrencyText amount={Number(order.fiat_total || 0)} code={order.fiat_currency} style={[s.statValueBig, { color: T.primary }]} />
+            <CurrencyText amount={Number(order.fiat_total || 0)} code={order.fiat_currency} style={[s.statValueBig, { color: T.primary }]} skipConversion />
             {globalFiatCurrency !== order.fiat_currency && (
               <Text style={{ fontSize: 11, color: T.textDim, fontWeight: '600', marginTop: 2 }}>
                 ≈ <CurrencyText amount={Number(order.fiat_total || 0) / (SUPPORTED_FIAT_CURRENCIES[order.fiat_currency]?.rate || 1)} code={globalFiatCurrency} />
@@ -296,7 +296,7 @@ function RateChart({
           ) : liveRate ? (
             <>
               <Text style={[rc.livePrice, { color: T.text }]}>
-                <CurrencyText amount={liveRate} code={fiat} />
+                <CurrencyText amount={liveRate} code={fiat} skipConversion />
               </Text>
               <View style={[rc.changeBadge, { backgroundColor: isUp ? '#10B98118' : '#EC262918' }]}>
                 <Text style={[rc.changeText, { color: isUp ? '#10B981' : '#EC2629' }]}>
@@ -444,7 +444,7 @@ function RateChart({
             {selectedRate > 0 ? (
               <>
                 <Text style={[rc.selectedRate, { color: T.text }]}>
-                  <CurrencyText amount={selectedRate} code={fiat} />
+                  <CurrencyText amount={selectedRate} code={fiat} skipConversion />
                 </Text>
               </>
             ) : (
