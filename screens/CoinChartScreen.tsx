@@ -300,7 +300,7 @@ export default function CoinChartScreen({ route, navigation }: any) {
         </View>
 
         <View style={{ alignItems: 'flex-end' }}>
-          <CurrencyText amount={priceNow} code={fiatCurrency} style={[styles.priceTop, { color: T.text }]} />
+          <CurrencyText amount={priceNow} code={fiatCurrency} style={[styles.priceTop, { color: T.text }]} decimals={priceNow * fiatInfo.rate < 1 ? 6 : priceNow * fiatInfo.rate < 1000 ? 4 : 2} />
           <Text style={[styles.changeTop, { color: chartLineColor }]}>
             {chartUp ? '+' : ''}{(typeof pctChange === 'number' && isFinite(pctChange) ? pctChange : 0).toFixed(2)}%
           </Text>
@@ -447,11 +447,15 @@ export default function CoinChartScreen({ route, navigation }: any) {
            <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 24 }}>
               <View style={{ width: '50%' }}>
                  <Text style={[styles.statLabel, { color: T.textMuted }]}>Market Cap</Text>
-                 <CurrencyText amount={45.68} code={fiatCurrency} style={[styles.statValue, { color: T.text }]} skipConversion={true} />
+                 <Text style={[styles.statValue, { color: T.text }]}>
+                   <CurrencyText amount={45.68 * fiatInfo.rate} code={fiatCurrency} skipConversion={true} />B
+                 </Text>
               </View>
               <View style={{ width: '50%' }}>
                  <Text style={[styles.statLabel, { color: T.textMuted }]}>24h Volume</Text>
-                 <CurrencyText amount={3.65} code={fiatCurrency} style={[styles.statValue, { color: T.text }]} skipConversion={true} />
+                 <Text style={[styles.statValue, { color: T.text }]}>
+                   <CurrencyText amount={3.65 * fiatInfo.rate} code={fiatCurrency} skipConversion={true} />B
+                 </Text>
               </View>
               <View style={{ width: '50%' }}>
                  <Text style={[styles.statLabel, { color: T.textMuted }]}>Holders</Text>

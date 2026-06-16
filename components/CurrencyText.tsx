@@ -10,9 +10,10 @@ interface CurrencyTextProps {
   style?: TextStyle | TextStyle[];
   hideBalance?: boolean;
   skipConversion?: boolean;
+  decimals?: number;
 }
 
-export const CurrencyText = ({ amount, code, style, hideBalance = false, skipConversion = false }: CurrencyTextProps) => {
+export const CurrencyText = ({ amount, code, style, hideBalance = false, skipConversion = false, decimals }: CurrencyTextProps) => {
   const flattened = StyleSheet.flatten(style || {});
   const fontSize = flattened.fontSize || 16;
   const color = flattened.color || '#FFFFFF';
@@ -25,14 +26,23 @@ export const CurrencyText = ({ amount, code, style, hideBalance = false, skipCon
   
   let amountStr: string | number = convertedAmt;
   if (typeof convertedAmt === 'number') {
-    if (fiatConfig?.code === 'JPY' || fiatConfig?.code === 'VND') {
-      amountStr = Math.round(convertedAmt).toLocaleString(locale);
+    let minDecimals = 2;
+    let maxDecimals = 2;
+    
+    if (decimals !== undefined) {
+      minDecimals = decimals;
+      maxDecimals = decimals;
     } else {
-      amountStr = convertedAmt.toLocaleString(locale, {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-      });
+      if (fiatConfig?.code === 'JPY' || fiatConfig?.code === 'VND') {
+        minDecimals = 0;
+        maxDecimals = 0;
+      }
     }
+
+    amountStr = convertedAmt.toLocaleString(locale, {
+      minimumFractionDigits: minDecimals,
+      maximumFractionDigits: maxDecimals
+    });
   }
     
   const cleanAmt = typeof convertedAmt === 'number' && typeof amountStr === 'string' 
