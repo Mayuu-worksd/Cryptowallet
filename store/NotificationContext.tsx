@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { DeviceEventEmitter } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useWallet } from './WalletContext';
@@ -36,16 +36,27 @@ export const useNotifications = () => useContext(NotificationContext);
 export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   const { walletAddress } = useWallet();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const notificationsRef = useRef<AppNotification[]>(notifications);
+
+  // Keep ref up-to-date with notifications state to prevent stale closures in listeners
+  useEffect(() => {
+    notificationsRef.current = notifications;
+  }, [notifications]);
 
   const STORAGE_KEY = walletAddress ? `notifications_${walletAddress}` : 'notifications_guest';
 
+  // Load notifications when STORAGE_KEY changes
   useEffect(() => {
     loadNotifications();
+  }, [STORAGE_KEY]);
+
+  // Set up subscription for new notifications
+  useEffect(() => {
     const subscription = DeviceEventEmitter.addListener('onNewNotification', (notif: Omit<AppNotification, 'id' | 'read' | 'timestamp'>) => {
       addNotification(notif);
     });
     return () => subscription.remove();
-  }, [STORAGE_KEY, notifications]);
+  }, [STORAGE_KEY]);
 
   const loadNotifications = async () => {
     try {
@@ -76,17 +87,17 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
       read: false,
       timestamp: Date.now(),
     };
-    const updated = [newNotif, ...notifications];
+    const updated = [newNotif, ...notificationsRef.current];
     await saveNotifications(updated);
   };
 
   const markAsRead = async (id: string) => {
-    const updated = notifications.map(n => n.id === id ? { ...n, read: true } : n);
+    const updated = notificationsRef.current.map(n => n.id === id ? { ...n, read: true } : n);
     await saveNotifications(updated);
   };
 
   const markAllAsRead = async () => {
-    const updated = notifications.map(n => ({ ...n, read: true }));
+    const updated = notificationsRef.current.map(n => ({ ...n, read: true }));
     await saveNotifications(updated);
   };
 
