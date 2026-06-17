@@ -1020,7 +1020,32 @@ export interface LedgerEntry {
   created_at: string;
 }
 
+export interface AdminBankAccount {
+  id: string;
+  beneficiary_name: string;
+  bank_name: string;
+  routing_number: string;
+  account_number: string;
+  account_type: string;
+  currency: string;
+  iban?: string | null;
+  swift_code?: string | null;
+  deposit_instructions?: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export const fiatRequestService = {
+  async getActiveBankAccounts(): Promise<AdminBankAccount[]> {
+    const { data, error } = await supabase
+      .from('admin_bank_accounts')
+      .select('*')
+      .eq('is_active', true);
+    if (error) throw error;
+    return data ?? [];
+  },
+
   async uploadProof(
     walletAddress: string,
     fileUri: string,

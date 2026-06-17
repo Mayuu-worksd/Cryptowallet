@@ -29,6 +29,9 @@ export default function BankAccountsPage() {
     account_number: '',
     account_type: 'Checking',
     currency: 'USD',
+    iban: '',
+    swift_code: '',
+    deposit_instructions: '',
   });
 
   // Fetch Bank Accounts
@@ -53,6 +56,9 @@ export default function BankAccountsPage() {
           p_account_number: payload.account_number,
           p_account_type: payload.account_type,
           p_currency: payload.currency,
+          p_iban: payload.iban || null,
+          p_swift_code: payload.swift_code || null,
+          p_deposit_instructions: payload.deposit_instructions || null,
         });
         if (error) throw error;
       } else {
@@ -63,6 +69,9 @@ export default function BankAccountsPage() {
           p_account_number: payload.account_number,
           p_account_type: payload.account_type,
           p_currency: payload.currency,
+          p_iban: payload.iban || null,
+          p_swift_code: payload.swift_code || null,
+          p_deposit_instructions: payload.deposit_instructions || null,
         });
         if (error) throw error;
       }
@@ -102,12 +111,15 @@ export default function BankAccountsPage() {
     if (bank) {
       setEditingBank(bank);
       setFormData({
-        beneficiary_name: bank.beneficiary_name,
-        bank_name: bank.bank_name,
-        routing_number: bank.routing_number,
-        account_number: bank.account_number,
-        account_type: bank.account_type,
-        currency: bank.currency,
+        beneficiary_name: bank.beneficiary_name || '',
+        bank_name: bank.bank_name || '',
+        routing_number: bank.routing_number || '',
+        account_number: bank.account_number || '',
+        account_type: bank.account_type || 'Checking',
+        currency: bank.currency || 'USD',
+        iban: bank.iban || '',
+        swift_code: bank.swift_code || '',
+        deposit_instructions: bank.deposit_instructions || '',
       });
     } else {
       setEditingBank(null);
@@ -118,6 +130,9 @@ export default function BankAccountsPage() {
         account_number: '',
         account_type: 'Checking',
         currency: 'USD',
+        iban: '',
+        swift_code: '',
+        deposit_instructions: '',
       });
     }
     setIsDrawerOpen(true);
@@ -234,6 +249,8 @@ export default function BankAccountsPage() {
                     <td className="py-4 px-4 border-r-3 border-[#1a1a1a]">
                       <p className="text-xs font-bold font-mono text-[#1a1a1a]">{bank.account_number}</p>
                       <p className="text-[10px] font-bold text-gray-500 mt-0.5 font-mono">RTN: {bank.routing_number}</p>
+                      {bank.iban && <p className="text-[9px] font-bold text-gray-500 mt-0.5 font-mono">IBAN: {bank.iban}</p>}
+                      {bank.swift_code && <p className="text-[9px] font-bold text-gray-500 mt-0.5 font-mono">BIC/SWIFT: {bank.swift_code}</p>}
                     </td>
 
                     {/* Type / Curr */}
@@ -355,7 +372,7 @@ export default function BankAccountsPage() {
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-bold text-[#1a1a1a] uppercase tracking-wider mb-2">Routing / SWIFT Number</label>
+                    <label className="block text-[10px] font-bold text-[#1a1a1a] uppercase tracking-wider mb-2">Routing Number / Sort Code</label>
                     <input
                       required
                       type="text"
@@ -363,6 +380,38 @@ export default function BankAccountsPage() {
                       value={formData.routing_number}
                       onChange={(e) => setFormData({...formData, routing_number: e.target.value})}
                       className="w-full brutalist-input text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-[#1a1a1a] uppercase tracking-wider mb-2">IBAN</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. AE8601000000000001234567"
+                      value={formData.iban}
+                      onChange={(e) => setFormData({...formData, iban: e.target.value})}
+                      className="w-full brutalist-input text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-[#1a1a1a] uppercase tracking-wider mb-2">SWIFT / BIC Code</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. CHASUS33"
+                      value={formData.swift_code}
+                      onChange={(e) => setFormData({...formData, swift_code: e.target.value})}
+                      className="w-full brutalist-input text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-[#1a1a1a] uppercase tracking-wider mb-2">Deposit Instructions</label>
+                    <textarea
+                      placeholder="Instructions shown to the depositor..."
+                      value={formData.deposit_instructions}
+                      onChange={(e) => setFormData({...formData, deposit_instructions: e.target.value})}
+                      className="w-full brutalist-input text-xs min-h-[60px] py-2 px-3"
                     />
                   </div>
 
@@ -387,8 +436,10 @@ export default function BankAccountsPage() {
                         className="w-full brutalist-input text-xs bg-white"
                       >
                         <option value="USD">USD</option>
+                        <option value="AED">AED</option>
                         <option value="EUR">EUR</option>
                         <option value="GBP">GBP</option>
+                        <option value="INR">INR</option>
                         <option value="SGD">SGD</option>
                       </select>
                     </div>

@@ -4,7 +4,7 @@ import {
   ScrollView, ActivityIndicator, StatusBar, Dimensions
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useWallet, useMarket } from '../store/WalletContext';
 import { Theme, Fonts } from '../constants';
 import Toast from '../components/Toast';
@@ -23,7 +23,7 @@ export default function FiatWithdrawalScreen({ navigation }: any) {
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
 
   const [cryptoAsset, setCryptoAsset] = useState('USDT');
-  const [fiatCurrency, setFiatCurrency] = useState('AED');
+  const [fiatCurrency, setFiatCurrency] = useState('USD');
   const [amount, setAmount] = useState('');
   
   // Bank details form
@@ -57,7 +57,7 @@ export default function FiatWithdrawalScreen({ navigation }: any) {
     const usdPrice = prices[cryptoAsset]?.usd || 1;
     const valueUsd = amtNum * usdPrice;
     
-    // Conversions from USD to other fiat currencies (mock conversion rates for simplicity)
+    // Conversions from USD to other fiat currencies
     const fiatRates: Record<string, number> = {
       USD: 1.0,
       AED: 3.6725,
@@ -147,9 +147,9 @@ export default function FiatWithdrawalScreen({ navigation }: any) {
           <View style={[styles.successIconBox, { backgroundColor: T.success + '18', borderColor: T.success }]}>
             <Feather name="check-circle" size={48} color={T.success} />
           </View>
-          <Text style={[styles.successTitle, { color: T.text }]}>Withdrawal Request Submitted</Text>
+          <Text style={[styles.successTitle, { color: T.text }]}>Withdrawal Submitted</Text>
           <Text style={[styles.successSub, { color: T.textMuted }]}>
-            Your crypto has been debited. The admin team is reviewing your bank details to complete the manual wire payout.
+            Your crypto assets have been debited and are held in escrow. The admin desk is processing your manual wire payout.
           </Text>
 
           <View style={[styles.ticketCard, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
@@ -167,8 +167,9 @@ export default function FiatWithdrawalScreen({ navigation }: any) {
       ) : (
         // Form View
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          {/* Select Crypto */}
-          <Text style={[styles.inputLabel, { color: T.text }]}>1. Sell Crypto Asset</Text>
+          
+          {/* Section 1: Sell Crypto */}
+          <Text style={[styles.sectionTitle, { color: T.text }]}>1. Sell Crypto Asset</Text>
           <View style={styles.selectorRow}>
             {CRYPTO_ASSETS.map((asset) => {
               const selected = cryptoAsset === asset;
@@ -178,27 +179,32 @@ export default function FiatWithdrawalScreen({ navigation }: any) {
                   onPress={() => { haptics.selection(); setCryptoAsset(asset); }}
                   style={[
                     styles.selectorBtn,
-                    { borderColor: selected ? T.primary : T.border, backgroundColor: selected ? T.primary + '12' : T.surface }
+                    {
+                      borderColor: selected ? T.primary : T.border,
+                      backgroundColor: selected ? T.primary + '10' : T.surface
+                    }
                   ]}
                 >
-                  <Text style={[styles.selectorText, { color: selected ? T.primary : T.text }]}>{asset}</Text>
+                  <Text style={[styles.selectorText, { color: selected ? T.primary : T.text, fontFamily: Fonts.bold }]}>{asset}</Text>
                 </TouchableOpacity>
               );
             })}
           </View>
 
           {/* Balance Display */}
-          <View style={styles.balanceRow}>
-            <Text style={[styles.balanceLabel, { color: T.textMuted }]}>Available Balance:</Text>
-            <TouchableOpacity onPress={() => setAmount(balance.toString())}>
-              <Text style={[styles.balanceValue, { color: T.primary }]}>
-                {balance.toFixed(6)} {cryptoAsset} (Max)
-              </Text>
+          <View style={styles.balanceContainer}>
+            <Text style={[styles.balanceLabel, { color: T.textDim }]}>Available Balance:</Text>
+            <TouchableOpacity onPress={() => { haptics.selection(); setAmount(balance.toString()); }}>
+              <View style={[styles.maxBadge, { borderColor: T.primary + '30', backgroundColor: T.primary + '0a' }]}>
+                <Text style={[styles.maxBadgeText, { color: T.primary }]}>
+                  {balance.toFixed(6)} {cryptoAsset} (Max)
+                </Text>
+              </View>
             </TouchableOpacity>
           </View>
 
-          {/* Select Fiat Payout */}
-          <Text style={[styles.inputLabel, { color: T.text }]}>2. Receive Fiat Payout Currency</Text>
+          {/* Section 2: Payout Currency */}
+          <Text style={[styles.sectionTitle, { color: T.text, marginTop: 12 }]}>2. Receive Payout Currency</Text>
           <View style={styles.selectorRow}>
             {FIAT_CURRENCIES.map((fiat) => {
               const selected = fiatCurrency === fiat;
@@ -208,17 +214,20 @@ export default function FiatWithdrawalScreen({ navigation }: any) {
                   onPress={() => { haptics.selection(); setFiatCurrency(fiat); }}
                   style={[
                     styles.selectorBtn,
-                    { borderColor: selected ? T.primary : T.border, backgroundColor: selected ? T.primary + '12' : T.surface }
+                    {
+                      borderColor: selected ? T.primary : T.border,
+                      backgroundColor: selected ? T.primary + '10' : T.surface
+                    }
                   ]}
                 >
-                  <Text style={[styles.selectorText, { color: selected ? T.primary : T.text }]}>{fiat}</Text>
+                  <Text style={[styles.selectorText, { color: selected ? T.primary : T.text, fontFamily: Fonts.bold }]}>{fiat}</Text>
                 </TouchableOpacity>
               );
             })}
           </View>
 
-          {/* Quantity to withdraw */}
-          <Text style={[styles.inputLabel, { color: T.text }]}>3. Quantity to Sell</Text>
+          {/* Section 3: Sell quantity */}
+          <Text style={[styles.sectionTitle, { color: T.text, marginTop: 20 }]}>3. Quantity to Sell</Text>
           <View style={[styles.inputContainer, { borderColor: T.border, backgroundColor: T.surface }]}>
             <TextInput
               style={[styles.input, { color: T.text }]}
@@ -228,73 +237,98 @@ export default function FiatWithdrawalScreen({ navigation }: any) {
               value={amount}
               onChangeText={setAmount}
             />
-            <Text style={[styles.suffix, { color: T.textMuted }]}>{cryptoAsset}</Text>
+            <Text style={[styles.suffix, { color: T.textDim }]}>{cryptoAsset}</Text>
           </View>
 
           {/* Calculator estimate */}
           <View style={[styles.estimateBox, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
-            <Text style={[styles.estimateLabel, { color: T.textMuted }]}>Estimated Fiat Payout:</Text>
-            <Text style={[styles.estimateValue, { color: T.success }]}>
+            <Text style={[styles.estimateLabel, { color: T.textDim }]}>Estimated Fiat Payout:</Text>
+            <Text style={[styles.estimateValue, { color: T.success, fontFamily: Fonts.bold }]}>
               {fiatEstimate} {fiatCurrency}
             </Text>
           </View>
 
-          {/* Bank details */}
-          <Text style={[styles.inputLabel, { color: T.text }]}>4. Bank Account Details</Text>
+          {/* Section 4: Bank account details */}
+          <Text style={[styles.sectionTitle, { color: T.text, marginTop: 24, marginBottom: 8 }]}>4. Bank Payout Details</Text>
           
-          <Text style={[styles.subLabel, { color: T.textMuted }]}>Account Holder Name *</Text>
-          <TextInput
-            style={[styles.brutalInput, { borderColor: T.border, color: T.text, backgroundColor: T.surface }]}
-            placeholder="John Doe"
-            placeholderTextColor={T.textDim}
-            value={accountName}
-            onChangeText={setAccountName}
-          />
+          <View style={[styles.card, { backgroundColor: T.surface, borderColor: T.border, padding: 16, gap: 14 }]}>
+            
+            <View>
+              <Text style={[styles.subLabel, { color: T.textDim }]}>Account Holder Name *</Text>
+              <TextInput
+                style={[styles.brutalInput, { borderColor: T.border, color: T.text, backgroundColor: T.background }]}
+                placeholder="John Doe"
+                placeholderTextColor={T.textDim}
+                value={accountName}
+                onChangeText={setAccountName}
+              />
+            </View>
 
-          <Text style={[styles.subLabel, { color: T.textMuted }]}>Bank Name *</Text>
-          <TextInput
-            style={[styles.brutalInput, { borderColor: T.border, color: T.text, backgroundColor: T.surface }]}
-            placeholder="e.g. JPMorgan Chase / Emirates NBD"
-            placeholderTextColor={T.textDim}
-            value={bankName}
-            onChangeText={setBankName}
-          />
+            <View>
+              <Text style={[styles.subLabel, { color: T.textDim }]}>Bank Name *</Text>
+              <TextInput
+                style={[styles.brutalInput, { borderColor: T.border, color: T.text, backgroundColor: T.background }]}
+                placeholder="e.g. JPMorgan Chase / Emirates NBD"
+                placeholderTextColor={T.textDim}
+                value={bankName}
+                onChangeText={setBankName}
+              />
+            </View>
 
-          <Text style={[styles.subLabel, { color: T.textMuted }]}>IBAN / Account Number *</Text>
-          <TextInput
-            style={[styles.brutalInput, { borderColor: T.border, color: T.text, backgroundColor: T.surface }]}
-            placeholder="AE000000000000000000000"
-            placeholderTextColor={T.textDim}
-            value={accountNumber}
-            onChangeText={setAccountNumber}
-          />
+            <View>
+              <Text style={[styles.subLabel, { color: T.textDim }]}>IBAN / Account Number *</Text>
+              <TextInput
+                style={[styles.brutalInput, { borderColor: T.border, color: T.text, backgroundColor: T.background }]}
+                placeholder="AE000000000000000000000"
+                placeholderTextColor={T.textDim}
+                value={accountNumber}
+                onChangeText={setAccountNumber}
+              />
+            </View>
 
-          <Text style={[styles.subLabel, { color: T.textMuted }]}>SWIFT / BIC Code (Optional)</Text>
-          <TextInput
-            style={[styles.brutalInput, { borderColor: T.border, color: T.text, backgroundColor: T.surface }]}
-            placeholder="e.g. CHASUS33"
-            placeholderTextColor={T.textDim}
-            value={swiftCode}
-            onChangeText={setSwiftCode}
-          />
+            <View>
+              <Text style={[styles.subLabel, { color: T.textDim }]}>SWIFT / BIC Code (Optional)</Text>
+              <TextInput
+                style={[styles.brutalInput, { borderColor: T.border, color: T.text, backgroundColor: T.background }]}
+                placeholder="e.g. CHASUS33"
+                placeholderTextColor={T.textDim}
+                value={swiftCode}
+                onChangeText={setSwiftCode}
+              />
+            </View>
 
-          <Text style={[styles.subLabel, { color: T.textMuted }]}>Additional Instructions (Optional)</Text>
-          <TextInput
-            style={[styles.brutalInput, { borderColor: T.border, color: T.text, backgroundColor: T.surface, height: 80, textAlignVertical: 'top', paddingVertical: 12 }]}
-            placeholder="e.g. Intermediate bank, specific notes..."
-            placeholderTextColor={T.textDim}
-            multiline
-            value={notes}
-            onChangeText={setNotes}
-          />
+            <View>
+              <Text style={[styles.subLabel, { color: T.textDim }]}>Additional Wire Notes (Optional)</Text>
+              <TextInput
+                style={[
+                  styles.brutalInput, 
+                  { 
+                    borderColor: T.border, 
+                    color: T.text, 
+                    backgroundColor: T.background, 
+                    height: 80, 
+                    textAlignVertical: 'top', 
+                    paddingVertical: 12 
+                  }
+                ]}
+                placeholder="e.g. Intermediary bank routing, memo info..."
+                placeholderTextColor={T.textDim}
+                multiline
+                value={notes}
+                onChangeText={setNotes}
+              />
+            </View>
+          </View>
 
-          <View style={[styles.warningBox, { backgroundColor: T.pending + '10', borderColor: T.pending + '50' }]}>
+          {/* Compliance warnings */}
+          <View style={[styles.warningBox, { backgroundColor: T.pending + '0a', borderColor: T.pending + '40' }]}>
             <Feather name="shield" size={16} color={T.pending} style={{ marginTop: 2 }} />
-            <Text style={[styles.warningText, { color: T.textMuted }]}>
-              Crypto is debited instantly. Double-check your bank credentials before submitting. Manual settlements typically complete within 1-2 business days.
+            <Text style={[styles.warningText, { color: T.textDim }]}>
+              Funds are held in escrow instantly. Verification and wire transfers are processed during business days and typically arrive in 1-2 banking days. Ensure the target account belongs to you.
             </Text>
           </View>
 
+          {/* Submit */}
           <TouchableOpacity
             style={[
               styles.btnSubmit,
@@ -325,28 +359,30 @@ const styles = StyleSheet.create({
   backBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   headerTitle: { fontSize: 18, fontFamily: Fonts.extraBold },
   scrollContent: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 60 },
-  inputLabel: { fontSize: 14, fontFamily: Fonts.extraBold, marginBottom: 12, marginTop: 16 },
-  subLabel: { fontSize: 11, fontFamily: Fonts.extraBold, marginBottom: 6, marginTop: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
-  selectorRow: { flexDirection: 'row', gap: 10, marginBottom: 8 },
-  selectorBtn: { flex: 1, height: 48, borderRadius: 12, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  selectorText: { fontSize: 13, fontFamily: Fonts.extraBold },
-  balanceRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4, marginBottom: 16, paddingHorizontal: 4 },
+  sectionTitle: { fontSize: 14, fontFamily: Fonts.extraBold, marginBottom: 12 },
+  subLabel: { fontSize: 10, fontFamily: Fonts.extraBold, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
+  selectorRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
+  selectorBtn: { flex: 1, height: 48, borderRadius: 12, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  selectorText: { fontSize: 13 },
+  balanceContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingHorizontal: 4 },
   balanceLabel: { fontSize: 12, fontFamily: Fonts.medium },
-  balanceValue: { fontSize: 12, fontFamily: Fonts.bold },
-  inputContainer: { flexDirection: 'row', alignItems: 'center', height: 56, borderRadius: 16, borderWidth: 1.5, paddingHorizontal: 16 },
-  suffix: { fontSize: 16, fontFamily: Fonts.bold, marginLeft: 8 },
-  input: { flex: 1, fontSize: 16, fontFamily: Fonts.bold, padding: 0 },
-  estimateBox: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderRadius: 16, borderWidth: 1.5, marginTop: 16, marginBottom: 8 },
+  maxBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1.5 },
+  maxBadgeText: { fontSize: 11, fontFamily: Fonts.bold },
+  inputContainer: { flexDirection: 'row', alignItems: 'center', height: 56, borderRadius: 16, borderWidth: 2, paddingHorizontal: 16 },
+  suffix: { fontSize: 15, fontFamily: Fonts.bold, marginLeft: 8 },
+  input: { flex: 1, fontSize: 18, fontFamily: Fonts.extraBold, padding: 0 },
+  estimateBox: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderRadius: 16, borderWidth: 2, marginTop: 16 },
   estimateLabel: { fontSize: 13, fontFamily: Fonts.bold },
-  estimateValue: { fontSize: 16, fontFamily: Fonts.extraBold },
-  brutalInput: { height: 48, borderRadius: 12, borderWidth: 1.5, paddingHorizontal: 16, fontSize: 14, fontFamily: Fonts.semiBold, marginBottom: 4 },
-  warningBox: { flexDirection: 'row', gap: 8, padding: 12, borderRadius: 12, borderWidth: 1, marginTop: 20, marginBottom: 24 },
-  warningText: { flex: 1, fontSize: 11, fontFamily: Fonts.medium, lineHeight: 16 },
+  estimateValue: { fontSize: 16 },
+  card: { borderRadius: 16, borderWidth: 2 },
+  brutalInput: { height: 48, borderRadius: 12, borderWidth: 2, paddingHorizontal: 16, fontSize: 14, fontFamily: Fonts.semiBold },
+  warningBox: { flexDirection: 'row', gap: 10, padding: 14, borderRadius: 14, borderWidth: 1.5, marginTop: 20, marginBottom: 24 },
+  warningText: { flex: 1, fontSize: 11, lineHeight: 16 },
   btnSubmit: { height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   btnSubmitText: { fontSize: 15, fontFamily: Fonts.extraBold },
   successContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
   successIconBox: { width: 80, height: 80, borderRadius: 40, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
-  successTitle: { fontSize: 21, fontFamily: Fonts.extraBold, marginBottom: 8, textAlign: 'center' },
+  successTitle: { fontSize: 22, fontFamily: Fonts.extraBold, marginBottom: 8, textAlign: 'center' },
   successSub: { fontSize: 13, fontFamily: Fonts.medium, textAlign: 'center', lineHeight: 20, marginBottom: 28 },
   ticketCard: { paddingVertical: 16, paddingHorizontal: 32, borderRadius: 16, borderWidth: 1.5, alignItems: 'center', marginBottom: 36, width: '100%' },
   ticketLabel: { fontSize: 10, fontFamily: Fonts.extraBold, letterSpacing: 1, marginBottom: 4 },
