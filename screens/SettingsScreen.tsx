@@ -532,61 +532,89 @@ export default function SettingsScreen({ navigation }: any) {
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
-        {/* Profile Card */}
-        <View style={[styles.profileCard, { backgroundColor: isDarkMode ? '#191C1E' : T.surfaceLow }]}>
-          <View style={[styles.profileAvatar, { backgroundColor: T.primary }]}>
-            <Text style={{ color: '#FFF', fontSize: 22, fontWeight: '800' }}>
-              {walletName.charAt(0).toUpperCase()}
-            </Text>
+        {/* Profile Card Redesign */}
+        <View style={[styles.profileHeaderBlock, { backgroundColor: T.surface }]}>
+          <View style={styles.profileHeaderTop}>
+            <View style={[styles.profileAvatarLarge, { backgroundColor: T.primary }]}>
+              <Text style={{ color: '#FFF', fontSize: 28, fontWeight: '800' }}>
+                {walletName.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={[styles.profileNameLarge, { color: T.text }]}>{walletName}</Text>
+                <TouchableOpacity onPress={() => { setNameInput(walletName); setRenameModal(true); }} style={[styles.editNameBtn, { backgroundColor: T.primary + '15' }]}>
+                  <Feather name="edit-2" size={14} color={T.primary} />
+                </TouchableOpacity>
+              </View>
+              <Text style={[styles.profileSubtext, { color: T.textMuted }]}>Tap to edit your wallet name</Text>
+            </View>
           </View>
-          <View style={styles.profileInfo}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={[styles.profileName, { color: T.text }]}>{walletName}</Text>
-              <TouchableOpacity onPress={() => { setNameInput(walletName); setRenameModal(true); }} activeOpacity={0.7}>
-                <Feather name="edit-2" size={14} color={T.textMuted} />
+          
+          <View style={[styles.profileDivider, { backgroundColor: T.border }]} />
+
+          {/* Wallet Address */}
+          <View style={styles.profileDetailRow}>
+            <View style={[styles.profileIconWrap, { backgroundColor: '#627EEA15' }]}>
+              <Feather name="link" size={18} color="#627EEA" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.profileDetailLabel, { color: T.textMuted }]}>Wallet Address ({isTronNetwork ? 'TRX' : 'EVM'})</Text>
+              <Text style={[styles.profileDetailValue, { color: T.text }]} numberOfLines={1}>
+                {primaryAddress ? `${primaryAddress.slice(0, 10)}...${primaryAddress.slice(-8)}` : 'No wallet'}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={copyAddress} style={styles.profileCopyBtn}>
+              <Feather name="copy" size={18} color={T.textMuted} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Email */}
+          {kycEmail ? (
+            <View style={styles.profileDetailRow}>
+              <View style={[styles.profileIconWrap, { backgroundColor: T.success + '15' }]}>
+                <Feather name="mail" size={18} color={T.success} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.profileDetailLabel, { color: T.textMuted }]}>Email Address</Text>
+                <Text style={[styles.profileDetailValue, { color: T.text }]}>{maskEmail(kycEmail)}</Text>
+              </View>
+              {kycStatus === 'verified' && <Feather name="check-circle" size={18} color={T.success} style={{ marginRight: 8 }} />}
+            </View>
+          ) : null}
+
+          {/* UID */}
+          {userUid ? (
+            <View style={styles.profileDetailRow}>
+              <View style={[styles.profileIconWrap, { backgroundColor: '#F59E0B15' }]}>
+                <Feather name="hash" size={18} color="#F59E0B" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.profileDetailLabel, { color: T.textMuted }]}>Unique ID (UID)</Text>
+                <Text style={[styles.profileDetailValue, { color: T.text }]}>{userUid}</Text>
+              </View>
+              <TouchableOpacity onPress={copyUid} style={styles.profileCopyBtn}>
+                <Feather name="copy" size={18} color={T.textMuted} />
               </TouchableOpacity>
             </View>
-            {/* Address row — compact single line */}
-            <TouchableOpacity onPress={copyAddress} activeOpacity={0.7} style={styles.addrRow}>
-              <View style={[styles.addrNetPill, { backgroundColor: isTronNetwork ? '#EF002718' : '#627EEA18' }]}>
-                <View style={[styles.addrNetDot, { backgroundColor: isTronNetwork ? '#EF0027' : '#627EEA' }]} />
-                <Text style={[styles.addrNetLabel, { color: isTronNetwork ? '#EF0027' : '#627EEA' }]}>
-                  {isTronNetwork ? 'TRX' : 'EVM'}
-                </Text>
-              </View>
-              <Text style={[styles.addrText, { color: T.textMuted }]} numberOfLines={1}>
-                {primaryAddress ? `${primaryAddress.slice(0, 6)}...${primaryAddress.slice(-4)}` : 'No wallet'}
+          ) : null}
+
+          {/* Account Type */}
+          <TouchableOpacity onPress={() => setAccountTypeModal(true)} style={styles.profileDetailRowLast}>
+            <View style={[styles.profileIconWrap, { backgroundColor: accountType === 'business' ? T.primary + '15' : T.success + '15' }]}>
+              <Feather name={accountType === 'business' ? 'briefcase' : 'user'} size={18} color={accountType === 'business' ? T.primary : T.success} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.profileDetailLabel, { color: T.textMuted }]}>Account Type</Text>
+              <Text style={[styles.profileDetailValue, { color: accountType === 'business' ? T.primary : T.success }]}>
+                {accountType === 'business' ? 'Business Merchant' : 'Personal Account'}
               </Text>
-              <Feather name="copy" size={12} color={T.textMuted} style={{ opacity: 0.5 }} />
-            </TouchableOpacity>
-
-            {/* Email row if exists */}
-            {kycEmail ? (
-              <View style={styles.emailRow}>
-                <Text style={[styles.emailText, { color: T.textMuted }]}>{maskEmail(kycEmail)}</Text>
-              </View>
-            ) : null}
-
-            {/* UID row */}
-            {userUid ? (
-              <TouchableOpacity onPress={copyUid} activeOpacity={0.7} style={styles.uidRow}>
-                <Text style={[styles.uidText, { color: T.text }]}>UID: {userUid}</Text>
-                <Feather name="copy" size={12} color={T.textMuted} style={{ opacity: 0.5 }} />
-              </TouchableOpacity>
-            ) : null}
-
-            {/* Account Type Badge */}
-            <TouchableOpacity
-              onPress={() => setAccountTypeModal(true)}
-              style={[styles.accountTypeBadge, { backgroundColor: accountType === 'business' ? T.primary + '20' : T.success + '20' }]}
-            >
-              <Feather name={accountType === 'business' ? 'briefcase' : 'user'} size={12} color={accountType === 'business' ? T.primary : T.success} />
-              <Text style={{ fontSize: 11, fontWeight: '800', color: accountType === 'business' ? T.primary : T.success, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                {accountType === 'business' ? 'Business Merchant' : 'Personal'}
-              </Text>
-              <Feather name="chevron-down" size={11} color={accountType === 'business' ? T.primary : T.success} />
-            </TouchableOpacity>
-          </View>
+            </View>
+            <View style={[styles.switchAccountBtn, { backgroundColor: T.background }]}>
+              <Text style={[styles.switchAccountText, { color: T.text }]}>Switch</Text>
+              <Feather name="chevron-right" size={16} color={T.textMuted} />
+            </View>
+          </TouchableOpacity>
         </View>
 
         {/* Holdings with real coin logos */}
@@ -1131,27 +1159,25 @@ const makeStyles = (T: any, insets: any) => StyleSheet.create({
   headerTitle: { fontSize: isSmall ? 16 : 18, fontFamily: Fonts.extraBold, color: T.text, letterSpacing: -0.5 },
   scroll: { paddingHorizontal: isSmall ? 16 : 24, paddingBottom: insets.bottom + 120, paddingTop: 12 },
 
-  profileCard: {
-    flexDirection: 'row', alignItems: 'center', borderRadius: 20,
-    padding: isSmall ? 16 : 20, marginBottom: 28,
-    borderWidth: 1, borderColor: T.surfaceHigh,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3,
+  profileHeaderBlock: {
+    borderRadius: 24, padding: 20, marginBottom: 28, borderWidth: 1,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 4,
   },
-  profileAvatar: { width: isSmall ? 48 : 56, height: isSmall ? 48 : 56, borderRadius: isSmall ? 24 : 28, alignItems: 'center', justifyContent: 'center', marginRight: 14, flexShrink: 0 },
-  profileInfo: { flex: 1, minWidth: 0 },
-  profileName: { fontSize: isSmall ? 16 : 18, fontFamily: Fonts.extraBold, marginBottom: 4, letterSpacing: -0.5 },
-  profileAddr: { fontSize: 12, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', opacity: 0.7 },
-  copyIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  profileHeaderTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 16 },
+  profileAvatarLarge: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
+  profileNameLarge: { fontSize: 22, fontFamily: Fonts.extraBold, letterSpacing: -0.5 },
+  profileSubtext: { fontSize: 13, fontFamily: Fonts.medium, marginTop: 2 },
+  editNameBtn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  profileDivider: { height: 1, marginBottom: 16 },
+  profileDetailRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 14 },
+  profileDetailRowLast: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  profileIconWrap: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
+  profileDetailLabel: { fontSize: 11, fontFamily: Fonts.extraBold, marginBottom: 2, textTransform: 'uppercase', letterSpacing: 0.5 },
+  profileDetailValue: { fontSize: 15, fontFamily: Fonts.semiBold },
+  profileCopyBtn: { padding: 8 },
+  switchAccountBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, gap: 4 },
+  switchAccountText: { fontSize: 12, fontFamily: Fonts.bold },
 
-  addrRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
-  emailRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
-  emailText: { fontSize: 13, fontFamily: Fonts.bold },
-  uidRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
-  uidText: { fontSize: 13, fontFamily: Fonts.bold },
-  addrNetPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, flexShrink: 0 },
-  addrNetDot: { width: 5, height: 5, borderRadius: 3 },
-  addrNetLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
-  addrText: { fontSize: 11, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', flex: 1 },
   accountTypeBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginTop: 8, alignSelf: 'flex-start' },
   accountTypeOption: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 16, marginBottom: 12 },
   accountTypeIconWrap: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
