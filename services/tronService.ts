@@ -452,7 +452,7 @@ function signTronTx(tx: any, privateKey: string): any {
   // ethers v5: _signingKey is a function returning signing key object
   const signingKey = typeof (wallet as any)._signingKey === 'function' 
     ? (wallet as any)._signingKey() 
-    : (wallet as any)._signingKey ?? wallet.signingKey;
+    : (wallet as any)._signingKey ?? (wallet as any).signingKey;
   
   if (!signingKey) {
     throw new Error("Signing key not found in Wallet instance");

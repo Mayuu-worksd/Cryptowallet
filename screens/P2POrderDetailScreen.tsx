@@ -1358,7 +1358,7 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
                           <TouchableOpacity 
                             style={[styles.instBtn, { backgroundColor: T.surfaceHigh, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, flex: 1, height: 32, borderRadius: 8 }]}
                             onPress={() => {
-                              Clipboard.setStringAsync(currentOrder.payment_details || '');
+                              Clipboard.setStringAsync(currentOrder.seller_payment_details || '');
                               Alert.alert('Copied', 'Bank specs copied.');
                             }}
                           >
@@ -1485,8 +1485,8 @@ export default function P2POrderDetailScreen({ navigation, route }: any) {
               <TouchableOpacity 
                 style={[styles.chatShortcutTag, { backgroundColor: T.surfaceLow, borderColor: T.border, borderWidth: 1, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                 onPress={() => {
-                  if (currentOrder.payment_details) {
-                    setChatInput(`Banking specs:\nMethod: ${currentOrder.payment_method}\nSpecs: ${currentOrder.payment_details}`);
+                  if (currentOrder.seller_payment_details) {
+                    setChatInput(`Banking specs:\nMethod: ${currentOrder.payment_method}\nSpecs: ${currentOrder.seller_payment_details}`);
                   } else {
                     Alert.alert('Details Unavailable', 'Please configure bank settings.');
                   }
@@ -2126,11 +2126,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 16,
     padding: 14,
-  },
-  flexRowBetween: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
   },
   instBtn: {
     flex: 1,

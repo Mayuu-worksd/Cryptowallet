@@ -340,7 +340,7 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
               colors={[statusColor, shadeColor(statusColor, -20)]}
               style={styles.glowingIconCircle}
             >
-              <Feather name={statusIcon} size={44} color="#FFF" />
+              <Feather name={statusIcon as any} size={44} color="#FFF" />
             </LinearGradient>
           </View>
           
@@ -526,7 +526,7 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
         ) : (
           <View style={styles.cardPreviewContainer}>
             <LinearGradient
-              colors={activeGradient}
+              colors={activeGradient as any}
               style={[styles.portraitCard, styles.shadowWrapper]}
             >
               <View style={styles.glow} />
@@ -626,16 +626,16 @@ export default function ApplyPhysicalCardScreen({ navigation, route }: any) {
 
         {/* Transparent billing review ledger */}
         {selectedVariant && selectedCountry && (
-          <View style={[styles.orderSummary, { backgroundColor: T.surface, borderColor: T.border }]}>
+          <View style={[styles.billingSummary, { backgroundColor: T.surface, borderColor: T.border }]}>
             <Text style={[styles.sectionTitle, { color: T.textMuted, marginBottom: 12, marginLeft: 0 }]}>BILLING LEDGER</Text>
             {[
               { label: `${selectedVariant.name} Card Minting Fee`, value: cardPriceUSD === 0 ? 'Free' : formatLocalFiat(cardPriceUSD) },
               { label: 'One-time Card Activation Fee', value: activationFeeUSD === 0 ? 'Free' : formatLocalFiat(activationFeeUSD) },
               { label: `Express Dispatch to ${selectedCountry}`, value: formatLocalFiat(shippingFeeUSD) },
             ].map(row => (
-              <View key={row.label} style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: T.textMuted }]}>{row.label}</Text>
-                <Text style={[styles.summaryValue, { color: T.text }]}>{row.value}</Text>
+              <View key={row.label} style={styles.billingSummaryRow}>
+                <Text style={[styles.billingSummaryLabel, { color: T.textMuted }]}>{row.label}</Text>
+                <Text style={[styles.billingSummaryValue, { color: T.text }]}>{row.value}</Text>
               </View>
             ))}
             
@@ -902,10 +902,10 @@ const styles = StyleSheet.create({
   selectorLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   countrySelectorText: { fontSize: 14, fontWeight: '700' },
 
-  orderSummary: { borderRadius: 24, borderWidth: 1, padding: 18, marginBottom: 24 },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
-  summaryLabel: { fontSize: 13, fontWeight: '700' },
-  summaryValue: { fontSize: 13, fontWeight: '800' },
+  billingSummary: { borderRadius: 24, borderWidth: 1, padding: 18, marginBottom: 24 },
+  billingSummaryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
+  billingSummaryLabel: { fontSize: 13, fontWeight: '700' },
+  billingSummaryValue: { fontSize: 13, fontWeight: '800' },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', paddingTop: 14, marginTop: 8, borderTopWidth: 1 },
   totalLabel: { fontSize: 15, fontWeight: '900' },
   totalValue: { fontSize: 18, fontWeight: '900' },

@@ -6,7 +6,7 @@ import Svg, { Polyline, Line, Circle, Defs, LinearGradient as SvgGradient, Stop,
 import { useFocusEffect } from '@react-navigation/native';
 import { useWallet } from '../store/WalletContext';
 import { Theme } from '../constants';
-import { AedSymbol } from '../components/AedSymbol';
+import AedSymbol from '../components/AedSymbol';
 import { p2pService, P2POrder, FIAT_CURRENCIES, PAYMENT_METHODS, getLiveRate, calcPlatformFee } from '../services/merchantService';
 import TransactionLoader from '../components/ui/TransactionLoader';
 import { SUPPORTED_FIAT_CURRENCIES } from '../constants/currencyConfig';

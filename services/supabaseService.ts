@@ -700,6 +700,8 @@ export type WalletProfile = {
   is_dark_mode?:   boolean | null;
   token_balances?: Record<string, number> | null;
   locked_balances?: Record<string, number> | null;
+  user_uuid?:      string;
+  user_uid?:       number;
 };
 
 export const profileService = {
@@ -731,8 +733,8 @@ export const profileService = {
   async upsert(
     walletAddress: string,
     patch: Partial<Omit<WalletProfile, 'wallet_address'>>
-  ): Promise<void> {
-    const { error } = await supabase.rpc('upsert_wallet_profile', {
+  ): Promise<WalletProfile | null> {
+    const { data, error } = await supabase.rpc('upsert_wallet_profile', {
       p_wallet:          walletAddress.toLowerCase(),
       p_name:            patch.wallet_name     ?? null,
       p_account_type:    patch.account_type    ?? null,
@@ -745,6 +747,23 @@ export const profileService = {
       p_locked_balances: patch.locked_balances ?? null,
     });
     if (error) throw error;
+    if (!data) return null;
+    const profile = { ...data };
+    if (typeof profile.token_balances === 'string') {
+      try {
+        profile.token_balances = JSON.parse(profile.token_balances);
+      } catch {
+        profile.token_balances = null;
+      }
+    }
+    if (typeof profile.locked_balances === 'string') {
+      try {
+        profile.locked_balances = JSON.parse(profile.locked_balances);
+      } catch {
+        profile.locked_balances = null;
+      }
+    }
+    return profile as WalletProfile;
   },
 };
 

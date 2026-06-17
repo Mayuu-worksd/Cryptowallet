@@ -71,6 +71,17 @@ export default function CloudBackupScreen({ navigation }: any) {
   // Guard to trigger haptic success only once when password becomes fully valid
   const [hasTriggeredSuccessHaptic, setHasTriggeredSuccessHaptic] = useState(false);
 
+  // 1. Password Checks
+  const isLengthValid = password.length >= 8;
+  const hasUppercase = /[A-Z]/.test(password);
+  const hasLowercase = /[a-z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+  const hasSpecial = /[!@#$%^&*]/.test(password);
+
+  const isPasswordValid = isLengthValid && hasUppercase && hasLowercase && hasNumber && hasSpecial;
+  const passwordsMatch = password === confirmPassword && confirmPassword !== '';
+  const canContinue = isPasswordValid && passwordsMatch;
+
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
 
@@ -87,17 +98,6 @@ export default function CloudBackupScreen({ navigation }: any) {
     }
     prevPasswordValid.current = isPasswordValid;
   }, [isPasswordValid, step]);
-
-  // 1. Password Checks
-  const isLengthValid = password.length >= 8;
-  const hasUppercase = /[A-Z]/.test(password);
-  const hasLowercase = /[a-z]/.test(password);
-  const hasNumber = /[0-9]/.test(password);
-  const hasSpecial = /[!@#$%^&*]/.test(password);
-
-  const isPasswordValid = isLengthValid && hasUppercase && hasLowercase && hasNumber && hasSpecial;
-  const passwordsMatch = password === confirmPassword && confirmPassword !== '';
-  const canContinue = isPasswordValid && passwordsMatch;
 
   // Trigger haptic feedback when transition to fully valid happens
   useEffect(() => {

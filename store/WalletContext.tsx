@@ -98,6 +98,7 @@ type WalletContextType = {
   transactions: Transaction[];
   balanceVisible: boolean;
   isSyncing: boolean;
+  formatOrderFiat: (amountLocal: number, currencyCode: string) => string;
   toggleBalanceVisible: () => void;
   pinEnabled: boolean;
   addTx: (tx: Omit<Transaction, 'id' | 'date'>) => string;
@@ -137,6 +138,9 @@ type WalletContextType = {
   isGlobalLoading: boolean;
   setGlobalLoading: (loading: boolean, message?: string) => void;
   globalLoadingMessage: string;
+  userUuid: string;
+  userUid: string;
+  kycEmail: string;
 };
 
 const WalletContext = createContext<WalletContextType>({} as WalletContextType);
@@ -161,6 +165,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [walletAddress,    setWalletAddress]    = useState('');
   const [tronAddress,      setTronAddress]      = useState('');
   const [walletName,       setWalletNameState]  = useState('Account 1');
+  const [userUuid,         setUserUuid]         = useState('');
+  const [userUid,          setUserUid]          = useState('');
+  const [kycEmail,         setKycEmail]         = useState('');
   const [ethBalance,       setEthBalance]       = useState('0.0');
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);
   const [hasWallet,        setHasWallet]        = useState(false);
@@ -235,7 +242,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         if (type === 'business') {
           const { businessKYCService } = await import('../services/merchantService');
           const record = await businessKYCService.getStatus(walletAddress);
-          setKycStatus(record?.status ?? null);
+          setKycStatus(record?.status === 'approved' ? 'verified' : (record?.status ?? null));
         } else {
           const record = await kycService.getStatus(walletAddress);
           setKycStatus(record?.status ?? null);
@@ -257,7 +264,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const setEnabledCardCurrencies = useCallback(async (currencies: Record<string, boolean>) => {
     setEnabledCardCurrenciesState(currencies);
     await AsyncStorage.setItem('cw_card_currencies', JSON.stringify(currencies));
-    if (walletAddress) profileService.upsert(walletAddress, { card_currencies: currencies }).catch(() => {});
+    if (walletAddress) profileService.upsert(walletAddress, { card_currencies: currencies } as any).catch(() => {});
   }, [walletAddress]);
 
   const lockBalance = useCallback((token: string, amount: number) => {
@@ -335,7 +342,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       } else {
         if ((balancesRef.current?.TRX ?? 0) > 0 && merged.TRX === 0) merged.TRX = balancesRef.current.TRX;
         if (((balancesRef.current as any)?.USDT_TRC20 ?? 0) > 0 && (merged as any).USDT_TRC20 === 0) (merged as any).USDT_TRC20 = (balancesRef.current as any).USDT_TRC20;
-        if (((balancesRef.current as any)?.USDC_TRC20 ?? 0) > 0 && (merged as any).USDC_TRC20 === 0) (merged as any).USDC_TRC20 = (balancesRef.current as any).USDC_TRC20;
+        if (((balancesRef.current as any)?.USDC_TRC20 ?? 0) > 0 && (merged as any).USDC_TRC20 === 0) (merged as any).USDC_TRC20 = (merged as any).USDC_TRC20;
       }
       setEthBalance(Number(merged.ETH || 0).toFixed(6));
       ethBalanceRef.current = Number(merged.ETH || 0).toFixed(6);
@@ -449,10 +456,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       if (accountType === 'business') {
         const { businessKYCService } = await import('../services/merchantService');
         const record = await businessKYCService.getStatus(walletAddress);
-        setKycStatus(record?.status ?? null);
+        setKycStatus(record?.status === 'approved' ? 'verified' : (record?.status ?? null));
       } else {
         const record = await kycService.getStatus(walletAddress);
         setKycStatus(record?.status ?? null);
+        if (record?.email) {
+          setKycEmail(record.email);
+        } else {
+          setKycEmail('');
+        }
       }
     } catch (_e) {}
   }, [walletAddress, accountType]);
@@ -672,8 +684,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
                       name: n.network_name,
                       type: n.is_mainnet ? 'Mainnet' : 'Testnet',
                       color: n.network_name.includes('TRON') ? '#FF0013' : (n.network_name.includes('Solana') ? '#14F195' : '#627EEA'),
-                      symbol: n.symbol
-                    };
+                      symbol: n.symbol,
+                      iconUrl: n.icon_url ?? '',
+                    } as any;
                  }
                });
             }
@@ -681,9 +694,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             // KYC
             const acctType = savedAccountType ?? 'personal';
             if (acctType === 'business') {
-              setKycStatus(bizRecord?.status ?? null);
+              setKycStatus(bizRecord?.status === 'approved' ? 'verified' : (bizRecord?.status as any ?? null));
             } else {
-              setKycStatus(kycRecord?.status ?? null);
+              setKycStatus((kycRecord?.status as any) === 'approved' ? 'verified' : (kycRecord?.status as any ?? null));
+              if (kycRecord?.email) {
+                setKycEmail(kycRecord.email);
+              }
             }
 
             // ── Restore profile fields from Supabase (wins over AsyncStorage) ──
@@ -691,8 +707,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
             // Restore network preference
             if (kycRecord) {} // placeholder to keep block structure
-            const profileForStartup = await profileService.get(address).catch(() => null);
+            let profileForStartup = await profileService.get(address).catch(() => null);
+            if (!profileForStartup) {
+              const defaultName = savedName || `Wallet ${address.slice(-4).toUpperCase()}`;
+              profileForStartup = await profileService.upsert(address, { wallet_name: defaultName }).catch(() => null);
+            }
             if (profileForStartup) {
+              if (profileForStartup.user_uuid) {
+                setUserUuid(profileForStartup.user_uuid);
+              }
+              if (profileForStartup.user_uid) {
+                setUserUid(profileForStartup.user_uid.toString());
+              }
               if (profileForStartup.network) {
                 setNetworkState(profileForStartup.network);
               }
@@ -1323,6 +1349,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         // ── Restore KYC status (deferred type check) ──
         // We will update this again after profile fetch if they are business
         setKycStatus(kycRecord?.status ?? null);
+        if (kycRecord?.email) {
+          setKycEmail(kycRecord.email);
+        } else {
+          setKycEmail('');
+        }
 
         // ── Restore wallet name from Supabase profile or keep address-based default ──
         // Restore wallet profile (name, account type, p2p prefs) from Supabase
@@ -1332,12 +1363,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             const name = profile.wallet_name || `Wallet ${data.address.slice(-4).toUpperCase()}`;
             setWalletNameState(name);
             await storageService.saveWalletName(name);
+            if (profile.user_uuid) {
+              setUserUuid(profile.user_uuid);
+            }
+            if (profile.user_uid) {
+              setUserUid(profile.user_uid.toString());
+            }
             if (profile.account_type) {
               setAccountTypeState(profile.account_type);
               setAccountTypeSet(true);
               await AsyncStorage.setItem('cw_account_type', profile.account_type);
               if (profile.account_type === 'business') {
-                setKycStatus(bizRecord?.status ?? null);
+                setKycStatus(bizRecord?.status === 'approved' ? 'verified' : (bizRecord?.status ?? null));
               }
             }
             if (profile.p2p_country) {
@@ -1375,7 +1412,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             const defaultName = `Wallet ${data.address.slice(-4).toUpperCase()}`;
             setWalletNameState(defaultName);
             await storageService.saveWalletName(defaultName);
-            profileService.upsert(data.address, { wallet_name: defaultName }).catch(() => {});
+            const newProfile = await profileService.upsert(data.address, { wallet_name: defaultName }).catch(() => null);
+            if (newProfile) {
+              if (newProfile.user_uuid) setUserUuid(newProfile.user_uuid);
+              if (newProfile.user_uid) setUserUid(newProfile.user_uid.toString());
+            }
           }
         } catch {
           const defaultName = `Wallet ${data.address.slice(-4).toUpperCase()}`;
@@ -2257,7 +2298,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       if (msg) setGlobalLoadingMessage(msg);
       setIsGlobalLoading(loading);
     },
-    globalLoadingMessage
+    globalLoadingMessage,
+    userUuid,
+    userUid,
+    kycEmail
   }), [
     isDarkMode, toggleTheme, accountType, accountTypeSet, setAccountType,
     p2pCountry, p2pCurrency, setP2PPreferences, lockedBalance, lockBalance, unlockBalance, resetLockedBalances, creditP2PBalance,
@@ -2271,7 +2315,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     sendETH, sendCrypto, topupCard, spendCard, toggleFreezeCard, reportLostCard, applySwapBalances, switchNetwork,
     fiatCurrency, setFiatCurrency, formatFiat, convertFiat, fiatSymbol, formatOrderFiat,
     isGlobalLoading,
-    globalLoadingMessage
+    globalLoadingMessage,
+    userUuid,
+    userUid,
+    kycEmail
   ]);
 
   return (

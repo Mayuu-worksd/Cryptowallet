@@ -23,6 +23,13 @@ export type BusinessKYC = {
   country: string;
   director_name?: string;
   director_nationality?: string;
+  website?: string;
+  incorporation_date?: string;
+  director_id_type?: string;
+  director_dob?: string;
+  director_address?: string;
+  ubo_name?: string;
+  ubo_ownership?: string;
   document_url?: string;
   director_id_url?: string;
   status: BusinessKYCStatus;

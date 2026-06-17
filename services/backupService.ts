@@ -61,7 +61,7 @@ async function pbkdf2Fallback(password: Uint8Array, salt: Uint8Array, iterations
   const sHex = '0x' + bytesToHex(salt);
 
   // PRF = HMAC-SHA256
-  const prf = (key: string, data: string) => utils.computeHmac('sha256', key, data);
+  const prf = (key: string, data: string) => utils.computeHmac(utils.SupportedAlgorithm.sha256, key, data);
 
   const hLen = 32; // SHA-256 output bytes
   const blocks = Math.ceil(keyLen / hLen);
@@ -97,9 +97,9 @@ async function deriveKeys(
   const subtle = getSubtle();
 
   if (subtle) {
-    const baseKey = await subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
+    const baseKey = await subtle.importKey('raw', enc.encode(password) as any, 'PBKDF2', false, ['deriveBits']);
     const bits = await subtle.deriveBits(
-      { name: 'PBKDF2', salt, iterations: 210_000, hash: 'SHA-256' },
+      { name: 'PBKDF2', salt: salt as any, iterations: 210_000, hash: 'SHA-256' },
       baseKey,
       512,
     );
@@ -127,8 +127,8 @@ async function encryptMnemonic(mnemonic: string, encKeyHex: string, ivBytes: Uin
   const subtle = getSubtle();
 
   if (subtle) {
-    const encKey = await subtle.importKey('raw', hexToBytes(encKeyHex), 'AES-GCM', false, ['encrypt']);
-    const cipherBuf = await subtle.encrypt({ name: 'AES-GCM', iv: ivBytes }, encKey, enc.encode(mnemonic));
+    const encKey = await subtle.importKey('raw', hexToBytes(encKeyHex) as any, 'AES-GCM', false, ['encrypt']);
+    const cipherBuf = await subtle.encrypt({ name: 'AES-GCM', iv: ivBytes as any }, encKey, enc.encode(mnemonic) as any);
     return bytesToHex(new Uint8Array(cipherBuf));
   }
 
@@ -148,8 +148,8 @@ async function decryptMnemonic(ciphertextHex: string, encKeyHex: string, ivBytes
   const subtle = getSubtle();
 
   if (!ciphertextHex.startsWith('xor:') && subtle) {
-    const encKey = await subtle.importKey('raw', hexToBytes(encKeyHex), 'AES-GCM', false, ['decrypt']);
-    const plainBuf = await subtle.decrypt({ name: 'AES-GCM', iv: ivBytes }, encKey, hexToBytes(ciphertextHex));
+    const encKey = await subtle.importKey('raw', hexToBytes(encKeyHex) as any, 'AES-GCM', false, ['decrypt']);
+    const plainBuf = await subtle.decrypt({ name: 'AES-GCM', iv: ivBytes as any }, encKey, hexToBytes(ciphertextHex) as any);
     return new TextDecoder().decode(plainBuf);
   }
 

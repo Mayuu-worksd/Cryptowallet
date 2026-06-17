@@ -241,7 +241,7 @@ const DetailModal = memo(({ tx, T, cfg, network, onClose, formatFiat }: {
           <View style={modal.hero}>
             <View style={[modal.heroIconWrap, { borderColor: cfg.color + '40' }]}>
               <View style={[modal.heroIcon, { backgroundColor: cfg.bg }]}>
-                {React.cloneElement(cfg.icon as React.ReactElement, { size: 28 })}
+                {React.cloneElement(cfg.icon as any, { size: 28 })}
               </View>
             </View>
             <Text style={[modal.heroAmount, { color: amtColor }]}>

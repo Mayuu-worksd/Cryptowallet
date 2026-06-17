@@ -12,7 +12,6 @@ import Toast from '../components/Toast';
 import { CurrencySelector } from '../components/CurrencySelector';
 import { CurrencyText } from '../components/CurrencyText';
 import { haptics } from '../utils/haptics';
-import CurrencyDisplay from '../components/CurrencyDisplay';
 import { supabase } from '../services/supabaseClient';
 import { P2POrder } from '../services/merchantService';
 import { SUPPORTED_FIAT_CURRENCIES } from '../constants/currencyConfig';

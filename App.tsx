@@ -1428,7 +1428,7 @@ export default function App() {
           const update = await Updates.checkForUpdateAsync();
           if (update.isAvailable) {
             await Updates.fetchUpdateAsync();
-            await notificationService.notifyAppUpdateAvailable(update.manifest?.version || 'Latest');
+            await notificationService.notifyAppUpdateAvailable((update.manifest as any)?.version || 'Latest');
           }
         }
       } catch (_error) {

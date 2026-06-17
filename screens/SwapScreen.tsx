@@ -75,8 +75,21 @@ export default function SwapScreen({ navigation, route }: any) {
   const walletRef = useRef(walletAddress);
   walletRef.current = walletAddress;
 
-  const [sellToken, setSellToken] = useState(() => route?.params?.fromToken || 'ETH');
-  const [buyToken, setBuyToken]   = useState('USDT');
+  const [sellToken, setSellToken] = useState(() => {
+    const available = NETWORK_TOKENS[network] ?? ['ETH', 'USDT', 'USDC'];
+    const paramToken = route?.params?.fromToken;
+    if (paramToken && available.includes(paramToken)) {
+      return paramToken;
+    }
+    return available[0] ?? 'ETH';
+  });
+  const [buyToken, setBuyToken]   = useState(() => {
+    const available = NETWORK_TOKENS[network] ?? ['ETH', 'USDT', 'USDC'];
+    const paramToken = route?.params?.fromToken;
+    const initialSell = (paramToken && available.includes(paramToken)) ? paramToken : (available[0] ?? 'ETH');
+    const firstDifferent = available.find(t => t !== initialSell);
+    return firstDifferent ?? (initialSell === 'USDT' ? 'ETH' : 'USDT');
+  });
   const [sellAmount, setSellAmount] = useState('');
   const sellAmtNum = parseFloat(sellAmount) || 0;
   

@@ -394,7 +394,7 @@ export default function SendScreen({ navigation, route }: any) {
                   <Text style={styles.detailLabel}>{row.label}</Text>
                   <View style={{ alignItems: 'flex-end' }}>
                     <Text style={styles.detailValue}>{row.value}</Text>
-                    {row.sub !== null && row.sub !== undefined && row.sub !== '' ? (
+                    {row.sub !== null && row.sub !== undefined ? (
                       <CurrencyText amount={row.sub as number} code={fiatCurrency} style={styles.detailSub} />
                     ) : null}
                   </View>
@@ -557,7 +557,7 @@ export default function SendScreen({ navigation, route }: any) {
                 <ActivityIndicator size="small" color={T.primary} />
               ) : (
                 <Text style={styles.gasValue}>
-                  {gasEth ? `${parseFloat(gasEth).toFixed(6)} ${coinLabel} (${fiatGas})` : '—'}
+                  {gasEth ? `${parseFloat(gasEth).toFixed(6)} ${coinLabel} (${fiatSymbol} ${formatFiat(fiatGasNum)})` : '—'}
                 </Text>
               )}
            </View>

@@ -65,8 +65,8 @@ export async function checkAndRequestApproval({
   const amtWei   = ethers.utils.parseUnits(amount, DECIMALS[tokenSymbol] ?? 18);
   const contract = new ethers.Contract(tokenAddress, ERC20_ABI, wallet);
 
-  const allowance: bigint = await contract.allowance(wallet.address, spenderAddress);
-  if (allowance >= amtWei) return true;
+  const allowance: ethers.BigNumber = await contract.allowance(wallet.address, spenderAddress);
+  if (allowance.gte(amtWei)) return true;
 
   onStatus?.(`Approving ${tokenSymbol}...`);
   const tx = await contract.approve(spenderAddress, ethers.constants.MaxUint256);

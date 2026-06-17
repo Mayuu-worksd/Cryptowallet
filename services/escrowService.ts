@@ -135,8 +135,8 @@ export const escrowService = {
 
       // Approve escrow contract to spend tokens first
       const tokenContract = new ethers.Contract(tokenAddr, ERC20_ABI, wallet);
-      const allowance: bigint = await tokenContract.allowance(wallet.address, ESCROW_CONTRACTS[network]);
-      if (allowance < rawAmount) {
+      const allowance: ethers.BigNumber = await tokenContract.allowance(wallet.address, ESCROW_CONTRACTS[network]);
+      if (allowance.lt(rawAmount)) {
         const approveTx = await tokenContract.approve(ESCROW_CONTRACTS[network], rawAmount);
         await approveTx.wait(1);
       }

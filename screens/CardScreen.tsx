@@ -979,13 +979,13 @@ export default function CardScreen({ navigation, route }: any) {
 
             {/* Ledger Transactions */}
             <View style={[styles.premiumWidget, { backgroundColor: T.surface, borderColor: T.border, padding: 6 }, styles.shadowWrapper]}>
-              {cardTransactions.filter(tx => tx.type !== 'topup').length === 0 ? (
+              {cardTransactions.filter((tx: any) => tx.type !== 'topup').length === 0 ? (
                 <View style={styles.emptyActivity}>
                   <Feather name="activity" size={24} color={T.textDim} />
                   <Text style={[styles.emptyTextTitle, { color: T.textDim }]}>No transactions recorded</Text>
                 </View>
               ) : (
-                cardTransactions.filter(tx => tx.type !== 'topup').slice(0, 5).map((tx, i, arr) => (
+                cardTransactions.filter((tx: any) => tx.type !== 'topup').slice(0, 5).map((tx: any, i: number, arr: any[]) => (
                   <TouchableOpacity
                     key={tx.id}
                     style={[

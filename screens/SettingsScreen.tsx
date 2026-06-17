@@ -80,7 +80,8 @@ export default function SettingsScreen({ navigation }: any) {
     walletName, setWalletName,
     deleteWallet, enterReadOnlyMode, isDarkMode, toggleTheme, balances, ethBalance,
     pinEnabled, refreshPinEnabled, isReadOnly, kycStatus, accountType, setAccountType,
-    p2pCountry, p2pCurrency, setP2PPreferences, setFiatCurrency, formatFiat, fiatCurrency
+    p2pCountry, p2pCurrency, setP2PPreferences, setFiatCurrency, formatFiat, fiatCurrency,
+    userUuid, userUid, kycEmail
   } = useWallet() as any;
   const isTronNetwork = network === 'TRON' || network === 'TRON Nile';
   // Show EVM address on EVM networks, TRON address on TRON networks
@@ -191,6 +192,21 @@ export default function SettingsScreen({ navigation }: any) {
     await Clipboard.setStringAsync(secondaryAddress);
     haptics.success();
     showToast(isTronNetwork ? 'EVM address copied!' : 'TRON address copied!', 'success');
+  };
+
+  const copyUid = async () => {
+    if (!userUid) return;
+    await Clipboard.setStringAsync(userUid);
+    haptics.success();
+    showToast('User ID copied!', 'success');
+  };
+
+  const maskEmail = (email: string) => {
+    if (!email) return '';
+    const [local, domain] = email.split('@');
+    if (!local || !domain) return email;
+    if (local.length <= 2) return `${local.charAt(0)}***@${domain}`;
+    return `${local.slice(0, 3)}***@${domain}`;
   };
 
   const handleRename = async () => {
@@ -543,6 +559,22 @@ export default function SettingsScreen({ navigation }: any) {
               </Text>
               <Feather name="copy" size={12} color={T.textMuted} style={{ opacity: 0.5 }} />
             </TouchableOpacity>
+
+            {/* Email row if exists */}
+            {kycEmail ? (
+              <View style={styles.emailRow}>
+                <Text style={[styles.emailText, { color: T.textMuted }]}>{maskEmail(kycEmail)}</Text>
+              </View>
+            ) : null}
+
+            {/* UID row */}
+            {userUid ? (
+              <TouchableOpacity onPress={copyUid} activeOpacity={0.7} style={styles.uidRow}>
+                <Text style={[styles.uidText, { color: T.text }]}>UID: {userUid}</Text>
+                <Feather name="copy" size={12} color={T.textMuted} style={{ opacity: 0.5 }} />
+              </TouchableOpacity>
+            ) : null}
+
             {/* Account Type Badge */}
             <TouchableOpacity
               onPress={() => setAccountTypeModal(true)}
@@ -1112,6 +1144,10 @@ const makeStyles = (T: any, insets: any) => StyleSheet.create({
   copyIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 
   addrRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
+  emailRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  emailText: { fontSize: 13, fontFamily: Fonts.bold },
+  uidRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  uidText: { fontSize: 13, fontFamily: Fonts.bold },
   addrNetPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, flexShrink: 0 },
   addrNetDot: { width: 5, height: 5, borderRadius: 3 },
   addrNetLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },

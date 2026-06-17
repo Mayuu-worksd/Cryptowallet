@@ -210,7 +210,7 @@ export default function VCCCardDetailScreen({ navigation }: any) {
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
 
         {/* ── Card Visual ── */}
-        <LinearGradient colors={gradientColors} style={s.cardVisual} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+        <LinearGradient colors={gradientColors as any} style={s.cardVisual} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
           {/* Network logo */}
           <View style={s.cardTop}>
             <View style={s.chipIcon}>

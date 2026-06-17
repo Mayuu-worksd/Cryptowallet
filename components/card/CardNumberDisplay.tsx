@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  AppState, ActivityIndicator,
+  AppState, ActivityIndicator, Alert,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { haptics } from '../../utils/haptics';
@@ -89,7 +89,7 @@ export function CardCredentialsWidget({
       haptics.error();
       // Use standard alert to inform user that credentials need to be fetched
       // since the context currently holds the fallback masked version.
-      alert('Secure credentials unavailable. Please pull down to refresh the card data.');
+      Alert.alert('Unavailable', 'Secure credentials unavailable. Please pull down to refresh the card data.');
       return;
     }
 
