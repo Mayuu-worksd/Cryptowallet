@@ -330,12 +330,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       };
       if (isTronNet) {
         if ((balancesRef.current?.ETH ?? 0) > 0 && merged.ETH === 0) merged.ETH = balancesRef.current.ETH;
-        if ((balancesRef.current?.USDT_ERC20 ?? 0) > 0 && merged.USDT_ERC20 === 0) merged.USDT_ERC20 = balancesRef.current.USDT_ERC20;
-        if ((balancesRef.current?.USDC_ERC20 ?? 0) > 0 && merged.USDC_ERC20 === 0) merged.USDC_ERC20 = balancesRef.current.USDC_ERC20;
+        if (((balancesRef.current as any)?.USDT_ERC20 ?? 0) > 0 && (merged as any).USDT_ERC20 === 0) (merged as any).USDT_ERC20 = (balancesRef.current as any).USDT_ERC20;
+        if (((balancesRef.current as any)?.USDC_ERC20 ?? 0) > 0 && (merged as any).USDC_ERC20 === 0) (merged as any).USDC_ERC20 = (balancesRef.current as any).USDC_ERC20;
       } else {
         if ((balancesRef.current?.TRX ?? 0) > 0 && merged.TRX === 0) merged.TRX = balancesRef.current.TRX;
-        if ((balancesRef.current?.USDT_TRC20 ?? 0) > 0 && merged.USDT_TRC20 === 0) merged.USDT_TRC20 = balancesRef.current.USDT_TRC20;
-        if ((balancesRef.current?.USDC_TRC20 ?? 0) > 0 && merged.USDC_TRC20 === 0) merged.USDC_TRC20 = balancesRef.current.USDC_TRC20;
+        if (((balancesRef.current as any)?.USDT_TRC20 ?? 0) > 0 && (merged as any).USDT_TRC20 === 0) (merged as any).USDT_TRC20 = (balancesRef.current as any).USDT_TRC20;
+        if (((balancesRef.current as any)?.USDC_TRC20 ?? 0) > 0 && (merged as any).USDC_TRC20 === 0) (merged as any).USDC_TRC20 = (balancesRef.current as any).USDC_TRC20;
       }
       setEthBalance(Number(merged.ETH || 0).toFixed(6));
       ethBalanceRef.current = Number(merged.ETH || 0).toFixed(6);
@@ -743,6 +743,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
               const cvv = String(100 + (cvvBuf[0] % 900));
               
               const [expMonth, expYear] = vcc ? vcc.expiry_mm_yy.split('/') : ['12', '28'];
+              const variant = vcc ? variants.find(v => v.id === vcc.card_variant) : null;
               dbCardService.saveCredentials(address, num, cvv, {
                 expiry_month: expMonth ?? '12',
                 expiry_year: expYear ?? '28',
@@ -1263,7 +1264,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         design: 'dark',
       });
       setTransactions([]);
-        setMarketActive(active);
 
         // Load commission rates
         await commissionService.loadRates();

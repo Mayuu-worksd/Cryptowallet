@@ -78,6 +78,7 @@ export default function SwapScreen({ navigation, route }: any) {
   const [sellToken, setSellToken] = useState(() => route?.params?.fromToken || 'ETH');
   const [buyToken, setBuyToken]   = useState('USDT');
   const [sellAmount, setSellAmount] = useState('');
+  const sellAmtNum = parseFloat(sellAmount) || 0;
   
   const [quote, setQuote] = useState<SwapQuote | null>(null);
   const [swapStatus, setSwapStatus] = useState('');
