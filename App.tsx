@@ -135,6 +135,9 @@ import CardScreen from "./screens/CardScreen";
 import PortfolioScreen from "./screens/PortfolioScreen";
 import HistoryScreen from "./screens/HistoryScreen";
 import SettingsScreen from "./screens/SettingsScreen";
+import FiatDepositScreen from "./screens/FiatDepositScreen";
+import FiatWithdrawalScreen from "./screens/FiatWithdrawalScreen";
+import AccountStatementScreen from "./screens/AccountStatementScreen";
 import CreateWalletScreen from "./screens/CreateWalletScreen";
 import ImportWalletScreen from "./screens/ImportWalletScreen";
 import LandingScreen from "./screens/LandingScreen";
@@ -1067,6 +1070,9 @@ function MobileNavigator() {
             <Stack.Screen name="Swap" component={SwapScreen} />
             <Stack.Screen name="History" component={HistoryScreen} />
             <Stack.Screen name="Assets" component={PortfolioScreen} />
+            <Stack.Screen name="FiatDeposit" component={FiatDepositScreen} />
+            <Stack.Screen name="FiatWithdrawal" component={FiatWithdrawalScreen} />
+            <Stack.Screen name="AccountStatement" component={AccountStatementScreen} />
             <Stack.Screen name="Portfolio" component={PortfolioScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
             <Stack.Screen name="Profile" component={SettingsScreen} />
@@ -1257,6 +1263,12 @@ function WebApp() {
         return <PortfolioScreen navigation={nav} route={route} />;
       case "History":
         return <HistoryScreen navigation={nav} route={route} />;
+      case "FiatDeposit":
+        return <FiatDepositScreen navigation={nav} route={route} />;
+      case "FiatWithdrawal":
+        return <FiatWithdrawalScreen navigation={nav} route={route} />;
+      case "AccountStatement":
+        return <AccountStatementScreen navigation={nav} route={route} />;
       case "Profile":
       case "Settings":
         return <SettingsScreen navigation={nav} route={route} />;

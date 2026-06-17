@@ -980,3 +980,154 @@ export const adminAlertsService = {
     }
   }
 };
+
+// ─── Fiat Crypto Requests & Ledger Service ────────────────────────────────────
+
+export interface FiatCryptoRequest {
+  id: string;
+  ticket_id: string;
+  wallet_address: string;
+  user_uuid: string;
+  type: 'deposit' | 'withdrawal';
+  fiat_currency: string;
+  crypto_asset: string;
+  amount: number;
+  crypto_amount?: number | null;
+  payment_proof_url?: string | null;
+  bank_details?: {
+    accountName: string;
+    bankName: string;
+    accountNumber: string;
+    swiftCode?: string;
+    notes?: string;
+  } | null;
+  status: 'pending' | 'under_review' | 'approved' | 'rejected' | 'completed';
+  admin_notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LedgerEntry {
+  id: string;
+  user_uuid: string;
+  wallet_address: string;
+  transaction_id?: string | null;
+  ticket_id: string;
+  credit_entry: number;
+  debit_entry: number;
+  asset: string;
+  status: 'pending' | 'completed' | 'failed';
+  created_at: string;
+}
+
+export const fiatRequestService = {
+  async uploadProof(
+    walletAddress: string,
+    fileUri: string,
+    mimeType: string = 'image/jpeg',
+  ): Promise<string> {
+    const addr        = walletAddress.toLowerCase().replace('0x', '');
+    const ext         = mimeType.split('/')[1] ?? 'jpg';
+    const storagePath = `proofs/${addr}/${Date.now()}.${ext}`;
+    const uploadUrl   = `${SUPABASE_URL}/storage/v1/object/payment-proofs/${storagePath}`;
+
+    const attempt = async () => {
+      const base64 = await FileSystem.readAsStringAsync(fileUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      const binaryStr = atob(base64);
+      const bytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+
+      const response = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: {
+          Authorization:  `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': mimeType,
+          'x-upsert':     'true',
+        },
+        body: bytes,
+      });
+
+      if (!response.ok) {
+        const body = await response.text().catch(() => '');
+        throw new Error(`Upload failed (${response.status}): ${body}`);
+      }
+    };
+
+    let lastError: any;
+    for (let i = 0; i < 3; i++) {
+      try {
+        await attempt();
+        return storagePath;
+      } catch (e: any) {
+        lastError = e;
+        if (i < 2) await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+      }
+    }
+    throw lastError;
+  },
+
+  async submitDeposit(
+    walletAddress: string,
+    fiatCurrency: string,
+    cryptoAsset: string,
+    amount: number,
+    proofPath: string,
+  ): Promise<any> {
+    const { data, error } = await supabase
+      .from('fiat_crypto_requests')
+      .insert({
+        wallet_address: walletAddress.toLowerCase(),
+        type: 'deposit',
+        fiat_currency: fiatCurrency,
+        crypto_asset: cryptoAsset,
+        amount,
+        payment_proof_url: proofPath,
+        status: 'pending'
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async submitWithdrawal(
+    walletAddress: string,
+    cryptoAsset: string,
+    fiatCurrency: string,
+    amount: number,
+    bankDetails: any,
+  ): Promise<any> {
+    const { data, error } = await supabase.rpc('submit_fiat_withdrawal', {
+      p_wallet_address: walletAddress.toLowerCase(),
+      p_crypto_asset: cryptoAsset,
+      p_fiat_currency: fiatCurrency,
+      p_amount: amount,
+      p_bank_details: bankDetails
+    });
+    if (error) throw error;
+    return data;
+  },
+
+  async getRequests(walletAddress: string): Promise<FiatCryptoRequest[]> {
+    const { data, error } = await supabase
+      .from('fiat_crypto_requests')
+      .select('*')
+      .eq('wallet_address', walletAddress.toLowerCase())
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data ?? [];
+  },
+
+  async getLedgerEntries(walletAddress: string): Promise<LedgerEntry[]> {
+    const { data, error } = await supabase
+      .from('ledger_entries')
+      .select('*')
+      .eq('wallet_address', walletAddress.toLowerCase())
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data ?? [];
+  },
+};
+

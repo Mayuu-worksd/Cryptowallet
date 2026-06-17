@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useRe
 import { DeviceEventEmitter } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useWallet } from './WalletContext';
+import { supabase } from '../services/supabaseClient';
 
 export interface AppNotification {
   id: string;
@@ -57,6 +58,62 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     });
     return () => subscription.remove();
   }, [STORAGE_KEY]);
+
+  // Set up Supabase real-time channel to listen for status changes
+  useEffect(() => {
+    if (!walletAddress) return;
+
+    const channel = supabase
+      .channel(`fiat_requests_changes_${walletAddress}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'fiat_crypto_requests',
+          filter: `wallet_address=eq.${walletAddress.toLowerCase()}`
+        },
+        (payload) => {
+          const updated = payload.new;
+          const old = payload.old;
+          
+          if (updated && old && updated.status !== old.status) {
+            let title = '';
+            let body = '';
+            
+            const isDeposit = updated.type === 'deposit';
+            const action = isDeposit ? 'deposit' : 'withdrawal';
+            
+            if (updated.status === 'under_review') {
+              title = `🔍 Request Under Review`;
+              body = `Your fiat ${action} ticket ${updated.ticket_id} is now under review.`;
+            } else if (updated.status === 'approved') {
+              title = `✅ Request Approved`;
+              body = `Your fiat ${action} ticket ${updated.ticket_id} has been approved.`;
+            } else if (updated.status === 'completed') {
+              title = `💰 Settlement Completed!`;
+              body = `Your fiat ${action} ticket ${updated.ticket_id} is completed and settled.`;
+            } else if (updated.status === 'rejected') {
+              title = `❌ Request Rejected`;
+              body = `Your fiat ${action} ticket ${updated.ticket_id} was rejected. Note: ${updated.admin_notes || 'No reason provided.'}`;
+            }
+
+            if (title && body) {
+              addNotification({
+                title,
+                body,
+                type: 'history'
+              });
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [walletAddress]);
 
   const loadNotifications = async () => {
     try {
