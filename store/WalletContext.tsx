@@ -141,6 +141,7 @@ type WalletContextType = {
   userUuid: string;
   userUid: string;
   kycEmail: string;
+  adminNetworks: any[];
 };
 
 const WalletContext = createContext<WalletContextType>({} as WalletContextType);
@@ -194,6 +195,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   });
   const [network,         setNetworkState]  = useState(DEFAULT_NETWORK);
   const [transactions,    setTransactions]  = useState<Transaction[]>([]);
+  const [adminNetworks,   setAdminNetworks] = useState<any[]>([]);
   const [balances, setBalances] = useState<Record<string, number>>(
     Object.fromEntries(Object.keys(SUPPORTED_TOKENS).map(k => [k, 0]))
   );
@@ -673,6 +675,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
             // Inject Dynamic Networks from Admin Dashboard
             if (dbNetworksRes?.data && dbNetworksRes.data.length > 0) {
+               setAdminNetworks(dbNetworksRes.data);
                const { NETWORKS, NETWORK_INFO } = await import('../constants');
                dbNetworksRes.data.forEach((n: any) => {
                  NETWORKS[n.network_name] = n.rpc_url;
@@ -2301,7 +2304,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     globalLoadingMessage,
     userUuid,
     userUid,
-    kycEmail
+    kycEmail,
+    adminNetworks
   }), [
     isDarkMode, toggleTheme, accountType, accountTypeSet, setAccountType,
     p2pCountry, p2pCurrency, setP2PPreferences, lockedBalance, lockBalance, unlockBalance, resetLockedBalances, creditP2PBalance,
@@ -2318,7 +2322,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     globalLoadingMessage,
     userUuid,
     userUid,
-    kycEmail
+    kycEmail,
+    adminNetworks
   ]);
 
   return (

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Theme } from '../constants';
+import { Theme, Fonts } from '../constants';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   Platform, Vibration, Animated, StatusBar, ActivityIndicator,
@@ -9,7 +9,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
-import { parseQRPayload } from './ReceiveScreen';
+import { parseQRPayload, parseUIDQRPayload } from './ReceiveScreen';
 
 const WINDOW_SIZE = 260;
 const CORNER_SIZE = 36;
@@ -26,11 +26,12 @@ export default function ScanScreen({ navigation }: any) {
   const [scanInfo, setScanInfo]   = useState('');
   const [camReady, setCamReady]   = useState(false);
   const [showCam, setShowCam]     = useState(false);
+  // Track what type was detected for the hint badge
+  const [detectedType, setDetectedType] = useState<'wallet' | 'payment' | null>(null);
 
   // useFocusEffect: mount camera only when screen focused, destroy on leave
   useFocusEffect(
     useCallback(() => {
-      // Small delay so the screen transition finishes before camera mounts
       const t = setTimeout(() => setShowCam(true), 400);
       return () => {
         clearTimeout(t);
@@ -39,6 +40,7 @@ export default function ScanScreen({ navigation }: any) {
         setScanned(false);
         setLastScan('');
         setScanInfo('');
+        setDetectedType(null);
       };
     }, [])
   );
@@ -100,14 +102,28 @@ export default function ScanScreen({ navigation }: any) {
 
     const trimmed = data.trim();
 
-    // Check specific token URI schemes
+    // ── 1. Try UID Payment QR first (highest priority for internal transfers) ──
+    const uidPayload = parseUIDQRPayload(trimmed);
+    if (uidPayload) {
+      setDetectedType('payment');
+      setLastScan(`UID:${uidPayload.uid}`);
+      setScanInfo('Payment QR detected');
+      setTimeout(() => navigation.navigate('Send', {
+        scannedUid: uidPayload.uid,
+        scannedUidName: uidPayload.name,
+        scannedUidAccountType: uidPayload.accountType,
+      }), 600);
+      return;
+    }
+
+    setDetectedType('wallet');
+
+    // ── 2. Token URI schemes ──
     if (trimmed.toLowerCase().startsWith('bitcoin:')) {
       const addr = trimmed.slice(8).split('?')[0];
       setLastScan(addr);
       setTimeout(() => navigation.navigate('Send', {
-        scannedAddress: addr,
-        scannedNetwork: 'Bitcoin Network',
-        symbol: 'BTC'
+        scannedAddress: addr, scannedNetwork: 'Bitcoin Network', symbol: 'BTC'
       }), 600);
       return;
     }
@@ -115,9 +131,7 @@ export default function ScanScreen({ navigation }: any) {
       const addr = trimmed.slice(7).split('?')[0];
       setLastScan(addr);
       setTimeout(() => navigation.navigate('Send', {
-        scannedAddress: addr,
-        scannedNetwork: 'Solana Network',
-        symbol: 'SOL'
+        scannedAddress: addr, scannedNetwork: 'Solana Network', symbol: 'SOL'
       }), 600);
       return;
     }
@@ -125,9 +139,7 @@ export default function ScanScreen({ navigation }: any) {
       const addr = trimmed.slice(5).split('?')[0];
       setLastScan(addr);
       setTimeout(() => navigation.navigate('Send', {
-        scannedAddress: addr,
-        scannedNetwork: 'TRON Nile',
-        symbol: 'TRX'
+        scannedAddress: addr, scannedNetwork: 'TRON Nile', symbol: 'TRX'
       }), 600);
       return;
     }
@@ -135,9 +147,7 @@ export default function ScanScreen({ navigation }: any) {
       const addr = trimmed.slice(5).split('?')[0];
       setLastScan(addr);
       setTimeout(() => navigation.navigate('Send', {
-        scannedAddress: addr,
-        scannedNetwork: 'Ethereum',
-        symbol: 'USDT'
+        scannedAddress: addr, scannedNetwork: 'Ethereum', symbol: 'USDT'
       }), 600);
       return;
     }
@@ -145,9 +155,7 @@ export default function ScanScreen({ navigation }: any) {
       const addr = trimmed.slice(5).split('?')[0];
       setLastScan(addr);
       setTimeout(() => navigation.navigate('Send', {
-        scannedAddress: addr,
-        scannedNetwork: 'Ethereum',
-        symbol: 'USDC'
+        scannedAddress: addr, scannedNetwork: 'Ethereum', symbol: 'USDC'
       }), 600);
       return;
     }
@@ -171,78 +179,65 @@ export default function ScanScreen({ navigation }: any) {
       return;
     }
 
-    // Direct plain address detection with correct network and token preselection
+    // ── 3. Plain address detection ──
     if (/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(trimmed)) {
       setLastScan(trimmed);
       setTimeout(() => navigation.navigate('Send', {
-        scannedAddress: trimmed,
-        scannedNetwork: 'TRON Nile',
-        symbol: 'TRX'
+        scannedAddress: trimmed, scannedNetwork: 'TRON Nile', symbol: 'TRX'
       }), 600);
       return;
     }
     if (/^(1|3|bc1)[a-zA-HJ-NP-Z0-9]{25,62}$/.test(trimmed)) {
       setLastScan(trimmed);
       setTimeout(() => navigation.navigate('Send', {
-        scannedAddress: trimmed,
-        scannedNetwork: 'Bitcoin Network',
-        symbol: 'BTC'
+        scannedAddress: trimmed, scannedNetwork: 'Bitcoin Network', symbol: 'BTC'
       }), 600);
       return;
     }
     if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(trimmed)) {
       setLastScan(trimmed);
       setTimeout(() => navigation.navigate('Send', {
-        scannedAddress: trimmed,
-        scannedNetwork: 'Solana Network',
-        symbol: 'SOL'
+        scannedAddress: trimmed, scannedNetwork: 'Solana Network', symbol: 'SOL'
       }), 600);
       return;
     }
     if (/^[a-zA-Z0-9_-]{48}$/.test(trimmed)) {
       setLastScan(trimmed);
       setTimeout(() => navigation.navigate('Send', {
-        scannedAddress: trimmed,
-        scannedNetwork: 'TON Network',
-        symbol: 'TON'
+        scannedAddress: trimmed, scannedNetwork: 'TON Network', symbol: 'TON'
       }), 600);
       return;
     }
     if (/^0x[0-9a-fA-F]{64}$/.test(trimmed)) {
       setLastScan(trimmed);
       setTimeout(() => navigation.navigate('Send', {
-        scannedAddress: trimmed,
-        scannedNetwork: 'Sui Network',
-        symbol: 'SUI'
+        scannedAddress: trimmed, scannedNetwork: 'Sui Network', symbol: 'SUI'
       }), 600);
       return;
     }
     if (/^r[0-9a-zA-Z]{24,34}$/.test(trimmed)) {
       setLastScan(trimmed);
       setTimeout(() => navigation.navigate('Send', {
-        scannedAddress: trimmed,
-        scannedNetwork: 'Ripple Ledger',
-        symbol: 'XRP'
+        scannedAddress: trimmed, scannedNetwork: 'Ripple Ledger', symbol: 'XRP'
       }), 600);
       return;
     }
     if (/^0x[0-9a-fA-F]{40}$/.test(trimmed)) {
       setLastScan(trimmed);
       setTimeout(() => navigation.navigate('Send', {
-        scannedAddress: trimmed,
-        scannedNetwork: 'Ethereum',
-        symbol: 'ETH'
+        scannedAddress: trimmed, scannedNetwork: 'Ethereum', symbol: 'ETH'
       }), 600);
       return;
     }
 
+    // ── 4. JSON wallet QR fallback ──
     processQRData(data);
   };
 
   const processQRData = (data: string) => {
     try {
       const result = parseQRPayload(data);
-      if (!result) { setScanInfo('Unrecognised QR'); setScanned(false); return; }
+      if (!result) { setScanInfo('Unrecognised QR'); setScanned(false); setDetectedType(null); return; }
       setLastScan(result.address);
       if (result.network !== appNetwork) setScanInfo(`Network mismatch: ${result.network}`);
       setTimeout(() => navigation.navigate('Send', {
@@ -253,17 +248,27 @@ export default function ScanScreen({ navigation }: any) {
     } catch {
       setScanInfo('Invalid QR format');
       setScanned(false);
+      setDetectedType(null);
     }
   };
+
+  // Hint text based on scan state
+  const hintText = scanned
+    ? detectedType === 'payment' ? '⚡ PAYMENT QR DETECTED' : '✓ WALLET QR DETECTED'
+    : 'SCAN TO PAY';
+
+  const hintColor = scanned
+    ? detectedType === 'payment' ? '#F59E0B' : '#00C853'
+    : '#FFF';
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
 
-      {/* Black background always — never shows blue */}
+      {/* Black background always */}
       <View style={StyleSheet.absoluteFillObject} />
 
-      {/* Camera — only rendered after focus + delay, destroyed on blur */}
+      {/* Camera */}
       {showCam && (
         <CameraView
           style={StyleSheet.absoluteFillObject}
@@ -275,7 +280,7 @@ export default function ScanScreen({ navigation }: any) {
         />
       )}
 
-      {/* Loading overlay — shown until camera is ready */}
+      {/* Loading overlay */}
       {!camReady && (
         <View style={[StyleSheet.absoluteFillObject, styles.loadingOverlay]}>
           <ActivityIndicator size="large" color="#FF3B3B" />
@@ -301,7 +306,25 @@ export default function ScanScreen({ navigation }: any) {
             <View style={styles.overlaySide} />
           </View>
           <View style={styles.overlayBottom}>
-            <Text style={styles.scanHint}>{scanned ? '✓ QR DETECTED' : 'ALIGN QR CODE IN FRAME'}</Text>
+            {/* Type indicator pills when detected */}
+            {scanned && detectedType && (
+              <View style={[
+                styles.typeIndicator,
+                { backgroundColor: detectedType === 'payment' ? 'rgba(245,158,11,0.2)' : 'rgba(0,200,83,0.2)' }
+              ]}>
+                <Feather
+                  name={detectedType === 'payment' ? 'zap' : 'link'}
+                  size={13}
+                  color={detectedType === 'payment' ? '#F59E0B' : '#00C853'}
+                />
+                <Text style={[styles.typeIndicatorText, { color: detectedType === 'payment' ? '#F59E0B' : '#00C853' }]}>
+                  {detectedType === 'payment' ? 'Payment QR' : 'Wallet QR'}
+                </Text>
+              </View>
+            )}
+
+            <Text style={[styles.scanHint, { color: hintColor }]}>{hintText}</Text>
+
             {!!scanInfo && (
               <View style={styles.infoPill}>
                 <MaterialIcons name="info-outline" size={13} color="#FFF" />
@@ -311,11 +334,26 @@ export default function ScanScreen({ navigation }: any) {
             {scanned && (
               <TouchableOpacity
                 style={styles.rescanBtn}
-                onPress={() => { setScanned(false); setLastScan(''); setScanInfo(''); }}
+                onPress={() => { setScanned(false); setLastScan(''); setScanInfo(''); setDetectedType(null); }}
               >
                 <Feather name="refresh-cw" size={14} color="#FFF" />
                 <Text style={styles.rescanText}>Scan Again</Text>
               </TouchableOpacity>
+            )}
+
+            {/* Bottom mode hint */}
+            {!scanned && (
+              <View style={styles.modesRow}>
+                <View style={styles.modePill}>
+                  <Feather name="zap" size={10} color="#F59E0B" />
+                  <Text style={styles.modePillText}>Payment QR</Text>
+                </View>
+                <View style={styles.modeDivider} />
+                <View style={styles.modePill}>
+                  <Feather name="link" size={10} color="#627EEA" />
+                  <Text style={styles.modePillText}>Wallet QR</Text>
+                </View>
+              </View>
             )}
           </View>
         </View>
@@ -351,11 +389,11 @@ const styles = StyleSheet.create({
   overlayTop:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)' },
   overlayMiddle:  { flexDirection: 'row', height: WINDOW_SIZE },
   overlaySide:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)' },
-  overlayBottom:  { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', alignItems: 'center', paddingTop: 32, gap: 14 },
+  overlayBottom:  { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', alignItems: 'center', paddingTop: 28, gap: 12 },
   scanWindow:     { width: WINDOW_SIZE, height: WINDOW_SIZE },
   corner:         { position: 'absolute', width: CORNER_SIZE, height: CORNER_SIZE },
   scanLine:       { position: 'absolute', left: 8, right: 8, height: 2, backgroundColor: '#FF3B3B', opacity: 0.9 },
-  scanHint:       { color: '#FFF', fontSize: 12, fontWeight: '800', letterSpacing: 1.5, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 18, paddingVertical: 8, borderRadius: 100 },
+  scanHint:       { fontSize: 12, fontWeight: '800', letterSpacing: 1.5, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 18, paddingVertical: 8, borderRadius: 100 },
   infoPill:       { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(0,0,0,0.7)', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20 },
   infoPillText:   { color: '#FFF', fontSize: 12, fontWeight: '600' },
   rescanBtn:      { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(255,255,255,0.12)', paddingHorizontal: 22, paddingVertical: 11, borderRadius: 100 },
@@ -363,4 +401,12 @@ const styles = StyleSheet.create({
   header:         { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 16 },
   iconBtn:        { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' },
   headerTitle:    { color: '#FFF', fontSize: 12, fontWeight: '900', letterSpacing: 2 },
+  // Type indicator (shown on scan)
+  typeIndicator:  { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20 },
+  typeIndicatorText: { fontSize: 12, fontWeight: '700' },
+  // Mode pills (shown before scan)
+  modesRow:       { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },
+  modePill:       { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  modePillText:   { color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: '600' },
+  modeDivider:    { width: 1, height: 12, backgroundColor: 'rgba(255,255,255,0.3)' },
 });

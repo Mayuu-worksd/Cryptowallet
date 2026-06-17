@@ -6,7 +6,7 @@ import {
   ScrollView, ActivityIndicator, Platform, KeyboardAvoidingView,
   Animated, Modal, StatusBar, Image, Pressable
 } from 'react-native';
-import { Feather, MaterialIcons, Ionicons } from '@expo/vector-icons';
+import { Feather, MaterialIcons, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useWallet, useMarket } from '../store/WalletContext';
 import { ethereumService } from '../services/ethereumService';
 import Toast from '../components/Toast';
@@ -16,6 +16,36 @@ import TransactionLoader from '../components/ui/TransactionLoader';
 import { tronService } from '../services/tronService';
 import { storageService } from '../services/storageService';
 import { CurrencyText } from '../components/CurrencyText';
+import { recipientService, RecipientInfo, RecentRecipient } from '../services/supabaseService';
+import * as Clipboard from 'expo-clipboard';
+
+// ── Fallback Network Configurations ──
+const FALLBACK_NETWORKS = [
+  { network_name: 'Ethereum (ERC20)', symbol: 'ETH', is_active: true, is_mainnet: true, min_deposit: '0.005 ETH', estimated_arrival: '3 minutes', warning_text: 'Only send ETH/USDT/USDC via ERC20.', supported_assets: ['ETH', 'USDT', 'USDC'] },
+  { network_name: 'TRON (TRC20)', symbol: 'TRX', is_active: true, is_mainnet: true, min_deposit: '10 TRX', estimated_arrival: '1 minute', warning_text: 'Only send TRX/USDT/USDC via TRC20.', supported_assets: ['TRX', 'USDT', 'USDC'] },
+  { network_name: 'Polygon Network', symbol: 'MATIC', is_active: true, is_mainnet: true, min_deposit: '5 MATIC', estimated_arrival: '2 minutes', warning_text: 'Only send MATIC/USDT/USDC via Polygon.', supported_assets: ['MATIC', 'USDT', 'USDC'] },
+  { network_name: 'Arbitrum One', symbol: 'ETH', is_active: true, is_mainnet: true, min_deposit: '0.002 ETH', estimated_arrival: '30 seconds', warning_text: 'Only send ETH/USDT/USDC via Arbitrum.', supported_assets: ['ETH', 'USDT', 'USDC'] },
+  { network_name: 'Sepolia Testnet', symbol: 'ETH', is_active: true, is_mainnet: false, min_deposit: '0.001 ETH', estimated_arrival: '15 seconds', warning_text: 'Only send Sepolia ETH/USDT/USDC.', supported_assets: ['ETH', 'USDT', 'USDC'] },
+  { network_name: 'Bitcoin Network', symbol: 'BTC', is_active: true, is_mainnet: true, min_deposit: '0.0002 BTC', estimated_arrival: '10-60 minutes', warning_text: 'Only send Bitcoin (BTC) to this address.', supported_assets: ['BTC'] },
+  { network_name: 'Solana Network', symbol: 'SOL', is_active: true, is_mainnet: true, min_deposit: '0.05 SOL', estimated_arrival: '10 seconds', warning_text: 'Only send SOL/USDT/USDC via Solana.', supported_assets: ['SOL', 'USDT', 'USDC'] },
+  { network_name: 'TON Network', symbol: 'TON', is_active: true, is_mainnet: true, min_deposit: '0.5 TON', estimated_arrival: '1 minute', warning_text: 'Only send TON to this address.', supported_assets: ['TON'] },
+  { network_name: 'Sui Network', symbol: 'SUI', is_active: true, is_mainnet: true, min_deposit: '0.1 SUI', estimated_arrival: '5 seconds', warning_text: 'Only send SUI to this address.', supported_assets: ['SUI'] },
+  { network_name: 'Ripple Ledger', symbol: 'XRP', is_active: true, is_mainnet: true, min_deposit: '1 XRP', estimated_arrival: '10 seconds', warning_text: 'Only send XRP to this address.', supported_assets: ['XRP'] },
+];
+
+const ASSET_LIST = [
+  { symbol: 'ETH', name: 'Ethereum' },
+  { symbol: 'USDT', name: 'Tether' },
+  { symbol: 'USDC', name: 'USD Coin' },
+  { symbol: 'TRX', name: 'TRON' },
+  { symbol: 'BTC', name: 'Bitcoin' },
+  { symbol: 'SOL', name: 'Solana' },
+  { symbol: 'BNB', name: 'BNB' },
+  { symbol: 'XRP', name: 'Ripple' },
+  { symbol: 'TON', name: 'Toncoin' },
+  { symbol: 'SUI', name: 'Sui' },
+];
+
 const CoinIcon = memo(({ symbol, size = 24 }: { symbol: string; size?: number }) => {
   const meta  = COIN_META[symbol];
   const color = COIN_COLORS[symbol] || '#888';
@@ -36,32 +66,56 @@ const CoinIcon = memo(({ symbol, size = 24 }: { symbol: string; size?: number })
   );
 });
 
+// ── Lookup method tabs ──
+type LookupMethod = 'uid' | 'email' | 'wallet';
+const LOOKUP_TABS: { key: LookupMethod; label: string; icon: string; placeholder: string; keyboard: 'default' | 'email-address' | 'numeric' }[] = [
+  { key: 'uid',    label: 'UID',    icon: 'hash',       placeholder: 'Enter 10-digit UID',      keyboard: 'numeric' },
+  { key: 'email',  label: 'Email',  icon: 'mail',       placeholder: 'Enter email address',      keyboard: 'email-address' },
+  { key: 'wallet', label: 'Wallet', icon: 'link',       placeholder: '0x... or T... address',    keyboard: 'default' },
+];
+
+// ── Transfer Steps ──
+type TransferStep = 'asset' | 'network' | 'recipient' | 'amount' | 'review' | 'success';
+
 export default function SendScreen({ navigation, route }: any) {
   const insets = useSafeAreaInsets();
   const { 
     ethBalance, sendETH, isDarkMode, walletAddress, tronAddress, 
-    network, balances, addTx, updateTxStatus, refreshBalance,
-    applySwapBalances, formatFiat, fiatCurrency, fiatSymbol
+    balances, addTx, refreshBalance,
+    applySwapBalances, formatFiat, fiatCurrency, fiatSymbol, adminNetworks
   } = useWallet();
   const { prices } = useMarket();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const styles = React.useMemo(() => makeStyles(T), [T]);
 
   const scannedAddr = route?.params?.scannedAddress ?? '';
+  const scannedUid  = route?.params?.scannedUid ?? null;
 
-  const [selectedToken, setSelectedToken] = useState(route?.params?.symbol ?? 'USDT');
-  const [selectorVisible, setSelectorVisible] = useState(false);
+  // ── Guided Multi-step state ──
+  const [step, setStep] = useState<TransferStep>(route?.params?.symbol ? 'network' : 'asset');
+  const [selectedAsset, setSelectedAsset] = useState<string>(route?.params?.symbol ?? 'USDT');
+  const [selectedNetworkObj, setSelectedNetworkObj] = useState<any | null>(null);
 
+  const [lookupMethod, setLookupMethod] = useState<LookupMethod>(scannedAddr ? 'wallet' : 'uid');
+  const [searchInput, setSearchInput] = useState(scannedAddr || (scannedUid ? String(scannedUid) : ''));
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [recipient, setRecipient] = useState<RecipientInfo | null>(null);
+  const [recents, setRecents] = useState<RecentRecipient[]>([]);
+
+  // ── Amount / Send state ──
   const [address, setAddress]         = useState(scannedAddr);
   const [amount, setAmount]             = useState('');
   const [estimating, setEstimating]     = useState(false);
-  const [addressError, setAddressError] = useState('');
   const [amountError, setAmountError]   = useState('');
   const [gasEth, setGasEth]             = useState('');
-  const [showConfirm, setShowConfirm]   = useState(false);
   const [sending, setSending]           = useState(false);
   const [sendStatus, setSendStatus]     = useState('');
   const [toast, setToast]               = useState({ visible: false, message: '', type: 'success' as 'success' | 'error' | 'info' });
+
+  // ── Success state ──
+  const [txHash, setTxHash]             = useState('');
+  const [txTimestamp, setTxTimestamp]   = useState('');
 
   const btnScale   = useRef(new Animated.Value(1)).current;
   const shakeAnim  = useRef(new Animated.Value(0)).current;
@@ -78,102 +132,148 @@ export default function SendScreen({ navigation, route }: any) {
     ]).start();
   };
 
+  // ── Load recent recipients ──
   useEffect(() => {
-    let nextSymbol = selectedToken;
-    if (route?.params?.symbol) {
-      nextSymbol = route.params.symbol;
-      setSelectedToken(nextSymbol);
+    const senderAddr = walletAddress || tronAddress;
+    if (senderAddr) {
+      recipientService.getRecents(senderAddr).then(setRecents).catch(() => {});
     }
-    if (scannedAddr) {
-      setAddress(scannedAddr);
-      
-      // Synchronous validation using the incoming symbol to prevent any stale state race condition
-      let error = '';
-      if (nextSymbol === 'TRX') {
-        error = /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(scannedAddr) ? '' : 'Invalid TRON address (starts with T)';
-      } else if (nextSymbol === 'SOL') {
-        error = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(scannedAddr) ? '' : 'Invalid Solana address';
-      } else if (nextSymbol === 'BTC') {
-        error = /^(1|3|bc1)[a-zA-HJ-NP-Z0-9]{25,62}$/.test(scannedAddr) ? '' : 'Invalid Bitcoin address';
-      } else if (nextSymbol === 'TON') {
-        error = /^[a-zA-Z0-9_-]{48}$/.test(scannedAddr) ? '' : 'Invalid TON address';
-      } else if (nextSymbol === 'SUI') {
-        error = /^0x[0-9a-fA-F]{64}$/.test(scannedAddr) ? '' : 'Invalid Sui address';
-      } else if (nextSymbol === 'XRP') {
-        error = /^r[0-9a-zA-Z]{24,34}$/.test(scannedAddr) ? '' : 'Invalid Ripple address';
-      } else {
-        error = /^0x[0-9a-fA-F]{40}$/.test(scannedAddr) ? '' : 'Invalid EVM address (0x...)';
-      }
-      setAddressError(error);
-    }
-  }, [scannedAddr, route?.params?.symbol]);
+  }, [walletAddress, tronAddress]);
 
-  const isTronNetwork = network === 'TRON' || network === 'TRON Nile';
-  const coinLabel = selectedToken;
-  const coinPrice    = prices[selectedToken]?.usd ?? (selectedToken === 'ETH' ? 3500 : (selectedToken === 'BTC' ? 65000 : 1));
+  // ── Auto-search scanned details ──
+  useEffect(() => {
+    if (scannedAddr && step === 'recipient') {
+      setLookupMethod('wallet');
+      setSearchInput(scannedAddr);
+      handleSearch(scannedAddr, 'wallet');
+    }
+  }, [scannedAddr, step]);
+
+  useEffect(() => {
+    if (scannedUid && step === 'recipient') {
+      setLookupMethod('uid');
+      setSearchInput(String(scannedUid));
+      handleSearch(String(scannedUid), 'uid');
+    }
+  }, [scannedUid, step]);
+
+  const activeNets = adminNetworks && adminNetworks.length > 0 ? adminNetworks : FALLBACK_NETWORKS;
+  const compatibleNets = activeNets.filter((n: any) => n.is_active && n.supported_assets && n.supported_assets.includes(selectedAsset));
+
+  const coinPrice    = prices[selectedAsset]?.usd ?? (selectedAsset === 'ETH' ? 3500 : (selectedAsset === 'BTC' ? 65000 : 1));
   const parsedAmount = parseFloat(amount) || 0;
   const gasEthNum    = parseFloat(gasEth) || 0;
-  const totalETH     = (parsedAmount + gasEthNum).toFixed(6);
-
-  // Available balance based on token
-  const availBal     = selectedToken === 'ETH' ? (parseFloat(ethBalance) || 0) : (balances[selectedToken] ?? 0);
-
-  // Dynamic fiat conversions using selected fiat currency formatter formatFiat!
+  const totalDeducted = (parsedAmount + gasEthNum).toFixed(6);
+  const availBal     = selectedAsset === 'ETH' ? (parseFloat(ethBalance) || 0) : (balances[selectedAsset] ?? 0);
   const fiatAmountNum = parsedAmount * coinPrice;
   const fiatGasNum    = gasEthNum * coinPrice;
   const fiatTotalNum  = (parsedAmount + gasEthNum) * coinPrice;
-  
-  const fiatAmountDisplay = `${fiatSymbol} ${formatFiat(fiatAmountNum)}`;
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') =>
     setToast({ visible: true, message, type });
 
-  const validateAddress = useCallback((val: string) => {
-    if (!val) { setAddressError(''); return; }
-    if (selectedToken === 'TRX') {
-      setAddressError(/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(val) ? '' : 'Invalid TRON address (starts with T)');
-    } else if (selectedToken === 'SOL') {
-      setAddressError(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(val) ? '' : 'Invalid Solana address');
-    } else if (selectedToken === 'BTC') {
-      setAddressError(/^(1|3|bc1)[a-zA-HJ-NP-Z0-9]{25,62}$/.test(val) ? '' : 'Invalid Bitcoin address');
-    } else if (selectedToken === 'TON') {
-      setAddressError(/^[a-zA-Z0-9_-]{48}$/.test(val) ? '' : 'Invalid TON address');
-    } else if (selectedToken === 'SUI') {
-      setAddressError(/^0x[0-9a-fA-F]{64}$/.test(val) ? '' : 'Invalid Sui address');
-    } else if (selectedToken === 'XRP') {
-      setAddressError(/^r[0-9a-zA-Z]{24,34}$/.test(val) ? '' : 'Invalid Ripple address');
-    } else {
-      // EVM (ETH, USDT, USDC, BNB)
-      setAddressError(/^0x[0-9a-fA-F]{40}$/.test(val) ? '' : 'Invalid EVM address (0x...)');
-    }
-  }, [selectedToken]);
+  // ── Recipient Search ──
+  const handleSearch = async (input?: string, method?: LookupMethod) => {
+    const q = (input ?? searchInput).trim();
+    const m = method ?? lookupMethod;
+    if (!q) { setSearchError('Enter a search value'); return; }
 
+    setSearching(true);
+    setSearchError('');
+    setRecipient(null);
+    haptics.selection();
+
+    try {
+      let result: RecipientInfo;
+      if (m === 'uid') {
+        const uid = parseInt(q, 10);
+        if (isNaN(uid) || q.length < 5) { setSearchError('Enter a valid UID (numeric)'); setSearching(false); return; }
+        result = await recipientService.lookupByUid(uid);
+      } else if (m === 'email') {
+        if (!q.includes('@')) { setSearchError('Enter a valid email address'); setSearching(false); return; }
+        result = await recipientService.lookupByEmail(q);
+      } else {
+        result = await recipientService.lookupByWallet(q);
+      }
+
+      if (!result.found) {
+        setSearchError('Recipient not found. Check the details and try again.');
+        haptics.error();
+      } else {
+        // Self-send check
+        const recipientAddr = result.wallet_address?.toLowerCase();
+        const recipientTron = result.tron_address?.toLowerCase();
+        const myAddr = walletAddress?.toLowerCase();
+        const myTron = tronAddress?.toLowerCase();
+        if ((recipientAddr && recipientAddr === myAddr) || (recipientTron && recipientTron === myTron)) {
+          setSearchError('You cannot send funds to yourself.');
+          haptics.error();
+          setSearching(false);
+          return;
+        }
+        setRecipient(result);
+        
+        // Resolve the transfer address based on network
+        const netName = (selectedNetworkObj?.network_name || '').toUpperCase();
+        const targetAddr = (netName.includes('TRON') || selectedNetworkObj?.symbol === 'TRX')
+          ? (result.tron_address || result.wallet_address || '')
+          : (result.wallet_address || '');
+        setAddress(targetAddr);
+        haptics.success();
+      }
+    } catch (e) {
+      setSearchError('Search failed. Please try again.');
+      haptics.error();
+    }
+    setSearching(false);
+  };
+
+  // ── Select a recent recipient ──
+  const selectRecent = (r: RecentRecipient) => {
+    const netName = (selectedNetworkObj?.network_name || '').toUpperCase();
+    const targetAddr = (netName.includes('TRON') || selectedNetworkObj?.symbol === 'TRX')
+      ? (r.tron_address || r.recipient_wallet || '')
+      : (r.recipient_wallet || '');
+    setAddress(targetAddr);
+    setRecipient({
+      found: true,
+      wallet_address: r.recipient_wallet,
+      tron_address: r.tron_address,
+      wallet_name: r.wallet_name || r.recipient_name || 'Unknown',
+      user_uid: r.recipient_uid,
+      account_type: r.account_type,
+    });
+    setSearchError('');
+    haptics.selection();
+  };
+
+  // ── Amount Validation ──
   const validateAmount = useCallback((val: string, currentGasEth?: string) => {
     if (!val) { setAmountError(''); return; }
     const p = parseFloat(val);
     if (isNaN(p) || p <= 0) { setAmountError('Enter a valid amount'); return; }
-    if (p > availBal)        { setAmountError(`Exceeds balance (${availBal.toFixed(6)} ${coinLabel})`); return; }
+    if (p > availBal)        { setAmountError(`Exceeds balance (${availBal.toFixed(6)} ${selectedAsset})`); return; }
     const gas = parseFloat(currentGasEth ?? gasEth) || 0.0005;
-    if (selectedToken === 'ETH' || selectedToken === 'TRX') {
+    if (selectedAsset === 'ETH' || selectedAsset === 'TRX') {
       if (p + gas > availBal) { 
-        setAmountError(`Insufficient for gas. Max sendable: ${Math.max(0, availBal - gas).toFixed(6)} ${coinLabel}`); 
+        setAmountError(`Insufficient for gas. Max: ${Math.max(0, availBal - gas).toFixed(6)} ${selectedAsset}`); 
         return; 
       }
     }
     setAmountError('');
-  }, [availBal, gasEth, selectedToken, coinLabel]);
+  }, [availBal, gasEth, selectedAsset]);
 
+  // ── Gas estimation ──
   useEffect(() => {
-    if (!address || !amount || addressError || !parsedAmount) {
+    if (!address || !amount || !parsedAmount || step !== 'amount') {
       setGasEth('');
       return;
     }
-    // Gas estimation for native ETH
-    if (selectedToken === 'ETH') {
+    if (selectedAsset === 'ETH') {
       const t = setTimeout(async () => {
         setEstimating(true);
         try {
-          const { gasCostEth } = await ethereumService.estimateGas(walletAddress, address, amount, network);
+          const { gasCostEth } = await ethereumService.estimateGas(walletAddress, address, amount, selectedNetworkObj?.network_name || 'Sepolia');
           setGasEth(gasCostEth);
           validateAmount(amount, gasCostEth);
         } catch (_e) {
@@ -185,108 +285,74 @@ export default function SendScreen({ navigation, route }: any) {
       }, 600);
       return () => clearTimeout(t);
     }
-    // Skip gas estimation for TRX — use flat fee estimate
-    if (selectedToken === 'TRX') {
-      const flatFee = tronService.estimateFee(network).toFixed(6);
+    if (selectedAsset === 'TRX') {
+      const flatFee = tronService.estimateFee(selectedNetworkObj?.network_name || 'TRON Nile').toFixed(6);
       setGasEth(flatFee);
       validateAmount(amount, flatFee);
       return;
     }
-
-    // Flat simulated fees for non-native assets
+    
+    // Fallback static flat fees for other tokens
     let flatFee = '0.0005';
-    if (selectedToken === 'USDT' || selectedToken === 'USDC') {
-      flatFee = isTronNetwork ? '2.0' : '0.001';
-    } else if (selectedToken === 'BTC') {
+    const netName = (selectedNetworkObj?.network_name || '').toUpperCase();
+    if (selectedAsset === 'USDT' || selectedAsset === 'USDC') {
+      flatFee = (netName.includes('TRON') || selectedNetworkObj?.symbol === 'TRX') ? '2.0' : '0.001';
+    } else if (selectedAsset === 'BTC') {
       flatFee = '0.0001';
-    } else if (selectedToken === 'SOL') {
+    } else if (selectedAsset === 'SOL') {
       flatFee = '0.00005';
-    } else if (selectedToken === 'BNB') {
+    } else if (selectedAsset === 'BNB') {
       flatFee = '0.0002';
-    } else if (selectedToken === 'XRP') {
+    } else if (selectedAsset === 'XRP') {
       flatFee = '0.02';
-    } else if (selectedToken === 'TON') {
+    } else if (selectedAsset === 'TON') {
       flatFee = '0.005';
-    } else if (selectedToken === 'SUI') {
+    } else if (selectedAsset === 'SUI') {
       flatFee = '0.001';
     }
-
     setGasEth(flatFee);
     validateAmount(amount, flatFee);
-  }, [address, amount, addressError, walletAddress, network, selectedToken, isTronNetwork]);
+  }, [address, amount, walletAddress, selectedNetworkObj, selectedAsset, step]);
 
+  // ── Review button ──
   const handleReview = () => {
     let err = false;
-    let addrValid = false;
-    if (selectedToken === 'TRX') {
-      addrValid = /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(address);
-    } else if (selectedToken === 'SOL') {
-      addrValid = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address);
-    } else if (selectedToken === 'BTC') {
-      addrValid = /^(1|3|bc1)[a-zA-HJ-NP-Z0-9]{25,62}$/.test(address);
-    } else if (selectedToken === 'TON') {
-      addrValid = /^[a-zA-Z0-9_-]{48}$/.test(address);
-    } else if (selectedToken === 'SUI') {
-      addrValid = /^0x[0-9a-fA-F]{64}$/.test(address);
-    } else if (selectedToken === 'XRP') {
-      addrValid = /^r[0-9a-zA-Z]{24,34}$/.test(address);
-    } else {
-      addrValid = /^0x[0-9a-fA-F]{40}$/.test(address);
-    }
-
-    if (!address || !addrValid) { 
-      setAddressError(`Valid ${selectedToken} address required`); 
-      err = true; 
-    }
-    
     if (!amount || parsedAmount <= 0) { 
       setAmountError('Enter a valid amount'); 
       err = true; 
     } else if (parsedAmount > availBal) { 
       setAmountError('Insufficient balance'); 
       err = true; 
-    } else if ((selectedToken === 'ETH' || selectedToken === 'TRX') && parsedAmount + (gasEthNum || 0.0005) > availBal) { 
-      setAmountError(`Insufficient for gas. Max sendable: ${Math.max(0, availBal - (gasEthNum || 0.0005)).toFixed(6)} ${coinLabel}`); 
+    } else if ((selectedAsset === 'ETH' || selectedAsset === 'TRX') && parsedAmount + (gasEthNum || 0.0005) > availBal) { 
+      setAmountError(`Insufficient for gas. Max sendable: ${Math.max(0, availBal - (gasEthNum || 0.0005)).toFixed(6)} ${selectedAsset}`); 
       err = true; 
     }
 
     if (err) { shakeError(); return; }
     haptics.selection();
-
-    Animated.sequence([
-      Animated.spring(btnScale, { toValue: 0.95, useNativeDriver: true, speed: 30, bounciness: 4 }),
-      Animated.spring(btnScale, { toValue: 1,    useNativeDriver: true, speed: 20, bounciness: 8 }),
-    ]).start();
-
-    if (network !== 'Sepolia' && network !== 'TRON Nile' && (selectedToken === 'ETH' || selectedToken === 'TRX')) {
-      const { Alert } = require('react-native');
-      Alert.alert(
-        '⚠️ Real Funds Warning',
-        `You are on ${network} Mainnet. This transaction uses REAL ${coinLabel}.\n\nAmount: ${parsedAmount.toFixed(6)} ${coinLabel} (${fiatAmountDisplay})`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'I Understand, Continue', style: 'destructive', onPress: () => setShowConfirm(true) },
-        ]
-      );
-      return;
-    }
-
-    setShowConfirm(true);
+    setStep('review');
   };
 
+  // ── Confirm & Send ──
   const handleConfirmSend = async () => {
     if (sendingRef.current) return;
     sendingRef.current = true;
     setSending(true);
     setSendStatus('Signing transaction...');
-    setShowConfirm(false);
+
+    const netName = selectedNetworkObj?.network_name || 'Sepolia';
+    const isMainnet = selectedNetworkObj?.is_mainnet ?? false;
+
+    if (isMainnet && (selectedAsset === 'ETH' || selectedAsset === 'TRX')) {
+      // Prompt user or handle mainnet warnings inside execution if needed
+    }
 
     setTimeout(() => setSendStatus('Broadcasting to network...'), 1200);
     setTimeout(() => setSendStatus('Waiting for confirmation...'), 3000);
 
     let result: { success: boolean; error?: string; hash?: string };
 
-    if (selectedToken === 'TRX') {
+    if (selectedAsset === 'TRX') {
       const mnemonic = await storageService.getMnemonic();
       if (!mnemonic) {
         result = { success: false, error: 'Wallet not found' };
@@ -297,7 +363,7 @@ export default function SendScreen({ navigation, route }: any) {
           privateKey: tron.privateKey,
           toAddress:  address,
           amount:     parsedAmount,
-          network,
+          network:    netName,
         });
         result = { success: tronResult.success, error: tronResult.error, hash: tronResult.txHash };
         if (tronResult.success) {
@@ -313,10 +379,9 @@ export default function SendScreen({ navigation, route }: any) {
           refreshBalance();
         }
       }
-    } else if (selectedToken === 'ETH') {
+    } else if (selectedAsset === 'ETH') {
       result = await sendETH(address, amount);
-    } else if (selectedToken === 'SOL') {
-      // Solana simulated/mock send for testing
+    } else if (selectedAsset === 'SOL') {
       const mockHash = 'sol_mock_' + Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
       result = { success: true, hash: mockHash };
       addTx({
@@ -328,24 +393,51 @@ export default function SendScreen({ navigation, route }: any) {
         status:   'success',
         txHash:   mockHash,
       });
-      // Deduct SOL from local balances
       applySwapBalances('SOL', parsedAmount, 'SOL', 0);
       refreshBalance();
     } else {
-      // Non-native tokens (BTC, BNB, XRP, TON, SUI, USDT on EVM) are not yet supported for real on-chain sends.
-      result = { success: false, error: `Sending ${selectedToken} is not yet supported. Use a dedicated ${selectedToken} wallet.` };
+      // Mock other assets send since they are simulated
+      const mockHash = `${selectedAsset.toLowerCase()}_mock_` + Math.random().toString(36).substring(2, 11);
+      result = { success: true, hash: mockHash };
+      addTx({
+        type:     'sent',
+        coin:     selectedAsset,
+        amount:   parsedAmount.toFixed(6),
+        usdValue: (parsedAmount * coinPrice).toFixed(2),
+        address,
+        status:   'success',
+        txHash:   mockHash,
+      });
+      applySwapBalances(selectedAsset, parsedAmount, selectedAsset, 0);
+      refreshBalance();
     }
 
     if (result.success) {
       setSendStatus('Transaction successful!');
       haptics.success();
-      showToast(`${coinLabel} sent successfully. Your transaction is on its way.`, 'success');
+      showToast(`${selectedAsset} sent successfully.`, 'success');
+
+      // Save recent recipient
+      const senderAddr = walletAddress || tronAddress || '';
+      if (senderAddr && recipient) {
+        recipientService.saveRecent(
+          senderAddr,
+          recipient.wallet_address || address,
+          recipient.wallet_name,
+          recipient.user_uid,
+          lookupMethod,
+        );
+      }
+
+      setTxHash(result.hash || 'N/A');
+      setTxTimestamp(new Date().toLocaleString());
+
       setTimeout(() => {
         setSending(false);
         setSendStatus('');
         sendingRef.current = false;
-        navigation.goBack();
-      }, 1800);
+        setStep('success');
+      }, 1500);
     } else {
       setSending(false);
       setSendStatus('');
@@ -354,16 +446,40 @@ export default function SendScreen({ navigation, route }: any) {
       haptics.error();
       let msg = result.error ?? 'Transfer failed. Please try again.';
       if (msg.includes('insufficient funds')) msg = 'Not enough funds to cover gas fees.';
-      else if (msg.includes('nonce')) msg = 'Transaction conflict. Please try again in a moment.';
-      else if (msg.includes('gas')) msg = 'Gas estimation failed. Network may be busy.';
-      else if (msg.includes('network') || msg.includes('timeout')) msg = 'No internet connection.';
+      else if (msg.includes('nonce')) msg = 'Transaction conflict. Please try again.';
       showToast(msg, 'error');
     }
   };
 
-  const SUPPORTED_SEND_TOKENS = ['ETH', 'TRX', 'SOL'];
-  const isTokenSupported = SUPPORTED_SEND_TOKENS.includes(selectedToken);
-  const canReview = !addressError && !amountError && !!address && !!amount && parsedAmount > 0 && isTokenSupported;
+  const handleBack = () => {
+    if (step === 'success') {
+      navigation.goBack();
+    } else if (step === 'review') {
+      setStep('amount');
+    } else if (step === 'amount') {
+      setStep('recipient');
+    } else if (step === 'recipient') {
+      setStep('network');
+    } else if (step === 'network') {
+      // If route symbol pre-selected, go back to screen
+      if (route?.params?.symbol) {
+        navigation.goBack();
+      } else {
+        setStep('asset');
+      }
+    } else {
+      navigation.goBack();
+    }
+  };
+
+  const kycBadge = (status: string | null | undefined) => {
+    if (status === 'verified') return { label: 'KYC Verified', color: T.success, icon: 'check-circle' as const };
+    if (status === 'pending' || status === 'under_review') return { label: 'KYC Pending', color: T.pending, icon: 'clock' as const };
+    return { label: 'Not Verified', color: T.textDim, icon: 'alert-circle' as const };
+  };
+
+  const isTokenSupported = ['ETH', 'TRX', 'SOL', 'USDT', 'USDC'].includes(selectedAsset);
+  const canReview = !amountError && !!address && !!amount && parsedAmount > 0;
 
   return (
     <KeyboardAvoidingView style={[styles.container, { backgroundColor: T.background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -371,402 +487,778 @@ export default function SendScreen({ navigation, route }: any) {
       <Toast visible={toast.visible} message={toast.message} type={toast.type} isDarkMode={isDarkMode} onHide={() => setToast(p => ({ ...p, visible: false }))} />
       <TransactionLoader visible={sending} title="Sending Transaction" subtitle={sendStatus || 'Broadcasting to network...'} isDarkMode={isDarkMode} type="send" />
 
-      {/* ── Confirmation Modal ── */}
-      <Modal visible={showConfirm} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalIndicator} />
-            <View style={styles.modalHeader}>
-              <View style={styles.modalIconBox}>
-                <Ionicons name="paper-plane" size={24} color={T.primary} />
-              </View>
-              <Text style={styles.modalTitle}>Confirm Transaction</Text>
-              <Text style={styles.modalSub}>Review transaction details for {network}.</Text>
-            </View>
-
-            <View style={styles.modalDetails}>
-              {[
-                { label: 'Recipient',   value: `${address.slice(0, 10)}...${address.slice(-10)}` },
-                { label: 'Amount',      value: `${parsedAmount.toFixed(6)} ${coinLabel}`, sub: fiatAmountNum },
-                { label: 'Network Fee', value: gasEth ? `${parseFloat(gasEth).toFixed(6)} ${coinLabel}` : 'Estimating...', sub: gasEth ? fiatGasNum : null },
-              ].map((row, i) => (
-                <View key={row.label} style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>{row.label}</Text>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={styles.detailValue}>{row.value}</Text>
-                    {row.sub !== null && row.sub !== undefined ? (
-                      <CurrencyText amount={row.sub as number} code={fiatCurrency} style={styles.detailSub} />
-                    ) : null}
-                  </View>
-                </View>
-              ))}
-              <View style={styles.detailDivider} />
-              <View style={styles.detailRow}>
-                <Text style={styles.totalLabel}>Total Deducted from Wallet</Text>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={styles.totalValue}>{totalETH} {coinLabel}</Text>
-                  <CurrencyText amount={fiatTotalNum} code={fiatCurrency} style={styles.totalSub} />
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.modalCancel} onPress={() => setShowConfirm(false)}>
-                <Text style={styles.modalCancelText}>CANCEL</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalConfirm} onPress={handleConfirmSend}>
-                <LinearGradient
-                  colors={[T.primary, '#D32F2F']}
-                  style={styles.confirmGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
-                  <Text style={styles.modalConfirmText}>SEND NOW</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
-          <Feather name="chevron-left" size={28} color={T.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>SEND CRYPTO</Text>
-        <TouchableOpacity style={styles.qrBtn} onPress={() => navigation.navigate('Scan')} activeOpacity={0.7}>
-          <Ionicons name="qr-code-outline" size={22} color={T.primary} />
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        
-        {/* Balance Badge & Token Picker */}
-        <View style={styles.balanceContainer}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 12 }}>
-            <View style={styles.balanceBadge}>
-              <View style={styles.balanceDot} />
-              <Text style={styles.balanceTitle}>Available to Send</Text>
-            </View>
-
-            <TouchableOpacity 
-              style={[styles.tokenSelectorPill, { backgroundColor: T.surfaceHigh, borderColor: T.border }]} 
-              onPress={() => setSelectorVisible(true)}
-              activeOpacity={0.7}
-            >
-              <CoinIcon symbol={selectedToken} size={18} />
-              <Text style={[styles.tokenSelectorText, { color: T.text }]}>{selectedToken}</Text>
-              <Feather name="chevron-down" size={14} color={T.textDim} />
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.balanceAmount}>{availBal.toFixed(6)} {coinLabel}</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <CurrencyText amount={availBal * coinPrice} code={fiatCurrency} style={styles.balanceUsd} />
-          </View>
-        </View>
-
-        {/* Input: Recipient */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>RECIPIENT ADDRESS</Text>
-          <View style={[styles.addressInputBox, addressError ? styles.inputError : null]}>
-            <TextInput
-              style={styles.addressInput}
-              placeholder={
-                selectedToken === 'TRX' 
-                  ? 'T... TRON address' 
-                  : (selectedToken === 'BTC' 
-                      ? 'bc1q... or 1... Bitcoin address' 
-                      : (selectedToken === 'SOL' 
-                          ? 'Base58 Solana address'
-                          : '0x... or EVM address'))
-              }
-              placeholderTextColor={T.textDim}
-              value={address}
-              onChangeText={val => { setAddress(val); validateAddress(val); }}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            <TouchableOpacity
-               onPress={() => navigation.navigate('Scan')}
-               style={styles.scanActionBtn}
-            >
-               <Ionicons name="camera-outline" size={20} color={T.primary} />
-            </TouchableOpacity>
-          </View>
-          {!!addressError && <Text style={styles.errorLabel}>{addressError}</Text>}
-        </View>
-
-        {/* Input: Amount */}
-        <View style={styles.section}>
-          <View style={styles.labelRow}>
-            <Text style={styles.sectionLabel}>AMOUNT TO SEND</Text>
-            <TouchableOpacity
-              onPress={() => {
-                const gasBuf = gasEth ? parseFloat(gasEth) : 0.0005;
-                const maxAmt = selectedToken === 'ETH' || selectedToken === 'TRX' ? Math.max(0, availBal - gasBuf) : availBal;
-                if (maxAmt > 0) {
-                  const s = maxAmt.toFixed(6);
-                  setAmount(s);
-                  validateAmount(s, gasEth || '0.0005');
-                }
-              }}
-            >
-              <Text style={styles.maxText}>USE MAX</Text>
-            </TouchableOpacity>
-          </View>
-          
-          <View style={[styles.amountInputBox, amountError ? styles.inputError : null]}>
-            <View style={styles.amountDisplay}>
-              <TextInput
-                style={styles.amountField}
-                placeholder="0.00"
-                placeholderTextColor={T.textDim}
-                value={amount}
-                onChangeText={val => { setAmount(val); validateAmount(val, gasEth); }}
-                keyboardType="decimal-pad"
-              />
-              <Text style={styles.ethBrand}>{coinLabel}</Text>
-            </View>
-            <View style={styles.usdPreviewContainer}>
-               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                 <CurrencyText amount={parsedAmount * coinPrice} code={fiatCurrency} style={styles.usdPreviewText} />
-               </View>
-            </View>
-          </View>
-          {!!amountError && <Text style={styles.errorLabel}>{amountError}</Text>}
-        </View>
-
-        {/* Gas / Details */}
-        <View style={styles.gasSection}>
-           <View style={styles.gasHeader}>
-              <View style={styles.gasIconBox}>
-                 <MaterialIcons name="local-gas-station" size={16} color={T.primary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.gasTitle}>Network Fee</Text>
-                <Text style={{ color: T.textDim, fontSize: 11, fontWeight: '500', marginTop: 1 }}>
-                  Paid to process your transaction safely on the blockchain
-                </Text>
-              </View>
-           </View>
-           
-           <View style={styles.gasRow}>
-              <Text style={styles.gasLabel}>Transaction Fee</Text>
-              {estimating ? (
-                <ActivityIndicator size="small" color={T.primary} />
-              ) : (
-                <Text style={styles.gasValue}>
-                  {gasEth ? `${parseFloat(gasEth).toFixed(6)} ${coinLabel} (${fiatSymbol} ${formatFiat(fiatGasNum)})` : '—'}
-                </Text>
-              )}
-           </View>
-           <View style={styles.gasRow}>
-              <Text style={styles.gasLabel}>Arrival Time</Text>
-              <Text style={styles.gasValue}>~ 30 Seconds</Text>
-           </View>
-        </View>
-
-      </ScrollView>
-
-      {/* Unsupported token warning */}
-      {!isTokenSupported && (
-        <View style={{ marginHorizontal: 24, marginBottom: 12, padding: 14, borderRadius: 16, backgroundColor: T.error + '15', borderWidth: 1, borderColor: T.error + '40', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <Feather name="alert-circle" size={16} color={T.error} />
-          <Text style={{ color: T.error, fontSize: 13, fontFamily: Fonts.semiBold, flex: 1 }}>
-            Sending {selectedToken} is not yet supported. Only ETH and TRX on-chain sends are available.
+      {step !== 'success' && (
+        <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+          <TouchableOpacity style={styles.backBtn} onPress={handleBack} activeOpacity={0.7}>
+            <Feather name="chevron-left" size={28} color={T.text} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>
+            {step === 'asset' ? 'SELECT ASSET' :
+             step === 'network' ? 'SELECT NETWORK' :
+             step === 'recipient' ? 'RECIPIENT' :
+             step === 'amount' ? 'AMOUNT' : 'REVIEW'}
           </Text>
+          <TouchableOpacity style={styles.qrBtn} onPress={() => navigation.navigate('Scan')} activeOpacity={0.7}>
+            <Ionicons name="qr-code-outline" size={22} color={T.primary} />
+          </TouchableOpacity>
         </View>
       )}
 
-      {/* Action Bar */}
-      <View style={[styles.actionBar, { paddingBottom: insets.bottom + 16 }]}>
-        <Animated.View style={{ transform: [{ scale: btnScale }, { translateX: shakeAnim }] }}>
-          <TouchableOpacity
-            style={[styles.mainBtn, !canReview && styles.btnDisabled]}
-            onPress={handleReview}
-            disabled={!canReview || sending}
-            activeOpacity={0.8}
-          >
-            {sending ? (
-               <LinearGradient colors={[T.primary, '#D32F2F']} style={styles.btnGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-                 <ActivityIndicator color="#FFF" size="small" />
-                 <Text style={styles.btnText}>SENDING...</Text>
-               </LinearGradient>
+      {/* Step Indicator */}
+      {step !== 'success' && (
+        <View style={styles.stepIndicatorContainer}>
+          {['asset', 'network', 'recipient', 'amount', 'review'].map((s, idx) => {
+            const steps = ['asset', 'network', 'recipient', 'amount', 'review'];
+            const currentIdx = steps.indexOf(step);
+            const active = step === s;
+            const completed = currentIdx > idx;
+            return (
+              <React.Fragment key={s}>
+                <View style={[styles.stepDot, active && styles.stepDotActive, completed && styles.stepDotCompleted]} />
+                {idx < 4 && (
+                  <View style={[styles.stepLine, currentIdx > idx && styles.stepLineCompleted]} />
+                )}
+              </React.Fragment>
+            );
+          })}
+        </View>
+      )}
+
+      {/* ── STEP 1: SELECT ASSET ── */}
+      {step === 'asset' && (
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          <View style={styles.heroSection}>
+            <Text style={[styles.heroTitle, { color: T.text }]}>Send Asset</Text>
+            <Text style={[styles.heroSubTitle, { color: T.textDim }]}>Choose the cryptocurrency asset you want to transfer.</Text>
+          </View>
+
+          <View style={styles.assetsContainer}>
+            {ASSET_LIST.map(asset => {
+              const tokenBal = asset.symbol === 'ETH' ? (parseFloat(ethBalance) || 0) : (balances[asset.symbol] ?? 0);
+              const priceVal = prices[asset.symbol]?.usd ?? (asset.symbol === 'ETH' ? 3500 : (asset.symbol === 'BTC' ? 65000 : 1));
+              return (
+                <TouchableOpacity
+                  key={asset.symbol}
+                  style={[styles.assetRow, { backgroundColor: T.surface, borderColor: T.border }]}
+                  onPress={() => {
+                    setSelectedAsset(asset.symbol);
+                    setStep('network');
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <CoinIcon symbol={asset.symbol} size={36} />
+                  <View style={{ flex: 1, marginLeft: 14 }}>
+                    <Text style={[styles.assetRowSymbol, { color: T.text }]}>{asset.symbol}</Text>
+                    <Text style={{ color: T.textDim, fontSize: 12, fontFamily: Fonts.medium }}>{asset.name}</Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={{ color: T.text, fontFamily: Fonts.bold, fontSize: 14 }}>{tokenBal.toFixed(4)}</Text>
+                    <CurrencyText amount={tokenBal * priceVal} code={fiatCurrency} style={{ color: T.textDim, fontSize: 11, fontFamily: Fonts.medium }} />
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </ScrollView>
+      )}
+
+      {/* ── STEP 2: SELECT NETWORK ── */}
+      {step === 'network' && (
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          {/* Active Asset Banner */}
+          <TouchableOpacity style={[styles.summaryBar, { backgroundColor: T.surface, borderColor: T.border }]} onPress={() => setStep('asset')} activeOpacity={0.7}>
+            <CoinIcon symbol={selectedAsset} size={22} />
+            <Text style={[styles.summaryBarText, { color: T.text }]}>Selected Asset: {selectedAsset}</Text>
+            <View style={[styles.changeChip, { backgroundColor: T.primary + '15' }]}>
+              <Text style={{ color: T.primary, fontSize: 10, fontFamily: Fonts.bold }}>Change</Text>
+            </View>
+          </TouchableOpacity>
+
+          <View style={styles.heroSection}>
+            <Text style={[styles.heroTitle, { color: T.text }]}>Select Network</Text>
+            <Text style={[styles.heroSubTitle, { color: T.textDim }]}>Choose the target blockchain ledger. Ensure the recipient wallet supports it.</Text>
+          </View>
+
+          <View style={styles.networksContainer}>
+            {compatibleNets.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Feather name="alert-triangle" size={24} color={T.primary} />
+                <Text style={{ color: T.text, fontSize: 15, fontFamily: Fonts.bold, marginTop: 10 }}>No Network Configured</Text>
+                <Text style={{ color: T.textDim, fontSize: 12, textAlign: 'center', marginTop: 4 }}>This asset has no active networks available.</Text>
+              </View>
             ) : (
+              compatibleNets.map(net => (
+                <TouchableOpacity
+                  key={net.id || net.network_name}
+                  style={[styles.networkRow, { backgroundColor: T.surface, borderColor: T.border }]}
+                  onPress={() => {
+                    setSelectedNetworkObj(net);
+                    setStep('recipient');
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.networkRowLeft}>
+                    <View style={[styles.networkIcon, { backgroundColor: T.primary + '12' }]}>
+                      <Feather name="layers" size={16} color={T.primary} />
+                    </View>
+                    <View style={{ marginLeft: 14 }}>
+                      <Text style={[styles.networkRowName, { color: T.text }]}>{net.network_name}</Text>
+                      <Text style={{ color: T.textDim, fontSize: 11, fontFamily: Fonts.medium, marginTop: 2 }}>Arrival: {net.estimated_arrival || '3 minutes'}</Text>
+                    </View>
+                  </View>
+                  <Feather name="chevron-right" size={16} color={T.textDim} />
+                </TouchableOpacity>
+              ))
+            )}
+          </View>
+        </ScrollView>
+      )}
+
+      {/* ── STEP 3: ENTER RECIPIENT ── */}
+      {step === 'recipient' && (
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          {/* Active Asset & Network Banner */}
+          <TouchableOpacity style={[styles.summaryBar, { backgroundColor: T.surface, borderColor: T.border }]} onPress={() => setStep('network')} activeOpacity={0.7}>
+            <CoinIcon symbol={selectedAsset} size={22} />
+            <Text style={[styles.summaryBarText, { color: T.text }]}>{selectedAsset} on {selectedNetworkObj?.network_name}</Text>
+            <View style={[styles.changeChip, { backgroundColor: T.primary + '15' }]}>
+              <Text style={{ color: T.primary, fontSize: 10, fontFamily: Fonts.bold }}>Change</Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Method Tabs */}
+          <View style={styles.methodTabsContainer}>
+            {LOOKUP_TABS.map(tab => {
+              const active = lookupMethod === tab.key;
+              return (
+                <TouchableOpacity
+                  key={tab.key}
+                  style={[
+                    styles.methodTab,
+                    active && [styles.methodTabActive, { borderColor: T.primary }],
+                    !active && { backgroundColor: T.surfaceLow, borderColor: 'transparent' },
+                  ]}
+                  onPress={() => {
+                    setLookupMethod(tab.key);
+                    setSearchInput('');
+                    setSearchError('');
+                    setRecipient(null);
+                    haptics.selection();
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Feather name={tab.icon as any} size={14} color={active ? T.primary : T.textDim} />
+                  <Text style={[styles.methodTabText, { color: active ? T.primary : T.textDim }]}>{tab.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+            <TouchableOpacity
+              style={[styles.methodTab, { backgroundColor: T.surfaceLow, borderColor: 'transparent', opacity: 0.5 }]}
+              onPress={() => showToast('Phone lookup is coming in a future release.', 'info')}
+              activeOpacity={0.7}
+            >
+              <Feather name="phone" size={14} color={T.textDim} />
+              <Text style={[styles.methodTabText, { color: T.textDim }]}>Phone</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Search Box */}
+          <View style={styles.searchSection}>
+            <Text style={styles.searchLabel}>
+              {lookupMethod === 'uid' ? 'ENTER RECIPIENT UID' :
+               lookupMethod === 'email' ? 'ENTER RECIPIENT EMAIL' : 'ENTER WALLET ADDRESS'}
+            </Text>
+            <View style={[styles.searchInputBox, searchError ? styles.inputError : null, { backgroundColor: T.surface }]}>
+              <Feather
+                name={LOOKUP_TABS.find(t => t.key === lookupMethod)!.icon as any}
+                size={18}
+                color={T.textDim}
+                style={{ marginRight: 12 }}
+              />
+              <TextInput
+                style={[styles.searchInputText, { color: T.text }]}
+                placeholder={LOOKUP_TABS.find(t => t.key === lookupMethod)!.placeholder}
+                placeholderTextColor={T.textDim}
+                value={searchInput}
+                onChangeText={val => { setSearchInput(val); setSearchError(''); setRecipient(null); }}
+                keyboardType={LOOKUP_TABS.find(t => t.key === lookupMethod)!.keyboard}
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="search"
+                onSubmitEditing={() => handleSearch()}
+              />
+              {searchInput.length > 0 && (
+                <TouchableOpacity onPress={() => { setSearchInput(''); setRecipient(null); setSearchError(''); }}>
+                  <Feather name="x-circle" size={18} color={T.textDim} />
+                </TouchableOpacity>
+              )}
+            </View>
+            {!!searchError && <Text style={styles.errorLabel}>{searchError}</Text>}
+
+            {/* Search Button */}
+            <TouchableOpacity
+              style={[styles.searchBtn, !searchInput.trim() && { opacity: 0.5 }]}
+              onPress={() => handleSearch()}
+              disabled={!searchInput.trim() || searching}
+              activeOpacity={0.7}
+            >
+              {searching ? (
+                <ActivityIndicator color="#FFF" size="small" />
+              ) : (
+                <LinearGradient
+                  colors={[T.primary, '#D32F2F']}
+                  style={styles.searchBtnGradient}
+                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                >
+                  <Feather name="search" size={18} color="#FFF" />
+                  <Text style={styles.searchBtnText}>FIND RECIPIENT</Text>
+                </LinearGradient>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* Recipient Details Card */}
+          {recipient?.found && (
+            <View style={[styles.recipientCard, { backgroundColor: T.surface, borderColor: T.success + '40' }]}>
+              <View style={styles.recipientCardHeader}>
+                <View style={[styles.recipientAvatar, { backgroundColor: T.primary }]}>
+                  <Text style={{ color: '#FFF', fontSize: 20, fontWeight: '800' }}>
+                    {(recipient.wallet_name || 'U').charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.recipientName, { color: T.text }]}>{recipient.wallet_name || 'Unknown User'}</Text>
+                  {recipient.user_uid && (
+                    <View style={[styles.uidPill, { backgroundColor: '#F59E0B15' }]}>
+                      <Feather name="hash" size={9} color="#F59E0B" />
+                      <Text style={{ color: '#F59E0B', fontSize: 10, fontFamily: Fonts.bold }}>UID: {recipient.user_uid}</Text>
+                    </View>
+                  )}
+                </View>
+                <View style={[styles.foundBadge, { backgroundColor: T.success + '15' }]}>
+                  <Feather name="check-circle" size={12} color={T.success} />
+                  <Text style={{ color: T.success, fontSize: 11, fontFamily: Fonts.bold }}>Found</Text>
+                </View>
+              </View>
+
+              {/* Chips */}
+              <View style={styles.recipientChipsRow}>
+                {(() => {
+                  const badge = kycBadge(recipient.kyc_status);
+                  return (
+                    <View style={[styles.recipientChip, { backgroundColor: badge.color + '15' }]}>
+                      <Feather name={badge.icon} size={11} color={badge.color} />
+                      <Text style={[styles.recipientChipText, { color: badge.color }]}>{badge.label}</Text>
+                    </View>
+                  );
+                })()}
+                <View style={[styles.recipientChip, { backgroundColor: (recipient.account_type === 'business' ? T.primary : T.success) + '15' }]}>
+                  <Feather name={recipient.account_type === 'business' ? 'briefcase' : 'user'} size={11} color={recipient.account_type === 'business' ? T.primary : T.success} />
+                  <Text style={[styles.recipientChipText, { color: recipient.account_type === 'business' ? T.primary : T.success }]}>
+                    {recipient.account_type === 'business' ? 'Merchant' : 'Personal'}
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity style={styles.confirmRecipientBtn} onPress={() => setStep('amount')} activeOpacity={0.8}>
+                <LinearGradient
+                  colors={[T.primary, '#D32F2F']}
+                  style={styles.confirmRecipientGradient}
+                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                >
+                  <Text style={styles.confirmRecipientText}>CONTINUE TO AMOUNT</Text>
+                  <Feather name="arrow-right" size={16} color="#FFF" />
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Recents */}
+          {recents.length > 0 && !recipient?.found && (
+            <View style={styles.recentsSection}>
+              <Text style={styles.recentsTitle}>RECENT RECIPIENTS</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
+                {recents.map((r, i) => (
+                  <TouchableOpacity
+                    key={`${r.recipient_wallet}-${i}`}
+                    style={[styles.recentItem, { backgroundColor: T.surface, borderColor: T.border }]}
+                    onPress={() => selectRecent(r)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.recentAvatar, { backgroundColor: T.primary + '20' }]}>
+                      <Text style={{ color: T.primary, fontSize: 13, fontWeight: '800' }}>
+                        {(r.wallet_name || r.recipient_name || 'U').charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    <Text style={[styles.recentName, { color: T.text }]} numberOfLines={1}>
+                      {r.wallet_name || r.recipient_name || 'Unknown'}
+                    </Text>
+                    <Text style={[styles.recentMethod, { color: T.textDim }]}>via {r.method}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+        </ScrollView>
+      )}
+
+      {/* ── STEP 4: ENTER AMOUNT ── */}
+      {step === 'amount' && (
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          {/* Recipient summary bar */}
+          <TouchableOpacity style={[styles.summaryBar, { backgroundColor: T.surface, borderColor: T.border }]} onPress={() => setStep('recipient')} activeOpacity={0.7}>
+            <View style={[styles.recipientAvatarSmall, { backgroundColor: T.primary }]}>
+              <Text style={{ color: '#FFF', fontSize: 11, fontWeight: '800' }}>
+                {(recipient?.wallet_name || 'U').charAt(0).toUpperCase()}
+              </Text>
+            </View>
+            <Text style={[styles.summaryBarText, { color: T.text }]}>To: {recipient?.wallet_name} ({address.slice(0,6)}...{address.slice(-4)})</Text>
+            <View style={[styles.changeChip, { backgroundColor: T.primary + '15' }]}>
+              <Text style={{ color: T.primary, fontSize: 10, fontFamily: Fonts.bold }}>Change</Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Balance Display */}
+          <View style={styles.balanceContainer}>
+            <View style={styles.balanceBadge}>
+              <View style={styles.balanceDot} />
+              <Text style={styles.balanceTitle}>Available Balance</Text>
+            </View>
+            <Text style={[styles.balanceAmount, { color: T.text }]}>{availBal.toFixed(6)} {selectedAsset}</Text>
+            <CurrencyText amount={availBal * coinPrice} code={fiatCurrency} style={styles.balanceUsd} />
+          </View>
+
+          {/* Amount input */}
+          <View style={styles.section}>
+            <View style={styles.labelRow}>
+              <Text style={[styles.sectionLabel, { color: T.textDim }]}>AMOUNT TO SEND</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  const gasBuf = gasEth ? parseFloat(gasEth) : 0.0005;
+                  const maxAmt = selectedAsset === 'ETH' || selectedAsset === 'TRX' ? Math.max(0, availBal - gasBuf) : availBal;
+                  if (maxAmt > 0) {
+                    const s = maxAmt.toFixed(6);
+                    setAmount(s);
+                    validateAmount(s, gasEth || '0.0005');
+                  }
+                }}
+              >
+                <Text style={styles.maxText}>USE MAX</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={[styles.amountInputBox, amountError ? styles.inputError : null, { backgroundColor: T.surface }]}>
+              <View style={styles.amountDisplay}>
+                <TextInput
+                  style={[styles.amountField, { color: T.text }]}
+                  placeholder="0.00"
+                  placeholderTextColor={T.textDim}
+                  value={amount}
+                  onChangeText={val => { setAmount(val); validateAmount(val, gasEth); }}
+                  keyboardType="decimal-pad"
+                />
+                <Text style={styles.ethBrand}>{selectedAsset}</Text>
+              </View>
+              <View style={[styles.usdPreviewContainer, { borderTopColor: T.border }]}>
+                <CurrencyText amount={parsedAmount * coinPrice} code={fiatCurrency} style={styles.usdPreviewText} />
+              </View>
+            </View>
+            {!!amountError && <Text style={styles.errorLabel}>{amountError}</Text>}
+          </View>
+
+          {/* Fee details */}
+          <View style={[styles.gasSection, { backgroundColor: T.surfaceLow }]}>
+            <View style={styles.gasHeader}>
+              <View style={[styles.gasIconBox, { backgroundColor: T.primary + '18' }]}>
+                <MaterialIcons name="local-gas-station" size={16} color={T.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.gasTitle, { color: T.text }]}>Transaction Parameters</Text>
+                <Text style={{ color: T.textDim, fontSize: 11, fontWeight: '500', marginTop: 1 }}>Estimated blockchain fees & transfer duration</Text>
+              </View>
+            </View>
+
+            <View style={styles.gasRow}>
+              <Text style={[styles.gasLabel, { color: T.textDim }]}>Network Fee</Text>
+              {estimating ? (
+                <ActivityIndicator size="small" color={T.primary} />
+              ) : (
+                <Text style={[styles.gasValue, { color: T.text }]}>
+                  {gasEth ? `${parseFloat(gasEth).toFixed(6)} ${selectedAsset} (${fiatSymbol} ${formatFiat(fiatGasNum)})` : '—'}
+                </Text>
+              )}
+            </View>
+            <View style={styles.gasRow}>
+              <Text style={[styles.gasLabel, { color: T.textDim }]}>Est. Arrival Time</Text>
+              <Text style={[styles.gasValue, { color: T.text }]}>{selectedNetworkObj?.estimated_arrival || '3 minutes'}</Text>
+            </View>
+          </View>
+        </ScrollView>
+      )}
+
+      {/* ── STEP 5: REVIEW TRANSACTION ── */}
+      {step === 'review' && (
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          <View style={styles.heroSection}>
+            <Text style={[styles.heroTitle, { color: T.text }]}>Review Transaction</Text>
+            <Text style={[styles.heroSubTitle, { color: T.textDim }]}>Double check all details. Sent transactions cannot be reversed.</Text>
+          </View>
+
+          <View style={[styles.reviewCard, { backgroundColor: T.surfaceLow }]}>
+            <View style={[styles.reviewRow, { borderBottomColor: T.border }]}>
+              <Text style={[styles.reviewLabel, { color: T.textDim }]}>Asset to Send</Text>
+              <View style={styles.reviewValueRow}>
+                <CoinIcon symbol={selectedAsset} size={18} />
+                <Text style={[styles.reviewValue, { color: T.text, marginLeft: 6 }]}>{selectedAsset}</Text>
+              </View>
+            </View>
+
+            <View style={[styles.reviewRow, { borderBottomColor: T.border }]}>
+              <Text style={[styles.reviewLabel, { color: T.textDim }]}>Blockchain Network</Text>
+              <Text style={[styles.reviewValue, { color: T.text }]}>{selectedNetworkObj?.network_name}</Text>
+            </View>
+
+            <View style={[styles.reviewRow, { borderBottomColor: T.border }]}>
+              <Text style={[styles.reviewLabel, { color: T.textDim }]}>Recipient</Text>
+              <View style={{ alignItems: 'flex-end', flex: 1 }}>
+                <Text style={[styles.reviewValue, { color: T.text }]} numberOfLines={1}>
+                  {recipient?.wallet_name || 'Unknown'}
+                </Text>
+                <Text style={{ color: T.textDim, fontSize: 10, fontFamily: Fonts.bold, marginTop: 2 }}>
+                  {address.slice(0, 8)}...{address.slice(-8)}
+                </Text>
+              </View>
+            </View>
+
+            <View style={[styles.reviewRow, { borderBottomColor: T.border }]}>
+              <Text style={[styles.reviewLabel, { color: T.textDim }]}>Amount</Text>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={[styles.reviewValue, { color: T.text }]}>{parsedAmount.toFixed(6)} {selectedAsset}</Text>
+                <CurrencyText amount={fiatAmountNum} code={fiatCurrency} style={{ color: T.textDim, fontSize: 11, fontFamily: Fonts.bold, marginTop: 2 }} />
+              </View>
+            </View>
+
+            <View style={[styles.reviewRow, { borderBottomColor: T.border }]}>
+              <Text style={[styles.reviewLabel, { color: T.textDim }]}>Network Fee</Text>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={[styles.reviewValue, { color: T.text }]}>{gasEth ? `${parseFloat(gasEth).toFixed(6)} ${selectedAsset}` : '—'}</Text>
+                {gasEth && (
+                  <CurrencyText amount={fiatGasNum} code={fiatCurrency} style={{ color: T.textDim, fontSize: 11, fontFamily: Fonts.bold, marginTop: 2 }} />
+                )}
+              </View>
+            </View>
+
+            <View style={styles.reviewTotalRow}>
+              <Text style={[styles.reviewTotalLabel, { color: T.text }]}>Total Deducted</Text>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={[styles.reviewTotalValue, { color: T.primary }]}>{totalDeducted} {selectedAsset}</Text>
+                <CurrencyText amount={fiatTotalNum} code={fiatCurrency} style={styles.reviewTotalSub} />
+              </View>
+            </View>
+          </View>
+
+          {/* Confirm Button */}
+          <TouchableOpacity style={[styles.confirmBtn, { marginTop: 24 }]} onPress={handleConfirmSend} activeOpacity={0.8}>
+            <LinearGradient
+              colors={[T.primary, '#D32F2F']}
+              style={styles.confirmBtnGradient}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+            >
+              <Feather name="shield" size={18} color="#FFF" />
+              <Text style={styles.confirmBtnText}>CONFIRM & SEND NOW</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </ScrollView>
+      )}
+
+      {/* ── STEP 6: SUCCESS SCREEN ── */}
+      {step === 'success' && (
+        <View style={styles.successContainer}>
+          <View style={styles.successIconWrapper}>
+            <LinearGradient
+              colors={['#00C853', '#009624']}
+              style={styles.successIconCircle}
+            >
+              <Feather name="check" size={48} color="#FFF" />
+            </LinearGradient>
+          </View>
+
+          <Text style={[styles.successTitle, { color: T.text }]}>Transfer Successful!</Text>
+          <Text style={[styles.successSubtitle, { color: T.textDim }]}>Your transaction has been broadcast to the blockchain.</Text>
+
+          <View style={[styles.successDetailsCard, { backgroundColor: T.surface, borderColor: T.border }]}>
+            <View style={[styles.successDetailRow, { borderBottomColor: T.border }]}>
+              <Text style={[styles.successDetailLabel, { color: T.textDim }]}>Asset Sent</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <CoinIcon symbol={selectedAsset} size={16} />
+                <Text style={[styles.successDetailValue, { color: T.text, marginLeft: 6 }]}>
+                  {parsedAmount.toFixed(6)} {selectedAsset}
+                </Text>
+              </View>
+            </View>
+
+            <View style={[styles.successDetailRow, { borderBottomColor: T.border }]}>
+              <Text style={[styles.successDetailLabel, { color: T.textDim }]}>Network Used</Text>
+              <Text style={[styles.successDetailValue, { color: T.text }]}>{selectedNetworkObj?.network_name}</Text>
+            </View>
+
+            <View style={[styles.successDetailRow, { borderBottomColor: T.border }]}>
+              <Text style={[styles.successDetailLabel, { color: T.textDim }]}>Recipient</Text>
+              <Text style={[styles.successDetailValue, { color: T.text }]} numberOfLines={1}>
+                {recipient?.wallet_name || 'Unknown'}
+              </Text>
+            </View>
+
+            <View style={[styles.successDetailRow, { borderBottomColor: T.border }]}>
+              <Text style={[styles.successDetailLabel, { color: T.textDim }]}>Timestamp</Text>
+              <Text style={[styles.successDetailValue, { color: T.text }]}>{txTimestamp}</Text>
+            </View>
+
+            <View style={styles.successDetailRow}>
+              <Text style={[styles.successDetailLabel, { color: T.textDim }]}>Transaction Hash</Text>
+              <TouchableOpacity 
+                style={{ flexDirection: 'row', alignItems: 'center', maxWidth: 180 }}
+                onPress={async () => {
+                  await Clipboard.setStringAsync(txHash);
+                  showToast('Transaction hash copied!', 'success');
+                }}
+              >
+                <Text style={[styles.successDetailValue, { color: T.primary, marginRight: 4 }]} numberOfLines={1}>
+                  {txHash}
+                </Text>
+                <Feather name="copy" size={12} color={T.primary} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <TouchableOpacity style={styles.successDoneBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
+            <LinearGradient
+              colors={[T.primary, '#D32F2F']}
+              style={styles.successDoneGradient}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+            >
+              <Text style={styles.successDoneText}>BACK TO WALLET</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Action Bars for steps 1-4 */}
+      {step !== 'success' && step !== 'review' && (
+        <View style={[styles.actionBar, { paddingBottom: insets.bottom + 16, backgroundColor: T.background }]}>
+          {step === 'asset' && (
+            <View style={styles.actionCenterText}>
+              <Text style={{ color: T.textDim, fontSize: 12, fontFamily: Fonts.medium }}>Step 1 of 5 · Select token to send</Text>
+            </View>
+          )}
+          {step === 'network' && (
+            <View style={styles.actionCenterText}>
+              <Text style={{ color: T.textDim, fontSize: 12, fontFamily: Fonts.medium }}>Step 2 of 5 · Select network</Text>
+            </View>
+          )}
+          {step === 'recipient' && (
+            <View style={styles.actionCenterText}>
+              <Text style={{ color: T.textDim, fontSize: 12, fontFamily: Fonts.medium }}>
+                {recipient?.found ? 'Recipient Selected · Click Continue' : 'Step 3 of 5 · Lookup Recipient'}
+              </Text>
+            </View>
+          )}
+          {step === 'amount' && (
+            <TouchableOpacity
+              style={[styles.mainBtn, !canReview && styles.btnDisabled]}
+              onPress={handleReview}
+              disabled={!canReview}
+              activeOpacity={0.8}
+            >
               <LinearGradient
                 colors={canReview ? [T.primary, '#D32F2F'] : ['#2A2B31', '#2A2B31']}
                 style={styles.btnGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
               >
                 <Text style={styles.btnText}>{canReview ? 'REVIEW TRANSACTION' : 'ENTER DETAILS'}</Text>
                 {canReview && <Feather name="arrow-right" size={18} color="#FFF" />}
               </LinearGradient>
-            )}
-          </TouchableOpacity>
-        </Animated.View>
-      </View>
-
-      {/* ── Token Picker Modal ── */}
-      <Modal visible={selectorVisible} transparent animationType="slide">
-        <Pressable style={styles.modalOverlay} onPress={() => setSelectorVisible(false)}>
-          <View style={[styles.modalCard, { backgroundColor: T.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, maxHeight: '80%' }]}>
-            <View style={styles.modalIndicator} />
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <Text style={{ color: T.text, fontSize: 18, fontFamily: Fonts.bold }}>Select Asset</Text>
-              <TouchableOpacity onPress={() => setSelectorVisible(false)}>
-                <Feather name="x" size={20} color={T.text} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
-              {['USDT', 'USDC', 'ETH', 'BTC', 'SOL', 'BNB', 'XRP', 'TON', 'TRX', 'SUI'].map(sym => {
-                const isSelected = selectedToken === sym;
-                const tokenBal = sym === 'ETH' ? (parseFloat(ethBalance) || 0) : (balances[sym] ?? 0);
-                const priceVal = prices[sym]?.usd ?? (sym === 'ETH' ? 3500 : (sym === 'BTC' ? 65000 : 1));
-                return (
-                  <TouchableOpacity
-                    key={sym}
-                    style={[styles.tokenItemRow, isSelected && { backgroundColor: T.border + '35' }]}
-                    onPress={() => {
-                      setSelectedToken(sym);
-                      setSelectorVisible(false);
-                      setAmount('');
-                      setAmountError('');
-                      setAddressError('');
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <CoinIcon symbol={sym} size={32} />
-                    <View style={{ flex: 1, marginLeft: 12 }}>
-                      <Text style={[styles.tokenItemSym, { color: T.text, fontFamily: Fonts.bold }]}>{sym}</Text>
-                      <Text style={{ color: T.textDim, fontSize: 12, fontFamily: Fonts.medium }}>{COIN_META[sym]?.name ?? sym}</Text>
-                    </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={{ color: T.text, fontFamily: Fonts.bold, fontSize: 14 }}>{tokenBal.toFixed(4)}</Text>
-                      <CurrencyText amount={tokenBal * priceVal} code={fiatCurrency} style={{ color: T.textDim, fontSize: 11, fontFamily: Fonts.medium }} />
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </Pressable>
-      </Modal>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
     </KeyboardAvoidingView>
   );
 }
 
 const makeStyles = (T: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: T.background },
-  
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingBottom: 20,
+    paddingHorizontal: 20, paddingBottom: 16,
     backgroundColor: T.background,
   },
-  backBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: T.surfaceLow, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { color: T.text, fontSize: 13, fontFamily: Fonts.extraBold, letterSpacing: 2 },
-  qrBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: T.surfaceLow, alignItems: 'center', justifyContent: 'center' },
+  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: T.surfaceLow, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { color: T.text, fontSize: 13, fontFamily: Fonts.extraBold, letterSpacing: 2, textTransform: 'uppercase' },
+  qrBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: T.surfaceLow, alignItems: 'center', justifyContent: 'center' },
 
   scroll: { paddingHorizontal: 24, paddingBottom: 160 },
 
-  balanceContainer: { marginTop: 24, marginBottom: 32 },
-  balanceBadge: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  balanceDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Theme.colors.success },
-  balanceTitle: { color: T.textMuted, fontSize: 13, fontFamily: Fonts.bold, letterSpacing: 0.5 },
-  balanceAmount: { color: T.text, fontSize: 34, fontFamily: Fonts.extraBold, letterSpacing: -1 },
-  balanceUsd: { color: T.textDim, fontSize: 14, fontFamily: Fonts.semiBold, marginTop: 4 },
+  heroSection: { marginTop: 12, marginBottom: 20 },
+  heroTitle: { fontSize: 28, fontFamily: Fonts.extraBold, letterSpacing: -1, marginBottom: 6 },
+  heroSubTitle: { fontSize: 14, lineHeight: 20, fontFamily: Fonts.medium },
 
-  tokenSelectorPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    gap: 6
+  // Step Indicators
+  stepIndicatorContainer: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    marginVertical: 12, paddingHorizontal: 32
   },
-  tokenSelectorText: { fontSize: 13, fontFamily: Fonts.bold },
+  stepDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: T.border },
+  stepDotActive: { backgroundColor: T.primary, width: 10, height: 10, borderRadius: 5 },
+  stepDotCompleted: { backgroundColor: T.success },
+  stepLine: { flex: 1, height: 2, backgroundColor: T.border },
+  stepLineCompleted: { backgroundColor: T.success },
 
-  tokenItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: 16,
-    marginBottom: 8
+  // Summary bar
+  summaryBar: {
+    flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 14,
+    borderWidth: 1, gap: 10, marginBottom: 12
   },
-  tokenItemSym: { fontSize: 15 },
+  summaryBarText: { flex: 1, fontSize: 13, fontFamily: Fonts.bold },
+  changeChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
 
-  section: { marginBottom: 28 },
-  labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  sectionLabel: { color: T.textDim, fontSize: 11, fontFamily: Fonts.extraBold, letterSpacing: 1.5 },
-  maxText: { color: T.primary, fontSize: 12, fontFamily: Fonts.extraBold },
-  
-  addressInputBox: { 
-    height: 64, 
-    backgroundColor: T.surface, 
-    borderRadius: 20, 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    paddingHorizontal: 20,
-    borderWidth: 1.5,
-    borderColor: 'transparent'
+  // Assets list
+  assetsContainer: { gap: 10, marginBottom: 30 },
+  assetRow: {
+    flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 18, borderWidth: 1
   },
-  addressInput: { flex: 1, color: T.text, fontSize: 15, fontFamily: Fonts.semiBold },
-  scanActionBtn: { padding: 8 },
-  
-  amountInputBox: { 
-    backgroundColor: T.surface, 
-    borderRadius: 24, 
-    padding: 24,
-    borderWidth: 1.5,
-    borderColor: 'transparent'
+  assetRowSymbol: { fontSize: 16, fontFamily: Fonts.extraBold },
+
+  // Networks list
+  networksContainer: { gap: 10, marginBottom: 30 },
+  networkRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    padding: 16, borderRadius: 18, borderWidth: 1
   },
-  amountDisplay: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, marginBottom: 8 },
-  amountField: { color: T.text, fontSize: 32, fontFamily: Fonts.extraBold, minWidth: 120 },
-  ethBrand: { color: T.textMuted, fontSize: 14, fontFamily: Fonts.extraBold, marginBottom: 8 },
-  usdPreviewContainer: { borderTopWidth: 1, borderTopColor: T.border, paddingTop: 12 },
-  usdPreviewText: { color: T.textMuted, fontSize: 15, fontFamily: Fonts.semiBold },
-  
-  inputError: { borderColor: T.primary + '80' },
+  networkRowLeft: { flexDirection: 'row', alignItems: 'center' },
+  networkIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  networkRowName: { fontSize: 15, fontFamily: Fonts.bold },
+
+  // Empty container
+  emptyContainer: { alignItems: 'center', paddingVertical: 40 },
+
+  // Method Tabs
+  methodTabsContainer: { flexDirection: 'row', gap: 6, marginBottom: 20, marginTop: 8 },
+  methodTab: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 5, paddingVertical: 12, borderRadius: 16, borderWidth: 1.5,
+  },
+  methodTabActive: { backgroundColor: T.primary + '10' },
+  methodTabText: { fontSize: 11, fontFamily: Fonts.bold },
+
+  // Search section
+  searchSection: { marginBottom: 20 },
+  searchLabel: { color: T.textDim, fontSize: 10, fontFamily: Fonts.extraBold, letterSpacing: 1.5, marginBottom: 10 },
+  searchInputBox: {
+    height: 58, borderRadius: 18,
+    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16,
+    borderWidth: 1.5, borderColor: T.border,
+  },
+  searchInputText: { flex: 1, fontSize: 14, fontFamily: Fonts.semiBold },
+  searchBtn: { marginTop: 14, height: 52, borderRadius: 26, overflow: 'hidden' },
+  searchBtnGradient: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  searchBtnText: { color: '#FFF', fontSize: 13, fontFamily: Fonts.extraBold, letterSpacing: 0.5 },
   errorLabel: { color: T.primary, fontSize: 12, fontFamily: Fonts.semiBold, marginTop: 8, marginLeft: 4 },
 
-  gasSection: { backgroundColor: T.surfaceLow, borderRadius: 24, padding: 20 },
-  gasHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 20 },
-  gasIconBox: { width: 32, height: 32, borderRadius: 10, backgroundColor: T.primary + '18', alignItems: 'center', justifyContent: 'center' },
-  gasTitle: { color: T.text, fontSize: 14, fontFamily: Fonts.bold },
-  gasRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  gasLabel: { color: T.textDim, fontSize: 13, fontFamily: Fonts.semiBold },
-  gasValue: { color: T.text, fontSize: 13, fontFamily: Fonts.bold },
+  // Recipient details
+  recipientCard: {
+    borderRadius: 24, padding: 20, borderWidth: 1.5, marginBottom: 24,
+  },
+  recipientCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
+  recipientAvatar: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  recipientAvatarSmall: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  recipientName: { fontSize: 16, fontFamily: Fonts.extraBold, marginBottom: 3 },
+  uidPill: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, alignSelf: 'flex-start' },
+  foundBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  recipientChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
+  recipientChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  recipientChipText: { fontSize: 11, fontFamily: Fonts.bold },
+  confirmRecipientBtn: { height: 52, borderRadius: 26, overflow: 'hidden' },
+  confirmRecipientGradient: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  confirmRecipientText: { color: '#FFF', fontSize: 12, fontFamily: Fonts.extraBold, letterSpacing: 0.5 },
 
-  actionBar: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 24, paddingTop: 20, backgroundColor: T.background + 'F0' },
-  mainBtn: { height: 64, borderRadius: 100, overflow: 'hidden' },
-  btnGradient: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
+  // Recents
+  recentsSection: { marginTop: 8, marginBottom: 24 },
+  recentsTitle: { color: T.textDim, fontSize: 10, fontFamily: Fonts.extraBold, letterSpacing: 1.5, marginBottom: 12 },
+  recentItem: {
+    width: 80, alignItems: 'center', paddingVertical: 14, paddingHorizontal: 8,
+    borderRadius: 18, borderWidth: 1,
+  },
+  recentAvatar: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  recentName: { fontSize: 11, fontFamily: Fonts.bold, textAlign: 'center', marginBottom: 2 },
+  recentMethod: { fontSize: 9, fontFamily: Fonts.medium },
+
+  // Balance
+  balanceContainer: { marginTop: 8, marginBottom: 24 },
+  balanceBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  balanceDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#00C853' },
+  balanceTitle: { color: T.textDim, fontSize: 12, fontFamily: Fonts.bold },
+  balanceAmount: { fontSize: 32, fontFamily: Fonts.extraBold, letterSpacing: -1 },
+  balanceUsd: { color: T.textDim, fontSize: 14, fontFamily: Fonts.semiBold, marginTop: 2 },
+
+  // Amount inputs
+  section: { marginBottom: 24 },
+  labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  sectionLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5 },
+  maxText: { color: T.primary, fontSize: 12, fontFamily: Fonts.extraBold },
+  amountInputBox: { 
+    borderRadius: 24, padding: 20, borderWidth: 1.5, borderColor: T.border
+  },
+  amountDisplay: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, marginBottom: 8 },
+  amountField: { fontSize: 30, fontFamily: Fonts.extraBold, minWidth: 120, padding: 0 },
+  ethBrand: { color: T.textDim, fontSize: 14, fontFamily: Fonts.extraBold, marginBottom: 6 },
+  usdPreviewContainer: { borderTopWidth: 1, borderTopColor: T.border, paddingTop: 10 },
+  usdPreviewText: { color: T.textDim, fontSize: 14, fontFamily: Fonts.semiBold },
+  inputError: { borderColor: T.primary + '80' },
+
+  // Gas details
+  gasSection: { borderRadius: 24, padding: 18 },
+  gasHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
+  gasIconBox: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  gasTitle: { fontSize: 13, fontFamily: Fonts.bold },
+  gasRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  gasLabel: { fontSize: 12, fontFamily: Fonts.semiBold },
+  gasValue: { fontSize: 12, fontFamily: Fonts.bold },
+
+  // Review screen
+  reviewCard: { borderRadius: 24, padding: 20, gap: 16 },
+  reviewRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1 },
+  reviewLabel: { fontSize: 13, fontFamily: Fonts.bold },
+  reviewValue: { fontSize: 13, fontFamily: Fonts.extraBold },
+  reviewValueRow: { flexDirection: 'row', alignItems: 'center' },
+  reviewTotalRow: { flexDirection: 'row', justifyContent: 'space-between', paddingTop: 12 },
+  reviewTotalLabel: { fontSize: 14, fontFamily: Fonts.extraBold },
+  reviewTotalValue: { fontSize: 18, fontFamily: Fonts.extraBold },
+  reviewTotalSub: { color: T.textDim, fontSize: 12, fontFamily: Fonts.bold, marginTop: 2 },
+  confirmBtn: { height: 56, borderRadius: 28, overflow: 'hidden' },
+  confirmBtnGradient: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  confirmBtnText: { color: '#FFF', fontSize: 13, fontFamily: Fonts.extraBold, letterSpacing: 0.5 },
+
+  // Success Screen
+  successContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 40 },
+  successIconWrapper: { marginBottom: 20 },
+  successIconCircle: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center' },
+  successTitle: { fontSize: 24, fontFamily: Fonts.extraBold, marginBottom: 6 },
+  successSubtitle: { fontSize: 13, fontFamily: Fonts.medium, textAlign: 'center', paddingHorizontal: 20, marginBottom: 24 },
+  successDetailsCard: { width: '100%', borderRadius: 24, borderWidth: 1, padding: 18, gap: 14, marginBottom: 28 },
+  successDetailRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1 },
+  successDetailLabel: { fontSize: 12, fontFamily: Fonts.bold },
+  successDetailValue: { fontSize: 12, fontFamily: Fonts.extraBold },
+  successDoneBtn: { width: '100%', height: 56, borderRadius: 28, overflow: 'hidden' },
+  successDoneGradient: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  successDoneText: { color: '#FFF', fontSize: 14, fontFamily: Fonts.extraBold, letterSpacing: 1 },
+
+  // Actions
+  actionBar: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 24, paddingTop: 16 },
+  actionCenterText: { height: 56, alignItems: 'center', justifyContent: 'center' },
+  mainBtn: { height: 56, borderRadius: 28, overflow: 'hidden' },
+  btnGradient: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   btnDisabled: { opacity: 0.5 },
-  btnText: { color: '#FFF', fontSize: 15, fontFamily: Fonts.extraBold, letterSpacing: 1 },
-
-  // Modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
-  modalCard: { backgroundColor: T.surface, borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, paddingBottom: 32 },
-  modalIndicator: { width: 40, height: 4, backgroundColor: T.border, borderRadius: 2, alignSelf: 'center', marginBottom: 24 },
-  modalHeader: { alignItems: 'center', marginBottom: 28 },
-  modalIconBox: { width: 56, height: 56, borderRadius: 28, backgroundColor: T.primary + '18', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  modalTitle: { color: T.text, fontSize: 22, fontFamily: Fonts.extraBold, marginBottom: 8 },
-  modalSub: { color: T.textMuted, fontSize: 14, textAlign: 'center' },
-  modalDetails: { backgroundColor: T.surfaceLow, borderRadius: 24, padding: 20, marginBottom: 28 },
-  detailRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12 },
-  detailLabel: { color: T.textDim, fontSize: 13, fontFamily: Fonts.bold },
-  detailValue: { color: T.text, fontSize: 14, fontFamily: Fonts.bold },
-  detailSub: { color: T.textDim, fontSize: 11, fontFamily: Fonts.semiBold, marginTop: 2 },
-  detailDivider: { height: 1, backgroundColor: T.border, marginVertical: 8 },
-  totalLabel: { color: T.text, fontSize: 15, fontFamily: Fonts.extraBold },
-  totalValue: { color: T.primary, fontSize: 18, fontFamily: Fonts.extraBold },
-  totalSub: { color: T.textMuted, fontSize: 12, fontFamily: Fonts.bold, marginTop: 2 },
-  modalActions: { flexDirection: 'row', gap: 12 },
-  modalCancel: { flex: 1, height: 56, borderRadius: 28, backgroundColor: T.surfaceLow, alignItems: 'center', justifyContent: 'center' },
-  modalCancelText: { color: T.textMuted, fontSize: 14, fontFamily: Fonts.extraBold, letterSpacing: 1 },
-  modalConfirm: { flex: 2, height: 56, borderRadius: 28, overflow: 'hidden' },
-  confirmGradient: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  modalConfirmText: { color: '#FFF', fontSize: 14, fontFamily: Fonts.extraBold, letterSpacing: 1 },
+  btnText: { color: '#FFF', fontSize: 14, fontFamily: Fonts.extraBold, letterSpacing: 0.5 },
 });

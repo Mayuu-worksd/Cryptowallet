@@ -24,13 +24,17 @@ export default function NetworksPage() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingNetwork, setEditingNetwork] = useState<any>(null);
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<any>({
     network_name: '',
     rpc_url: '',
     chain_id: '',
     explorer_url: '',
     symbol: '',
     is_mainnet: true,
+    min_deposit: '',
+    estimated_arrival: '',
+    warning_text: '',
+    supported_assets: [],
   });
 
   // Fetch Networks
@@ -50,21 +54,29 @@ export default function NetworksPage() {
         const { error } = await supabase.rpc('admin_update_network', {
           p_id: editingNetwork.id,
           p_network_name: payload.network_name,
-          p_rpc_url: payload.rpc_url,
+          p_rpc_url: payload.rpc_url || '',
           p_chain_id: payload.chain_id,
           p_explorer_url: payload.explorer_url,
           p_symbol: payload.symbol,
           p_is_mainnet: payload.is_mainnet,
+          p_min_deposit: payload.min_deposit,
+          p_estimated_arrival: payload.estimated_arrival,
+          p_warning_text: payload.warning_text,
+          p_supported_assets: payload.supported_assets,
         });
         if (error) throw error;
       } else {
         const { error } = await supabase.rpc('admin_insert_network', {
           p_network_name: payload.network_name,
-          p_rpc_url: payload.rpc_url,
+          p_rpc_url: payload.rpc_url || '',
           p_chain_id: payload.chain_id,
           p_explorer_url: payload.explorer_url,
           p_symbol: payload.symbol,
           p_is_mainnet: payload.is_mainnet,
+          p_min_deposit: payload.min_deposit,
+          p_estimated_arrival: payload.estimated_arrival,
+          p_warning_text: payload.warning_text,
+          p_supported_assets: payload.supported_assets,
         });
         if (error) throw error;
       }
@@ -105,11 +117,15 @@ export default function NetworksPage() {
       setEditingNetwork(network);
       setFormData({
         network_name: network.network_name,
-        rpc_url: network.rpc_url,
+        rpc_url: network.rpc_url || '',
         chain_id: network.chain_id,
         explorer_url: network.explorer_url || '',
         symbol: network.symbol,
         is_mainnet: network.is_mainnet,
+        min_deposit: network.min_deposit || '',
+        estimated_arrival: network.estimated_arrival || '',
+        warning_text: network.warning_text || '',
+        supported_assets: network.supported_assets || [],
       });
     } else {
       setEditingNetwork(null);
@@ -120,6 +136,10 @@ export default function NetworksPage() {
         explorer_url: '',
         symbol: '',
         is_mainnet: true,
+        min_deposit: '',
+        estimated_arrival: '',
+        warning_text: '',
+        supported_assets: [],
       });
     }
     setIsDrawerOpen(true);
@@ -203,6 +223,9 @@ export default function NetworksPage() {
                 <th className="py-3.5 px-6 border-r-3 border-[#1a1a1a] font-display">Network Info</th>
                 <th className="py-3.5 px-4 border-r-3 border-[#1a1a1a] font-display">Chain / RPC</th>
                 <th className="py-3.5 px-4 border-r-3 border-[#1a1a1a] font-display">Environment</th>
+                <th className="py-3.5 px-4 border-r-3 border-[#1a1a1a] font-display">Supported Assets</th>
+                <th className="py-3.5 px-4 border-r-3 border-[#1a1a1a] font-display">Min Deposit</th>
+                <th className="py-3.5 px-4 border-r-3 border-[#1a1a1a] font-display">Est. Arrival</th>
                 <th className="py-3.5 px-4 border-r-3 border-[#1a1a1a] font-display">Status</th>
                 <th className="py-3.5 px-6 text-right font-display">Actions</th>
               </tr>
@@ -210,7 +233,7 @@ export default function NetworksPage() {
             <tbody className="divide-y-3 divide-[#1a1a1a] font-mono text-[#1a1a1a]">
               {isLoading ? (
                 <tr>
-                  <td colSpan={5} className="py-16 text-center text-gray-500">
+                  <td colSpan={8} className="py-16 text-center text-gray-500">
                     <div className="flex flex-col items-center gap-2">
                       <Loader2 className="h-6 w-6 animate-spin text-[#1a1a1a]" />
                       <span className="font-bold font-display uppercase text-xs">Fetching networks...</span>
@@ -219,7 +242,7 @@ export default function NetworksPage() {
                 </tr>
               ) : (networks || []).length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-16 text-center text-[#1a1a1a] font-bold uppercase font-display">
+                  <td colSpan={8} className="py-16 text-center text-[#1a1a1a] font-bold uppercase font-display">
                     No blockchain networks configured.
                   </td>
                 </tr>
@@ -245,7 +268,7 @@ export default function NetworksPage() {
                       <p className="text-[10px] font-bold text-[#1a1a1a]">Chain ID: {network.chain_id}</p>
                       <div className="flex items-center gap-1 mt-1 text-[9px] text-gray-500 w-48 truncate">
                         <LinkIcon className="h-3 w-3 flex-shrink-0" />
-                        <span className="truncate">{network.rpc_url}</span>
+                        <span className="truncate">{network.rpc_url || '—'}</span>
                       </div>
                     </td>
 
@@ -256,6 +279,34 @@ export default function NetworksPage() {
                       }`}>
                         {network.is_mainnet ? 'Mainnet' : 'Testnet'}
                       </span>
+                    </td>
+
+                    {/* Supported Assets */}
+                    <td className="py-4 px-4 border-r-3 border-[#1a1a1a]">
+                      <div className="flex flex-wrap gap-1 max-w-[150px]">
+                        {network.supported_assets && network.supported_assets.length > 0 ? (
+                          network.supported_assets.map((asset: string) => (
+                            <span 
+                              key={asset} 
+                              className="px-1 py-0.5 bg-gray-100 border border-gray-400 text-[#1a1a1a] rounded-sm text-[8px] font-bold font-mono"
+                            >
+                              {asset}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-[9px] text-gray-400 italic">None</span>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* Min Deposit */}
+                    <td className="py-4 px-4 border-r-3 border-[#1a1a1a] font-mono text-[10px] font-bold">
+                      {network.min_deposit || '—'}
+                    </td>
+
+                    {/* Est. Arrival */}
+                    <td className="py-4 px-4 border-r-3 border-[#1a1a1a] font-mono text-[10px] font-bold">
+                      {network.estimated_arrival || '—'}
                     </td>
 
                     {/* Status badge */}
@@ -358,11 +409,10 @@ export default function NetworksPage() {
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-bold text-[#1a1a1a] uppercase tracking-wider mb-2">RPC Endpoint URL</label>
+                    <label className="block text-[10px] font-bold text-[#1a1a1a] uppercase tracking-wider mb-2">RPC Endpoint URL (Optional)</label>
                     <input
-                      required
-                      type="url"
-                      placeholder="https://mainnet.infura.io/v3/..."
+                      type="text"
+                      placeholder="https://mainnet.infura.io/v3/... or empty"
                       value={formData.rpc_url}
                       onChange={(e) => setFormData({...formData, rpc_url: e.target.value})}
                       className="w-full brutalist-input text-xs"
@@ -403,6 +453,65 @@ export default function NetworksPage() {
                       onChange={(e) => setFormData({...formData, explorer_url: e.target.value})}
                       className="w-full brutalist-input text-xs"
                     />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold text-[#1a1a1a] uppercase tracking-wider mb-2">Minimum Deposit</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 0.001 ETH"
+                        value={formData.min_deposit}
+                        onChange={(e) => setFormData({...formData, min_deposit: e.target.value})}
+                        className="w-full brutalist-input text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-[#1a1a1a] uppercase tracking-wider mb-2">Estimated Arrival</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 3 minutes"
+                        value={formData.estimated_arrival}
+                        onChange={(e) => setFormData({...formData, estimated_arrival: e.target.value})}
+                        className="w-full brutalist-input text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-[#1a1a1a] uppercase tracking-wider mb-2">Network Warnings</label>
+                    <textarea
+                      placeholder="Only send assets through this network..."
+                      value={formData.warning_text}
+                      onChange={(e) => setFormData({...formData, warning_text: e.target.value})}
+                      className="w-full brutalist-input text-xs h-20 p-2 border-2 border-[#1a1a1a] font-mono resize-none focus:outline-hidden"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-[#1a1a1a] uppercase tracking-wider mb-2">Supported Assets</label>
+                    <div className="grid grid-cols-3 gap-2 border-2 border-[#1a1a1a] p-3 bg-gray-50 max-h-40 overflow-y-auto">
+                      {['ETH', 'USDT', 'USDC', 'TRX', 'BTC', 'SOL', 'BNB', 'XRP', 'TON', 'SUI', 'MATIC'].map(asset => {
+                        const isChecked = (formData.supported_assets || []).includes(asset);
+                        return (
+                          <label key={asset} className="flex items-center gap-2 text-xs font-bold cursor-pointer hover:text-[#0055ff] transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {
+                                const current = formData.supported_assets || [];
+                                const updated = current.includes(asset) 
+                                  ? current.filter((a: string) => a !== asset) 
+                                  : [...current, asset];
+                                setFormData({...formData, supported_assets: updated});
+                              }}
+                              className="w-4 h-4 border-2 border-[#1a1a1a] focus:ring-0 text-[#0055ff]"
+                            />
+                            {asset}
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   <div>

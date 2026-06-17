@@ -812,6 +812,111 @@ export const txService = {
   },
 };
 
+// ─── Recipient Lookup Service (Multi-Recipient Transfer) ─────────────────────
+
+export type RecipientInfo = {
+  found: boolean;
+  wallet_address?: string;
+  tron_address?: string;
+  wallet_name?: string;
+  user_uid?: number;
+  account_type?: 'personal' | 'business';
+  kyc_status?: KYCStatus;
+  kyc_name?: string;
+  masked_email?: string;
+};
+
+export type RecentRecipient = {
+  recipient_wallet: string;
+  recipient_name?: string;
+  recipient_uid?: number;
+  method: 'uid' | 'email' | 'phone' | 'wallet';
+  last_used_at: string;
+  wallet_name?: string;
+  account_type?: 'personal' | 'business';
+  tron_address?: string;
+};
+
+export const recipientService = {
+
+  async lookupByUid(uid: number): Promise<RecipientInfo> {
+    try {
+      const { data, error } = await supabase.rpc('lookup_recipient_by_uid', { p_uid: uid });
+      if (error) throw error;
+      return (data as RecipientInfo) ?? { found: false };
+    } catch (e) {
+      console.warn('[recipientService] lookupByUid error:', e);
+      return { found: false };
+    }
+  },
+
+  async lookupByEmail(email: string): Promise<RecipientInfo> {
+    try {
+      const { data, error } = await supabase.rpc('lookup_recipient_by_email', { p_email: email.trim() });
+      if (error) throw error;
+      return (data as RecipientInfo) ?? { found: false };
+    } catch (e) {
+      console.warn('[recipientService] lookupByEmail error:', e);
+      return { found: false };
+    }
+  },
+
+  async lookupByPhone(phone: string): Promise<RecipientInfo> {
+    try {
+      const { data, error } = await supabase.rpc('lookup_recipient_by_phone', { p_phone: phone.trim() });
+      if (error) throw error;
+      return (data as RecipientInfo) ?? { found: false };
+    } catch (e) {
+      console.warn('[recipientService] lookupByPhone error:', e);
+      return { found: false };
+    }
+  },
+
+  async lookupByWallet(address: string): Promise<RecipientInfo> {
+    try {
+      const { data, error } = await supabase.rpc('lookup_recipient_by_wallet', { p_wallet: address.trim() });
+      if (error) throw error;
+      return (data as RecipientInfo) ?? { found: false };
+    } catch (e) {
+      console.warn('[recipientService] lookupByWallet error:', e);
+      return { found: false };
+    }
+  },
+
+  async saveRecent(
+    senderWallet: string,
+    recipientWallet: string,
+    recipientName?: string,
+    recipientUid?: number,
+    method: 'uid' | 'email' | 'phone' | 'wallet' = 'wallet',
+  ): Promise<void> {
+    try {
+      await supabase.rpc('save_recent_recipient', {
+        p_sender_wallet: senderWallet.toLowerCase(),
+        p_recipient_wallet: recipientWallet.toLowerCase(),
+        p_recipient_name: recipientName ?? null,
+        p_recipient_uid: recipientUid ?? null,
+        p_method: method,
+      });
+    } catch (e) {
+      console.warn('[recipientService] saveRecent error:', e);
+    }
+  },
+
+  async getRecents(senderWallet: string): Promise<RecentRecipient[]> {
+    try {
+      const { data, error } = await supabase.rpc('get_recent_recipients', {
+        p_sender_wallet: senderWallet.toLowerCase(),
+      });
+      if (error) throw error;
+      return (data as RecentRecipient[]) ?? [];
+    } catch (e) {
+      console.warn('[recipientService] getRecents error:', e);
+      return [];
+    }
+  },
+};
+
 // ─── Fiat Currency Service ────────────────────────────────────────────────────
 
 export interface FiatCurrency {
