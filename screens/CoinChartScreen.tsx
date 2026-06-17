@@ -16,6 +16,7 @@ import { COIN_META, COIN_COLORS } from '../constants';
 import { SYMBOL_TO_COINGECKO_ID } from '../services/marketService';
 import { SUPPORTED_FIAT_CURRENCIES } from '../constants/currencyConfig';
 import { CurrencyText } from '../components/CurrencyText';
+import { parseDateSafe, formatDateShort } from '../utils/date';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -270,7 +271,7 @@ export default function CoinChartScreen({ route, navigation }: any) {
       tx.symbol === symbol || 
       (tx.type === 'swap' && (tx.buyToken === symbol || tx.coin === symbol)) ||
       (tx.type === 'SWAP' && (tx.buyToken === symbol || tx.coin === symbol))
-    ).sort((a: any, b: any) => new Date(b.date || Date.now()).getTime() - new Date(a.date || Date.now()).getTime());
+    ).sort((a: any, b: any) => parseDateSafe(b.date).getTime() - parseDateSafe(a.date).getTime());
   }, [transactions, symbol]);
 
   return (
@@ -361,7 +362,7 @@ export default function CoinChartScreen({ route, navigation }: any) {
              </View>
            </View>
 
-           {/* Send & Receive Pills */}
+           {/* Send, Receive & Swap Pills */}
            <View style={styles.balanceActions}>
               <TouchableOpacity style={[styles.pillBtn, { backgroundColor: T.surfaceLow }]} onPress={() => navigation.navigate('Send', { symbol })}>
                  <Feather name="arrow-up-right" size={16} color={T.text} style={{ marginRight: 8 }} />
@@ -370,6 +371,10 @@ export default function CoinChartScreen({ route, navigation }: any) {
               <TouchableOpacity style={[styles.pillBtn, { backgroundColor: T.surfaceLow }]} onPress={() => navigation.navigate('Receive', { symbol })}>
                  <Ionicons name="qr-code-outline" size={16} color={T.text} style={{ marginRight: 8 }} />
                  <Text style={[styles.pillBtnText, { color: T.text }]}>Receive</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.pillBtn, { backgroundColor: T.surfaceLow }]} onPress={() => navigation.navigate('Swap', { fromToken: symbol })}>
+                 <Feather name="repeat" size={16} color={T.text} style={{ marginRight: 8 }} />
+                 <Text style={[styles.pillBtnText, { color: T.text }]}>Swap</Text>
               </TouchableOpacity>
            </View>
         </View>
@@ -424,7 +429,7 @@ export default function CoinChartScreen({ route, navigation }: any) {
                       <View>
                         <Text style={[styles.txTitle, { color: T.text }]}>{title}</Text>
                         <Text style={[styles.txDate, { color: T.textMuted }]}>
-                           {new Date(tx.date || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                           {formatDateShort(tx.date)}
                         </Text>
                       </View>
                     </View>

@@ -18,6 +18,7 @@ import { DEFAULT_NETWORK, NETWORK_INFO } from '../constants';
 import { ESCROW_CONTRACTS } from '../services/escrowService';
 import { SUPPORTED_TOKENS, SUPPORTED_FIAT_CURRENCIES } from '../constants/currencyConfig';
 import { commissionService } from '../services/commissionService';
+import { parseDateSafe } from '../utils/date';
 
 export type Transaction = {
   id: string;
@@ -1051,7 +1052,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
       // Sort transactions oldest to newest for accurate replay
       const sortedTxs = [...transactions].sort((a: any, b: any) => 
-        (a.rawDate || new Date(a.date).getTime()) - (b.rawDate || new Date(b.date).getTime())
+        (a.rawDate || parseDateSafe(a.date).getTime()) - (b.rawDate || parseDateSafe(b.date).getTime())
       );
 
       sortedTxs.forEach(t => {

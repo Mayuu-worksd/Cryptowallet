@@ -6,6 +6,7 @@
 
 import { Platform } from 'react-native';
 import { ethers } from 'ethers';
+import { parseDateSafe, formatDateShort } from '../utils/date';
 
 // ethers v5 compatibility shim — utils functions moved to top-level in v6
 const formatEther = (ethers as any).formatEther ?? ethers.utils.formatEther;
@@ -72,12 +73,11 @@ type CardTx = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function toIso(dateStr: string): string {
-  // Handles "Apr 22, 2024", ISO strings, and unix-ms strings
   try {
-    const d = new Date(dateStr);
-    if (!isNaN(d.getTime())) return d.toISOString();
-  } catch (_e) {}
-  return new Date().toISOString();
+    return parseDateSafe(dateStr).toISOString();
+  } catch (_e) {
+    return new Date().toISOString();
+  }
 }
 
 function localStatusToUnified(s: 'success' | 'pending' | 'failed'): UnifiedTx['status'] {
@@ -319,17 +319,7 @@ export const transactionService = {
 
   /** Format ISO date → "Apr 22, 2:30 PM" */
   formatDate(iso: string): string {
-    try {
-      return new Date(iso).toLocaleString('en-US', {
-        month:  'short',
-        day:    'numeric',
-        hour:   'numeric',
-        minute: '2-digit',
-        hour12: true,
-      });
-    } catch {
-      return iso;
-    }
+    return formatDateShort(iso);
   },
 
   /**
