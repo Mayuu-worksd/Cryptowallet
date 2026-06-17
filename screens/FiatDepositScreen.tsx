@@ -60,9 +60,11 @@ export default function FiatDepositScreen({ navigation }: any) {
     setToast({ visible: true, message, type });
   };
 
-  // Fetch bank accounts and active requests
   const loadData = async () => {
-    if (!walletAddress) return;
+    if (!walletAddress) {
+      setCheckingRequests(false);
+      return;
+    }
     setLoadingBanks(true);
     setCheckingRequests(true);
     try {
@@ -87,10 +89,9 @@ export default function FiatDepositScreen({ navigation }: any) {
     loadData();
   }, [walletAddress]);
 
-  // Find bank account for current fiat currency
   const bankDetails = useMemo(() => {
     return bankAccounts.find(
-      (b) => b.currency.toUpperCase() === fiatCurrency.toUpperCase()
+      (b) => b.currency?.toUpperCase() === fiatCurrency.toUpperCase()
     );
   }, [bankAccounts, fiatCurrency]);
 
@@ -105,7 +106,7 @@ export default function FiatDepositScreen({ navigation }: any) {
     const amtNum = parseFloat(amount);
     if (isNaN(amtNum) || amtNum <= 0) return '0.00';
 
-    const coinPriceUsd = prices[cryptoAsset]?.usd || 1.0;
+    const coinPriceUsd = prices?.[cryptoAsset]?.usd || 1.0;
     const rate = FIAT_RATES[fiatCurrency] || 1.0;
     const valueUsd = amtNum / rate;
     const cryptoAmt = valueUsd / coinPriceUsd;

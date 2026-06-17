@@ -54,7 +54,7 @@ export default function FiatWithdrawalScreen({ navigation }: any) {
     if (isNaN(amtNum) || amtNum <= 0) return '0.00';
     
     // Check asset price in USD
-    const usdPrice = prices[cryptoAsset]?.usd || 1;
+    const usdPrice = prices?.[cryptoAsset]?.usd || 1;
     const valueUsd = amtNum * usdPrice;
     
     // Conversions from USD to other fiat currencies
