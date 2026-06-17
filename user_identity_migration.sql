@@ -20,16 +20,17 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql VOLATILE;
 
--- 2. Add columns to wallet_profiles (temporarily nullable so default populates existing rows)
+-- 2. Add columns to wallet_profiles (initially nullable, without the self-referencing default UID during table alter)
 ALTER TABLE wallet_profiles ADD COLUMN IF NOT EXISTS user_uuid UUID UNIQUE DEFAULT gen_random_uuid();
-ALTER TABLE wallet_profiles ADD COLUMN IF NOT EXISTS user_uid BIGINT UNIQUE DEFAULT generate_unique_user_uid();
+ALTER TABLE wallet_profiles ADD COLUMN IF NOT EXISTS user_uid BIGINT UNIQUE;
 
--- 3. Backfill any missing UUID/UID values for wallet_profiles
+-- 3. Backfill any missing UUID/UID values for wallet_profiles (populates UID column row by row safely)
 UPDATE wallet_profiles SET user_uuid = gen_random_uuid() WHERE user_uuid IS NULL;
 UPDATE wallet_profiles SET user_uid = generate_unique_user_uid() WHERE user_uid IS NULL;
 
--- 4. Set columns to NOT NULL
+-- 4. Set column DEFAULT constraint and NOT NULL constraints
 ALTER TABLE wallet_profiles ALTER COLUMN user_uuid SET NOT NULL;
+ALTER TABLE wallet_profiles ALTER COLUMN user_uid SET DEFAULT generate_unique_user_uid();
 ALTER TABLE wallet_profiles ALTER COLUMN user_uid SET NOT NULL;
 
 -- 5. Add user_uuid columns to downstream tables
