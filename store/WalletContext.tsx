@@ -1278,8 +1278,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const importWallet = useCallback(async (mnemonic: string, isNew: boolean = false, preferredNetwork?: string) => {
     try {
-      setIsLoadingWallet(true);
-
       // Clear all in-memory state immediately
       setCardBalance(0);
       setCardCreated(false);
@@ -1630,8 +1628,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setWalletNameState(defaultName);
       }
 
-      setIsLoadingWallet(false);
-
       transactionService.lastSyncTime = 0;
       transactionService.isLockedOut = false;
       // Fetch on-chain balance + new txs in background
@@ -1660,7 +1656,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         } catch {}
       })();
     } catch (e: any) {
-      setIsLoadingWallet(false);
       throw new Error(e.message || 'Invalid seed phrase.');
     }
   }, [walletAddress, network, prices, fetchBalance, switchNetwork]);

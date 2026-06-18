@@ -9,7 +9,7 @@ module.exports = {
     sdkVersion: "54.0.0",
     jsEngine: "hermes",
     updates: {
-      url: "https://u.expo.dev/8c882003-2f5c-42f8-963a-9bd47b068eab",
+      url: "https://u.expo.dev/ae4236e0-7cd5-4995-a9f1-afca7d6471e7",
       enabled: true,
       fallbackToCacheTimeout: 10000,
       checkAutomatically: "ON_LOAD",
@@ -17,6 +17,7 @@ module.exports = {
     runtimeVersion: {
       policy: "appVersion",
     },
+
     splash: {
       image: "./assets/splash-icon.png",
       resizeMode: "contain",
@@ -70,10 +71,10 @@ module.exports = {
         },
       ],
     ],
-    owner: "work234",
+    owner: "mayur57658",
     extra: {
       eas: {
-        projectId: "8c882003-2f5c-42f8-963a-9bd47b068eab",
+        projectId: "ae4236e0-7cd5-4995-a9f1-afca7d6471e7",
       },
     },
   },

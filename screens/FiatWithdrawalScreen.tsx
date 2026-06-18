@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
-  ScrollView, ActivityIndicator, StatusBar, Dimensions
+  ScrollView, ActivityIndicator, Image, StatusBar, Dimensions
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useWallet, useMarket } from '../store/WalletContext';
-import { Theme, Fonts } from '../constants';
+import { Theme, Fonts, COIN_META, NETWORK_INFO } from '../constants';
 import Toast from '../components/Toast';
 import { fiatRequestService } from '../services/supabaseService';
 import { haptics } from '../utils/haptics';
@@ -16,12 +16,41 @@ const { width } = Dimensions.get('window');
 const CRYPTO_ASSETS = ['USDT', 'USDC', 'ETH', 'BTC'];
 const FIAT_CURRENCIES = ['USD', 'AED', 'EUR', 'GBP', 'INR'];
 
+const FIAT_FLAGS: Record<string, string> = {
+  USD: 'us',
+  INR: 'in',
+  EUR: 'eu',
+  GBP: 'gb',
+  AED: 'ae',
+  AUD: 'au',
+  SGD: 'sg',
+  RUB: 'ru',
+  BHD: 'bh',
+  VND: 'vn',
+  SAR: 'sa',
+  KWD: 'kw',
+  THB: 'th'
+};
+
+const FiatIcon = ({ currency, size = 24 }: { currency: string; size?: number }) => {
+  const code = FIAT_FLAGS[currency.toUpperCase()] || 'us';
+  return (
+    <Image 
+      source={{ uri: `https://flagcdn.com/w80/${code}.png` }} 
+      style={{ width: size, height: size, borderRadius: size / 2 }}
+      resizeMode="cover"
+    />
+  );
+};
+
 export default function FiatWithdrawalScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
-  const { isDarkMode, walletAddress, balances } = useWallet();
+  const { isDarkMode, walletAddress, balances, network } = useWallet();
   const { prices } = useMarket();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
 
+  // Flow steps: 1=Crypto, 2=Fiat, 3=Amount, 4=Bank details, 5=Confirm summary
+  const [step, setStep] = useState<number>(1);
   const [cryptoAsset, setCryptoAsset] = useState('USDT');
   const [fiatCurrency, setFiatCurrency] = useState('USD');
   const [amount, setAmount] = useState('');
@@ -35,7 +64,6 @@ export default function FiatWithdrawalScreen({ navigation }: any) {
 
   const [submitting, setSubmitting] = useState(false);
   const [successTicket, setSuccessTicket] = useState<string | null>(null);
-
   const [toast, setToast] = useState({ visible: false, message: '', type: 'success' as 'success' | 'error' | 'info' });
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
@@ -68,6 +96,38 @@ export default function FiatWithdrawalScreen({ navigation }: any) {
     const rate = fiatRates[fiatCurrency] || 1.0;
     return (valueUsd * rate).toFixed(2);
   }, [amount, cryptoAsset, fiatCurrency, prices]);
+
+  const handleNext = () => {
+    haptics.selection();
+    if (step === 3) {
+      const amtNum = parseFloat(amount);
+      if (isNaN(amtNum) || amtNum <= 0) {
+        showToast('Please enter a valid amount to sell', 'error');
+        haptics.error();
+        return;
+      }
+      if (amtNum > balance) {
+        showToast(`Insufficient balance. You only have ${balance} ${cryptoAsset}`, 'error');
+        haptics.error();
+        return;
+      }
+    }
+    if (step === 4) {
+      if (!accountName.trim() || !bankName.trim() || !accountNumber.trim()) {
+        showToast('Please complete all required bank payout fields', 'error');
+        haptics.error();
+        return;
+      }
+    }
+    setStep(s => s + 1);
+  };
+
+  const handlePrev = () => {
+    haptics.selection();
+    if (step > 1) {
+      setStep(s => s - 1);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!walletAddress) return;
@@ -131,12 +191,21 @@ export default function FiatWithdrawalScreen({ navigation }: any) {
 
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 12, borderBottomColor: T.border }]}>
-        <TouchableOpacity
-          onPress={() => { haptics.selection(); navigation.goBack(); }}
-          style={[styles.backBtn, { backgroundColor: T.surfaceLow, borderColor: T.border }]}
-        >
-          <Feather name="chevron-left" size={24} color={T.text} />
-        </TouchableOpacity>
+        {step > 1 && !successTicket ? (
+          <TouchableOpacity
+            onPress={handlePrev}
+            style={[styles.backBtn, { backgroundColor: T.surfaceLow, borderColor: T.border }]}
+          >
+            <Feather name="chevron-left" size={24} color={T.text} />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            onPress={() => { haptics.selection(); navigation.goBack(); }}
+            style={[styles.backBtn, { backgroundColor: T.surfaceLow, borderColor: T.border }]}
+          >
+            {successTicket ? <Feather name="x" size={20} color={T.text} /> : <Feather name="chevron-left" size={24} color={T.text} />}
+          </TouchableOpacity>
+        )}
         <Text style={[styles.headerTitle, { color: T.text }]}>Fiat Withdrawal</Text>
         <View style={{ width: 44 }} />
       </View>
@@ -165,186 +234,370 @@ export default function FiatWithdrawalScreen({ navigation }: any) {
           </TouchableOpacity>
         </View>
       ) : (
-        // Form View
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          
-          {/* Section 1: Sell Crypto */}
-          <Text style={[styles.sectionTitle, { color: T.text }]}>1. Sell Crypto Asset</Text>
-          <View style={styles.selectorRow}>
-            {CRYPTO_ASSETS.map((asset) => {
-              const selected = cryptoAsset === asset;
-              return (
-                <TouchableOpacity
-                  key={asset}
-                  onPress={() => { haptics.selection(); setCryptoAsset(asset); }}
-                  style={[
-                    styles.selectorBtn,
-                    {
-                      borderColor: selected ? T.primary : T.border,
-                      backgroundColor: selected ? T.primary + '10' : T.surface
-                    }
-                  ]}
-                >
-                  <Text style={[styles.selectorText, { color: selected ? T.primary : T.text, fontFamily: Fonts.bold }]}>{asset}</Text>
-                </TouchableOpacity>
-              );
-            })}
+        <>
+          {/* Steps Progress Indicator */}
+          <View style={styles.progressHeader}>
+            <View style={[styles.progressBarBg, { backgroundColor: T.surfaceHigh }]}>
+              <View style={[styles.progressBarFill, { width: `${(step / 5) * 100}%`, backgroundColor: T.primary }]} />
+            </View>
+            <View style={styles.stepLabelsRow}>
+              <Text style={[styles.stepIndicatorText, { color: T.textDim }]}>Step {step} of 5</Text>
+              <Text style={[styles.stepDescText, { color: T.primary, fontFamily: Fonts.bold }]}>
+                {step === 1 && 'Select Asset'}
+                {step === 2 && 'Select Currency'}
+                {step === 3 && 'Enter Amount'}
+                {step === 4 && 'Bank Details'}
+                {step === 5 && 'Confirm Request'}
+              </Text>
+            </View>
           </View>
 
-          {/* Balance Display */}
-          <View style={styles.balanceContainer}>
-            <Text style={[styles.balanceLabel, { color: T.textDim }]}>Available Balance:</Text>
-            <TouchableOpacity onPress={() => { haptics.selection(); setAmount(balance.toString()); }}>
-              <View style={[styles.maxBadge, { borderColor: T.primary + '30', backgroundColor: T.primary + '0a' }]}>
-                <Text style={[styles.maxBadgeText, { color: T.primary }]}>
-                  {balance.toFixed(6)} {cryptoAsset} (Max)
-                </Text>
+          {/* Network Indicator Banner */}
+          {(() => {
+            const netInfo = NETWORK_INFO[network] || NETWORK_INFO['Sepolia'];
+            return (
+              <View style={[styles.networkBanner, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  {netInfo?.iconUrl ? (
+                    <Image source={{ uri: netInfo.iconUrl }} style={styles.networkBannerIcon} />
+                  ) : (
+                    <Feather name="globe" size={16} color={T.textDim} />
+                  )}
+                  <Text style={[styles.networkBannerText, { color: T.text, fontFamily: Fonts.bold }]}>
+                    {netInfo?.name || network} Network
+                  </Text>
+                </View>
+                <View style={[styles.networkStatusPill, { backgroundColor: T.success + '15' }]}>
+                  <View style={[styles.networkStatusDot, { backgroundColor: T.success }]} />
+                  <Text style={[styles.networkStatusText, { color: T.success, fontFamily: Fonts.bold }]}>Active</Text>
+                </View>
               </View>
-            </TouchableOpacity>
-          </View>
+            );
+          })()}
 
-          {/* Section 2: Payout Currency */}
-          <Text style={[styles.sectionTitle, { color: T.text, marginTop: 12 }]}>2. Receive Payout Currency</Text>
-          <View style={styles.selectorRow}>
-            {FIAT_CURRENCIES.map((fiat) => {
-              const selected = fiatCurrency === fiat;
-              return (
-                <TouchableOpacity
-                  key={fiat}
-                  onPress={() => { haptics.selection(); setFiatCurrency(fiat); }}
-                  style={[
-                    styles.selectorBtn,
-                    {
-                      borderColor: selected ? T.primary : T.border,
-                      backgroundColor: selected ? T.primary + '10' : T.surface
-                    }
-                  ]}
-                >
-                  <Text style={[styles.selectorText, { color: selected ? T.primary : T.text, fontFamily: Fonts.bold }]}>{fiat}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {/* Section 3: Sell quantity */}
-          <Text style={[styles.sectionTitle, { color: T.text, marginTop: 20 }]}>3. Quantity to Sell</Text>
-          <View style={[styles.inputContainer, { borderColor: T.border, backgroundColor: T.surface }]}>
-            <TextInput
-              style={[styles.input, { color: T.text }]}
-              placeholder="0.00"
-              placeholderTextColor={T.textDim}
-              keyboardType="decimal-pad"
-              value={amount}
-              onChangeText={setAmount}
-            />
-            <Text style={[styles.suffix, { color: T.textDim }]}>{cryptoAsset}</Text>
-          </View>
-
-          {/* Calculator estimate */}
-          <View style={[styles.estimateBox, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
-            <Text style={[styles.estimateLabel, { color: T.textDim }]}>Estimated Fiat Payout:</Text>
-            <Text style={[styles.estimateValue, { color: T.success, fontFamily: Fonts.bold }]}>
-              {fiatEstimate} {fiatCurrency}
-            </Text>
-          </View>
-
-          {/* Section 4: Bank account details */}
-          <Text style={[styles.sectionTitle, { color: T.text, marginTop: 24, marginBottom: 8 }]}>4. Bank Payout Details</Text>
-          
-          <View style={[styles.card, { backgroundColor: T.surface, borderColor: T.border, padding: 16, gap: 14 }]}>
+          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             
-            <View>
-              <Text style={[styles.subLabel, { color: T.textDim }]}>Account Holder Name *</Text>
-              <TextInput
-                style={[styles.brutalInput, { borderColor: T.border, color: T.text, backgroundColor: T.background }]}
-                placeholder="John Doe"
-                placeholderTextColor={T.textDim}
-                value={accountName}
-                onChangeText={setAccountName}
-              />
-            </View>
+            {/* STEP 1: Select Crypto */}
+            {step === 1 && (
+              <View style={styles.stepContainer}>
+                <Text style={[styles.inputLabel, { color: T.text }]}>Choose a Crypto Asset to sell</Text>
+                <Text style={[styles.inputSubLabel, { color: T.textDim }]}>Select the digital asset you want to debit from your wallet balance to cash out.</Text>
+                <View style={styles.assetGrid}>
+                  {CRYPTO_ASSETS.map((asset) => {
+                    const selected = cryptoAsset === asset;
+                    return (
+                      <TouchableOpacity
+                        key={asset}
+                        onPress={() => { haptics.selection(); setCryptoAsset(asset); }}
+                        style={[
+                          styles.gridCard,
+                          {
+                            borderColor: selected ? T.primary : T.border,
+                            backgroundColor: selected ? T.primary + '10' : T.surface
+                          }
+                        ]}
+                      >
+                        <View style={[styles.assetIconCircle, { backgroundColor: T.surfaceHigh }]}>
+                          {COIN_META[asset]?.iconUrl ? (
+                            <Image source={{ uri: COIN_META[asset].iconUrl }} style={{ width: 24, height: 24, borderRadius: 12 }} />
+                          ) : (
+                            <MaterialCommunityIcons 
+                              name={asset === 'BTC' ? 'bitcoin' : asset === 'ETH' ? 'ethereum' : 'currency-usd'} 
+                              size={24} 
+                              color={selected ? T.primary : T.textDim} 
+                            />
+                          )}
+                        </View>
+                        <Text style={[styles.gridText, { color: T.text, fontFamily: Fonts.bold }]}>{asset}</Text>
+                        {selected && (
+                          <View style={[styles.checkCircle, { backgroundColor: T.primary }]}>
+                            <Feather name="check" size={10} color="#FFF" />
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
 
-            <View>
-              <Text style={[styles.subLabel, { color: T.textDim }]}>Bank Name *</Text>
-              <TextInput
-                style={[styles.brutalInput, { borderColor: T.border, color: T.text, backgroundColor: T.background }]}
-                placeholder="e.g. JPMorgan Chase / Emirates NBD"
-                placeholderTextColor={T.textDim}
-                value={bankName}
-                onChangeText={setBankName}
-              />
-            </View>
-
-            <View>
-              <Text style={[styles.subLabel, { color: T.textDim }]}>IBAN / Account Number *</Text>
-              <TextInput
-                style={[styles.brutalInput, { borderColor: T.border, color: T.text, backgroundColor: T.background }]}
-                placeholder="AE000000000000000000000"
-                placeholderTextColor={T.textDim}
-                value={accountNumber}
-                onChangeText={setAccountNumber}
-              />
-            </View>
-
-            <View>
-              <Text style={[styles.subLabel, { color: T.textDim }]}>SWIFT / BIC Code (Optional)</Text>
-              <TextInput
-                style={[styles.brutalInput, { borderColor: T.border, color: T.text, backgroundColor: T.background }]}
-                placeholder="e.g. CHASUS33"
-                placeholderTextColor={T.textDim}
-                value={swiftCode}
-                onChangeText={setSwiftCode}
-              />
-            </View>
-
-            <View>
-              <Text style={[styles.subLabel, { color: T.textDim }]}>Additional Wire Notes (Optional)</Text>
-              <TextInput
-                style={[
-                  styles.brutalInput, 
-                  { 
-                    borderColor: T.border, 
-                    color: T.text, 
-                    backgroundColor: T.background, 
-                    height: 80, 
-                    textAlignVertical: 'top', 
-                    paddingVertical: 12 
-                  }
-                ]}
-                placeholder="e.g. Intermediary bank routing, memo info..."
-                placeholderTextColor={T.textDim}
-                multiline
-                value={notes}
-                onChangeText={setNotes}
-              />
-            </View>
-          </View>
-
-          {/* Compliance warnings */}
-          <View style={[styles.warningBox, { backgroundColor: T.pending + '0a', borderColor: T.pending + '40' }]}>
-            <Feather name="shield" size={16} color={T.pending} style={{ marginTop: 2 }} />
-            <Text style={[styles.warningText, { color: T.textDim }]}>
-              Funds are held in escrow instantly. Verification and wire transfers are processed during business days and typically arrive in 1-2 banking days. Ensure the target account belongs to you.
-            </Text>
-          </View>
-
-          {/* Submit */}
-          <TouchableOpacity
-            style={[
-              styles.btnSubmit,
-              { backgroundColor: submitting ? T.surfaceLow : T.text, borderColor: T.border }
-            ]}
-            onPress={handleSubmit}
-            disabled={submitting}
-          >
-            {submitting ? (
-              <ActivityIndicator size="small" color={T.text} />
-            ) : (
-              <Text style={[styles.btnSubmitText, { color: T.background }]}>Submit Withdrawal Request</Text>
+                <TouchableOpacity
+                  style={[styles.btnPrimary, { backgroundColor: T.text, marginTop: 40 }]}
+                  onPress={handleNext}
+                >
+                  <Text style={[styles.btnPrimaryText, { color: T.background }]}>Continue</Text>
+                </TouchableOpacity>
+              </View>
             )}
-          </TouchableOpacity>
-          <View style={{ height: 40 }} />
-        </ScrollView>
+
+            {/* STEP 2: Select Payout Currency */}
+            {step === 2 && (
+              <View style={styles.stepContainer}>
+                <Text style={[styles.inputLabel, { color: T.text }]}>Choose your Payout Currency</Text>
+                <Text style={[styles.inputSubLabel, { color: T.textDim }]}>Select the fiat currency you wish to receive in your bank account.</Text>
+                <View style={styles.fiatList}>
+                  {FIAT_CURRENCIES.map((fiat) => {
+                    const selected = fiatCurrency === fiat;
+                    return (
+                      <TouchableOpacity
+                        key={fiat}
+                        onPress={() => { haptics.selection(); setFiatCurrency(fiat); }}
+                        style={[
+                          styles.fiatRow,
+                          {
+                            borderColor: selected ? T.primary : T.border,
+                            backgroundColor: selected ? T.primary + '0a' : T.surface
+                          }
+                        ]}
+                      >
+                        <View style={styles.fiatLeft}>
+                          <View style={[styles.currencySymbolCircle, { backgroundColor: T.surfaceHigh }]}>
+                            <FiatIcon currency={fiat} size={24} />
+                          </View>
+                          <Text style={[styles.fiatName, { color: T.text, fontFamily: Fonts.bold }]}>{fiat}</Text>
+                        </View>
+                        {selected ? (
+                          <View style={[styles.radioActive, { borderColor: T.primary }]}>
+                            <View style={[styles.radioDot, { backgroundColor: T.primary }]} />
+                          </View>
+                        ) : (
+                          <View style={[styles.radioInactive, { borderColor: T.border }]} />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.btnPrimary, { backgroundColor: T.text, marginTop: 40 }]}
+                  onPress={handleNext}
+                >
+                  <Text style={[styles.btnPrimaryText, { color: T.background }]}>Continue</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* STEP 3: Enter Quantity */}
+            {step === 3 && (
+              <View style={styles.stepContainer}>
+                <Text style={[styles.inputLabel, { color: T.text }]}>Enter Quantity to Sell</Text>
+                <Text style={[styles.inputSubLabel, { color: T.textDim }]}>Specify how much crypto you wish to liquidate.</Text>
+                
+                {/* Available Balance max badge */}
+                <View style={styles.balanceContainer}>
+                  <Text style={[styles.balanceLabel, { color: T.textDim }]}>Available Balance:</Text>
+                  <TouchableOpacity onPress={() => { haptics.selection(); setAmount(balance.toString()); }}>
+                    <View style={[styles.maxBadge, { borderColor: T.primary + '30', backgroundColor: T.primary + '0a' }]}>
+                      <Text style={[styles.maxBadgeText, { color: T.primary }]}>
+                        {balance.toFixed(6)} {cryptoAsset} (Max)
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={[styles.inputFieldContainer, { borderColor: T.border, backgroundColor: T.surface }]}>
+                  <TextInput
+                    style={[styles.inputField, { color: T.text }]}
+                    placeholder="0.00"
+                    placeholderTextColor={T.textDim}
+                    keyboardType="decimal-pad"
+                    autoFocus
+                    value={amount}
+                    onChangeText={setAmount}
+                  />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    {COIN_META[cryptoAsset]?.iconUrl && (
+                      <Image source={{ uri: COIN_META[cryptoAsset].iconUrl }} style={{ width: 18, height: 18, borderRadius: 9 }} />
+                    )}
+                    <Text style={[styles.suffix, { color: T.textDim }]}>{cryptoAsset}</Text>
+                  </View>
+                </View>
+
+                {/* Calculator Payout Estimate */}
+                <View style={[styles.estimateCard, { backgroundColor: T.surfaceLow, borderColor: T.border, marginTop: 24 }]}>
+                  <View style={styles.estimateRow}>
+                    <Text style={[styles.estimateLabel, { color: T.textDim }]}>Estimated Fiat Payout</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <FiatIcon currency={fiatCurrency} size={16} />
+                      <Text style={[styles.estimateValue, { color: T.success, fontFamily: Fonts.bold }]}>
+                        {fiatEstimate} {fiatCurrency}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.estimateRow}>
+                    <Text style={[styles.estimateLabel, { color: T.textDim }]}>Processing Fee</Text>
+                    <Text style={[styles.estimateValue, { color: T.text, fontFamily: Fonts.bold }]}>0.00% (Free)</Text>
+                  </View>
+                  <View style={styles.estimateRow}>
+                    <Text style={[styles.estimateLabel, { color: T.textDim }]}>Wire Transfer Speed</Text>
+                    <Text style={[styles.estimateValue, { color: T.text, fontFamily: Fonts.medium }]}>1 - 2 business days</Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.btnPrimary, { backgroundColor: T.text, marginTop: 30 }]}
+                  onPress={handleNext}
+                >
+                  <Text style={[styles.btnPrimaryText, { color: T.background }]}>Continue</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* STEP 4: Bank Details Form */}
+            {step === 4 && (
+              <View style={styles.stepContainer}>
+                <Text style={[styles.inputLabel, { color: T.text }]}>Target Bank Details</Text>
+                <Text style={[styles.inputSubLabel, { color: T.textDim }]}>Specify the personal bank account where payouts should be sent. Wire clearing takes 1-2 days.</Text>
+
+                <View style={[styles.card, { backgroundColor: T.surface, borderColor: T.border, padding: 16, gap: 14 }]}>
+                  <View>
+                    <Text style={[styles.subLabel, { color: T.textDim }]}>Account Holder Name *</Text>
+                    <TextInput
+                      style={[styles.brutalInput, { borderColor: T.border, color: T.text, backgroundColor: T.background }]}
+                      placeholder="John Doe"
+                      placeholderTextColor={T.textDim}
+                      value={accountName}
+                      onChangeText={setAccountName}
+                    />
+                  </View>
+
+                  <View>
+                    <Text style={[styles.subLabel, { color: T.textDim }]}>Bank Name *</Text>
+                    <TextInput
+                      style={[styles.brutalInput, { borderColor: T.border, color: T.text, backgroundColor: T.background }]}
+                      placeholder="e.g. JPMorgan Chase / Emirates NBD"
+                      placeholderTextColor={T.textDim}
+                      value={bankName}
+                      onChangeText={setBankName}
+                    />
+                  </View>
+
+                  <View>
+                    <Text style={[styles.subLabel, { color: T.textDim }]}>IBAN / Account Number *</Text>
+                    <TextInput
+                      style={[styles.brutalInput, { borderColor: T.border, color: T.text, backgroundColor: T.background }]}
+                      placeholder="AE000000000000000000000"
+                      placeholderTextColor={T.textDim}
+                      value={accountNumber}
+                      onChangeText={setAccountNumber}
+                    />
+                  </View>
+
+                  <View>
+                    <Text style={[styles.subLabel, { color: T.textDim }]}>SWIFT / BIC Code (Optional)</Text>
+                    <TextInput
+                      style={[styles.brutalInput, { borderColor: T.border, color: T.text, backgroundColor: T.background }]}
+                      placeholder="e.g. CHASUS33"
+                      placeholderTextColor={T.textDim}
+                      value={swiftCode}
+                      onChangeText={setSwiftCode}
+                    />
+                  </View>
+
+                  <View>
+                    <Text style={[styles.subLabel, { color: T.textDim }]}>Additional Wire Notes (Optional)</Text>
+                    <TextInput
+                      style={[
+                        styles.brutalInput, 
+                        { 
+                          borderColor: T.border, 
+                          color: T.text, 
+                          backgroundColor: T.background, 
+                          height: 80, 
+                          textAlignVertical: 'top', 
+                          paddingVertical: 12 
+                        }
+                      ]}
+                      placeholder="e.g. Intermediary routing, memo info..."
+                      placeholderTextColor={T.textDim}
+                      multiline
+                      value={notes}
+                      onChangeText={setNotes}
+                    />
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.btnPrimary, { backgroundColor: T.text, marginTop: 30 }]}
+                  onPress={handleNext}
+                >
+                  <Text style={[styles.btnPrimaryText, { color: T.background }]}>Continue</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* STEP 5: Confirm summary & submit */}
+            {step === 5 && (
+              <View style={styles.stepContainer}>
+                <Text style={[styles.inputLabel, { color: T.text }]}>Confirm Withdrawal Request</Text>
+                <Text style={[styles.inputSubLabel, { color: T.textDim }]}>Please review your request before submitting. Escrow locking will occur instantly.</Text>
+
+                <View style={[styles.card, { backgroundColor: T.surface, borderColor: T.border, padding: 18, gap: 16 }]}>
+                  
+                  <View style={styles.reviewRow}>
+                    <Text style={[styles.reviewLabel, { color: T.textDim }]}>Asset to Sell</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      {COIN_META[cryptoAsset]?.iconUrl && (
+                        <Image source={{ uri: COIN_META[cryptoAsset].iconUrl }} style={{ width: 18, height: 18, borderRadius: 9 }} />
+                      )}
+                      <Text style={[styles.reviewValue, { color: T.text, fontFamily: Fonts.bold }]}>{amount} {cryptoAsset}</Text>
+                    </View>
+                  </View>
+
+                  <View style={[styles.cardLine, { backgroundColor: T.border }]} />
+
+                  <View style={styles.reviewRow}>
+                    <Text style={[styles.reviewLabel, { color: T.textDim }]}>Payout Currency</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <FiatIcon currency={fiatCurrency} size={18} />
+                      <Text style={[styles.reviewValue, { color: T.success, fontFamily: Fonts.bold }]}>{fiatEstimate} {fiatCurrency}</Text>
+                    </View>
+                  </View>
+
+                  <View style={[styles.cardLine, { backgroundColor: T.border }]} />
+
+                  <View style={styles.reviewRow}>
+                    <Text style={[styles.reviewLabel, { color: T.textDim }]}>Network</Text>
+                    <Text style={[styles.reviewValue, { color: T.text, fontFamily: Fonts.semiBold }]}>{network} Chain</Text>
+                  </View>
+
+                  <View style={[styles.cardLine, { backgroundColor: T.border }]} />
+
+                  <View style={styles.reviewBlock}>
+                    <Text style={[styles.reviewLabel, { color: T.textDim, marginBottom: 4 }]}>Beneficiary Account</Text>
+                    <Text style={[styles.reviewText, { color: T.text, fontFamily: Fonts.bold }]}>{accountName}</Text>
+                    <Text style={[styles.reviewText, { color: T.textMuted }]}>{bankName} ({accountNumber})</Text>
+                    {swiftCode ? <Text style={[styles.reviewText, { color: T.textDim }]}>SWIFT: {swiftCode}</Text> : null}
+                  </View>
+
+                </View>
+
+                {/* Compliance warning */}
+                <View style={[styles.warningBox, { backgroundColor: T.pending + '0a', borderColor: T.pending + '40' }]}>
+                  <Feather name="shield" size={16} color={T.pending} style={{ marginTop: 2 }} />
+                  <Text style={[styles.warningText, { color: T.textDim }]}>
+                    Funds are held in escrow instantly. Verification and wire transfers are processed during business days and typically arrive in 1-2 banking days. Ensure the target account belongs to you.
+                  </Text>
+                </View>
+
+                {/* Submit */}
+                <TouchableOpacity
+                  style={[
+                    styles.btnPrimary,
+                    { backgroundColor: submitting ? T.surfaceLow : T.text, marginTop: 10 }
+                  ]}
+                  onPress={handleSubmit}
+                  disabled={submitting}
+                >
+                  {submitting ? (
+                    <ActivityIndicator size="small" color={T.text} />
+                  ) : (
+                    <Text style={[styles.btnPrimaryText, { color: T.background }]}>Confirm & Submit Escrow</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+
+          </ScrollView>
+        </>
       )}
     </View>
   );
@@ -358,28 +611,46 @@ const styles = StyleSheet.create({
   },
   backBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   headerTitle: { fontSize: 18, fontFamily: Fonts.extraBold },
-  scrollContent: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 60 },
-  sectionTitle: { fontSize: 14, fontFamily: Fonts.extraBold, marginBottom: 12 },
-  subLabel: { fontSize: 10, fontFamily: Fonts.extraBold, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
-  selectorRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
-  selectorBtn: { flex: 1, height: 48, borderRadius: 12, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  selectorText: { fontSize: 13 },
-  balanceContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingHorizontal: 4 },
+  progressHeader: { paddingHorizontal: 20, paddingTop: 16 },
+  progressBarBg: { height: 4, borderRadius: 2, overflow: 'hidden' },
+  progressBarFill: { height: '100%' },
+  stepLabelsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
+  stepIndicatorText: { fontSize: 11, fontFamily: Fonts.medium },
+  stepDescText: { fontSize: 11 },
+  stepContainer: { width: '100%', marginTop: 8 },
+  inputLabel: { fontSize: 18, fontFamily: Fonts.extraBold, marginBottom: 6 },
+  inputSubLabel: { fontSize: 13, lineHeight: 18, marginBottom: 20 },
+  assetGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  gridCard: { width: (width - 52) / 2, padding: 16, borderRadius: 16, borderWidth: 2, position: 'relative' },
+  assetIconCircle: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  gridText: { fontSize: 15 },
+  checkCircle: { position: 'absolute', top: 12, right: 12, width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  fiatList: { gap: 12 },
+  fiatRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderRadius: 16, borderWidth: 2 },
+  fiatLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  currencySymbolCircle: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  fiatName: { fontSize: 15 },
+  radioActive: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  radioDot: { width: 10, height: 10, borderRadius: 5 },
+  radioInactive: { width: 20, height: 20, borderRadius: 10, borderWidth: 2 },
+  balanceContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingHorizontal: 4 },
   balanceLabel: { fontSize: 12, fontFamily: Fonts.medium },
   maxBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1.5 },
   maxBadgeText: { fontSize: 11, fontFamily: Fonts.bold },
-  inputContainer: { flexDirection: 'row', alignItems: 'center', height: 56, borderRadius: 16, borderWidth: 2, paddingHorizontal: 16 },
-  suffix: { fontSize: 15, fontFamily: Fonts.bold, marginLeft: 8 },
-  input: { flex: 1, fontSize: 18, fontFamily: Fonts.extraBold, padding: 0 },
-  estimateBox: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderRadius: 16, borderWidth: 2, marginTop: 16 },
-  estimateLabel: { fontSize: 13, fontFamily: Fonts.bold },
-  estimateValue: { fontSize: 16 },
+  inputFieldContainer: { flexDirection: 'row', alignItems: 'center', height: 64, borderRadius: 16, borderWidth: 2, paddingHorizontal: 20 },
+  suffix: { fontSize: 16, fontFamily: Fonts.bold, marginLeft: 8 },
+  inputField: { flex: 1, fontSize: 22, fontFamily: Fonts.extraBold, padding: 0 },
+  estimateCard: { padding: 16, borderRadius: 16, borderWidth: 2, gap: 12 },
+  estimateRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  estimateLabel: { fontSize: 13 },
+  estimateValue: { fontSize: 14 },
   card: { borderRadius: 16, borderWidth: 2 },
+  subLabel: { fontSize: 10, fontFamily: Fonts.extraBold, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
   brutalInput: { height: 48, borderRadius: 12, borderWidth: 2, paddingHorizontal: 16, fontSize: 14, fontFamily: Fonts.semiBold },
+  btnPrimary: { height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
+  btnPrimaryText: { fontSize: 15, fontFamily: Fonts.extraBold },
   warningBox: { flexDirection: 'row', gap: 10, padding: 14, borderRadius: 14, borderWidth: 1.5, marginTop: 20, marginBottom: 24 },
   warningText: { flex: 1, fontSize: 11, lineHeight: 16 },
-  btnSubmit: { height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
-  btnSubmitText: { fontSize: 15, fontFamily: Fonts.extraBold },
   successContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
   successIconBox: { width: 80, height: 80, borderRadius: 40, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
   successTitle: { fontSize: 22, fontFamily: Fonts.extraBold, marginBottom: 8, textAlign: 'center' },
@@ -387,6 +658,46 @@ const styles = StyleSheet.create({
   ticketCard: { paddingVertical: 16, paddingHorizontal: 32, borderRadius: 16, borderWidth: 1.5, alignItems: 'center', marginBottom: 36, width: '100%' },
   ticketLabel: { fontSize: 10, fontFamily: Fonts.extraBold, letterSpacing: 1, marginBottom: 4 },
   ticketId: { fontSize: 20, fontFamily: Fonts.extraBold },
-  btnPrimary: { width: '100%', height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
-  btnPrimaryText: { fontSize: 15, fontFamily: Fonts.extraBold },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 60 },
+  networkBanner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginHorizontal: 20,
+    marginTop: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  networkBannerIcon: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+  },
+  networkBannerText: {
+    fontSize: 13,
+  },
+  networkStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  networkStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  networkStatusText: {
+    fontSize: 10,
+  },
+  reviewRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  reviewLabel: { fontSize: 13, fontFamily: Fonts.medium },
+  reviewValue: { fontSize: 14 },
+  cardLine: { height: 1 },
+  reviewBlock: { gap: 2 },
+  reviewText: { fontSize: 13, fontFamily: Fonts.medium }
 });

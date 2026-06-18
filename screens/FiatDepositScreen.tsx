@@ -9,10 +9,38 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Clipboard from 'expo-clipboard';
 import { useWallet, useMarket } from '../store/WalletContext';
-import { Theme, Fonts } from '../constants';
+import { Theme, Fonts, COIN_META, NETWORK_INFO } from '../constants';
 import Toast from '../components/Toast';
 import { fiatRequestService, AdminBankAccount, FiatCryptoRequest } from '../services/supabaseService';
 import { haptics } from '../utils/haptics';
+
+const FIAT_FLAGS: Record<string, string> = {
+  USD: 'us',
+  INR: 'in',
+  EUR: 'eu',
+  GBP: 'gb',
+  AED: 'ae',
+  AUD: 'au',
+  SGD: 'sg',
+  RUB: 'ru',
+  BHD: 'bh',
+  VND: 'vn',
+  SAR: 'sa',
+  KWD: 'kw',
+  THB: 'th'
+};
+
+const FiatIcon = ({ currency, size = 24 }: { currency: string; size?: number }) => {
+  const code = FIAT_FLAGS[currency.toUpperCase()] || 'us';
+  return (
+    <Image 
+      source={{ uri: `https://flagcdn.com/w80/${code}.png` }} 
+      style={{ width: size, height: size, borderRadius: size / 2 }}
+      resizeMode="cover"
+    />
+  );
+};
+
 
 const { width } = Dimensions.get('window');
 
@@ -29,7 +57,7 @@ const FIAT_RATES: Record<string, number> = {
 
 export default function FiatDepositScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
-  const { isDarkMode, walletAddress, userUid } = useWallet();
+  const { isDarkMode, walletAddress, userUid, network } = useWallet();
   const { prices } = useMarket();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
 
@@ -413,6 +441,29 @@ export default function FiatDepositScreen({ navigation }: any) {
         </View>
       </View>
 
+      {/* Network Indicator Banner */}
+      {(() => {
+        const netInfo = NETWORK_INFO[network] || NETWORK_INFO['Sepolia'];
+        return (
+          <View style={[styles.networkBanner, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {netInfo?.iconUrl ? (
+                <Image source={{ uri: netInfo.iconUrl }} style={styles.networkBannerIcon} />
+              ) : (
+                <Feather name="globe" size={16} color={T.textDim} />
+              )}
+              <Text style={[styles.networkBannerText, { color: T.text, fontFamily: Fonts.bold }]}>
+                {netInfo?.name || network} Network
+              </Text>
+            </View>
+            <View style={[styles.networkStatusPill, { backgroundColor: T.success + '15' }]}>
+              <View style={[styles.networkStatusDot, { backgroundColor: T.success }]} />
+              <Text style={[styles.networkStatusText, { color: T.success, fontFamily: Fonts.bold }]}>Active</Text>
+            </View>
+          </View>
+        );
+      })()}
+
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         
         {/* STEP 1: Select Crypto */}
@@ -436,11 +487,15 @@ export default function FiatDepositScreen({ navigation }: any) {
                     ]}
                   >
                     <View style={[styles.assetIconCircle, { backgroundColor: T.surfaceHigh }]}>
-                      <MaterialCommunityIcons 
-                        name={asset === 'BTC' ? 'bitcoin' : asset === 'ETH' ? 'ethereum' : 'currency-usd'} 
-                        size={24} 
-                        color={selected ? T.primary : T.textDim} 
-                      />
+                      {COIN_META[asset]?.iconUrl ? (
+                        <Image source={{ uri: COIN_META[asset].iconUrl }} style={{ width: 24, height: 24, borderRadius: 12 }} />
+                      ) : (
+                        <MaterialCommunityIcons 
+                          name={asset === 'BTC' ? 'bitcoin' : asset === 'ETH' ? 'ethereum' : 'currency-usd'} 
+                          size={24} 
+                          color={selected ? T.primary : T.textDim} 
+                        />
+                      )}
                     </View>
                     <Text style={[styles.gridText, { color: T.text, fontFamily: Fonts.bold }]}>{asset}</Text>
                     {selected && (
@@ -484,13 +539,7 @@ export default function FiatDepositScreen({ navigation }: any) {
                   >
                     <View style={styles.fiatLeft}>
                       <View style={[styles.currencySymbolCircle, { backgroundColor: T.surfaceHigh }]}>
-                        <Text style={[styles.symbolText, { color: T.text }]}>
-                          {fiat === 'USD' && '$'}
-                          {fiat === 'AED' && 'د.إ'}
-                          {fiat === 'EUR' && '€'}
-                          {fiat === 'GBP' && '£'}
-                          {fiat === 'INR' && '₹'}
-                        </Text>
+                        <FiatIcon currency={fiat} size={24} />
                       </View>
                       <Text style={[styles.fiatName, { color: T.text, fontFamily: Fonts.bold }]}>{fiat}</Text>
                     </View>
@@ -522,7 +571,10 @@ export default function FiatDepositScreen({ navigation }: any) {
             <Text style={[styles.inputSubLabel, { color: T.textDim }]}>Enter the amount of fiat money you plan to send.</Text>
             
             <View style={[styles.inputFieldContainer, { borderColor: T.border, backgroundColor: T.surface }]}>
-              <Text style={[styles.inputPrefix, { color: T.textDim }]}>{fiatCurrency}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginRight: 12 }}>
+                <FiatIcon currency={fiatCurrency} size={20} />
+                <Text style={[styles.inputPrefix, { color: T.textDim, marginRight: 0 }]}>{fiatCurrency}</Text>
+              </View>
               <TextInput
                 style={[styles.inputField, { color: T.text }]}
                 placeholder="0.00"
@@ -537,9 +589,14 @@ export default function FiatDepositScreen({ navigation }: any) {
             <View style={[styles.estimateCard, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
               <View style={styles.estimateRow}>
                 <Text style={[styles.estimateLabel, { color: T.textDim }]}>Estimated Crypto</Text>
-                <Text style={[styles.estimateValue, { color: T.success, fontFamily: Fonts.bold }]}>
-                  {cryptoEstimate} {cryptoAsset}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  {COIN_META[cryptoAsset]?.iconUrl && (
+                    <Image source={{ uri: COIN_META[cryptoAsset].iconUrl }} style={{ width: 16, height: 16, borderRadius: 8 }} />
+                  )}
+                  <Text style={[styles.estimateValue, { color: T.success, fontFamily: Fonts.bold }]}>
+                    {cryptoEstimate} {cryptoAsset}
+                  </Text>
+                </View>
               </View>
               <View style={styles.estimateRow}>
                 <Text style={[styles.estimateLabel, { color: T.textDim }]}>Processing Fee</Text>
@@ -810,6 +867,41 @@ export default function FiatDepositScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  networkBanner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginHorizontal: 20,
+    marginTop: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  networkBannerIcon: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+  },
+  networkBannerText: {
+    fontSize: 13,
+  },
+  networkStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  networkStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  networkStatusText: {
+    fontSize: 10,
+  },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1
