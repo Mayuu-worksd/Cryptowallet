@@ -12,6 +12,7 @@ import { useWallet, useMarket } from '../store/WalletContext';
 import { Theme, Fonts, COIN_META, NETWORK_INFO } from '../constants';
 import Toast from '../components/Toast';
 import { fiatRequestService, AdminBankAccount, FiatCryptoRequest } from '../services/supabaseService';
+import { BankAccountService } from '../services/bankAccountService';
 import { haptics } from '../utils/haptics';
 
 const FIAT_FLAGS: Record<string, string> = {
@@ -75,6 +76,7 @@ export default function FiatDepositScreen({ navigation }: any) {
 
   // Loaded active bank details
   const [bankAccounts, setBankAccounts] = useState<AdminBankAccount[]>([]);
+  const [supportedCurrencies, setSupportedCurrencies] = useState<string[]>([]);
   const [loadingBanks, setLoadingBanks] = useState(false);
 
   // Existing/submitted request tracking
@@ -96,8 +98,15 @@ export default function FiatDepositScreen({ navigation }: any) {
     setLoadingBanks(true);
     setCheckingRequests(true);
     try {
-      const banks = await fiatRequestService.getActiveBankAccounts();
+      // Use new BankAccountService for better bank account handling
+      const banks = await BankAccountService.getAllActiveBankAccounts();
       setBankAccounts(banks);
+      
+      // Get and store supported currencies
+      const currencies = await BankAccountService.getSupportedCurrencies();
+      setSupportedCurrencies(currencies);
+      console.log('Supported currencies:', currencies);
+      console.log('Available banks:', banks);
 
       const requests = await fiatRequestService.getRequests(walletAddress);
       // Look for any pending or under_review deposit requests
@@ -106,7 +115,8 @@ export default function FiatDepositScreen({ navigation }: any) {
         setActiveRequest(pendingDep);
       }
     } catch (e: any) {
-      showToast('Error loading details from server', 'error');
+      console.error('Error loading bank data:', e);
+      showToast('Error loading details from server: ' + (e.message || 'Unknown error'), 'error');
     } finally {
       setLoadingBanks(false);
       setCheckingRequests(false);
@@ -635,9 +645,17 @@ export default function FiatDepositScreen({ navigation }: any) {
             ) : !bankDetails ? (
               <View style={[styles.alertBox, { backgroundColor: T.error + '10', borderColor: T.error }]}>
                 <Feather name="alert-circle" size={18} color={T.error} />
-                <Text style={[styles.alertText, { color: T.text }]}>
-                  No bank accounts configured for {fiatCurrency}. Please contact the administration desk to enable this asset.
-                </Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.alertText, { color: T.text, fontFamily: Fonts.bold, marginBottom: 8 }]}>
+                    No bank accounts configured for {fiatCurrency}
+                  </Text>
+                  <Text style={[styles.alertText, { color: T.textDim, fontSize: 12 }]}>
+                    Please contact the administration desk to enable this asset.
+                  </Text>
+                  <Text style={[styles.alertText, { color: T.textDim, fontSize: 11, marginTop: 4 }]}>
+                    Available currencies: {bankAccounts.map(b => b.currency).filter((c, i, arr) => arr.indexOf(c) === i).join(', ') || 'None'}
+                  </Text>
+                </View>
               </View>
             ) : (
               <View style={styles.bankCardWrapper}>
