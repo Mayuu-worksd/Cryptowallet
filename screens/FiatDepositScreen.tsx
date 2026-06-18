@@ -350,11 +350,11 @@ export default function FiatDepositScreen({ navigation }: any) {
         </View>
 
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <View style={[styles.card, { backgroundColor: T.surface, borderColor: T.border }]}>
+          <View style={[styles.card, { backgroundColor: T.surface, borderColor: T.border, padding: 20 }]}>
             <View style={styles.ticketHeader}>
               <View>
-                <Text style={[styles.ticketBadgeLabel, { color: T.textDim }]}>TICKET NUMBER</Text>
-                <Text style={[styles.ticketBadgeId, { color: T.text }]}>{activeRequest.ticket_id}</Text>
+                <Text style={[styles.ticketBadgeLabel, { color: T.textDim }]}>TICKET ID</Text>
+                <Text style={[styles.ticketBadgeId, { color: T.primary }]}>{activeRequest.ticket_id}</Text>
               </View>
               <View style={[styles.statusBadge, { backgroundColor: T.pending + '18', borderColor: T.pending }]}>
                 <Text style={[styles.statusText, { color: T.pending }]}>
@@ -363,16 +363,24 @@ export default function FiatDepositScreen({ navigation }: any) {
               </View>
             </View>
 
-            <View style={[styles.divider, { backgroundColor: T.border }]} />
+            <View style={[styles.divider, { backgroundColor: T.border, marginVertical: 20 }]} />
 
             <View style={styles.ticketDetails}>
               <View style={styles.detailsRow}>
                 <Text style={[styles.detailLabel, { color: T.textDim }]}>Crypto Asset</Text>
-                <Text style={[styles.detailValue, { color: T.text }]}>{activeRequest.crypto_asset}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  {COIN_META[activeRequest.crypto_asset]?.iconUrl && (
+                    <Image source={{ uri: COIN_META[activeRequest.crypto_asset].iconUrl }} style={{ width: 16, height: 16, borderRadius: 8 }} />
+                  )}
+                  <Text style={[styles.detailValue, { color: T.text }]}>{activeRequest.crypto_asset}</Text>
+                </View>
               </View>
               <View style={styles.detailsRow}>
-                <Text style={[styles.detailLabel, { color: T.textDim }]}>Fiat Paid</Text>
-                <Text style={[styles.detailValue, { color: T.text }]}>{activeRequest.amount} {activeRequest.fiat_currency}</Text>
+                <Text style={[styles.detailLabel, { color: T.textDim }]}>Fiat Sent</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <FiatIcon currency={activeRequest.fiat_currency} size={16} />
+                  <Text style={[styles.detailValue, { color: T.text }]}>{activeRequest.amount} {activeRequest.fiat_currency}</Text>
+                </View>
               </View>
               <View style={styles.detailsRow}>
                 <Text style={[styles.detailLabel, { color: T.textDim }]}>Date Submitted</Text>
@@ -381,21 +389,17 @@ export default function FiatDepositScreen({ navigation }: any) {
             </View>
           </View>
 
-          <Text style={[styles.sectionTitle, { color: T.text, marginTop: 24, marginBottom: 16 }]}>Verification Progress</Text>
-          {renderTimeline(activeRequest.status)}
-
-          <View style={[styles.infoCard, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
-            <Feather name="info" size={18} color={T.textDim} />
-            <Text style={[styles.infoCardText, { color: T.textMuted }]}>
-              Deposits are verified manually by institutional desk managers. Verification typically completes within 1 business hour, depending on the banking clearance speed.
-            </Text>
+          <Text style={[styles.sectionTitle, { color: T.text, marginTop: 32, marginBottom: 20, fontFamily: Fonts.extraBold }]}>Verification Timeline</Text>
+          
+          <View style={[styles.card, { backgroundColor: T.surface, borderColor: T.border, padding: 20 }]}>
+            {renderTimeline(activeRequest.status)}
           </View>
 
           <TouchableOpacity
-            style={[styles.btnSecondary, { borderColor: T.border, marginTop: 12 }]}
+            style={[styles.btnSecondary, { borderColor: T.border, marginTop: 32 }]}
             onPress={handleReset}
           >
-            <Text style={[styles.btnSecondaryText, { color: T.text }]}>Submit Another Deposit</Text>
+            <Text style={[styles.btnSecondaryText, { color: T.text }]}>Submit New Deposit</Text>
           </TouchableOpacity>
         </ScrollView>
       </View>

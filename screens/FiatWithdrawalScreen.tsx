@@ -8,7 +8,7 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useWallet, useMarket } from '../store/WalletContext';
 import { Theme, Fonts, COIN_META, NETWORK_INFO } from '../constants';
 import Toast from '../components/Toast';
-import { fiatRequestService } from '../services/supabaseService';
+import { fiatRequestService, FiatCryptoRequest } from '../services/supabaseService';
 import { haptics } from '../utils/haptics';
 
 const { width } = Dimensions.get('window');
@@ -63,8 +63,32 @@ export default function FiatWithdrawalScreen({ navigation }: any) {
   const [notes, setNotes] = useState('');
 
   const [submitting, setSubmitting] = useState(false);
-  const [successTicket, setSuccessTicket] = useState<string | null>(null);
+  const [activeRequest, setActiveRequest] = useState<FiatCryptoRequest | null>(null);
+  const [checkingRequests, setCheckingRequests] = useState(true);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'success' as 'success' | 'error' | 'info' });
+
+  const loadData = async () => {
+    if (!walletAddress) {
+      setCheckingRequests(false);
+      return;
+    }
+    setCheckingRequests(true);
+    try {
+      const requests = await fiatRequestService.getRequests(walletAddress);
+      const pendingWd = requests.find(r => r.type === 'withdrawal' && (r.status === 'pending' || r.status === 'under_review'));
+      if (pendingWd) {
+        setActiveRequest(pendingWd);
+      }
+    } catch (e: any) {
+      console.error('Error loading requests:', e);
+    } finally {
+      setCheckingRequests(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [walletAddress]);
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToast({ visible: true, message, type });
@@ -169,7 +193,22 @@ export default function FiatWithdrawalScreen({ navigation }: any) {
       );
 
       haptics.success();
-      setSuccessTicket(res.ticket_id);
+      await loadData();
+      if (!activeRequest) {
+        setActiveRequest({
+          id: res?.id || '',
+          ticket_id: res?.ticket_id || 'WDR-PENDING',
+          wallet_address: walletAddress,
+          user_uuid: '',
+          type: 'withdrawal',
+          fiat_currency: fiatCurrency,
+          crypto_asset: cryptoAsset,
+          amount: amtNum,
+          status: 'pending',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+      }
     } catch (err: any) {
       showToast(err.message || 'Failed to submit withdrawal request', 'error');
       haptics.error();
@@ -177,6 +216,128 @@ export default function FiatWithdrawalScreen({ navigation }: any) {
       setSubmitting(false);
     }
   };
+
+  const handleReset = () => {
+    haptics.selection();
+    setActiveRequest(null);
+    setStep(1);
+    setAmount('');
+  };
+
+  const renderTimeline = (status: string) => {
+    const steps = [
+      { id: 'submitted', label: 'Submitted', desc: 'Crypto debited to escrow', done: true },
+      { id: 'under_review', label: 'Processing', desc: 'Admin desk initiating wire', done: status === 'under_review' || status === 'completed' },
+      { id: 'completed', label: 'Sent', desc: 'Wire transfer dispatched', done: status === 'completed' }
+    ];
+
+    return (
+      <View style={styles.timeline}>
+        {steps.map((st, i) => (
+          <View key={st.id} style={styles.timelineRow}>
+            <View style={styles.timelineLeft}>
+              <View style={[
+                styles.timelineDot,
+                { backgroundColor: st.done ? T.success : T.surfaceHigh, borderColor: st.done ? T.success : T.border }
+              ]}>
+                {st.done && <Feather name="check" size={12} color="#FFF" />}
+              </View>
+              {i < steps.length - 1 && (
+                <View style={[
+                  styles.timelineLine,
+                  { backgroundColor: st.done && steps[i + 1].done ? T.success : T.border }
+                ]} />
+              )}
+            </View>
+            <View style={styles.timelineRight}>
+              <Text style={[styles.timelineLabel, { color: T.text, fontFamily: Fonts.bold }]}>{st.label}</Text>
+              <Text style={[styles.timelineDesc, { color: T.textDim }]}>{st.desc}</Text>
+            </View>
+          </View>
+        ))}
+      </View>
+    );
+  };
+
+  if (checkingRequests) {
+    return (
+      <View style={[styles.root, { backgroundColor: T.background, justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={T.primary} />
+      </View>
+    );
+  }
+
+  if (activeRequest) {
+    return (
+      <View style={[styles.root, { backgroundColor: T.background }]}>
+        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+        <View style={[styles.header, { paddingTop: insets.top + 12, borderBottomColor: T.border }]}>
+          <TouchableOpacity
+            onPress={() => { haptics.selection(); navigation.goBack(); }}
+            style={[styles.backBtn, { backgroundColor: T.surfaceLow, borderColor: T.border }]}
+          >
+            <Feather name="chevron-left" size={24} color={T.text} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: T.text }]}>Track Withdrawal</Text>
+          <View style={{ width: 44 }} />
+        </View>
+
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <View style={[styles.card, { backgroundColor: T.surface, borderColor: T.border, padding: 20 }]}>
+            <View style={styles.ticketHeader}>
+              <View>
+                <Text style={[styles.ticketBadgeLabel, { color: T.textDim }]}>TICKET ID</Text>
+                <Text style={[styles.ticketBadgeId, { color: T.primary }]}>{activeRequest.ticket_id}</Text>
+              </View>
+              <View style={[styles.statusBadge, { backgroundColor: T.pending + '18', borderColor: T.pending }]}>
+                <Text style={[styles.statusText, { color: T.pending }]}>
+                  {activeRequest.status === 'under_review' ? 'Processing' : 'Pending Review'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={[styles.divider, { backgroundColor: T.border, marginVertical: 20 }]} />
+
+            <View style={styles.ticketDetails}>
+              <View style={styles.detailsRow}>
+                <Text style={[styles.detailLabel, { color: T.textDim }]}>Asset Sold</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  {COIN_META[activeRequest.crypto_asset]?.iconUrl && (
+                    <Image source={{ uri: COIN_META[activeRequest.crypto_asset].iconUrl }} style={{ width: 16, height: 16, borderRadius: 8 }} />
+                  )}
+                  <Text style={[styles.detailValue, { color: T.text }]}>{activeRequest.crypto_asset}</Text>
+                </View>
+              </View>
+              <View style={styles.detailsRow}>
+                <Text style={[styles.detailLabel, { color: T.textDim }]}>Fiat Payout</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <FiatIcon currency={activeRequest.fiat_currency} size={16} />
+                  <Text style={[styles.detailValue, { color: T.text }]}>{activeRequest.amount} {activeRequest.fiat_currency}</Text>
+                </View>
+              </View>
+              <View style={styles.detailsRow}>
+                <Text style={[styles.detailLabel, { color: T.textDim }]}>Date Submitted</Text>
+                <Text style={[styles.detailValue, { color: T.text }]}>{new Date(activeRequest.created_at).toLocaleDateString()}</Text>
+              </View>
+            </View>
+          </View>
+
+          <Text style={[styles.sectionTitle, { color: T.text, marginTop: 32, marginBottom: 20, fontFamily: Fonts.extraBold }]}>Verification Timeline</Text>
+          
+          <View style={[styles.card, { backgroundColor: T.surface, borderColor: T.border, padding: 20 }]}>
+            {renderTimeline(activeRequest.status)}
+          </View>
+
+          <TouchableOpacity
+            style={[styles.btnSecondary, { borderColor: T.border, marginTop: 32 }]}
+            onPress={handleReset}
+          >
+            <Text style={[styles.btnSecondaryText, { color: T.text }]}>Submit New Withdrawal</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.root, { backgroundColor: T.background }]}>
@@ -191,7 +352,7 @@ export default function FiatWithdrawalScreen({ navigation }: any) {
 
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 12, borderBottomColor: T.border }]}>
-        {step > 1 && !successTicket ? (
+        {step > 1 ? (
           <TouchableOpacity
             onPress={handlePrev}
             style={[styles.backBtn, { backgroundColor: T.surfaceLow, borderColor: T.border }]}
@@ -203,39 +364,15 @@ export default function FiatWithdrawalScreen({ navigation }: any) {
             onPress={() => { haptics.selection(); navigation.goBack(); }}
             style={[styles.backBtn, { backgroundColor: T.surfaceLow, borderColor: T.border }]}
           >
-            {successTicket ? <Feather name="x" size={20} color={T.text} /> : <Feather name="chevron-left" size={24} color={T.text} />}
+            <Feather name="x" size={20} color={T.text} />
           </TouchableOpacity>
         )}
         <Text style={[styles.headerTitle, { color: T.text }]}>Fiat Withdrawal</Text>
         <View style={{ width: 44 }} />
       </View>
 
-      {successTicket ? (
-        // Success View
-        <View style={styles.successContainer}>
-          <View style={[styles.successIconBox, { backgroundColor: T.success + '18', borderColor: T.success }]}>
-            <Feather name="check-circle" size={48} color={T.success} />
-          </View>
-          <Text style={[styles.successTitle, { color: T.text }]}>Withdrawal Submitted</Text>
-          <Text style={[styles.successSub, { color: T.textMuted }]}>
-            Your crypto assets have been debited and are held in escrow. The admin desk is processing your manual wire payout.
-          </Text>
-
-          <View style={[styles.ticketCard, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
-            <Text style={[styles.ticketLabel, { color: T.textMuted }]}>TICKET NUMBER</Text>
-            <Text style={[styles.ticketId, { color: T.primary }]}>{successTicket}</Text>
-          </View>
-
-          <TouchableOpacity
-            style={[styles.btnPrimary, { backgroundColor: T.text }]}
-            onPress={() => { haptics.selection(); navigation.navigate('History'); }}
-          >
-            <Text style={[styles.btnPrimaryText, { color: T.background }]}>Go to History</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <>
-          {/* Steps Progress Indicator */}
+      <>
+        {/* Steps Progress Indicator */}
           <View style={styles.progressHeader}>
             <View style={[styles.progressBarBg, { backgroundColor: T.surfaceHigh }]}>
               <View style={[styles.progressBarFill, { width: `${(step / 5) * 100}%`, backgroundColor: T.primary }]} />
@@ -699,5 +836,23 @@ const styles = StyleSheet.create({
   reviewValue: { fontSize: 14 },
   cardLine: { height: 1 },
   reviewBlock: { gap: 2 },
-  reviewText: { fontSize: 13, fontFamily: Fonts.medium }
+  reviewText: { fontSize: 13, fontFamily: Fonts.medium },
+  ticketHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  ticketBadgeLabel: { fontSize: 9, fontFamily: Fonts.extraBold, letterSpacing: 0.5 },
+  ticketBadgeId: { fontSize: 18, fontFamily: Fonts.extraBold },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, borderWidth: 1 },
+  statusText: { fontSize: 11, fontFamily: Fonts.bold },
+  ticketDetails: { gap: 10 },
+  detailsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  detailLabel: { fontSize: 12 },
+  detailValue: { fontSize: 13, fontFamily: Fonts.bold },
+  sectionTitle: { fontSize: 15 },
+  timeline: { paddingLeft: 10, gap: 4 },
+  timelineRow: { flexDirection: 'row', minHeight: 60 },
+  timelineLeft: { alignItems: 'center', width: 24 },
+  timelineDot: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, alignItems: 'center', justifyContent: 'center', zIndex: 1 },
+  timelineLine: { width: 2, flex: 1, marginVertical: -4 },
+  timelineRight: { flex: 1, paddingLeft: 12, paddingTop: 2 },
+  timelineLabel: { fontSize: 13 },
+  timelineDesc: { fontSize: 11 }
 });
