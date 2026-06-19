@@ -177,7 +177,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [cardBalance,      setCardBalance]      = useState(0);
   const [cardFrozen,       setCardFrozen]       = useState(false);
   const [cardTransactions, setCardTransactions] = useState<CardTransaction[]>([]);
-  const [enabledCardCurrencies, setEnabledCardCurrenciesState] = useState<Record<string, boolean>>({ USD: true, EUR: true, HKD: true, JPY: true, SGD: true, AED: true });
+  const [enabledCardCurrencies, setEnabledCardCurrenciesState] = useState<Record<string, boolean>>(() => {
+    // Build a fully explicit default — every token and fiat currency enabled
+    const defaults: Record<string, boolean> = {};
+    ['USDT','USDC','ETH','BTC','BNB','TRX','SOL','XRP','TON','SUI'].forEach(t => { defaults[t] = true; });
+    ['USD','EUR','GBP','INR','AED','AUD','SGD','RUB','BHD','VND','SAR','KWD','THB','HKD','JPY'].forEach(f => { defaults[f] = true; });
+    return defaults;
+  });
   const [cardCreated,      setCardCreated]      = useState(false);
   const [paymentPriority,  setPaymentPriority]  = useState<string[]>(['USDT', 'BTC', 'ETH', 'BNB', 'TRX']);
 
@@ -677,6 +683,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             // AsyncStorage above) will override this if they exist, since they were set after this.
             if (platformCurrencies && Object.keys(platformCurrencies).length > 0 && !savedCardCurrencies) {
               setEnabledCardCurrenciesState(platformCurrencies);
+            } else if (platformCurrencies && Object.keys(platformCurrencies).length > 0 && savedCardCurrencies) {
+              // Merge: admin config wins for any key the admin explicitly set to false
+              try {
+                const userPrefs = JSON.parse(savedCardCurrencies);
+                const merged: Record<string, boolean> = { ...userPrefs };
+                Object.entries(platformCurrencies).forEach(([k, v]) => {
+                  if (v === false) merged[k] = false; // admin disable always overrides
+                });
+                setEnabledCardCurrenciesState(merged);
+                AsyncStorage.setItem('cw_card_currencies', JSON.stringify(merged)).catch(() => {});
+              } catch {}
             }
 
             // Inject Dynamic Networks from Admin Dashboard

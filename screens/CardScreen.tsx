@@ -66,6 +66,7 @@ export default function CardScreen({ navigation, route }: any) {
     createCard, updateCardDetails, kycStatus,
     refreshCardData, refreshBalance, accountType,
     formatFiat, fiatSymbol, fiatCurrency, convertFiat,
+    enabledCardCurrencies,
   } = useWallet() as any;
   const { prices } = useMarket();
 
@@ -194,6 +195,18 @@ export default function CardScreen({ navigation, route }: any) {
     const num = cardDetails.number.replace(/\s/g, '');
     return `•• ${num.slice(-4)}`;
   }, [cardDetails.number, cardCreated]);
+
+  // Build the enabled fiat list for the payment panel dynamically
+  const FIAT_ALL = ['USD','EUR','AED','GBP','INR','AUD','SGD','SAR','KWD','BHD','THB','VND','RUB','JPY','HKD'];
+  const enabledFiatList = useMemo(
+    () => FIAT_ALL.filter(c => enabledCardCurrencies[c] !== false).slice(0, 6),
+    [enabledCardCurrencies]
+  );
+  const FIAT_SYMBOLS: Record<string, string> = {
+    USD: '$', EUR: '€', AED: 'د.إ', GBP: '£', INR: '₹',
+    AUD: 'A$', SGD: 'S$', SAR: '﷼', KWD: 'KD', BHD: 'BD',
+    THB: '฿', VND: '₫', RUB: '₽', JPY: '¥', HKD: 'HK$',
+  };
 
   // Skin configurations for virtual
   const skinStyles = useMemo(() => {
@@ -923,9 +936,9 @@ export default function CardScreen({ navigation, route }: any) {
 
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <Text style={[styles.inputLabel, { color: T.textDim, marginBottom: 0 }]}>AMOUNT</Text>
-                  <View style={{ flexDirection: 'row', gap: 6 }}>
-                    {['USD', 'EUR', 'AED'].map(cur => (
-                      <TouchableOpacity 
+                  <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end', flex: 1, marginLeft: 8 }}>
+                    {enabledFiatList.map(cur => (
+                      <TouchableOpacity
                         key={cur}
                         onPress={() => setMerchant(p => ({ ...p, currency: cur }))}
                         style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: merchant.currency === cur ? T.primary + '30' : T.surfaceLow, borderWidth: 1, borderColor: merchant.currency === cur ? T.primary : T.border }}
@@ -937,7 +950,7 @@ export default function CardScreen({ navigation, route }: any) {
                 </View>
                 <View style={[styles.inputPill, { backgroundColor: T.surfaceLow, borderColor: T.border, marginTop: 0 }]}>
                   <Text style={{ color: T.text, fontSize: 15, marginRight: 6 }}>
-                    {merchant.currency === 'USD' ? '$' : merchant.currency === 'EUR' ? '€' : merchant.currency === 'AED' ? 'د.إ' : '$'}
+                    {FIAT_SYMBOLS[merchant.currency ?? 'USD'] ?? '$'}
                   </Text>
                   <TextInput
                     style={[styles.textInput, { color: T.text }]}

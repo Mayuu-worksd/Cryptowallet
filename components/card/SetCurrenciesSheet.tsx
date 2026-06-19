@@ -114,8 +114,9 @@ export default function SetCurrenciesSheet({ visible, onClose, cardNumber }: Pro
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.modalOverlay} onPress={onClose}>
-        {/* stopPropagation so taps inside the sheet don't close it */}
+      {/* Overlay sits behind the sheet and closes on tap */}
+      <View style={styles.modalOverlay} pointerEvents="box-none">
+        <Pressable style={styles.overlayTap} onPress={onClose} />
         <View style={styles.sheetContainer}>
           {/* Header */}
           <View style={styles.header}>
@@ -159,9 +160,10 @@ export default function SetCurrenciesSheet({ visible, onClose, cardNumber }: Pro
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             removeClippedSubviews={false}
+            nestedScrollEnabled
           />
         </View>
-      </Pressable>
+      </View>
     </Modal>
   );
 }
@@ -190,8 +192,11 @@ function CurrencyIcon({ uri, color, code, isCrypto }: { uri: string; color: stri
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.65)',
     justifyContent: 'flex-end',
+  },
+  overlayTap: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.65)',
   },
   sheetContainer: {
     backgroundColor: '#1C1B1E',
