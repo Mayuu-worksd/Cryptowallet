@@ -271,7 +271,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const setEnabledCardCurrencies = useCallback(async (currencies: Record<string, boolean>) => {
     setEnabledCardCurrenciesState(currencies);
-    await AsyncStorage.setItem('cw_card_currencies', JSON.stringify(currencies));
+    // Persist user preferences to Supabase profile only — no AsyncStorage
     if (walletAddress) profileService.upsert(walletAddress, { card_currencies: currencies } as any).catch(() => {});
   }, [walletAddress]);
 
@@ -528,15 +528,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const startup = async () => {
       try {
         // Load UI preferences first (fastest)
-        const [savedDarkMode, savedAccountType, savedP2PCountry, savedP2PCurrency, savedLockedBal, savedFiatCurrency, savedCardCurrencies] = await Promise.all([
+        const [savedDarkMode, savedAccountType, savedP2PCountry, savedP2PCurrency, savedLockedBal, savedFiatCurrency] = await Promise.all([
           AsyncStorage.getItem('cw_is_dark_mode'),
           AsyncStorage.getItem('cw_account_type'),
           AsyncStorage.getItem('cw_p2p_country'),
           AsyncStorage.getItem('cw_p2p_currency'),
           AsyncStorage.getItem('cw_locked_balance'),
           AsyncStorage.getItem('cw_fiat_currency'),
-          AsyncStorage.getItem('cw_card_currencies'),
         ]);
+        // NOTE: cw_card_currencies intentionally NOT read from AsyncStorage.
+        // Card currency config comes from Supabase only (admin_settings + user profile).
 
         if (savedDarkMode !== null) setIsDarkMode(savedDarkMode === 'true');
         if (savedFiatCurrency !== null) setFiatCurrencyState(savedFiatCurrency);
@@ -544,9 +545,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         if (savedP2PCountry)  setP2PCountryState(savedP2PCountry);
         if (savedP2PCurrency) setP2PCurrencyState(savedP2PCurrency);
         if (savedLockedBal)   setLockedBalance(JSON.parse(savedLockedBal));
-        if (savedCardCurrencies) {
-          try { setEnabledCardCurrenciesState(JSON.parse(savedCardCurrencies)); } catch {}
-        }
+        // card_currencies: loaded exclusively from Supabase below — no AsyncStorage read
 
         if (savedAccountType && savedP2PCountry && savedP2PCurrency) {
           setAccountTypeSet(true);
@@ -679,21 +678,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
               adminSettingsService.getSetting<Record<string, boolean>>('card_currencies_config', {}),
             ]);
             setPaymentPriority(pPriority);
-            // Apply platform-level currency config as base — user's own saved prefs (loaded from
-            // AsyncStorage above) will override this if they exist, since they were set after this.
-            if (platformCurrencies && Object.keys(platformCurrencies).length > 0 && !savedCardCurrencies) {
-              setEnabledCardCurrenciesState(platformCurrencies);
-            } else if (platformCurrencies && Object.keys(platformCurrencies).length > 0 && savedCardCurrencies) {
-              // Merge: admin config wins for any key the admin explicitly set to false
-              try {
-                const userPrefs = JSON.parse(savedCardCurrencies);
-                const merged: Record<string, boolean> = { ...userPrefs };
-                Object.entries(platformCurrencies).forEach(([k, v]) => {
-                  if (v === false) merged[k] = false; // admin disable always overrides
-                });
-                setEnabledCardCurrenciesState(merged);
-                AsyncStorage.setItem('cw_card_currencies', JSON.stringify(merged)).catch(() => {});
-              } catch {}
+            // Card currencies: build from full-enabled defaults,
+            // then apply admin-disabled entries unconditionally.
+            // No AsyncStorage involved — Supabase is the only source of truth.
+            {
+              const base: Record<string, boolean> = {};
+              ['USDT','USDC','ETH','BTC','BNB','TRX','SOL','XRP','TON','SUI'].forEach(t => { base[t] = true; });
+              ['USD','EUR','GBP','INR','AED','AUD','SGD','RUB','BHD','VND','SAR','KWD','THB','HKD','JPY'].forEach(f => { base[f] = true; });
+              if (platformCurrencies && Object.keys(platformCurrencies).length > 0) {
+                Object.entries(platformCurrencies).forEach(([k, v]) => { base[k] = v; });
+              }
+              setEnabledCardCurrenciesState(base);
             }
 
             // Inject Dynamic Networks from Admin Dashboard
@@ -1432,14 +1427,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
                 await AsyncStorage.setItem('cw_locked_balance', JSON.stringify(lb));
               }
             }
-            if ((profile as any).card_currencies) {
-              let cc = (profile as any).card_currencies;
-              if (typeof cc === 'string') { try { cc = JSON.parse(cc); } catch { cc = null; } }
-              if (cc && typeof cc === 'object') {
-                setEnabledCardCurrenciesState(cc);
-                await AsyncStorage.setItem('cw_card_currencies', JSON.stringify(cc));
-              }
-            }
+            // card_currencies restored from admin_settings + user profile after this block
           } else {
             const defaultName = `Wallet ${data.address.slice(-4).toUpperCase()}`;
             setWalletNameState(defaultName);
@@ -1449,6 +1437,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
               if (newProfile.user_uuid) setUserUuid(newProfile.user_uuid);
               if (newProfile.user_uid) setUserUid(newProfile.user_uid.toString());
             }
+          }
+          // Apply admin card currency config after profile restore
+          {
+            const importPlatformCurrencies = await adminSettingsService.getSetting<Record<string, boolean>>('card_currencies_config', {});
+            const base: Record<string, boolean> = {};
+            ['USDT','USDC','ETH','BTC','BNB','TRX','SOL','XRP','TON','SUI'].forEach(t => { base[t] = true; });
+            ['USD','EUR','GBP','INR','AED','AUD','SGD','RUB','BHD','VND','SAR','KWD','THB','HKD','JPY'].forEach(f => { base[f] = true; });
+            if (importPlatformCurrencies && Object.keys(importPlatformCurrencies).length > 0) {
+              Object.entries(importPlatformCurrencies).forEach(([k, v]) => { base[k] = v; });
+            }
+            setEnabledCardCurrenciesState(base);
           }
         } catch {
           const defaultName = `Wallet ${data.address.slice(-4).toUpperCase()}`;
@@ -2031,14 +2030,25 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (!walletAddress) return;
     try {
       await setWallet(walletAddress);
-      const [vcc, dbCard, dbTxs, variants, priorityData] = await Promise.all([
+      const [vcc, dbCard, dbTxs, variants, priorityData, platformCurrencies] = await Promise.all([
         vccService.getCard(walletAddress),
         dbCardService.getCard(walletAddress),
         txService.getAll(walletAddress, 200),
         cardVariantService.getVariants(),
         adminSettingsService.getSetting<string[]>('payment_asset_priority', ['USDT', 'BTC', 'ETH', 'BNB', 'TRX']),
+        adminSettingsService.getSetting<Record<string, boolean>>('card_currencies_config', {}),
       ]);
       setPaymentPriority(priorityData);
+      // Re-apply admin currency config on every refresh — Supabase only, no AsyncStorage
+      {
+        const base: Record<string, boolean> = {};
+        ['USDT','USDC','ETH','BTC','BNB','TRX','SOL','XRP','TON','SUI'].forEach(t => { base[t] = true; });
+        ['USD','EUR','GBP','INR','AED','AUD','SGD','RUB','BHD','VND','SAR','KWD','THB','HKD','JPY'].forEach(f => { base[f] = true; });
+        if (platformCurrencies && Object.keys(platformCurrencies).length > 0) {
+          Object.entries(platformCurrencies).forEach(([k, v]) => { base[k] = v; });
+        }
+        setEnabledCardCurrenciesState(base);
+      }
       if (vcc) {
         // Try Supabase decrypt; fall back to current state (already loaded from AsyncStorage)
         let decryptedNumber = dbCard ? dbCardService.decryptNumber(dbCard, walletAddress) : '';

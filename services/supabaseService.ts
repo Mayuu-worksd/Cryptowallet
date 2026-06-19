@@ -946,19 +946,35 @@ export const fiatCurrencyService = {
 // ─── Admin Settings Service ───────────────────────────────────────────────────
 
 export const adminSettingsService = {
+  // In-memory cache so we don't hit Supabase on every render,
+  // but NEVER persist to AsyncStorage — admin changes must reflect immediately.
+  _cache: {} as Record<string, { value: any; fetchedAt: number }>,
+  _TTL: 30_000, // 30 seconds
+
   async getSetting<T>(key: string, defaultValue: T): Promise<T> {
     try {
+      const cached = this._cache[key];
+      if (cached && Date.now() - cached.fetchedAt < this._TTL) {
+        return cached.value as T;
+      }
       const { data, error } = await supabase
         .from('admin_settings')
         .select('value')
         .eq('key', key)
         .maybeSingle();
-      if (error || !data || !data.value) return defaultValue;
+      if (error || !data || data.value === undefined || data.value === null) return defaultValue;
+      this._cache[key] = { value: data.value, fetchedAt: Date.now() };
       return data.value as T;
     } catch {
       return defaultValue;
     }
-  }
+  },
+
+  // Force a fresh fetch, bypassing cache — called after admin saves
+  invalidate(key?: string) {
+    if (key) delete this._cache[key];
+    else this._cache = {};
+  },
 };
 
 // ─── Admin Alerts Service ─────────────────────────────────────────────────────
