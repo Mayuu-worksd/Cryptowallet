@@ -953,6 +953,38 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     startup();
   }, []);
 
+  // ── Realtime: Admin Settings Live Push ──
+  // Listens for any UPDATE on admin_settings and applies changes instantly — zero delay.
+  useEffect(() => {
+    if (!hasWallet) return;
+    const channel = supabase
+      .channel('admin_settings_live')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'admin_settings' },
+        (payload: any) => {
+          const { key, value } = payload.new ?? {};
+          if (!key || value === undefined) return;
+          // Bust the in-memory TTL cache for this key so next getSetting() fetches fresh
+          adminSettingsService.invalidate(key);
+          if (key === 'card_currencies_config') {
+            const base: Record<string, boolean> = {};
+            ['USDT','USDC','ETH','BTC','BNB','TRX','SOL','XRP','TON','SUI'].forEach(t => { base[t] = true; });
+            ['USD','EUR','GBP','INR','AED','AUD','SGD','RUB','BHD','VND','SAR','KWD','THB','HKD','JPY'].forEach(f => { base[f] = true; });
+            if (value && typeof value === 'object') {
+              Object.entries(value).forEach(([k, v]) => { base[k] = v as boolean; });
+            }
+            setEnabledCardCurrenciesState(base);
+          }
+          if (key === 'payment_asset_priority' && Array.isArray(value)) {
+            setPaymentPriority(value);
+          }
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [hasWallet]);
+
   // ── Auto-Sync Local Transactions to Supabase ──
   useEffect(() => {
     if (!walletAddress || !hasWallet) return;
