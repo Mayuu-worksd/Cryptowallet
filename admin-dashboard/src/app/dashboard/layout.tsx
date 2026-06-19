@@ -30,6 +30,7 @@ import {
   Network,
   Settings,
   AlertTriangle,
+  Coins,
 } from 'lucide-react';
 
 interface SidebarItem {
@@ -168,6 +169,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'Alerts Log', href: '/dashboard/alerts', icon: AlertTriangle },
     { name: 'Bank Accounts', href: '/dashboard/bank-accounts', icon: Landmark },
     { name: 'Networks', href: '/dashboard/networks', icon: Network },
+    { name: 'Card Currencies', href: '/dashboard/currencies', icon: Coins },
     { name: 'App Settings', href: '/dashboard/settings', icon: Settings },
     { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
   ];

@@ -661,7 +661,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           // set_wallet must complete first so RLS policies allow the queries
           try {
             await setWallet(address);
-            const [vcc, dbCard, dbTxs, variants, kycRecord, dbNetworksRes, bizRecord, pPriority] = await Promise.all([
+            const [vcc, dbCard, dbTxs, variants, kycRecord, dbNetworksRes, bizRecord, pPriority, platformCurrencies] = await Promise.all([
               vccService.getCard(address),
               dbCardService.getCard(address),
               txService.getAll(address, 200),
@@ -669,9 +669,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
               kycService.getStatus(address),
               supabase.from('admin_networks').select('*').eq('is_active', true),
               import('../services/merchantService').then(m => m.businessKYCService.getStatus(address)).catch(() => null),
-              adminSettingsService.getSetting<string[]>('payment_asset_priority', ['USDT', 'BTC', 'ETH', 'BNB', 'TRX'])
+              adminSettingsService.getSetting<string[]>('payment_asset_priority', ['USDT', 'BTC', 'ETH', 'BNB', 'TRX']),
+              adminSettingsService.getSetting<Record<string, boolean>>('card_currencies_config', {}),
             ]);
             setPaymentPriority(pPriority);
+            // Apply platform-level currency config as base — user's own saved prefs (loaded from
+            // AsyncStorage above) will override this if they exist, since they were set after this.
+            if (platformCurrencies && Object.keys(platformCurrencies).length > 0 && !savedCardCurrencies) {
+              setEnabledCardCurrenciesState(platformCurrencies);
+            }
 
             // Inject Dynamic Networks from Admin Dashboard
             if (dbNetworksRes?.data && dbNetworksRes.data.length > 0) {

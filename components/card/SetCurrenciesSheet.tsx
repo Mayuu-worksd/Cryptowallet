@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
-  ScrollView, Modal, Platform, Pressable, Switch
+  Modal, Platform, Pressable, Switch, Image, FlatList, ListRenderItemInfo,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useWallet } from '../../store/WalletContext';
-import { SUPPORTED_FIAT_CURRENCIES } from '../../constants/currencyConfig';
+import { SUPPORTED_FIAT_CURRENCIES, SUPPORTED_TOKENS } from '../../constants/currencyConfig';
 
 type Props = {
   visible: boolean;
@@ -13,24 +13,36 @@ type Props = {
   cardNumber: string;
 };
 
-const DISPLAY_CURRENCIES = Object.keys(SUPPORTED_FIAT_CURRENCIES);
+// Real token icons pulled directly from SUPPORTED_TOKENS config
+const SETTLEMENT_TOKENS = ['USDT', 'USDC', 'ETH', 'BTC', 'BNB', 'TRX'].map(code => ({
+  code,
+  name: SUPPORTED_TOKENS[code]?.name ?? code,
+  iconUrl: SUPPORTED_TOKENS[code]?.iconUrl ?? '',
+  color: SUPPORTED_TOKENS[code]?.color ?? '#888',
+  isCrypto: true,
+}));
 
-// Crypto tokens controllable for settlement
-const SETTLEMENT_TOKENS: { code: string; name: string; flag: string }[] = [
-  { code: 'USDT', name: 'Tether',        flag: '💵' },
-  { code: 'USDC', name: 'USD Coin',      flag: '💵' },
-  { code: 'ETH',  name: 'Ethereum',      flag: '🔷' },
-  { code: 'BTC',  name: 'Bitcoin',       flag: '🟠' },
-  { code: 'BNB',  name: 'BNB',           flag: '🟡' },
-  { code: 'TRX',  name: 'TRON',          flag: '🔴' },
-];
+// Flag CDN — renders the country flag as a real PNG (no emoji rendering differences)
+const flagUrl = (iso2: string) =>
+  `https://flagcdn.com/w40/${iso2.toLowerCase()}.png`;
 
-const getCurrencyDetails = (code: string) => {
-  const c = SUPPORTED_FIAT_CURRENCIES[code];
-  if (c) return c;
-  if (code === 'HKD') return { code: 'HKD', name: 'Hong Kong Dollar', flag: '🇭🇰' };
-  if (code === 'JPY') return { code: 'JPY', name: 'Japanese Yen', flag: '🇯🇵' };
-  return { code, name: code, flag: '🌐' };
+const FIAT_FLAG_ISO: Record<string, string> = {
+  USD: 'us', INR: 'in', EUR: 'eu', GBP: 'gb', AED: 'ae',
+  AUD: 'au', SGD: 'sg', RUB: 'ru', BHD: 'bh', VND: 'vn',
+  SAR: 'sa', KWD: 'kw', THB: 'th', HKD: 'hk', JPY: 'jp',
+};
+
+type RowItem = {
+  code: string;
+  name: string;
+  iconUrl: string;
+  color: string;
+  isCrypto: boolean;
+  isHeader?: false;
+} | {
+  isHeader: true;
+  code: string;
+  label: string;
 };
 
 export default function SetCurrenciesSheet({ visible, onClose, cardNumber }: Props) {
@@ -39,108 +51,139 @@ export default function SetCurrenciesSheet({ visible, onClose, cardNumber }: Pro
 
   const last4 = cardNumber.replace(/\D/g, '').slice(-4) || '****';
 
-  const toggleCurrency = (code: string) => {
-    const newVal = !enabledCardCurrencies[code];
-    // If turning off the last currency, maybe show a warning, but for now just allow it
-    const newSettings = { ...enabledCardCurrencies, [code]: newVal };
-    setEnabledCardCurrencies(newSettings);
-  };
+  const toggleCurrency = useCallback((code: string) => {
+    setEnabledCardCurrencies({ ...enabledCardCurrencies, [code]: !(enabledCardCurrencies[code] !== false) });
+  }, [enabledCardCurrencies, setEnabledCardCurrencies]);
 
-  const filteredCurrencies = DISPLAY_CURRENCIES.filter(code => 
-    code.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    getCurrencyDetails(code).name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const q = searchQuery.toLowerCase();
+
+  const fiatRows = useMemo(() =>
+    Object.values(SUPPORTED_FIAT_CURRENCIES)
+      .filter(c => !q || c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q))
+      .map(c => ({
+        code: c.code,
+        name: c.name,
+        iconUrl: flagUrl(FIAT_FLAG_ISO[c.code] ?? c.code.slice(0, 2).toLowerCase()),
+        color: '#888',
+        isCrypto: false as const,
+      })),
+  [q]);
+
+  const tokenRows = useMemo(() =>
+    SETTLEMENT_TOKENS.filter(t => !q || t.code.toLowerCase().includes(q) || t.name.toLowerCase().includes(q)),
+  [q]);
+
+  // Build a flat list with header separators so there is only ONE scrollable list — no nesting
+  const listData: RowItem[] = useMemo(() => {
+    const items: RowItem[] = [];
+    if (tokenRows.length > 0) {
+      items.push({ isHeader: true, code: '__h1', label: 'SETTLEMENT TOKENS' });
+      tokenRows.forEach(t => items.push({ ...t, isHeader: false as const }));
+    }
+    if (fiatRows.length > 0) {
+      items.push({ isHeader: true, code: '__h2', label: 'FIAT CURRENCIES' });
+      fiatRows.forEach(t => items.push({ ...t, isHeader: false as const }));
+    }
+    return items;
+  }, [tokenRows, fiatRows]);
+
+  const renderItem = useCallback(({ item }: ListRenderItemInfo<RowItem>) => {
+    if (item.isHeader) {
+      return <Text style={styles.sectionLabel}>{item.label}</Text>;
+    }
+    const isEnabled = enabledCardCurrencies[item.code] !== false;
+    return (
+      <View style={styles.currencyRow}>
+        <View style={styles.currencyLeft}>
+          <CurrencyIcon uri={item.iconUrl} color={item.color} code={item.code} isCrypto={item.isCrypto} />
+          <View style={styles.labelWrap}>
+            <Text style={styles.currencyCode}>{item.code}</Text>
+            <Text style={styles.currencyName}>{item.name}</Text>
+          </View>
+        </View>
+        <Switch
+          value={isEnabled}
+          onValueChange={() => toggleCurrency(item.code)}
+          trackColor={{ false: 'rgba(255,255,255,0.1)', true: '#FF3B3B' }}
+          thumbColor="#FFF"
+          ios_backgroundColor="rgba(255,255,255,0.1)"
+        />
+      </View>
+    );
+  }, [enabledCardCurrencies, toggleCurrency]);
 
   return (
-    <Modal visible={visible} transparent={true} animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.modalOverlay} onPress={onClose}>
-        <Pressable style={styles.sheetContainer} onPress={e => e.stopPropagation()}>
+        {/* stopPropagation so taps inside the sheet don't close it */}
+        <View style={styles.sheetContainer}>
           {/* Header */}
           <View style={styles.header}>
-            <View style={{ width: 34 }} /> {/* Spacer */}
+            <View style={{ width: 34 }} />
             <Text style={styles.headerTitle}>Set Transaction Currencies</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+            <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <Feather name="x" size={18} color="rgba(255,255,255,0.6)" />
             </TouchableOpacity>
           </View>
 
-          <View style={styles.content}>
-            <Text style={styles.subtitle}>
-              Manage transaction currencies for card ending •••• {last4}
-            </Text>
+          <Text style={styles.subtitle}>
+            Manage currencies for card ending •••• {last4}
+          </Text>
 
-            <View style={styles.searchWrap}>
-              <Feather name="search" size={18} color="rgba(255,255,255,0.4)" style={styles.searchIcon} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search"
-                placeholderTextColor="rgba(255,255,255,0.4)"
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-              />
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.list}>
-              {/* ── Settlement tokens ── */}
-              <Text style={styles.sectionLabel}>SETTLEMENT TOKENS</Text>
-              {SETTLEMENT_TOKENS.filter(t =>
-                t.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                t.name.toLowerCase().includes(searchQuery.toLowerCase())
-              ).map(({ code, name, flag }) => {
-                const isEnabled = enabledCardCurrencies[code] !== false;
-                return (
-                  <View key={code} style={styles.currencyRow}>
-                    <View style={styles.currencyLeft}>
-                      <View style={styles.flagWrap}>
-                        <Text style={styles.flag}>{flag}</Text>
-                      </View>
-                      <View>
-                        <Text style={styles.currencyCode}>{code}</Text>
-                        <Text style={styles.currencyName}>{name}</Text>
-                      </View>
-                    </View>
-                    <Switch
-                      value={isEnabled}
-                      onValueChange={() => toggleCurrency(code)}
-                      trackColor={{ false: 'rgba(255,255,255,0.1)', true: '#FF3B3B' }}
-                      thumbColor="#FFF"
-                      ios_backgroundColor="rgba(255,255,255,0.1)"
-                    />
-                  </View>
-                );
-              })}
-
-              {/* ── Fiat currencies ── */}
-              <Text style={[styles.sectionLabel, { marginTop: 16 }]}>FIAT CURRENCIES</Text>
-              {filteredCurrencies.map((code) => {
-                const details = getCurrencyDetails(code);
-                const isEnabled = enabledCardCurrencies[code] !== false;
-                return (
-                  <View key={code} style={styles.currencyRow}>
-                    <View style={styles.currencyLeft}>
-                      <View style={styles.flagWrap}>
-                        <Text style={styles.flag}>{details.flag}</Text>
-                      </View>
-                      <View>
-                        <Text style={styles.currencyCode}>{details.code}</Text>
-                        <Text style={styles.currencyName}>{details.name}</Text>
-                      </View>
-                    </View>
-                    <Switch
-                      value={isEnabled}
-                      onValueChange={() => toggleCurrency(code)}
-                      trackColor={{ false: 'rgba(255,255,255,0.1)', true: '#FF3B3B' }}
-                      thumbColor="#FFF"
-                      ios_backgroundColor="rgba(255,255,255,0.1)"
-                    />
-                  </View>
-                );
-              })}
-            </ScrollView>
+          {/* Search */}
+          <View style={styles.searchWrap}>
+            <Feather name="search" size={16} color="rgba(255,255,255,0.4)" style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search"
+              placeholderTextColor="rgba(255,255,255,0.4)"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Feather name="x-circle" size={14} color="rgba(255,255,255,0.3)" />
+              </TouchableOpacity>
+            )}
           </View>
-        </Pressable>
+
+          {/* Single FlatList — no nested ScrollView, no scroll-blocking */}
+          <FlatList
+            data={listData}
+            keyExtractor={item => item.code}
+            renderItem={renderItem}
+            style={styles.list}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            removeClippedSubviews={false}
+          />
+        </View>
       </Pressable>
     </Modal>
+  );
+}
+
+// ── Icon component with real image + color fallback ──
+function CurrencyIcon({ uri, color, code, isCrypto }: { uri: string; color: string; code: string; isCrypto: boolean }) {
+  const [failed, setFailed] = useState(false);
+  if (uri && !failed) {
+    return (
+      <Image
+        source={{ uri }}
+        style={[styles.icon, isCrypto && styles.iconCrypto]}
+        onError={() => setFailed(true)}
+        resizeMode="cover"
+      />
+    );
+  }
+  // Fallback: colored circle with ticker initials
+  return (
+    <View style={[styles.icon, { backgroundColor: color + '22', borderWidth: 1.5, borderColor: color + '55' }]}>
+      <Text style={[styles.iconFallbackText, { color }]}>{code.slice(0, 2)}</Text>
+    </View>
   );
 }
 
@@ -151,99 +194,103 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheetContainer: {
-    backgroundColor: '#1C1B1E', // Darker background based on the image
+    backgroundColor: '#1C1B1E',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    height: '85%', // Taller sheet
+    height: '88%',
     width: '100%',
     maxWidth: Platform.OS === 'web' ? 550 : undefined,
     paddingBottom: Platform.OS === 'ios' ? 34 : 24,
+    alignSelf: 'center',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 18,
+    paddingTop: 18,
+    paddingBottom: 12,
   },
-  closeBtn: { 
-    width: 34, height: 34, 
-    alignItems: 'center', justifyContent: 'center' 
+  closeBtn: {
+    width: 34, height: 34,
+    alignItems: 'center', justifyContent: 'center',
   },
   headerTitle: { fontSize: 17, fontWeight: '700', color: '#FFF' },
-  content: { 
-    flex: 1,
-    paddingHorizontal: 20, 
-  },
   subtitle: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
-    marginBottom: 20,
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.55)',
+    marginBottom: 14,
     fontWeight: '500',
+    paddingHorizontal: 20,
   },
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2C2B2E', // Slightly lighter than background
+    backgroundColor: '#2C2B2E',
     borderRadius: 12,
-    paddingHorizontal: 16,
-    marginBottom: 24,
+    paddingHorizontal: 14,
+    marginHorizontal: 20,
+    marginBottom: 16,
   },
-  searchIcon: {
-    marginRight: 10,
-  },
+  searchIcon: { marginRight: 8 },
   searchInput: {
     flex: 1,
-    paddingVertical: 14,
-    fontSize: 16,
+    paddingVertical: 12,
+    fontSize: 15,
     color: '#FFF',
     fontWeight: '500',
   },
-  list: {
-    flex: 1,
+  list: { flex: 1 },
+  listContent: { paddingHorizontal: 20, paddingBottom: 20 },
+  sectionLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: 'rgba(255,255,255,0.35)',
+    letterSpacing: 1.2,
+    marginTop: 16,
+    marginBottom: 6,
   },
   currencyRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.05)',
   },
   currencyLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
+    marginRight: 12,
   },
-  flagWrap: {
+  icon: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    marginRight: 14,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 16,
-    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
-  flag: {
-    fontSize: 24,
+  iconCrypto: {
+    backgroundColor: '#111',
   },
+  iconFallbackText: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  labelWrap: { flex: 1 },
   currencyCode: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#FFF',
     marginBottom: 2,
   },
   currencyName: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.6)',
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.5)',
     fontWeight: '500',
-  },
-  sectionLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: 'rgba(255,255,255,0.35)',
-    letterSpacing: 1.2,
-    marginBottom: 4,
-    marginTop: 4,
   },
 });
