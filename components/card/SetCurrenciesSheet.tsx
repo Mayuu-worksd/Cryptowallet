@@ -13,17 +13,23 @@ type Props = {
   cardNumber: string;
 };
 
-// Use all supported fiat currencies from config
 const DISPLAY_CURRENCIES = Object.keys(SUPPORTED_FIAT_CURRENCIES);
 
-// Add HKD and JPY if not in config
+// Crypto tokens controllable for settlement
+const SETTLEMENT_TOKENS: { code: string; name: string; flag: string }[] = [
+  { code: 'USDT', name: 'Tether',        flag: '💵' },
+  { code: 'USDC', name: 'USD Coin',      flag: '💵' },
+  { code: 'ETH',  name: 'Ethereum',      flag: '🔷' },
+  { code: 'BTC',  name: 'Bitcoin',       flag: '🟠' },
+  { code: 'BNB',  name: 'BNB',           flag: '🟡' },
+  { code: 'TRX',  name: 'TRON',          flag: '🔴' },
+];
+
 const getCurrencyDetails = (code: string) => {
   const c = SUPPORTED_FIAT_CURRENCIES[code];
   if (c) return c;
-  
   if (code === 'HKD') return { code: 'HKD', name: 'Hong Kong Dollar', flag: '🇭🇰' };
   if (code === 'JPY') return { code: 'JPY', name: 'Japanese Yen', flag: '🇯🇵' };
-  
   return { code, name: code, flag: '🌐' };
 };
 
@@ -75,10 +81,40 @@ export default function SetCurrenciesSheet({ visible, onClose, cardNumber }: Pro
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} style={styles.list}>
+              {/* ── Settlement tokens ── */}
+              <Text style={styles.sectionLabel}>SETTLEMENT TOKENS</Text>
+              {SETTLEMENT_TOKENS.filter(t =>
+                t.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                t.name.toLowerCase().includes(searchQuery.toLowerCase())
+              ).map(({ code, name, flag }) => {
+                const isEnabled = enabledCardCurrencies[code] !== false;
+                return (
+                  <View key={code} style={styles.currencyRow}>
+                    <View style={styles.currencyLeft}>
+                      <View style={styles.flagWrap}>
+                        <Text style={styles.flag}>{flag}</Text>
+                      </View>
+                      <View>
+                        <Text style={styles.currencyCode}>{code}</Text>
+                        <Text style={styles.currencyName}>{name}</Text>
+                      </View>
+                    </View>
+                    <Switch
+                      value={isEnabled}
+                      onValueChange={() => toggleCurrency(code)}
+                      trackColor={{ false: 'rgba(255,255,255,0.1)', true: '#FF3B3B' }}
+                      thumbColor="#FFF"
+                      ios_backgroundColor="rgba(255,255,255,0.1)"
+                    />
+                  </View>
+                );
+              })}
+
+              {/* ── Fiat currencies ── */}
+              <Text style={[styles.sectionLabel, { marginTop: 16 }]}>FIAT CURRENCIES</Text>
               {filteredCurrencies.map((code) => {
                 const details = getCurrencyDetails(code);
-                const isEnabled = enabledCardCurrencies[code] !== false; // Default true if undefined
-
+                const isEnabled = enabledCardCurrencies[code] !== false;
                 return (
                   <View key={code} style={styles.currencyRow}>
                     <View style={styles.currencyLeft}>
@@ -201,5 +237,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: 'rgba(255,255,255,0.6)',
     fontWeight: '500',
+  },
+  sectionLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: 'rgba(255,255,255,0.35)',
+    letterSpacing: 1.2,
+    marginBottom: 4,
+    marginTop: 4,
   },
 });

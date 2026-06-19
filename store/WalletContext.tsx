@@ -1409,6 +1409,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
                 await AsyncStorage.setItem('cw_locked_balance', JSON.stringify(lb));
               }
             }
+            if ((profile as any).card_currencies) {
+              let cc = (profile as any).card_currencies;
+              if (typeof cc === 'string') { try { cc = JSON.parse(cc); } catch { cc = null; } }
+              if (cc && typeof cc === 'object') {
+                setEnabledCardCurrenciesState(cc);
+                await AsyncStorage.setItem('cw_card_currencies', JSON.stringify(cc));
+              }
+            }
           } else {
             const defaultName = `Wallet ${data.address.slice(-4).toUpperCase()}`;
             setWalletNameState(defaultName);
@@ -1851,6 +1859,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const SETTLEMENT_CURRENCY = 'USDT';
     
     for (const pCoin of paymentPriority) {
+      // Skip tokens the user has explicitly disabled in their currency settings
+      if (enabledCardCurrencies[pCoin] === false) continue;
       const balance = pCoin === 'ETH' ? parseFloat(ethBalance || '0') : (balances[pCoin] || 0);
       if (balance > 0) {
         const usdPrice = prices[pCoin]?.usd || 0;

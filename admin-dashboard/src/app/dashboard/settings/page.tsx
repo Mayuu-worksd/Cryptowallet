@@ -43,7 +43,7 @@ export default function AppSettingsPage() {
 
       if (data) {
         data.forEach((row) => {
-          if (row.key === 'payment_priority') {
+          if (row.key === 'payment_asset_priority') {
             setPaymentPriority((row.value as string[]).join(', '));
           } else if (row.key === 'physical_base_fee') {
             setPhysicalBaseFee(String(row.value));
@@ -98,7 +98,7 @@ export default function AppSettingsPage() {
 
       // 2. Prepare upsert payload
       const payload = [
-        { key: 'payment_priority', value: parsedPriority },
+        { key: 'payment_asset_priority', value: parsedPriority },
         { key: 'physical_base_fee', value: parsedBaseFee },
         { key: 'physical_card_prices', value: parsedCardPrices },
         { key: 'commission_rates', value: parsedCommissions },
