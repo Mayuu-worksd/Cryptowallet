@@ -228,6 +228,18 @@ export async function POST(req: NextRequest) {
         .eq('wallet_address', walletAddress.toLowerCase());
     }
 
+    // Verify Sandbox KYC approval
+    const userRes = await fetch(`${CODEGO_API_URL}/users/${codegoCardholderId}`, {
+      headers: codegoHeaders,
+    });
+    if (!userRes.ok) {
+      console.warn('[Codego cards] Failed to fetch user status:', userRes.status);
+      return NextResponse.json({ error: 'Unable to verify sandbox KYC status' }, { status: 400 });
+    }
+    const userData = await userRes.json();
+    if (userData.applicationStatus !== 'approved') {
+      return NextResponse.json({ error: `Sandbox KYC not approved (current status: ${userData.applicationStatus}). Complete sandbox verification first.` }, { status: 400 });
+    }
     // Check if the user already has any cards on CodeGo to adopt it and avoid duplicate errors
     if (codegoCardholderId) {
       try {

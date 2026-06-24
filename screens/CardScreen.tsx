@@ -67,6 +67,7 @@ export default function CardScreen({ navigation, route }: any) {
     refreshCardData, refreshBalance, accountType,
     formatFiat, fiatSymbol, fiatCurrency, convertFiat,
     enabledCardCurrencies,
+    walletAddress,
   } = useWallet() as any;
   const { prices } = useMarket();
 
@@ -161,10 +162,22 @@ export default function CardScreen({ navigation, route }: any) {
     }
   }, [route?.params?.initialTab]);
 
-  const handleCardCreated = (holderName: string) => {
-    createCard(holderName, selectedSkin === 'standard' ? 'dark' : selectedSkin === 'solana' ? 'neon' : 'emerald');
-    setShowCreate(false);
-    showToast('Vault Card successfully activated', 'success');
+  const handleCardCreated = async (holderName: string) => {
+    try {
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+      const statusRes = await fetch(`${apiUrl}/api/admin/kyc/status?walletAddress=${walletAddress}`);
+      const { approved, status } = await statusRes.json();
+      if (!approved) {
+        showToast(`Sandbox KYC not approved (status: ${status}).`, 'error');
+        return;
+      }
+      await createCard(holderName, selectedSkin === 'standard' ? 'dark' : selectedSkin === 'solana' ? 'neon' : 'emerald');
+      setShowCreate(false);
+      showToast('Vault Card successfully activated', 'success');
+    } catch (e: any) {
+      const errMsg = e?.message || 'Failed to create card. Please ensure sandbox KYC is completed.';
+      showToast(errMsg, 'error');
+    }
   };
 
   const handleSpend = async () => {
@@ -629,11 +642,24 @@ export default function CardScreen({ navigation, route }: any) {
             {/* Action Bottom Pill */}
             {activeTab === 'virtual' ? (
               <TouchableOpacity
-                onPress={() => {
+                onPress={async () => {
                   if (kycStatus === 'verified') {
                     setShowCreate(true);
                   } else {
-                    navigation.navigate(kycStatus ? 'KYCResult' : 'KYCIntro');
+                    try {
+                      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+                      const statusRes = await fetch(
+                        `${apiUrl}/api/admin/kyc/status?walletAddress=${walletAddress}`,
+                      );
+                      const { approved, status } = await statusRes.json();
+                      if (approved) {
+                        setShowCreate(true);
+                      } else {
+                        showToast(`Sandbox KYC not approved (status: ${status}).`, 'error');
+                      }
+                    } catch (error) {
+                      showToast('Failed to verify KYC status.', 'error');
+                    }
                   }
                 }}
                 style={[styles.applyButton, { backgroundColor: T.text }]}
