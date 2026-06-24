@@ -1213,6 +1213,7 @@ export const fiatRequestService = {
     amount: number,
     proofPath: string,
   ): Promise<any> {
+    await setWallet(walletAddress);
     const { data, error } = await supabase
       .from('fiat_crypto_requests')
       .insert({
@@ -1237,6 +1238,7 @@ export const fiatRequestService = {
     amount: number,
     bankDetails: any,
   ): Promise<any> {
+    await setWallet(walletAddress);
     const { data, error } = await supabase.rpc('submit_fiat_withdrawal', {
       p_wallet_address: walletAddress.toLowerCase(),
       p_crypto_asset: cryptoAsset,
@@ -1249,6 +1251,7 @@ export const fiatRequestService = {
   },
 
   async getRequests(walletAddress: string): Promise<FiatCryptoRequest[]> {
+    await setWallet(walletAddress);
     const { data, error } = await supabase
       .from('fiat_crypto_requests')
       .select('*')
@@ -1259,6 +1262,7 @@ export const fiatRequestService = {
   },
 
   async getLedgerEntries(walletAddress: string): Promise<LedgerEntry[]> {
+    await setWallet(walletAddress);
     const { data, error } = await supabase
       .from('ledger_entries')
       .select('*')
@@ -1277,6 +1281,7 @@ export const codegoFiatService = {
     fiatCurrency: string,
     amount: number,
   ): Promise<any> {
+    await setWallet(walletAddress);
     const kyc = await kycService.getStatus(walletAddress);
     if (!kyc || kyc.status !== 'verified') throw new Error('KYC_NOT_VERIFIED');
 
@@ -1306,6 +1311,7 @@ export const codegoFiatService = {
       swiftCode: string;
     }
   ): Promise<any> {
+    await setWallet(walletAddress);
     const kyc = await kycService.getStatus(walletAddress);
     if (!kyc || kyc.status !== 'verified') throw new Error('KYC_NOT_VERIFIED');
 
