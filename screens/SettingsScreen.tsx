@@ -788,7 +788,50 @@ export default function SettingsScreen({ navigation }: any) {
           </TouchableOpacity>
           )}
 
-          {/* PIN Lock */}
+          {/* Card PIN & Limits — Personal only */}
+          {accountType !== 'business' && (
+            <>
+              <TouchableOpacity
+                style={[styles.menuRow, { borderBottomWidth: 1, borderBottomColor: T.border }]}
+                activeOpacity={0.7}
+                onPress={() => {
+                  showToast('PIN settings will be unlocked after card activation.', 'info');
+                }}
+              >
+                <View style={styles.menuLeft}>
+                  <View style={[styles.menuIconBox, { backgroundColor: T.background }]}>
+                    <Feather name="key" size={18} color={T.primary} />
+                  </View>
+                  <View>
+                    <Text style={[styles.menuLabel, { color: T.text }]}>Card PIN</Text>
+                    <Text style={[styles.menuSub, { color: T.textMuted }]}>Update your physical card PIN</Text>
+                  </View>
+                </View>
+                <Feather name="chevron-right" size={20} color={T.textMuted} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.menuRow, { borderBottomWidth: 1, borderBottomColor: T.border }]}
+                activeOpacity={0.7}
+                onPress={() => {
+                   showToast('Spending limits menu coming soon.', 'info');
+                }}
+              >
+                <View style={styles.menuLeft}>
+                  <View style={[styles.menuIconBox, { backgroundColor: T.background }]}>
+                    <Feather name="sliders" size={18} color={T.primary} />
+                  </View>
+                  <View>
+                    <Text style={[styles.menuLabel, { color: T.text }]}>Spending Limits</Text>
+                    <Text style={[styles.menuSub, { color: T.textMuted }]}>Manage daily and monthly card limits</Text>
+                  </View>
+                </View>
+                <Feather name="chevron-right" size={20} color={T.textMuted} />
+              </TouchableOpacity>
+            </>
+          )}
+
+          {/* App PIN Lock */}
           <TouchableOpacity
             style={[styles.menuRow, { borderBottomWidth: 1, borderBottomColor: T.border }]}
             activeOpacity={0.7}

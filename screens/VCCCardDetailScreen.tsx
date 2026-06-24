@@ -21,7 +21,8 @@ import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useWallet } from '../store/WalletContext';
 import { Theme } from '../constants';
-import { vccService, dbCardService, cardVariantService } from '../services/supabaseService';
+import { vccService, dbCardService, cardVariantService, VCCCard, DBCard } from '../services/supabaseService';
+import { haptics } from '../utils/haptics';
 import Toast from '../components/Toast';
 import { usePreventScreenCapture } from 'expo-screen-capture';
 import { CurrencyText } from '../components/CurrencyText';
@@ -34,6 +35,8 @@ type CardData = {
   status: string;
   network: string;
   variant: string;
+  codegoCardId?: string;
+  vccId?: string;
 };
 
 export default function VCCCardDetailScreen({ navigation }: any) {
@@ -88,6 +91,8 @@ export default function VCCCardDetailScreen({ navigation }: any) {
         status:      vcc.card_status,
         network:     vcc.card_network,
         variant:     vcc.card_variant,
+        codegoCardId: (vcc as any).codego_card_id,
+        vccId:       vcc.id,
       });
     } else if (dbCard) {
       activeVariantId = dbCard.card_type || 'classic';
@@ -102,6 +107,8 @@ export default function VCCCardDetailScreen({ navigation }: any) {
         status:      dbCard.status,
         network:     'Visa',
         variant:     dbCard.card_type,
+        codegoCardId: (dbCard as any).codego_card_id,
+        vccId:       dbCard.id,
       });
     } else if (cardCreated && cardDetails) {
       activeVariantId = 'classic';
@@ -151,6 +158,37 @@ export default function VCCCardDetailScreen({ navigation }: any) {
       ]
     );
   };
+
+  const handleFreezeToggle = async () => {
+    if (!cardData?.codegoCardId) return;
+    haptics.selection();
+    const newStatus = cardData.status === 'frozen' ? 'active' : 'frozen';
+    try {
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+      const res = await fetch(`${apiUrl}/api/codego/cards/${cardData.codegoCardId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (!res.ok) throw new Error('Failed to update status');
+      showToast(`Card ${newStatus} successfully`, 'success');
+      load();
+    } catch (e: any) {
+      showToast(e.message, 'error');
+    }
+  };
+
+  const handleCodegoAction = (action: 'topup' | 'withdraw') => {
+    haptics.selection();
+    // In a full implementation, this would open a modal or navigate to a dedicated
+    // Codego Deposit/Withdraw screen specifically for the card.
+    Alert.alert(
+      action === 'topup' ? 'Top Up Card' : 'Withdraw from Card',
+      'This feature connects directly to Codego fiat services.',
+      [{ text: 'OK' }]
+    );
+  };
+
 
   const statusColor = cardData?.status === 'active' ? T.success
     : cardData?.status === 'frozen' ? '#F59E0B'
@@ -245,8 +283,31 @@ export default function VCCCardDetailScreen({ navigation }: any) {
         <View style={[s.balanceCard, { backgroundColor: T.surface, borderColor: T.border }]}>
           <Text style={[s.balanceLabel, { color: T.textDim }]}>CARD BALANCE</Text>
           <CurrencyText amount={cardData.balance} code={fiatCurrency} style={[s.balanceValue, { color: T.text }]} />
-          <Text style={[s.balanceSub, { color: T.textMuted }]}>Direct settlement from crypto assets</Text>
+          <Text style={[s.balanceSub, { color: T.textMuted }]}>Codego Wallet Balance</Text>
         </View>
+
+        {/* ── Quick Actions ── */}
+        {cardData.codegoCardId && (
+          <View style={s.quickActionsRow}>
+            <TouchableOpacity style={[s.actionCapsule, { backgroundColor: T.primary }]} onPress={() => handleCodegoAction('topup')}>
+              <Feather name="arrow-down-circle" size={16} color="#FFF" style={{ marginRight: 6 }} />
+              <Text style={[s.actionCapsuleText, { color: '#FFF' }]}>Top Up</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[s.actionCapsule, { backgroundColor: T.surfaceLow }]} onPress={() => handleCodegoAction('withdraw')}>
+              <Feather name="arrow-up-circle" size={16} color={T.text} style={{ marginRight: 6 }} />
+              <Text style={[s.actionCapsuleText, { color: T.text }]}>Withdraw</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[s.actionCapsule, { backgroundColor: T.surfaceLow }]} onPress={() => handleFreezeToggle()}>
+              <Feather name={cardData.status === 'frozen' ? 'unlock' : 'lock'} size={16} color={cardData.status === 'frozen' ? T.success : '#F59E0B'} style={{ marginRight: 6 }} />
+              <Text style={[s.actionCapsuleText, { color: T.text }]}>
+                {cardData.status === 'frozen' ? 'Unfreeze' : 'Freeze'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
 
         {/* ── Card Details ── */}
         <Text style={[s.sectionTitle, { color: T.textDim }]}>CARD INFORMATION</Text>
@@ -402,4 +463,7 @@ const s = StyleSheet.create({
 
   btn: { paddingHorizontal: 24, paddingVertical: 14, borderRadius: 20 },
   btnText: { color: '#FFF', fontSize: 15, fontWeight: '800' },
+  quickActionsRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  actionCapsule: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, flex: 1, justifyContent: 'center' },
+  actionCapsuleText: { fontSize: 13, fontWeight: '700' },
 });

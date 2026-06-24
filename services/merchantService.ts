@@ -606,7 +606,7 @@ export const p2pService = {
       await supabase.from('p2p_chat').insert({
         order_id:      orderId,
         sender_wallet: ADMIN_SUPPORT_WALLET,
-        message:       "?? Hi, I'm from the CryptoWallet support team. I've been assigned to your dispute. Please describe the issue and provide any payment proof. We will resolve this within 24 hours.",
+        message:       "Hi, I'm from the CryptoWallet support team. I've been assigned to your dispute. Please describe the issue and provide any payment proof. We will resolve this within 24 hours.",
         is_support:    true,
       });
     } catch (_) {}

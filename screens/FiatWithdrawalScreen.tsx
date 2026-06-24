@@ -734,8 +734,7 @@ export default function FiatWithdrawalScreen({ navigation }: any) {
             )}
 
           </ScrollView>
-        </>
-      )}
+      </>
     </View>
   );
 }
@@ -854,5 +853,8 @@ const styles = StyleSheet.create({
   timelineLine: { width: 2, flex: 1, marginVertical: -4 },
   timelineRight: { flex: 1, paddingLeft: 12, paddingTop: 2 },
   timelineLabel: { fontSize: 13 },
-  timelineDesc: { fontSize: 11 }
+  timelineDesc: { fontSize: 11 },
+  divider: { height: 1 },
+  btnSecondary: { height: 52, borderRadius: 28, alignItems: 'center', justifyContent: 'center', borderWidth: 2 },
+  btnSecondaryText: { fontSize: 15, fontWeight: '700' },
 });

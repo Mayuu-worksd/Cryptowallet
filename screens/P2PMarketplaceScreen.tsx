@@ -178,9 +178,10 @@ function OrderCard({ order, onPress, T, walletAddress, formatOrderFiat, formatFi
           <View style={{ alignItems: 'flex-end' }}>
             <CurrencyText amount={Number(order.fiat_total || 0)} code={order.fiat_currency} style={[s.statValueBig, { color: T.primary }]} skipConversion />
             {globalFiatCurrency !== order.fiat_currency && (
-              <Text style={{ fontSize: 11, color: T.textDim, fontWeight: '600', marginTop: 2 }}>
-                ≈ <CurrencyText amount={Number(order.fiat_total || 0) / (SUPPORTED_FIAT_CURRENCIES[order.fiat_currency]?.rate || 1)} code={globalFiatCurrency} />
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 2 }}>
+                <Text style={{ fontSize: 11, color: T.textDim, fontWeight: '600' }}>≈</Text>
+                <CurrencyText amount={Number(order.fiat_total || 0) / (SUPPORTED_FIAT_CURRENCIES[order.fiat_currency]?.rate || 1)} code={globalFiatCurrency} style={{ fontSize: 11, color: T.textDim, fontWeight: '600' }} />
+              </View>
             )}
           </View>
         </View>
@@ -296,10 +297,10 @@ function RateChart({
             <ActivityIndicator size="small" color={lineColor} />
           ) : liveRate ? (
             <>
-              <Text style={[rc.livePrice, { color: T.text }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
                 {fiat === 'AED' ? <AedSymbol size={16} color={T.text} /> : null}
-                <CurrencyText amount={liveRate} code={fiat === 'AED' ? '' : fiat} skipConversion />
-              </Text>
+                <CurrencyText amount={liveRate} code={fiat === 'AED' ? '' : fiat} skipConversion style={[rc.livePrice, { color: T.text }]} />
+              </View>
               <View style={[rc.changeBadge, { backgroundColor: isUp ? '#10B98118' : '#EC262918' }]}>
                 <Text style={[rc.changeText, { color: isUp ? '#10B981' : '#EC2629' }]}>
                   {isUp ? '▲' : '▼'} {Math.abs(pct).toFixed(2)}%
@@ -444,12 +445,10 @@ function RateChart({
           <Text style={[rc.selectedLabel, { color: T.textDim }]}>YOUR RATE</Text>
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
             {selectedRate > 0 ? (
-              <>
-                <Text style={[rc.selectedRate, { color: T.text }]}>
-                  {fiat === 'AED' ? <AedSymbol size={18} color={T.text} /> : null}
-                  <CurrencyText amount={selectedRate} code={fiat === 'AED' ? '' : fiat} skipConversion />
-                </Text>
-              </>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                {fiat === 'AED' ? <AedSymbol size={18} color={T.text} /> : null}
+                <CurrencyText amount={selectedRate} code={fiat === 'AED' ? '' : fiat} skipConversion style={[rc.selectedRate, { color: T.text }]} />
+              </View>
             ) : (
               <Text style={[rc.selectedRate, { color: T.textDim }]}>Tap a preset above</Text>
             )}
@@ -607,9 +606,12 @@ function ProfessionalRateChart({ sellAmount, sellRate, sellFiat, sellToken, live
           </Svg>
           <View style={s.chartFooter}>
             <Text style={[s.chartFooterText, { color: T.textDim }]}>7-day trend</Text>
-            <Text style={[s.chartFooterText, { color: T.textDim }]}>
-              {rateHistory[0]?.toFixed(2)} → {rateHistory[rateHistory.length - 1]?.toFixed(2)} {sellFiat === 'AED' ? <AedSymbol size={10} color={T.textDim} /> : sellFiat}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={[s.chartFooterText, { color: T.textDim }]}>
+                {rateHistory[0]?.toFixed(2)} → {rateHistory[rateHistory.length - 1]?.toFixed(2)}{sellFiat !== 'AED' ? ` ${sellFiat}` : ' '}
+              </Text>
+              {sellFiat === 'AED' && <AedSymbol size={10} color={T.textDim} />}
+            </View>
           </View>
         </View>
       )}
@@ -1081,9 +1083,12 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
                   {parseFloat(sellAmount) > 0 && parseFloat(sellRate) > 0 && (
                     <View style={[s.previewBanner, { backgroundColor: T.primary + '10', borderColor: T.primary + '30' }]}>
                       <Feather name="trending-up" size={14} color={T.primary} />
-                      <Text style={{ color: T.primary, fontSize: 13, fontWeight: '700', flex: 1 }}>
-                        You'll receive ~{sellFiat === 'AED' ? <AedSymbol size={13} color={T.primary} /> : null}<CurrencyText amount={parseFloat(sellAmount) * parseFloat(sellRate) * 0.995} code={sellFiat === 'AED' ? '' : sellFiat} /> after fees
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, flexWrap: 'wrap' }}>
+                        <Text style={{ color: T.primary, fontSize: 13, fontWeight: '700' }}>You'll receive ~</Text>
+                        {sellFiat === 'AED' ? <AedSymbol size={13} color={T.primary} /> : null}
+                        <CurrencyText amount={parseFloat(sellAmount) * parseFloat(sellRate) * 0.995} code={sellFiat === 'AED' ? '' : sellFiat} style={{ color: T.primary, fontSize: 13, fontWeight: '700' }} />
+                        <Text style={{ color: T.primary, fontSize: 13, fontWeight: '700' }}> after fees</Text>
+                      </View>
                     </View>
                   )}
                 </View>
@@ -1175,14 +1180,16 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
                     <TokenSymbolIcon token={sellToken} size={52} />
                     <View style={{ alignItems: 'center', gap: 4 }}>
                       <Text style={[s.reviewHeroAmount, { color: T.text }]}>{sellAmount} {sellToken}</Text>
-                      <Text style={[s.reviewHeroFiat, { color: T.primary }]}>
-                        {sellFiat === 'AED' ? <AedSymbol size={16} color={T.primary} /> : null}
-                        <CurrencyText amount={parseFloat(sellAmount) * parseFloat(sellRate)} code={sellFiat === 'AED' ? '' : sellFiat} />
-                      </Text>
-                      <Text style={[s.reviewHeroRate, { color: T.textDim }]}>
-                        @ {sellFiat === 'AED' ? <AedSymbol size={12} color={T.textDim} /> : null}
-                        <CurrencyText amount={parseFloat(sellRate)} code={sellFiat === 'AED' ? '' : sellFiat} />/{sellToken}
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                        {sellFiat === 'AED' && <AedSymbol size={16} color={T.primary} />}
+                        <CurrencyText amount={parseFloat(sellAmount) * parseFloat(sellRate)} code={sellFiat === 'AED' ? '' : sellFiat} style={[s.reviewHeroFiat, { color: T.primary }]} />
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                        <Text style={[s.reviewHeroRate, { color: T.textDim }]}>@ </Text>
+                        {sellFiat === 'AED' && <AedSymbol size={12} color={T.textDim} />}
+                        <CurrencyText amount={parseFloat(sellRate)} code={sellFiat === 'AED' ? '' : sellFiat} style={[s.reviewHeroRate, { color: T.textDim }]} />
+                        <Text style={[s.reviewHeroRate, { color: T.textDim }]}>/{sellToken}</Text>
+                      </View>
                     </View>
                   </View>
 
@@ -1190,7 +1197,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
                   {[
                     { icon: 'credit-card', label: 'Payment', value: sellMethod, color: T.primary },
                     { icon: 'map-pin',    label: 'Country',  value: sellCountry, color: '#6366F1' },
-                    { icon: 'dollar-sign', label: 'Currency', value: sellFiat === 'AED' ? <AedSymbol size={15} color={T.success} /> : sellFiat, color: T.success },
+                    { icon: 'dollar-sign', label: 'Currency', value: sellFiat, color: T.success },
                     { icon: 'edit-3',      label: 'Details',  value: sellPaymentDetails.trim() ? (sellPaymentDetails.trim().length > 20 ? `${sellPaymentDetails.trim().slice(0, 20)}…` : sellPaymentDetails.trim()) : 'Simulated Defaults', color: '#F59E0B' },
                   ].map(row => (
                     <View key={row.label} style={[s.reviewRow, { backgroundColor: T.surfaceLow, borderColor: T.border }]}>
@@ -1211,12 +1218,15 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
                     <View style={[s.feeSummaryDivider, { backgroundColor: T.border }]} />
                     <View style={s.feeSummaryRow}>
                       <Text style={[s.feeSummaryLabel, { color: T.textDim }]}>Platform fee (0.5%)</Text>
-                      <Text style={{ color: T.error, fontSize: 13, fontWeight: '700' }}>−<CurrencyText amount={parseFloat(sellAmount) * parseFloat(sellRate) * 0.005} code={sellFiat} /></Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={{ color: T.error, fontSize: 13, fontWeight: '700' }}>−</Text>
+                        <CurrencyText amount={parseFloat(sellAmount) * parseFloat(sellRate) * 0.005} code={sellFiat} style={{ color: T.error, fontSize: 13, fontWeight: '700' }} />
+                      </View>
                     </View>
                     <View style={[s.feeSummaryDivider, { backgroundColor: T.border }]} />
                     <View style={s.feeSummaryRow}>
                       <Text style={[s.feeSummaryLabel, { color: T.text, fontWeight: '800' }]}>You receive</Text>
-                      <Text style={{ color: T.success, fontSize: 16, fontWeight: '900' }}><CurrencyText amount={parseFloat(sellAmount) * parseFloat(sellRate) * 0.995} code={sellFiat} /></Text>
+                      <CurrencyText amount={parseFloat(sellAmount) * parseFloat(sellRate) * 0.995} code={sellFiat} style={{ color: T.success, fontSize: 16, fontWeight: '900' }} />
                     </View>
                   </View>
                   {network !== 'Sepolia' && network !== 'TRON Nile' && (

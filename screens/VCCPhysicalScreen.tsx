@@ -85,7 +85,10 @@ export default function VCCPhysicalScreen({ navigation, route }: any) {
                 >
                   <Text style={[s.countryName, { color: T.text }]}>{sf.country_name}</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={[s.countryFee, { color: T.textMuted }]}><CurrencyText amount={sf.fee_usd} code={fiatCurrency} /> shipping</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <CurrencyText amount={sf.fee_usd} code={fiatCurrency} style={[s.countryFee, { color: T.textMuted }]} />
+                    <Text style={[s.countryFee, { color: T.textMuted }]}>shipping</Text>
+                  </View>
                     {selectedCountry?.country_name === sf.country_name && <Feather name="check" size={16} color={T.primary} />}
                   </View>
                 </TouchableOpacity>
@@ -118,7 +121,11 @@ export default function VCCPhysicalScreen({ navigation, route }: any) {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[s.optionTitle, { color: T.text }]}>Yes, send me a physical card</Text>
-              <Text style={[s.optionSub, { color: T.textMuted }]}>Base fee: <CurrencyText amount={PHYSICAL_BASE_FEE} code={fiatCurrency} /> + shipping by country</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 3 }}>
+                <Text style={[s.optionSub, { color: T.textMuted }]}>Base fee: </Text>
+                <CurrencyText amount={PHYSICAL_BASE_FEE} code={fiatCurrency} style={[s.optionSub, { color: T.textMuted }]} />
+                <Text style={[s.optionSub, { color: T.textMuted }]}> + shipping by country</Text>
+              </View>
             </View>
           </View>
         </TouchableOpacity>
@@ -143,18 +150,17 @@ export default function VCCPhysicalScreen({ navigation, route }: any) {
 
                 {selectedCountry && (
                   <View style={[s.costBreakdown, { backgroundColor: T.surface }]}>
-                    {[
-                      { label: 'Physical Card Fee', value: <CurrencyText amount={PHYSICAL_BASE_FEE} code={fiatCurrency} /> },
-                      { label: `Shipping to ${selectedCountry.country_name}`, value: <CurrencyText amount={shippingFee} code={fiatCurrency} /> },
-                    ].map(row => (
-                      <View key={row.label} style={s.costRow}>
-                        <Text style={[s.costLabel, { color: T.textMuted }]}>{row.label}</Text>
-                        <Text style={[s.costValue, { color: T.text }]}>{row.value}</Text>
-                      </View>
-                    ))}
+                    <View style={s.costRow}>
+                      <Text style={[s.costLabel, { color: T.textMuted }]}>Physical Card Fee</Text>
+                      <CurrencyText amount={PHYSICAL_BASE_FEE} code={fiatCurrency} style={[s.costValue, { color: T.text }]} />
+                    </View>
+                    <View style={s.costRow}>
+                      <Text style={[s.costLabel, { color: T.textMuted }]}>Shipping to {selectedCountry.country_name}</Text>
+                      <CurrencyText amount={shippingFee} code={fiatCurrency} style={[s.costValue, { color: T.text }]} />
+                    </View>
                     <View style={[s.costRow, s.totalRow, { borderTopColor: T.border }]}>
                       <Text style={[s.totalLabel, { color: T.text }]}>Total</Text>
-                      <Text style={[s.totalValue, { color: T.primary }]}><CurrencyText amount={total} code={fiatCurrency} /></Text>
+                      <CurrencyText amount={total} code={fiatCurrency} style={[s.totalValue, { color: T.primary }]} />
                     </View>
                   </View>
                 )}

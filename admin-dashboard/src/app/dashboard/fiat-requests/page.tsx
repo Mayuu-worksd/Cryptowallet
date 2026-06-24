@@ -35,31 +35,31 @@ export default function FiatRequestsPage() {
   const { data: requests, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['admin-fiat-requests'],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('admin_get_fiat_requests');
-      if (error) throw error;
-      return data || [];
+      const res = await fetch('/api/admin/fiat-queues');
+      if (!res.ok) throw new Error('Failed to fetch requests');
+      const data = await res.json();
+      return data.requests || [];
     },
   });
 
   // Action Mutation
   const processMutation = useMutation({
-    mutationFn: async ({ requestId, action, cryptoAmt, notes }: {
+    mutationFn: async ({ requestId, action, type, source }: {
       requestId: string;
       action: string;
-      cryptoAmt?: number | null;
-      notes?: string | null;
+      type: string;
+      source: string;
     }) => {
-      const { data, error } = await supabase.rpc('admin_process_fiat_request', {
-        p_request_id: requestId,
-        p_action: action,
-        p_crypto_amount: cryptoAmt || null,
-        p_admin_notes: notes || null,
+      const res = await fetch('/api/admin/fiat-queues/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId, action, type })
       });
-      if (error) throw error;
-      return data;
+      if (!res.ok) throw new Error('Failed to process request');
+      return await res.json();
     },
-    onSuccess: (data) => {
-      queryClient.setQueryData(['admin-fiat-requests'], data);
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-fiat-requests'] });
       closeDrawer();
     },
     onError: (err: any) => {
@@ -102,8 +102,8 @@ export default function FiatRequestsPage() {
       processMutation.mutate({
         requestId: selectedRequest.id,
         action,
-        cryptoAmt: parsedAmt,
-        notes: adminNotes.trim() || null
+        type: selectedRequest.type,
+        source: selectedRequest.source,
       });
     }
   };
@@ -112,17 +112,18 @@ export default function FiatRequestsPage() {
   const filteredRequests = (requests || []).filter((r: any) => {
     if (activeTab === 'all') return true;
     if (activeTab === 'pending') return r.status === 'pending';
-    if (activeTab === 'active') return r.status === 'under_review' || r.status === 'approved';
-    if (activeTab === 'completed') return r.status === 'completed' || r.status === 'rejected';
+    if (activeTab === 'active') return r.status === 'under_review' || r.status === 'approved' || r.status === 'processing';
+    if (activeTab === 'completed') return r.status === 'completed' || r.status === 'rejected' || r.status === 'failed';
     return true;
   });
 
   const getStatusStyle = (status: string) => {
     switch (status) {
       case 'completed': return 'bg-green-100 text-green-800 border-green-400';
-      case 'approved': return 'bg-blue-100 text-blue-800 border-blue-400';
+      case 'processing': return 'bg-blue-100 text-blue-800 border-blue-400';
       case 'under_review': return 'bg-yellow-100 text-yellow-800 border-yellow-400';
       case 'pending': return 'bg-orange-100 text-orange-800 border-orange-400';
+      case 'failed': return 'bg-red-100 text-red-800 border-red-400';
       case 'rejected': return 'bg-red-100 text-red-800 border-red-400';
       default: return 'bg-gray-100 text-gray-800 border-gray-400';
     }
@@ -337,34 +338,22 @@ export default function FiatRequestsPage() {
               )}
 
               {/* Withdrawal Bank info */}
-              {selectedRequest.type === 'withdrawal' && selectedRequest.bank_details && (
+              {selectedRequest.type === 'withdrawal' && (
                 <div className="space-y-2">
                   <h4 className="text-[10px] font-black font-display uppercase tracking-widest text-[#1a1a1a]">Target Bank Details</h4>
                   <div className="border-2 border-[#1a1a1a] bg-white p-4 shadow-[2px_2px_0px_0px_#1a1a1a] space-y-3 text-xs font-mono">
                     <div>
                       <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Beneficiary Account Name</span>
-                      <span className="font-bold text-sm">{selectedRequest.bank_details.accountName}</span>
+                      <span className="font-bold text-sm">{selectedRequest.destination_name}</span>
                     </div>
                     <div>
                       <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Receiving Bank Name</span>
-                      <span className="font-bold">{selectedRequest.bank_details.bankName}</span>
+                      <span className="font-bold">{selectedRequest.destination_bic} (BIC)</span>
                     </div>
                     <div>
                       <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Account / IBAN Number</span>
-                      <span className="font-bold text-[#0055ff]">{selectedRequest.bank_details.accountNumber}</span>
+                      <span className="font-bold text-[#0055ff]">{selectedRequest.destination_iban}</span>
                     </div>
-                    {selectedRequest.bank_details.swiftCode && (
-                      <div>
-                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">SWIFT / BIC Code</span>
-                        <span>{selectedRequest.bank_details.swiftCode}</span>
-                      </div>
-                    )}
-                    {selectedRequest.bank_details.notes && (
-                      <div className="bg-gray-50 p-2 border border-[#1a1a1a]">
-                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">User Instructions</span>
-                        <p className="text-gray-700 italic">{selectedRequest.bank_details.notes}</p>
-                      </div>
-                    )}
                   </div>
                 </div>
               )}
@@ -420,68 +409,22 @@ export default function FiatRequestsPage() {
             </div>
 
             {/* Actions Footer */}
-            {selectedRequest.status !== 'completed' && selectedRequest.status !== 'rejected' && (
+            {selectedRequest.status !== 'completed' && selectedRequest.status !== 'failed' && (
               <div className="grid grid-cols-2 gap-4 border-t-2 border-dashed border-[#1a1a1a] pt-4 mt-6">
-                
-                {/* Secondary action: Review or Reject */}
-                {selectedRequest.status === 'pending' ? (
-                  <button
-                    onClick={() => handleAction('under_review')}
-                    disabled={processMutation.isPending}
-                    className="w-full py-2.5 border-2 border-[#1a1a1a] bg-[#fdfdfd] hover:bg-gray-100 text-black text-xs font-black uppercase tracking-wider shadow-[2px_2px_0px_0px_#1a1a1a] transition-all cursor-pointer disabled:opacity-50"
-                  >
-                    Hold / Review
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleAction('reject')}
-                    disabled={processMutation.isPending}
-                    className="w-full py-2.5 border-2 border-[#1a1a1a] bg-[#e63b2e] text-white text-xs font-black uppercase tracking-wider shadow-[2px_2px_0px_0px_#1a1a1a] transition-all cursor-pointer disabled:opacity-50"
-                  >
-                    Reject Request
-                  </button>
-                )}
-
-                {/* Primary settlement actions */}
-                {selectedRequest.type === 'deposit' ? (
-                  <button
-                    onClick={() => handleAction('approve')}
-                    disabled={processMutation.isPending}
-                    className="w-full py-2.5 border-2 border-[#1a1a1a] bg-[#00ffcc] text-black text-xs font-black uppercase tracking-wider shadow-[2px_2px_0px_0px_#1a1a1a] transition-all cursor-pointer disabled:opacity-50"
-                  >
-                    Settle & Credit
-                  </button>
-                ) : (
-                  selectedRequest.status === 'approved' ? (
-                    <button
-                      onClick={() => handleAction('complete')}
-                      disabled={processMutation.isPending}
-                      className="w-full py-2.5 border-2 border-[#1a1a1a] bg-[#00ffcc] text-black text-xs font-black uppercase tracking-wider shadow-[2px_2px_0px_0px_#1a1a1a] transition-all cursor-pointer disabled:opacity-50 animate-pulse"
-                    >
-                      Confirm Payout
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleAction('approve')}
-                      disabled={processMutation.isPending}
-                      className="w-full py-2.5 border-2 border-[#1a1a1a] bg-[#00ffcc] text-black text-xs font-black uppercase tracking-wider shadow-[2px_2px_0px_0px_#1a1a1a] transition-all cursor-pointer disabled:opacity-50"
-                    >
-                      Approve Payout
-                    </button>
-                  )
-                )}
-
-                {selectedRequest.status === 'pending' && (
-                  <div className="col-span-2">
-                    <button
-                      onClick={() => handleAction('reject')}
-                      disabled={processMutation.isPending}
-                      className="w-full py-2.5 border-2 border-[#1a1a1a] bg-[#e63b2e] text-white text-xs font-black uppercase tracking-wider shadow-[2px_2px_0px_0px_#1a1a1a] transition-all cursor-pointer disabled:opacity-50"
-                    >
-                      Reject Request
-                    </button>
-                  </div>
-                )}
+                <button
+                  onClick={() => handleAction('approve')}
+                  disabled={processMutation.isPending}
+                  className="col-span-2 w-full py-2.5 border-2 border-[#1a1a1a] bg-[#00ffcc] text-black text-xs font-black uppercase tracking-wider shadow-[2px_2px_0px_0px_#1a1a1a] transition-all cursor-pointer disabled:opacity-50"
+                >
+                  Mark as Completed
+                </button>
+                <button
+                  onClick={() => handleAction('reject')}
+                  disabled={processMutation.isPending}
+                  className="col-span-2 w-full py-2.5 border-2 border-[#1a1a1a] bg-[#e63b2e] text-white text-xs font-black uppercase tracking-wider shadow-[2px_2px_0px_0px_#1a1a1a] transition-all cursor-pointer disabled:opacity-50"
+                >
+                  Mark as Failed
+                </button>
               </div>
             )}
           </div>

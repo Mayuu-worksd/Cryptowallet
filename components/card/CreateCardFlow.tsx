@@ -8,6 +8,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { CARD_DESIGNS, CardDesignKey } from './CardDesigns';
 import CardPreview from './CardPreview';
+import { useWallet } from '../../store/WalletContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -17,8 +18,10 @@ type Props = {
 };
 
 export default function CreateCardFlow({ onComplete, onCancel }: Props) {
-  const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [holderName, setHolderName] = useState('');
+  const { kycFullName } = useWallet() as any;
+  const initialName = kycFullName ? kycFullName.toUpperCase().trim() : '';
+  const [step, setStep] = useState<1 | 2 | 3>(initialName ? 2 : 1);
+  const [holderName, setHolderName] = useState(initialName);
   const [selectedDesign, setSelectedDesign] = useState<CardDesignKey>(CARD_DESIGNS[0].key);
   const [nameError, setNameError] = useState('');
   const insets = useSafeAreaInsets();
@@ -52,12 +55,18 @@ export default function CreateCardFlow({ onComplete, onCancel }: Props) {
   const renderTopBar = (currentStep: 1 | 2) => (
     <View style={[styles.topBar, { paddingTop: Math.max(insets.top + 10, 50) }]}>
       <TouchableOpacity 
-        onPress={currentStep === 1 ? onCancel : () => setStep(1)} 
+        onPress={() => {
+          if (currentStep === 1 || (currentStep === 2 && initialName)) {
+            onCancel();
+          } else {
+            setStep(1);
+          }
+        }} 
         style={styles.backBtn} 
         activeOpacity={0.7} 
         hitSlop={{top:15, bottom:15, left:15, right:15}}
       >
-        <Feather name={currentStep === 1 ? "x" : "chevron-left"} size={22} color="#FFF" />
+        <Feather name={(currentStep === 1 || (currentStep === 2 && initialName)) ? "x" : "chevron-left"} size={22} color="#FFF" />
       </TouchableOpacity>
       <View style={styles.dotsRow}>
         <View style={[styles.dot, currentStep >= 1 && styles.dotActive]} />

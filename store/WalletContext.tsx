@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode, useCallback, useMemo } from 'react';
-import { Platform, AppState, AppStateStatus } from 'react-native';
+import { Platform, AppState, AppStateStatus, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { walletService } from '../services/walletService';
@@ -2254,11 +2254,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     } catch (e: any) {
       setIsGlobalLoading(false);
       console.warn('[createCard] error:', e);
-      alert('Error creating card: ' + (e.message === 'KYC_NOT_VERIFIED'
+      Alert.alert('Card Error', e.message === 'KYC_NOT_VERIFIED'
         ? 'KYC verification required before creating a card.'
         : e.message === 'NAME_MISMATCH'
           ? 'Card holder name must match your KYC name.'
-          : e.message));
+          : e.message);
     }
   }, [walletAddress, refreshCardData]);
 

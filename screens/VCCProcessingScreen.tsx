@@ -53,6 +53,7 @@ export default function VCCProcessingScreen({ navigation, route }: any) {
 
       const result = await vccService.applyCard(
         walletAddress, variant, holderName, isPhysical, shippingFeeUsd,
+        previewNumber, previewCVV, previewExpiry,
       );
 
       // Save newly issued card to local state & storage so it can be revealed

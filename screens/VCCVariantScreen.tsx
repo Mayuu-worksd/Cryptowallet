@@ -124,14 +124,15 @@ export default function VCCVariantScreen({ navigation }: any) {
                   <View style={s.feeRow}>
                     <View style={s.feeItem}>
                       <Text style={[s.feeLabel, { color: T.textDim }]}>Annual Fee</Text>
-                      <Text style={[s.feeValue, { color: T.text }]}>
-                        {v.annual_fee_usd === 0 ? 'Free' : <CurrencyText amount={v.annual_fee_usd} code={fiatCurrency} />}
-                      </Text>
+                      {v.annual_fee_usd === 0
+                        ? <Text style={[s.feeValue, { color: T.text }]}>Free</Text>
+                        : <CurrencyText amount={v.annual_fee_usd} code={fiatCurrency} style={[s.feeValue, { color: T.text }]} />
+                      }
                     </View>
                     <View style={[s.feeDivider, { backgroundColor: T.border }]} />
                     <View style={s.feeItem}>
                       <Text style={[s.feeLabel, { color: T.textDim }]}>Tx Limit</Text>
-                      <Text style={[s.feeValue, { color: T.text }]}><CurrencyText amount={v.transaction_limit_usd} code={fiatCurrency} /></Text>
+                      <CurrencyText amount={v.transaction_limit_usd} code={fiatCurrency} style={[s.feeValue, { color: T.text }]} />
                     </View>
                     <View style={[s.feeDivider, { backgroundColor: T.border }]} />
                     <View style={s.feeItem}>

@@ -4,57 +4,57 @@ import { supabase } from '@/lib/supabase';
 const CODEGO_API_KEY = process.env.CODEGO_API_KEY || 'vcck_sbx_f119144ea2221e4796778de28115c4cad97429da86e66552';
 const CODEGO_API_URL = process.env.CODEGO_API_URL || 'https://vcc-sandbox.codegotech.com/api/v1';
 
+// FIX: Replace Authorization Bearer with X-Api-Key
+const codegoHeaders = {
+  'X-Api-Key': CODEGO_API_KEY,
+  'Content-Type': 'application/json',
+};
+
 export async function PUT(req: NextRequest, context: { params: Promise<{ id: string }> }) {
-  try {
-    const { id: cardId } = await context.params;
-    const body = await req.json();
-    const { newPin, userId } = body; 
+  const { id: codegoCardId } = await context.params;
+  const body = await req.json();
+  const { newPin, walletAddress } = body;
 
-    if (!newPin || newPin.length !== 4) {
-      return NextResponse.json({ error: 'Valid 4-digit PIN required' }, { status: 400 });
-    }
+  if (!newPin || !/^\d{4}$/.test(newPin)) {
+    return NextResponse.json({ error: 'Valid 4-digit PIN required' }, { status: 400 });
+  }
 
-    // According to Codego docs, we PUT /cards/{cardId}/pin
-    // The PIN payload is a simple string. The endpoint handles generating the fresh RSA session
-    // and ISO PIN block.
-    const response = await fetch(`${CODEGO_API_URL}/cards/${cardId}/pin`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${CODEGO_API_KEY}`
-      },
-      body: JSON.stringify({ pin: newPin }),
-    });
+  // PUT /cards/{id}/pin — this endpoint EXISTS on Codego (confirmed by probe)
+  const response = await fetch(`${CODEGO_API_URL}/cards/${codegoCardId}/pin`, {
+    method: 'PUT',
+    headers: codegoHeaders,
+    body: JSON.stringify({ pin: newPin }),
+  });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('Codego pin update error:', errorData);
-      return NextResponse.json(
-        { error: 'Failed to update Codego card PIN', details: errorData },
-        { status: response.status }
-      );
-    }
-
-    // Log the PIN change event without storing the PIN itself
-    if (userId) {
-      const clientIp = req.headers.get('x-forwarded-for') || 'unknown';
-      try {
-        await supabase.from('codego_card_pin_audits').insert({
-          card_id: cardId, // Notice this assumes codego_cards.id is UUID. We should look up the internal UUID first.
-          user_id: userId,
-          ip_address: clientIp
-        });
-      } catch (err) {
-        console.error('Failed to audit PIN change', err);
-      }
-    }
-
-    return NextResponse.json({ ok: true, message: 'PIN updated successfully' });
-  } catch (error) {
-    console.error('Error updating Codego PIN:', error);
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    console.error('[Codego PIN] Update failed:', errorData);
     return NextResponse.json(
-      { error: 'Internal Server Error' },
-      { status: 500 }
+      { error: 'Failed to update Codego card PIN', details: errorData },
+      { status: response.status }
     );
   }
+
+  // Audit log — look up the internal vcc_cards UUID from the codego_card_id
+  // FIX: Previously used cardId (codego string ID) directly as card_id FK — wrong.
+  // The FK references vcc_cards.id (UUID), not the codego_card_id string.
+  if (walletAddress) {
+    const { data: vccCard } = await supabase
+      .from('vcc_cards')
+      .select('id')
+      .eq('codego_card_id', codegoCardId)
+      .maybeSingle();
+
+    if (vccCard?.id) {
+      const clientIp = req.headers.get('x-forwarded-for') || 'unknown';
+      await supabase.from('codego_card_pin_audits').insert({
+        card_id: vccCard.id,   // FIX: internal UUID, not codego string ID
+        ip_address: clientIp,
+      }).then(({ error }) => {
+        if (error) console.warn('[Codego PIN] Audit log failed:', error.message);
+      });
+    }
+  }
+
+  return NextResponse.json({ ok: true, message: 'PIN updated successfully' });
 }
