@@ -36,11 +36,34 @@ export default function KycPage() {
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [signedUrls, setSignedUrls] = useState<{ doc?: string; selfie?: string; video?: string }>({});
   const [urlsLoading, setUrlsLoading] = useState(false);
+  const [sandboxLink, setSandboxLink] = useState<string | null>(null);
+  const [sandboxLoading, setSandboxLoading] = useState<boolean>(false);
   const queryClient = useQueryClient();
+
+  const handleGenerateSandboxLink = async (walletAddress: string) => {
+    setSandboxLoading(true);
+    setSandboxLink(null);
+    try {
+      const res = await fetch('/api/admin/sandbox-kyc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ walletAddress }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to generate link');
+      setSandboxLink(data.iframeUrl);
+    } catch (err: any) {
+      alert('❌ Error: ' + err.message);
+    } finally {
+      setSandboxLoading(false);
+    }
+  };
 
   const openKyc = async (kyc: any) => {
     setSelectedKyc(kyc);
     setAdminNotes(kyc.admin_notes || '');
+    setSandboxLink(null);
+    setSandboxLoading(false);
     setSignedUrls({});
     setUrlsLoading(true);
     try {
@@ -473,6 +496,42 @@ export default function KycPage() {
                         Stream Video
                       </a>
                     </div>
+                  )}
+                </div>
+
+                {/* Sandbox KYC Simulator Panel */}
+                <div className="p-4 border-2 border-[#1a1a1a] bg-[#ffcc00]/10 font-mono">
+                  <h3 className="text-xs font-extrabold text-[#1a1a1a] uppercase tracking-wider mb-2 font-display flex items-center gap-1.5">
+                    <Shield className="h-4 w-4 text-[#ffcc00]" />
+                    <span>Sandbox KYC Simulator</span>
+                  </h3>
+                  <p className="text-[10px] text-gray-600 mb-3">
+                    In Sandbox mode, Codego requires cardholders to go through a verification flow to issue cards. Click below to generate their Sandbox KYC link.
+                  </p>
+                  
+                  {sandboxLink ? (
+                    <div className="space-y-2">
+                      <div className="p-2 bg-white border border-[#1a1a1a] text-[10px] break-all select-all font-mono">
+                        {sandboxLink}
+                      </div>
+                      <a
+                        href={sandboxLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="w-full text-center block px-4 py-2 border-2 border-[#1a1a1a] bg-[#0055ff] hover:bg-[#003cc5] text-white text-xs font-bold font-display uppercase tracking-wider shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] transition-all"
+                      >
+                        🚀 Open Sandbox KYC Verification Flow
+                      </a>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => handleGenerateSandboxLink(selectedKyc.wallet_address)}
+                      disabled={sandboxLoading}
+                      className="w-full px-4 py-2 border-2 border-[#1a1a1a] bg-white hover:bg-[#ffcc00]/10 text-xs font-bold font-display uppercase tracking-wider disabled:opacity-50 shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] flex items-center justify-center gap-2 transition-all"
+                    >
+                      {sandboxLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                      <span>{sandboxLoading ? 'Generating Link...' : 'Generate Sandbox KYC Link'}</span>
+                    </button>
                   )}
                 </div>
 
