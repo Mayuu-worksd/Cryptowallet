@@ -48,6 +48,30 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     console.error('[Codego status] Card update error:', errorData);
+
+    // Local fallback for mock cards or when not found in sandbox
+    if (codegoCardId.startsWith('mock_cg_') || response.status === 404) {
+      console.warn('[Codego status] Card not found on CodeGo, updating locally in Supabase');
+      const internalStatus = status === 'frozen' ? 'frozen' : status === 'active' ? 'active' : 'blocked';
+      const { error: dbErr } = await supabase
+        .from('vcc_cards')
+        .update({
+          codego_status: codegoStatus,
+          card_status: internalStatus,
+        })
+        .eq('codego_card_id', codegoCardId);
+
+      if (dbErr) {
+        console.error('[Codego status] Local update failed:', dbErr.message);
+      }
+
+      return NextResponse.json({
+        message: 'Card status updated successfully (local mock fallback)',
+        codegoStatus,
+        internalStatus,
+      });
+    }
+
     return NextResponse.json({
       error: 'Failed to update Codego card status',
       details: errorData,

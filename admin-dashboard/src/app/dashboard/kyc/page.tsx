@@ -40,6 +40,32 @@ export default function KycPage() {
   const [sandboxLoading, setSandboxLoading] = useState<boolean>(false);
   const queryClient = useQueryClient();
 
+  const [codegoAppStatus, setCodegoAppStatus] = useState<string | null>(null);
+  const [codegoStatusLoading, setCodegoStatusLoading] = useState<boolean>(false);
+
+  const refreshCodegoStatus = async (walletAddress: string) => {
+    if (!walletAddress) return;
+    setCodegoStatusLoading(true);
+    try {
+      const res = await fetch(`/api/codego/cardholders?walletAddress=${walletAddress}`);
+      if (!res.ok) {
+        setCodegoAppStatus('not_started');
+        return;
+      }
+      const data = await res.json();
+      if (data.codegoStatus === 'not_found_in_codego' || !data.cardholderId) {
+        setCodegoAppStatus('not_started');
+      } else {
+        setCodegoAppStatus(data.codegoData?.applicationStatus || 'needsVerification');
+      }
+    } catch (err) {
+      console.error('Failed to check Codego status:', err);
+      setCodegoAppStatus('error');
+    } finally {
+      setCodegoStatusLoading(false);
+    }
+  };
+
   const handleGenerateSandboxLink = async (walletAddress: string) => {
     setSandboxLoading(true);
     setSandboxLink(null);
@@ -52,6 +78,7 @@ export default function KycPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to generate link');
       setSandboxLink(data.iframeUrl);
+      refreshCodegoStatus(walletAddress);
     } catch (err: any) {
       alert('❌ Error: ' + err.message);
     } finally {
@@ -66,6 +93,8 @@ export default function KycPage() {
     setSandboxLoading(false);
     setSignedUrls({});
     setUrlsLoading(true);
+    setCodegoAppStatus(null);
+    refreshCodegoStatus(kyc.wallet_address);
     try {
       const [doc, selfie, video] = await Promise.all([
         kyc.document_url ? getKYCSignedUrl(extractStoragePath(kyc.document_url)) : Promise.resolve(''),
@@ -126,15 +155,19 @@ export default function KycPage() {
         throw new Error('Rejection requires at least 10 characters of remarks.');
       }
       
-      const { error } = await supabase.rpc('admin_update_kyc', {
-        p_wallet: normalizedAddr,
-        p_status: mappedStatus,
-        p_notes: notes || null,
+      const res = await fetch('/api/admin/kyc/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          walletAddress: normalizedAddr,
+          status: mappedStatus,
+          notes: notes || null,
+        }),
       });
 
-      if (error) {
-        console.error('RPC admin_update_kyc failed:', error.message);
-        throw error;
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update KYC status');
       }
     },
     onSuccess: () => {
@@ -508,6 +541,34 @@ export default function KycPage() {
                   <p className="text-[10px] text-gray-600 mb-3">
                     In Sandbox mode, Codego requires cardholders to go through a verification flow to issue cards. Click below to generate their Sandbox KYC link.
                   </p>
+
+                  {/* Live CodeGo Application Status */}
+                  <div className="mb-3 flex items-center justify-between text-xs font-bold bg-white p-2 border border-[#1a1a1a]">
+                    <div className="flex items-center gap-1.5">
+                      <span>CodeGo status:</span>
+                      {codegoStatusLoading ? (
+                        <span className="text-gray-500 animate-pulse uppercase text-[10px]">Checking...</span>
+                      ) : (
+                        <span className={
+                          codegoAppStatus === 'approved' ? 'text-[#00c853] font-extrabold text-[10px]' : 
+                          codegoAppStatus === 'needsVerification' ? 'text-[#e5a93c] font-extrabold text-[10px]' : 
+                          'text-gray-500 text-[10px]'
+                        }>
+                          {(codegoAppStatus || 'NOT_STARTED').toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                    <button 
+                      onClick={(e) => {
+                        e.preventDefault();
+                        refreshCodegoStatus(selectedKyc.wallet_address);
+                      }}
+                      disabled={codegoStatusLoading}
+                      className="brutalist-button px-2 py-0.5 text-[8px] font-bold shadow-[1px_1px_0px_0px_rgba(26,26,26,1)] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
+                    >
+                      Refresh
+                    </button>
+                  </div>
                   
                   {sandboxLink ? (
                     <div className="space-y-2">
@@ -586,8 +647,14 @@ export default function KycPage() {
                     <span>Reject Identity</span>
                   </button>
                   <button
-                    onClick={() => setShowVerifyModal(true)}
-                    disabled={processReview.isPending}
+                    onClick={async () => {
+                      if (codegoAppStatus !== 'approved') {
+                        alert(`❌ Cannot verify identity: Codego Sandbox KYC is not completed yet.\n\nCurrent status: ${codegoAppStatus === 'needsVerification' ? 'Needs Sandbox Verification' : codegoAppStatus === 'not_started' ? 'Not Started' : 'Unknown'}.\n\nPlease generate the Sandbox KYC Link, open the simulator, and complete verification first.`);
+                        return;
+                      }
+                      setShowVerifyModal(true);
+                    }}
+                    disabled={processReview.isPending || codegoStatusLoading}
                     className="flex-1 brutalist-button-blue py-3 text-xs disabled:opacity-50 flex items-center justify-center gap-1.5"
                   >
                     {processReview.isPending ? (

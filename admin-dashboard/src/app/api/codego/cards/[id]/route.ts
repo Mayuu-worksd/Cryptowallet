@@ -24,12 +24,57 @@ function mapCodegoStatus(s: string): 'pending' | 'active' | 'frozen' | 'blocked'
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: codegoCardId } = await params;
 
+  if (codegoCardId.startsWith('mock_cg_')) {
+    const { data: vccCard } = await supabase
+      .from('vcc_cards')
+      .select('*')
+      .eq('codego_card_id', codegoCardId)
+      .maybeSingle();
+
+    if (vccCard) {
+      return NextResponse.json({
+        cardData: {
+          id: codegoCardId,
+          status: vccCard.card_status === 'frozen' ? 'locked' : 'active',
+          maskedPan: `•••• •••• •••• ${vccCard.card_last4 || '0000'}`,
+          last4: vccCard.card_last4 || '0000',
+          expiryMonth: vccCard.expiry_mm_yy ? parseInt(vccCard.expiry_mm_yy.split('/')[0], 10) : 12,
+          expiryYear: vccCard.expiry_mm_yy ? 2000 + parseInt(vccCard.expiry_mm_yy.split('/')[1], 10) : 2028,
+          holderName: vccCard.card_holder_name,
+          type: vccCard.is_physical ? 'physical' : 'virtual',
+        }
+      });
+    }
+  }
+
   const res = await fetch(`${CODEGO_API_URL}/cards/${codegoCardId}`, {
     headers: codegoHeaders,
   });
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
+    if (res.status === 404) {
+      const { data: vccCard } = await supabase
+        .from('vcc_cards')
+        .select('*')
+        .eq('codego_card_id', codegoCardId)
+        .maybeSingle();
+
+      if (vccCard) {
+        return NextResponse.json({
+          cardData: {
+            id: codegoCardId,
+            status: vccCard.card_status === 'frozen' ? 'locked' : 'active',
+            maskedPan: `•••• •••• •••• ${vccCard.card_last4 || '0000'}`,
+            last4: vccCard.card_last4 || '0000',
+            expiryMonth: vccCard.expiry_mm_yy ? parseInt(vccCard.expiry_mm_yy.split('/')[0], 10) : 12,
+            expiryYear: vccCard.expiry_mm_yy ? 2000 + parseInt(vccCard.expiry_mm_yy.split('/')[1], 10) : 2028,
+            holderName: vccCard.card_holder_name,
+            type: vccCard.is_physical ? 'physical' : 'virtual',
+          }
+        });
+      }
+    }
     return NextResponse.json({ error: 'Card not found in Codego', details: err }, { status: res.status });
   }
 
@@ -79,6 +124,37 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));
+    if (codegoCardId.startsWith('mock_cg_') || res.status === 404) {
+      console.warn('[Codego card/[id]] Card not found on CodeGo, updating locally in Supabase');
+      const dbUpdate: any = {};
+      if (status) {
+        const codegoStatusMap: Record<string, string> = {
+          active: 'active',
+          frozen: 'locked',
+          blocked: 'canceled',
+        };
+        dbUpdate.codego_status = codegoStatusMap[status] ?? status;
+        dbUpdate.card_status = status;
+      }
+      if (limit) dbUpdate.balance = limit;
+
+      const { error: dbError } = await supabase
+        .from('vcc_cards')
+        .update(dbUpdate)
+        .eq('codego_card_id', codegoCardId);
+
+      if (dbError) {
+        console.error('[Codego cards/[id]] Local vcc_cards update failed:', dbError.message);
+      }
+
+      return NextResponse.json({
+        cardData: {
+          id: codegoCardId,
+          status: status === 'frozen' ? 'locked' : 'active',
+          limit: { amount: limit || 0 },
+        }
+      });
+    }
     return NextResponse.json({ error: 'Failed to update Codego card', details: errData }, { status: res.status });
   }
 

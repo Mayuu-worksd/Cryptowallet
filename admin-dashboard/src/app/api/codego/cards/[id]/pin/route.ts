@@ -19,6 +19,28 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
     return NextResponse.json({ error: 'Valid 4-digit PIN required' }, { status: 400 });
   }
 
+  // Local mock card check
+  if (codegoCardId.startsWith('mock_cg_')) {
+    if (walletAddress) {
+      const { data: vccCard } = await supabase
+        .from('vcc_cards')
+        .select('id')
+        .eq('codego_card_id', codegoCardId)
+        .maybeSingle();
+
+      if (vccCard?.id) {
+        const clientIp = req.headers.get('x-forwarded-for') || 'unknown';
+        await supabase.from('codego_card_pin_audits').insert({
+          card_id: vccCard.id,
+          ip_address: clientIp,
+        }).then(({ error }) => {
+          if (error) console.warn('[Codego PIN] Audit log failed:', error.message);
+        });
+      }
+    }
+    return NextResponse.json({ ok: true, message: 'PIN updated successfully (mock card bypass)' });
+  }
+
   // PUT /cards/{id}/pin — this endpoint EXISTS on Codego (confirmed by probe)
   const response = await fetch(`${CODEGO_API_URL}/cards/${codegoCardId}/pin`, {
     method: 'PUT',

@@ -7,7 +7,7 @@
 const SUPABASE_URL     = 'https://hxmacphgbpedazdvgdnz.supabase.co';
 const SUPABASE_ANON    = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4bWFjcGhnYnBlZGF6ZHZnZG56Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcxMDIyNjAsImV4cCI6MjA5MjY3ODI2MH0.CPQgakkjwT6N7DX1B56yPEVjGe9H9jjMCWCBCC0qM1M';
 const SUPABASE_SERVICE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4bWFjcGhnYnBlZGF6ZHZnZG56Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NzEwMjI2MCwiZXhwIjoyMDkyNjc4MjYwfQ.vZ1uvQ8R_zu8ZjVZtyRSiGKMaACTmc6T0WgHx2_LE80';
-const ADMIN_URL        = 'https://cryptowallet-dun.vercel.app';
+const ADMIN_URL        = process.env.ADMIN_URL || 'http://localhost:3001';
 const CODEGO_KEY       = 'vcck_sbx_f119144ea2221e4796778de28115c4cad97429da86e66552';
 const CODEGO_URL       = 'https://vcc-sandbox.codegotech.com/api/v1';
 

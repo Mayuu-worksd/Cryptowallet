@@ -629,11 +629,19 @@ export default function CardScreen({ navigation, route }: any) {
             {/* Action Bottom Pill */}
             {activeTab === 'virtual' ? (
               <TouchableOpacity
-                onPress={() => setShowCreate(true)}
+                onPress={() => {
+                  if (kycStatus === 'verified') {
+                    setShowCreate(true);
+                  } else {
+                    navigation.navigate(kycStatus ? 'KYCResult' : 'KYCIntro');
+                  }
+                }}
                 style={[styles.applyButton, { backgroundColor: T.text }]}
                 activeOpacity={0.9}
               >
-                <Text style={[styles.applyButtonText, { color: T.background }]}>Create a Virtual Card</Text>
+                <Text style={[styles.applyButtonText, { color: T.background }]}>
+                  {kycStatus === 'verified' ? 'Create a Virtual Card' : 'Verify KYC to create card'}
+                </Text>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
