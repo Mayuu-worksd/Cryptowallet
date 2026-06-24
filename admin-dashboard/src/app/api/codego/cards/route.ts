@@ -125,18 +125,10 @@ export async function POST(req: NextRequest) {
         .eq('wallet_address', walletAddress.toLowerCase());
     }
 
-    // 4. Map variant to Codego limits
-    const limitMap: Record<string, number> = {
-      platinum: 100000_00, // $100,000 in cents
-      gold: 50000_00,
-      classic: 5000_00,
-      travel: 30000_00,
-    };
-    const limitAmount = limitMap[variant?.toLowerCase()] ?? 5000_00;
-
     const codegoCardPayload: any = {
       type: type === 'physical' ? 'physical' : 'virtual',
-      limit: { amount: limitAmount, frequency: 'monthly' },
+      // 'limit' is removed because Sandbox API strictly validates frequency enums that aren't well documented.
+      // Removing limit makes Codego use the default limits defined by the productId.
       configuration: {
         displayName: (nameOnCard || kycData.full_name || 'Crypto Wallet Card').toUpperCase(),
         productId: '1',
@@ -162,8 +154,16 @@ export async function POST(req: NextRequest) {
     if (!cardRes.ok) {
       const errData = await cardRes.json().catch(() => ({}));
       console.error('[Codego cards] Card creation failed:', cardRes.status, errData);
+      
+      let errMsg = 'Failed to issue Codego card';
+      if (errData.error === 'User exists, but is not approved') {
+        errMsg = 'Codego Sandbox requires manual approval. Log into vcc-sandbox.codegotech.com and click "Approve" for this user before issuing a card.';
+      } else if (errData.error) {
+        errMsg = typeof errData.error === 'string' ? errData.error : JSON.stringify(errData.error);
+      }
+
       return NextResponse.json({
-        error: 'Failed to issue Codego card',
+        error: errMsg,
         details: errData,
         httpStatus: cardRes.status,
       }, { status: cardRes.status });
