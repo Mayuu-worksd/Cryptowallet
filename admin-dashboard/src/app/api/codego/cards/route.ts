@@ -10,6 +10,35 @@ const codegoHeaders = {
   'Content-Type': 'application/json',
 };
 
+function formatBirthDate(dobStr: string | null | undefined): string {
+  if (!dobStr) return '1990-01-01';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dobStr)) return dobStr;
+  const parts = dobStr.split(/[-/]/);
+  if (parts.length === 3) {
+    let year = '';
+    let month = '';
+    let day = '';
+    if (parts[2].length === 4) {
+      year = parts[2];
+      const p0 = parseInt(parts[0], 10);
+      const p1 = parseInt(parts[1], 10);
+      if (p0 > 12) {
+        day = String(p0).padStart(2, '0');
+        month = String(p1).padStart(2, '0');
+      } else {
+        month = String(p0).padStart(2, '0');
+        day = String(p1).padStart(2, '0');
+      }
+    } else if (parts[0].length === 4) {
+      year = parts[0];
+      month = String(parts[1]).padStart(2, '0');
+      day = String(parts[2]).padStart(2, '0');
+    }
+    if (year && month && day) return `${year}-${month}-${day}`;
+  }
+  return '1990-01-01';
+}
+
 // Maps Codego card status to internal vcc_cards status
 function mapCodegoStatus(codegoStatus: string): 'pending' | 'active' | 'frozen' | 'blocked' {
   switch (codegoStatus?.toLowerCase()) {
@@ -55,16 +84,34 @@ export async function POST(req: NextRequest) {
     // 2. Check for existing vcc_cards record — prevent duplicates
     const { data: existingVccCard } = await supabase
       .from('vcc_cards')
-      .select('id, codego_card_id, card_status')
+      .select('id, codego_card_id, card_status, card_last4, expiry_mm_yy')
       .eq('wallet_address', walletAddress.toLowerCase())
       .maybeSingle();
 
-    // If already synced to Codego, don't create another
+    // If already synced to Codego, fetch it and return it so the client doesn't fall back to a mock!
     if (existingVccCard?.codego_card_id) {
+      const cardRes = await fetch(`${CODEGO_API_URL}/cards/${existingVccCard.codego_card_id}`, {
+        headers: codegoHeaders,
+      });
+      if (cardRes.ok) {
+        const cardData = await cardRes.json();
+        return NextResponse.json({
+          message: 'Card already synced to Codego',
+          cardData,
+          alreadyExists: true,
+        });
+      }
+      // If live check fails, return cached details inside cardData structure
       return NextResponse.json({
-        message: 'Card already synced to Codego',
-        cardId: existingVccCard.id,
-        codegoCardId: existingVccCard.codego_card_id,
+        message: 'Card already synced to Codego (cached)',
+        cardData: {
+          id: existingVccCard.codego_card_id,
+          status: existingVccCard.card_status || 'active',
+          maskedPan: `•••• •••• •••• ${existingVccCard.card_last4 || '0000'}`,
+          last4: existingVccCard.card_last4 || '0000',
+          expiryMonth: existingVccCard.expiry_mm_yy ? existingVccCard.expiry_mm_yy.split('/')[0] : '12',
+          expiryYear: existingVccCard.expiry_mm_yy ? '20' + existingVccCard.expiry_mm_yy.split('/')[1] : '2028',
+        },
         alreadyExists: true,
       });
     }
@@ -86,7 +133,7 @@ export async function POST(req: NextRequest) {
           email: kycData.email || `${externalUserId}@example.com`,
           firstName,
           lastName,
-          birthDate: kycData.dob || '1990-01-01',
+          birthDate: formatBirthDate(kycData.dob),
           phoneNumber: (kycData.phone || '10000000000').replace(/\D/g, ''),
           phoneCountryCode: '1',
           ipAddress: req.headers.get('x-forwarded-for') || '127.0.0.1',
@@ -123,6 +170,76 @@ export async function POST(req: NextRequest) {
         .from('kyc')
         .update({ codego_cardholder_id: codegoCardholderId })
         .eq('wallet_address', walletAddress.toLowerCase());
+    }
+
+    // Check if the user already has any cards on CodeGo to adopt it and avoid duplicate errors
+    if (codegoCardholderId) {
+      try {
+        const listRes = await fetch(`${CODEGO_API_URL}/users/${codegoCardholderId}/cards`, {
+          headers: codegoHeaders,
+        });
+        if (listRes.ok) {
+          const existingCards = await listRes.json().catch(() => []);
+          const targetType = type === 'physical' ? 'physical' : 'virtual';
+          const matchingCard = Array.isArray(existingCards)
+            ? existingCards.find((c: any) => (c.type || 'virtual').toLowerCase() === targetType)
+            : null;
+
+          if (matchingCard) {
+            const cardData = matchingCard;
+            const expiryMmYy = (cardData.expiryMonth && cardData.expiryYear)
+              ? `${String(cardData.expiryMonth).padStart(2, '0')}/${String(cardData.expiryYear).slice(-2)}`
+              : '12/28';
+            const last4 = (cardData.maskedPan || cardData.last4 || '0000').replace(/\D/g, '').slice(-4) || '0000';
+            const holderName = (nameOnCard || kycData.full_name || 'CARD HOLDER').toUpperCase();
+            const internalStatus = mapCodegoStatus(cardData.status);
+
+            // Sync to vcc_cards
+            if (existingVccCard) {
+              await supabase
+                .from('vcc_cards')
+                .update({
+                  codego_card_id: cardData.id,
+                  codego_status: cardData.status || 'active',
+                  card_last4: last4,
+                  expiry_mm_yy: expiryMmYy,
+                  card_holder_name: holderName,
+                  card_status: internalStatus,
+                  is_physical: type === 'physical',
+                })
+                .eq('id', existingVccCard.id);
+            } else {
+              await supabase
+                .from('vcc_cards')
+                .insert({
+                  wallet_address: walletAddress.toLowerCase(),
+                  card_last4: last4,
+                  expiry_mm_yy: expiryMmYy,
+                  card_holder_name: holderName,
+                  card_network: 'Visa',
+                  card_status: internalStatus,
+                  card_variant: variant || 'classic',
+                  codego_card_id: cardData.id,
+                  codego_status: cardData.status || 'active',
+                  balance: 0,
+                  is_physical: type === 'physical',
+                  physical_shipping_status: type === 'physical' ? 'processing' : 'not_requested',
+                  kyc_verified: true,
+                  compliance_status: 'compliant',
+                });
+            }
+
+            return NextResponse.json({
+              message: 'Existing CodeGo card retrieved and synced successfully',
+              cardData,
+              internalStatus,
+              alreadyExists: true,
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('[Codego cards] Failed to check for existing CodeGo cards:', err);
+      }
     }
 
     const codegoCardPayload: any = {

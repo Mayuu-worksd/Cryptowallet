@@ -364,6 +364,7 @@ export const dbCardService = {
 
   async saveCredentials(walletAddress: string, cardNumber: string, cvv: string, extra?: Partial<DBCard>): Promise<void> {
     const addr = walletAddress.toLowerCase();
+    await setWallet(addr);
     const encNumber = xorEncrypt(cardNumber.replace(/\s/g, ''), addr);
     const encCvv    = xorEncrypt(cvv, addr);
     

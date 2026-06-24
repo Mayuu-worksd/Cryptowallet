@@ -9,6 +9,35 @@ const codegoHeaders = {
   'Content-Type': 'application/json',
 };
 
+function formatBirthDate(dobStr: string | null | undefined): string {
+  if (!dobStr) return '1990-01-01';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dobStr)) return dobStr;
+  const parts = dobStr.split(/[-/]/);
+  if (parts.length === 3) {
+    let year = '';
+    let month = '';
+    let day = '';
+    if (parts[2].length === 4) {
+      year = parts[2];
+      const p0 = parseInt(parts[0], 10);
+      const p1 = parseInt(parts[1], 10);
+      if (p0 > 12) {
+        day = String(p0).padStart(2, '0');
+        month = String(p1).padStart(2, '0');
+      } else {
+        month = String(p0).padStart(2, '0');
+        day = String(p1).padStart(2, '0');
+      }
+    } else if (parts[0].length === 4) {
+      year = parts[0];
+      month = String(parts[1]).padStart(2, '0');
+      day = String(parts[2]).padStart(2, '0');
+    }
+    if (year && month && day) return `${year}-${month}-${day}`;
+  }
+  return '1990-01-01';
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -49,7 +78,7 @@ export async function POST(req: NextRequest) {
           email,
           firstName,
           lastName,
-          birthDate: kycData.dob || '1990-01-01',
+          birthDate: formatBirthDate(kycData.dob),
           phoneNumber: (kycData.phone || '10000000000').replace(/\D/g, ''),
           phoneCountryCode: '1',
           ipAddress: req.headers.get('x-forwarded-for') || '127.0.0.1',
