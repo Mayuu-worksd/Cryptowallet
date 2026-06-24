@@ -16,11 +16,27 @@ interface CardRequest {
   wallet_address: string;
   card_type: string;
   country: string;
-  shipping_fee: string | number | null;
-  total_cost: string | number | null;
-  status: string;
+  shipping_address: any;
+  activation_status: string;
+  shipping_tracking_number?: string;
+  masked_pan: string;
   created_at: string;
-  updated_at?: string;
+}
+
+interface VirtualCard {
+  id: string;
+  wallet_address: string;
+  card_last4: string;
+  card_holder_name: string;
+  expiry_mm_yy: string;
+  card_variant: string;
+  card_network: string;
+  card_status: string;
+  balance: number;
+  is_physical: boolean;
+  codego_card_id?: string;
+  codego_status?: string;
+  created_at: string;
 }
 
 interface CardVariant {
@@ -66,10 +82,11 @@ function safeParseFloat(value: string | number | null | undefined): number {
 }
 
 export default function CardsPage() {
-  const [activeTab, setActiveTab] = useState<'requests' | 'variants' | 'pricing'>('requests');
+  const [activeTab, setActiveTab] = useState<'requests' | 'virtual' | 'variants' | 'pricing'>('virtual');
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRequest, setSelectedRequest] = useState<CardRequest | null>(null);
+  const [trackingNumber, setTrackingNumber] = useState('');
   
   // Variants search/state
   const [variantSearch, setVariantSearch] = useState('');
@@ -112,17 +129,60 @@ export default function CardsPage() {
 
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [mutateError, setMutateError] = useState<string | null>(null);
+  const [syncingCardId, setSyncingCardId] = useState<string | null>(null);
+  const [vCardSearch, setVCardSearch] = useState('');
   const queryClient = useQueryClient();
+
+  // ─── Query Virtual Cards (vcc_cards) ─────────────────────────────────────────
+  const { data: virtualCards, isLoading: isVirtualLoading, refetch: refetchVirtual } = useQuery({
+    queryKey: ['admin-vcc-cards'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('vcc_cards')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data || []) as VirtualCard[];
+    },
+    refetchInterval: 30000,
+    enabled: activeTab === 'virtual',
+  });
+
+  const handleSyncToCodego = async (card: VirtualCard) => {
+    if (!confirm(`Sync card for ${card.wallet_address.slice(0, 10)}... to Codego?`)) return;
+    setSyncingCardId(card.id);
+    try {
+      const res = await fetch('/api/codego/cards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          walletAddress: card.wallet_address,
+          nameOnCard: card.card_holder_name,
+          type: 'virtual',
+          variant: card.card_variant === 'platinum' ? 'premium' : card.card_variant === 'gold' ? 'gold' : 'standard',
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Codego sync failed');
+      queryClient.invalidateQueries({ queryKey: ['admin-vcc-cards'] });
+      alert('✅ Card synced to Codego successfully!');
+    } catch (err: any) {
+      alert('❌ Sync failed: ' + err.message);
+    } finally {
+      setSyncingCardId(null);
+    }
+  };
 
   // ─── Query Requests ──────────────────────────────────────────────────────────
   const { data: requests, isLoading: isRequestsLoading, error: queryError, refetch: refetchRequests, isRefetching: isRefetchingRequests } = useQuery({
     queryKey: ['admin-card-requests', statusFilter],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('admin_get_card_requests');
-      if (error) throw error;
-      let results = data || [];
+      const res = await fetch('/api/admin/physical-cards');
+      if (!res.ok) throw new Error('Failed to fetch physical cards');
+      const data = await res.json();
+      let results = data.cards || [];
       if (statusFilter !== 'all') {
-        results = results.filter((r: any) => r.status === statusFilter);
+        results = results.filter((r: any) => r.activation_status === statusFilter);
       }
       return results as CardRequest[];
     },
@@ -190,18 +250,20 @@ export default function CardsPage() {
 
   // ─── Mutations Requests ───────────────────────────────────────────────────────
   const updateStatus = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { error } = await supabase.rpc('admin_update_card_request', {
-        p_id: id,
-        p_status: status
+    mutationFn: async ({ id, status, tracking }: { id: string; status: string; tracking?: string }) => {
+      const res = await fetch('/api/admin/physical-cards/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cardId: id, action: status, trackingNumber: tracking })
       });
-      if (error) throw error;
+      if (!res.ok) throw new Error('Failed to process card request');
       return status;
     },
     onSuccess: (newStatus) => {
       setMutateError(null);
       queryClient.invalidateQueries({ queryKey: ['admin-card-requests'] });
-      setSelectedRequest((prev) => prev ? { ...prev, status: newStatus } : null);
+      setSelectedRequest((prev) => prev ? { ...prev, activation_status: newStatus } : null);
+      setTrackingNumber('');
     },
     onError: (err) => {
       setMutateError((err as Error).message || 'Failed to update card request status.');
@@ -353,12 +415,16 @@ export default function CardsPage() {
   });
 
   // ─── Event Handlers ──────────────────────────────────────────────────────────
-  const handleStatusChange = (id: string, status: string) => {
-    const labels: Record<string, string> = { approved: 'APPROVE', rejected: 'REJECT', shipped: 'mark as SHIPPED' };
+  const handleStatusChange = (id: string, status: string, tracking?: string) => {
+    const labels: Record<string, string> = { pending: 'APPROVE', rejected: 'REJECT', shipped: 'mark as SHIPPED', delivered: 'mark as DELIVERED' };
     const label = labels[status] ?? status.toUpperCase();
+    if (status === 'shipped' && !tracking) {
+      alert("Please provide a tracking number before marking as shipped.");
+      return;
+    }
     if (!confirm(`Are you sure you want to ${label} this card request?`)) return;
     setMutateError(null);
-    updateStatus.mutate({ id, status });
+    updateStatus.mutate({ id, status, tracking });
   };
 
   const handleOpenCreateForm = () => {
@@ -468,13 +534,13 @@ export default function CardsPage() {
     );
   });
 
-  const countByStatus = (s: string) => (requests || []).filter((r: CardRequest) => r.status === s).length;
+  const countByStatus = (s: string) => (requests || []).filter((r: CardRequest) => r.activation_status === s).length;
 
   const STATUS_STYLES: Record<string, string> = {
+    not_requested: 'bg-white text-[#1a1a1a]',
     pending:  'bg-white text-[#1a1a1a] animate-pulse',
-    approved: 'bg-[#ffcc00] text-[#1a1a1a]',
-    rejected: 'bg-[#e63b2e] text-white',
     shipped:  'bg-[#0055ff] text-white',
+    delivered: 'bg-[#00ffcc] text-[#1a1a1a]',
   };
 
   return (
@@ -499,10 +565,12 @@ export default function CardsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-3 border-[#1a1a1a] pb-6 bg-[#ffcc00] p-6 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] border-3">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight text-[#1a1a1a] font-display uppercase leading-none">
-            {activeTab === 'requests' ? 'Physical Card Requests' : activeTab === 'variants' ? 'Card Variant Architecture' : 'Card Pricing & Currencies'}
+            {activeTab === 'virtual' ? 'Virtual Cards' : activeTab === 'requests' ? 'Physical Card Requests' : activeTab === 'variants' ? 'Card Variant Architecture' : 'Card Pricing & Currencies'}
           </h1>
           <p className="text-xs text-[#1a1a1a] font-bold mt-2 font-mono uppercase tracking-wider">
-            {activeTab === 'requests'
+            {activeTab === 'virtual'
+              ? 'All virtual cards issued to users — sync unregistered cards to Codego'
+              : activeTab === 'requests'
               ? 'Review, approve, and dispatch physical smartcard orders from verified wallets'
               : activeTab === 'variants'
               ? 'Admin panel to create, configure, theme and control cryptocurrency debit card designs'
@@ -511,11 +579,12 @@ export default function CardsPage() {
         </div>
         <button
           onClick={() => {
-            if (activeTab === 'requests') refetchRequests();
+            if (activeTab === 'virtual') refetchVirtual();
+            else if (activeTab === 'requests') refetchRequests();
             else if (activeTab === 'variants') refetchVariants();
             else { refetchShipping(); refetchFiat(); }
           }}
-          disabled={isRequestsLoading || isVariantsLoading || isRefetchingRequests || isRefetchingVariants}
+          disabled={isRequestsLoading || isVariantsLoading || isVirtualLoading || isRefetchingRequests || isRefetchingVariants}
           className="self-start brutalist-button px-4 py-2 flex items-center gap-2 shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]"
         >
           <RefreshCw className="h-4 w-4" />
@@ -525,6 +594,17 @@ export default function CardsPage() {
 
       {/* Tab Interface */}
       <div className="flex border-b-3 border-[#1a1a1a] bg-[#f5f0e8] p-1 gap-1 border-3 shadow-[3px_3px_0px_0px_rgba(26,26,26,1)]">
+        <button
+          onClick={() => setActiveTab('virtual')}
+          className={`flex-1 sm:flex-none px-6 py-3.5 text-xs font-extrabold uppercase font-display tracking-wider border-2 border-transparent transition-all flex items-center justify-center gap-2 ${
+            activeTab === 'virtual'
+              ? 'bg-[#1a1a1a] border-[#1a1a1a] text-white'
+              : 'text-[#1a1a1a] hover:bg-[#ffcc00]/20 hover:border-[#1a1a1a]'
+          }`}
+        >
+          <Sparkles className="h-4 w-4" />
+          <span>Virtual Cards ({virtualCards?.length || 0})</span>
+        </button>
         <button
           onClick={() => setActiveTab('requests')}
           className={`flex-1 sm:flex-none px-6 py-3.5 text-xs font-extrabold uppercase font-display tracking-wider border-2 border-transparent transition-all flex items-center justify-center gap-2 ${
@@ -560,6 +640,140 @@ export default function CardsPage() {
         </button>
       </div>
 
+      {/* ────────────────── VIRTUAL CARDS TAB ────────────────── */}
+      {activeTab === 'virtual' && (
+        <>
+          {/* Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[
+              { label: 'Total Issued', value: (virtualCards || []).length },
+              { label: 'Synced to Codego', value: (virtualCards || []).filter(c => c.codego_card_id).length },
+              { label: 'Pending Sync', value: (virtualCards || []).filter(c => !c.codego_card_id).length },
+              { label: 'Active', value: (virtualCards || []).filter(c => c.card_status === 'active').length },
+            ].map(s => (
+              <div key={s.label} className="brutalist-card p-4">
+                <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider font-mono">{s.label}</p>
+                <h4 className="text-2xl font-extrabold text-[#1a1a1a] mt-1.5 font-mono">
+                  {isVirtualLoading ? '...' : s.value}
+                </h4>
+              </div>
+            ))}
+          </div>
+
+          {/* Search */}
+          <div className="brutalist-card">
+            <div className="p-4 border-b-3 border-[#1a1a1a] flex items-center gap-3 bg-[#f5f0e8]">
+              <Search className="h-4 w-4 text-[#1a1a1a]" />
+              <input
+                type="text"
+                placeholder="Search wallet address or holder name..."
+                value={vCardSearch}
+                onChange={e => setVCardSearch(e.target.value)}
+                className="flex-1 bg-transparent text-xs font-mono text-[#1a1a1a] outline-none placeholder-gray-400"
+              />
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-left text-xs">
+                <thead>
+                  <tr className="bg-[#f5f0e8] border-b-2 border-[#1a1a1a] text-[10px] font-bold uppercase tracking-wider text-[#1a1a1a]">
+                    <th className="py-3.5 px-4 border-r border-[#1a1a1a] font-display">Wallet</th>
+                    <th className="py-3.5 px-4 border-r border-[#1a1a1a] font-display">Holder Name</th>
+                    <th className="py-3.5 px-4 border-r border-[#1a1a1a] font-display">Card</th>
+                    <th className="py-3.5 px-4 border-r border-[#1a1a1a] font-display">Variant</th>
+                    <th className="py-3.5 px-4 border-r border-[#1a1a1a] font-display">Status</th>
+                    <th className="py-3.5 px-4 border-r border-[#1a1a1a] font-display">Codego</th>
+                    <th className="py-3.5 px-4 border-r border-[#1a1a1a] font-display">Created</th>
+                    <th className="py-3.5 px-4 font-display text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#1a1a1a]/10 font-mono text-[#1a1a1a]">
+                  {isVirtualLoading ? (
+                    <tr><td colSpan={8} className="py-16 text-center">
+                      <div className="flex flex-col items-center gap-2">
+                        <Loader2 className="h-6 w-6 animate-spin text-[#1a1a1a]" />
+                        <span className="font-bold font-display uppercase text-xs">Loading virtual cards...</span>
+                      </div>
+                    </td></tr>
+                  ) : (virtualCards || []).filter(c =>
+                    !vCardSearch ||
+                    c.wallet_address.toLowerCase().includes(vCardSearch.toLowerCase()) ||
+                    c.card_holder_name.toLowerCase().includes(vCardSearch.toLowerCase())
+                  ).length === 0 ? (
+                    <tr><td colSpan={8} className="py-16 text-center text-[#1a1a1a] font-bold uppercase font-display">No virtual cards found.</td></tr>
+                  ) : (
+                    (virtualCards || []).filter(c =>
+                      !vCardSearch ||
+                      c.wallet_address.toLowerCase().includes(vCardSearch.toLowerCase()) ||
+                      c.card_holder_name.toLowerCase().includes(vCardSearch.toLowerCase())
+                    ).map(card => (
+                      <tr key={card.id} className="hover:bg-[#ffcc00]/5 transition-colors">
+                        <td className="py-3 px-4 border-r border-[#1a1a1a]/10">
+                          <span className="text-[10px] font-bold truncate block max-w-[120px]" title={card.wallet_address}>
+                            {card.wallet_address.slice(0, 6)}...{card.wallet_address.slice(-4)}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 border-r border-[#1a1a1a]/10 font-bold uppercase text-[10px]">{card.card_holder_name}</td>
+                        <td className="py-3 px-4 border-r border-[#1a1a1a]/10">
+                          <span className="font-bold">•••• {card.card_last4}</span>
+                          <span className="text-gray-400 ml-1">{card.expiry_mm_yy}</span>
+                        </td>
+                        <td className="py-3 px-4 border-r border-[#1a1a1a]/10">
+                          <span className="px-2 py-0.5 border border-[#1a1a1a] text-[9px] font-bold uppercase bg-[#f5f0e8]">
+                            {card.card_network} {card.card_variant}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 border-r border-[#1a1a1a]/10">
+                          <span className={`px-2 py-0.5 border-2 border-[#1a1a1a] text-[9px] font-extrabold uppercase ${
+                            card.card_status === 'active' ? 'bg-[#00ffcc] text-[#1a1a1a]' :
+                            card.card_status === 'frozen' ? 'bg-[#0055ff] text-white' :
+                            'bg-[#e63b2e] text-white'
+                          }`}>{card.card_status}</span>
+                        </td>
+                        <td className="py-3 px-4 border-r border-[#1a1a1a]/10">
+                          {card.codego_card_id ? (
+                            <div className="flex items-center gap-1.5">
+                              <CheckCircle className="h-3.5 w-3.5 text-green-600" />
+                              <span className="text-[9px] font-mono text-green-700 font-bold truncate max-w-[80px]" title={card.codego_card_id}>
+                                {card.codego_card_id.slice(0, 8)}...
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5">
+                              <AlertTriangle className="h-3.5 w-3.5 text-[#e63b2e]" />
+                              <span className="text-[9px] font-bold text-[#e63b2e] uppercase">Not synced</span>
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 border-r border-[#1a1a1a]/10 text-gray-500 text-[10px]">
+                          {new Date(card.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          {!card.codego_card_id ? (
+                            <button
+                              onClick={() => handleSyncToCodego(card)}
+                              disabled={syncingCardId === card.id}
+                              className="px-3 py-1.5 bg-[#0055ff] text-white border-2 border-[#1a1a1a] text-[10px] font-bold uppercase hover:bg-[#003cc5] disabled:opacity-50 flex items-center gap-1 ml-auto shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]"
+                            >
+                              {syncingCardId === card.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                              {syncingCardId === card.id ? 'Syncing...' : 'Sync to Codego'}
+                            </button>
+                          ) : (
+                            <span className="text-[10px] font-bold text-green-600 uppercase flex items-center gap-1 justify-end">
+                              <CheckCircle className="h-3 w-3" /> Registered
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* ────────────────── VIEW TAB 1: PHYSICAL REQUESTS ────────────────── */}
       {activeTab === 'requests' && (
         <>
@@ -584,7 +798,7 @@ export default function CardsPage() {
           <div className="brutalist-card">
             <div className="p-4 border-b-3 border-[#1a1a1a] flex flex-col md:flex-row gap-4 items-center justify-between bg-[#f5f0e8]">
               <div className="flex flex-wrap items-center gap-1.5 p-1 border-2 border-[#1a1a1a] bg-white">
-                {['all', 'pending', 'approved', 'shipped', 'rejected'].map(f => (
+                {['all', 'not_requested', 'pending', 'shipped', 'delivered'].map(f => (
                   <button
                     key={f}
                     onClick={() => setStatusFilter(f)}
@@ -650,7 +864,7 @@ export default function CardsPage() {
                             <span className="text-[10px] truncate max-w-[160px]">{r.wallet_address}</span>
                           </div>
                         </td>
-                        <td className="py-4 px-4 border-r border-[#1a1a1a]/10 font-bold uppercase">{r.card_type}</td>
+                        <td className="py-4 px-4 border-r border-[#1a1a1a]/10 font-bold uppercase">{r.masked_pan}</td>
                         <td className="py-4 px-4 border-r border-[#1a1a1a]/10">
                           <div className="flex items-center gap-1.5">
                             <MapPin className="h-3 w-3 text-gray-500" />
@@ -658,19 +872,22 @@ export default function CardsPage() {
                           </div>
                         </td>
                         <td className="py-4 px-4 border-r border-[#1a1a1a]/10 text-right font-bold">
-                          ${safeParseFloat(r.total_cost).toFixed(2)}
+                          {r.shipping_tracking_number || 'N/A'}
                         </td>
                         <td className="py-4 px-4 border-r border-[#1a1a1a]/10 text-gray-500">
                           {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </td>
                         <td className="py-4 px-4 border-r border-[#1a1a1a]/10">
-                          <span className={`px-2.5 py-0.5 border-2 border-[#1a1a1a] text-[9px] font-extrabold uppercase ${STATUS_STYLES[r.status] ?? 'bg-white text-[#1a1a1a]'}`}>
-                            {r.status}
+                          <span className={`px-2.5 py-0.5 border-2 border-[#1a1a1a] text-[9px] font-extrabold uppercase ${STATUS_STYLES[r.activation_status] ?? 'bg-white text-[#1a1a1a]'}`}>
+                            {r.activation_status.replace('_', ' ')}
                           </span>
                         </td>
                         <td className="py-4 px-6 text-right">
                           <button
-                            onClick={() => setSelectedRequest(r)}
+                            onClick={() => {
+                              setSelectedRequest(r);
+                              setTrackingNumber(r.shipping_tracking_number || '');
+                            }}
                             className="px-3 py-1.5 brutalist-button text-xs shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]"
                           >
                             <Eye className="h-3.5 w-3.5 inline mr-1" />
@@ -709,12 +926,12 @@ export default function CardsPage() {
                   <div className="space-y-4 font-mono">
                     <div className="grid grid-cols-2 gap-3">
                       {[
-                        { label: 'Card Specification', value: selectedRequest.card_type },
+                        { label: 'Card Name', value: selectedRequest.card_type },
+                        { label: 'Masked PAN', value: selectedRequest.masked_pan },
                         { label: 'Destination Country', value: selectedRequest.country },
-                        { label: 'Express Shipping', value: `$${safeParseFloat(selectedRequest.shipping_fee).toFixed(2)}` },
-                        { label: 'Total Cost Invoice', value: `$${safeParseFloat(selectedRequest.total_cost).toFixed(2)}` },
                         { label: 'Timestamp', value: new Date(selectedRequest.created_at).toLocaleString() },
-                        { label: 'Current State', value: selectedRequest.status?.toUpperCase() },
+                        { label: 'Current State', value: selectedRequest.activation_status?.toUpperCase() },
+                        { label: 'Tracking No', value: selectedRequest.shipping_tracking_number || 'Pending' }
                       ].map(row => (
                         <div key={row.label} className="p-3 border-2 border-[#1a1a1a] bg-[#f5f0e8]">
                           <p className="text-[9px] text-gray-500 uppercase font-bold tracking-wider mb-1">{row.label}</p>
@@ -727,38 +944,55 @@ export default function CardsPage() {
                       <p className="text-[9px] text-gray-500 uppercase font-bold tracking-wider mb-1">Wallet Public Address</p>
                       <p className="text-xs font-bold text-[#0055ff] break-all">{selectedRequest.wallet_address}</p>
                     </div>
+
+                    {selectedRequest.shipping_address && (
+                      <div className="p-3 border-2 border-[#1a1a1a] bg-[#f5f0e8]">
+                        <p className="text-[9px] text-gray-500 uppercase font-bold tracking-wider mb-1">Full Shipping Address</p>
+                        <p className="text-xs font-bold text-[#1a1a1a] break-all">
+                          {selectedRequest.shipping_address.street1} {selectedRequest.shipping_address.street2}
+                          <br />
+                          {selectedRequest.shipping_address.city}, {selectedRequest.shipping_address.state} {selectedRequest.shipping_address.postal_code}
+                          <br />
+                          {selectedRequest.country}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 <div className="mt-8 pt-4 border-t-3 border-[#1a1a1a] space-y-3">
-                  {selectedRequest.status === 'pending' && (
+                  {selectedRequest.activation_status === 'pending' && (
                     <div className="flex gap-3">
                       <button
-                        onClick={() => handleStatusChange(selectedRequest.id, 'rejected')}
-                        disabled={updateStatus.isPending}
-                        className="flex-1 brutalist-button py-3 !bg-[#e63b2e] !text-white text-xs disabled:opacity-50"
-                      >
-                        <XCircle className="h-4 w-4 inline mr-1" />
-                        Reject Order
-                      </button>
-                      <button
-                        onClick={() => handleStatusChange(selectedRequest.id, 'approved')}
+                        onClick={() => handleStatusChange(selectedRequest.id, 'shipped')}
                         disabled={updateStatus.isPending}
                         className="flex-1 brutalist-button-blue py-3 text-xs disabled:opacity-50"
                       >
-                        <CheckCircle className="h-4 w-4 inline mr-1" />
-                        Approve Order
+                        <Truck className="h-4 w-4 inline mr-1" />
+                        Mark as Shipped (Requires Tracking)
                       </button>
                     </div>
                   )}
-                  {selectedRequest.status === 'approved' && (
+                  {selectedRequest.activation_status === 'pending' && (
+                    <div className="mt-2">
+                       <label className="text-[10px] uppercase font-bold mb-1 block">Carrier Tracking Number</label>
+                       <input 
+                         type="text" 
+                         value={trackingNumber} 
+                         onChange={(e) => setTrackingNumber(e.target.value)}
+                         placeholder="Enter tracking ID..."
+                         className="w-full brutalist-input mb-2"
+                       />
+                    </div>
+                  )}
+                  {selectedRequest.activation_status === 'shipped' && (
                     <button
-                      onClick={() => handleStatusChange(selectedRequest.id, 'shipped')}
+                      onClick={() => handleStatusChange(selectedRequest.id, 'delivered')}
                       disabled={updateStatus.isPending}
                       className="w-full brutalist-button-blue py-3 text-xs disabled:opacity-50 flex items-center justify-center gap-2"
                     >
-                      <Truck className="h-4 w-4" />
-                      Mark as Shipped
+                      <CheckCircle className="h-4 w-4" />
+                      Mark as Delivered
                     </button>
                   )}
                   <button onClick={() => setSelectedRequest(null)} className="w-full brutalist-button-white py-2.5 text-xs">

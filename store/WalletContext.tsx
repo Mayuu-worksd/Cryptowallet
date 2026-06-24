@@ -141,6 +141,7 @@ type WalletContextType = {
   userUuid: string;
   userUid: string;
   kycEmail: string;
+  kycFullName: string;
   adminNetworks: any[];
 };
 
@@ -169,6 +170,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [userUuid,         setUserUuid]         = useState('');
   const [userUid,          setUserUid]          = useState('');
   const [kycEmail,         setKycEmail]         = useState('');
+  const [kycFullName,      setKycFullName]      = useState('');
   const [ethBalance,       setEthBalance]       = useState('0.0');
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);
   const [hasWallet,        setHasWallet]        = useState(false);
@@ -473,6 +475,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         } else {
           setKycEmail('');
         }
+        if (record?.full_name) {
+          setKycFullName(record.full_name);
+        } else {
+          setKycFullName('');
+        }
       }
     } catch (_e) {}
   }, [walletAddress, accountType]);
@@ -720,6 +727,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
               setKycStatus((kycRecord?.status as any) === 'approved' ? 'verified' : (kycRecord?.status as any ?? null));
               if (kycRecord?.email) {
                 setKycEmail(kycRecord.email);
+              }
+              if (kycRecord?.full_name) {
+                setKycFullName(kycRecord.full_name);
               }
             }
 
@@ -1404,6 +1414,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           setKycEmail(kycRecord.email);
         } else {
           setKycEmail('');
+        }
+        if (kycRecord?.full_name) {
+          setKycFullName(kycRecord.full_name);
+        } else {
+          setKycFullName('');
         }
 
         // ── Restore wallet name from Supabase profile or keep address-based default ──
@@ -2203,69 +2218,49 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     } catch {}
   }, [walletAddress]);
 
-  const createCard = useCallback((holderName: string, design: string) => {
-    // Generate Luhn-valid 16-digit VISA number
-    const buf = new Uint8Array(14);
-    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
-      crypto.getRandomValues(buf);
-    } else {
-      for (let i = 0; i < 14; i++) buf[i] = Math.floor(Math.random() * 256);
-    }
-    const d: number[] = [4, ...Array.from(buf).map(b => b % 10)];
-    let sum = 0;
-    for (let i = 0; i < 15; i++) {
-      let v = d[i];
-      if ((15 - i) % 2 === 0) { v *= 2; if (v > 9) v -= 9; }
-      sum += v;
-    }
-    d.push((10 - (sum % 10)) % 10);
-    const cardNumber = `${d.slice(0,4).join('')} ${d.slice(4,8).join('')} ${d.slice(8,12).join('')} ${d.slice(12,16).join('')}`;
+  const createCard = useCallback(async (holderName: string, design: string) => {
+    try {
+      setIsGlobalLoading(true);
+      setGlobalLoadingMessage('Activating Virtual Card...');
+      const cleanName = holderName.toUpperCase().trim() || 'CARD HOLDER';
 
-    const now = new Date();
-    const expiry = `${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getFullYear() + 3).slice(-2)}`;
+      // Map design → variant id
+      const variantId = design === 'neon' ? 'platinum' : design === 'emerald' ? 'gold' : 'classic';
+      const variants = await cardVariantService.getVariants();
+      const cardVariant = variants.find(v => v.id === variantId) ?? variants[0];
 
-    const cvvBuf = new Uint8Array(2);
-    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
-      crypto.getRandomValues(cvvBuf);
-    } else {
-      cvvBuf[0] = Math.floor(Math.random() * 256);
-      cvvBuf[1] = Math.floor(Math.random() * 256);
-    }
-    const cvv = String(100 + ((cvvBuf[0] * 256 + cvvBuf[1]) % 900));
-    const last4 = d.slice(12, 16).join('');
-    const [expMonth, expYear] = expiry.split('/');
-    const cleanName = holderName.toUpperCase().trim() || 'CARD HOLDER';
+      // Create card directly in Supabase (vcc_cards + cards tables)
+      const { cardNumber, cvv } = await vccService.applyCard(
+        walletAddress,
+        cardVariant,
+        cleanName,
+        false,
+        0,
+      );
 
-    const details = { number: cardNumber, expiry, cvv, brand: 'VISA' as const, holderName: cleanName, design };
-    setCardDetails(details);
-    setCardCreated(true);
-    // Always persist to AsyncStorage so reveal works immediately even if Supabase is slow
-    storageService.saveCardDetails(details).catch(() => {});
-    AsyncStorage.setItem('cw_card_created', 'true').catch(() => {});
-
-    // Save to Supabase as primary store — encrypted number + CVV
-    dbCardService.getCard(walletAddress).then(existing => {
-      const cardPayload = {
-        wallet_address: walletAddress,
-        card_last4:     last4,
-        expiry_month:   expMonth ?? '12',
-        expiry_year:    expYear  ?? '28',
-        card_type:      'classic',
-        balance:        0,
-        status:         'active' as const,
-        holder_name:    cleanName,
+      const expiry = vccService.generateExpiry();
+      await dbCardService.saveCredentials(walletAddress, cardNumber, cvv, {
+        expiry_month: expiry.split('/')[0],
+        expiry_year:  expiry.split('/')[1],
+        card_type:    cardVariant.id,
+        balance:      0,
+        status:       'active',
+        holder_name:  cleanName,
         design,
-      };
-      const saveCredentials = () => dbCardService.saveCredentials(walletAddress, cardNumber, cvv).catch(() => {});
-      if (existing) {
-        dbCardService.updateDesign(walletAddress, { holder_name: cleanName, design })
-          .then(saveCredentials).catch(() => {});
-      } else {
-        dbCardService.createCard(cardPayload)
-          .then(saveCredentials).catch(() => {});
-      }
-    }).catch(() => {});
-  }, [walletAddress]);
+      });
+
+      await refreshCardData();
+      setIsGlobalLoading(false);
+    } catch (e: any) {
+      setIsGlobalLoading(false);
+      console.warn('[createCard] error:', e);
+      alert('Error creating card: ' + (e.message === 'KYC_NOT_VERIFIED'
+        ? 'KYC verification required before creating a card.'
+        : e.message === 'NAME_MISMATCH'
+          ? 'Card holder name must match your KYC name.'
+          : e.message));
+    }
+  }, [walletAddress, refreshCardData]);
 
   const updateCardDetails = useCallback((patch: { holderName?: string; design?: string }) => {
     setCardDetails(prev => {
@@ -2375,6 +2370,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     userUuid,
     userUid,
     kycEmail,
+    kycFullName,
     adminNetworks
   }), [
     isDarkMode, toggleTheme, accountType, accountTypeSet, setAccountType,
@@ -2393,6 +2389,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     userUuid,
     userUid,
     kycEmail,
+    kycFullName,
     adminNetworks
   ]);
 

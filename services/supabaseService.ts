@@ -546,60 +546,88 @@ export const vccService = {
     holderName: string,
     isPhysical: boolean,
     shippingFeeUsd: number,
+    previewNumber?: string,
+    previewCVV?: string,
+    previewExpiry?: string,
   ): Promise<{ vccCard: VCCCard; cardNumber: string; cvv: string }> {
     const addr = walletAddress.toLowerCase();
 
-    // 1. Verify KYC
+    // 1. Set RLS wallet context so insert is allowed
+    await setWallet(addr);
+
+    // 2. Verify KYC
     const kyc = await kycService.getStatus(addr);
     if (!kyc || kyc.status !== 'verified') {
       throw new Error('KYC_NOT_VERIFIED');
     }
 
-    // 2. Name match check
-    const kycName    = (kyc.full_name ?? '').trim().toLowerCase();
-    const inputName  = holderName.trim().toLowerCase();
-    const nameMatch  = kycName === inputName || kycName.includes(inputName) || inputName.includes(kycName);
+    // 3. Name match check
+    const kycName   = (kyc.full_name ?? '').trim().toLowerCase();
+    const inputName = holderName.trim().toLowerCase();
+    const nameMatch = kycName === inputName || kycName.includes(inputName) || inputName.includes(kycName);
     if (!nameMatch) {
       throw new Error('NAME_MISMATCH');
     }
 
-    // 3. Generate card details locally
-    const cardNumber = vccService.generateCardNumber(variant.network);
+    // 4. Use preview credentials if passed in, otherwise generate fresh ones
+    const cardNumber = previewNumber ?? vccService.generateCardNumber(variant.network);
+    const cvv        = previewCVV    ?? vccService.generateCVV();
+    const expiry     = previewExpiry ?? vccService.generateExpiry();
     const last4      = cardNumber.replace(/\s/g, '').slice(-4);
-    const expiry     = vccService.generateExpiry();
-    const cvv        = vccService.generateCVV();
 
-    // 4. Insert VCC card
-    const payload: Omit<VCCCard, 'id' | 'created_at'> = {
-      wallet_address:           addr,
-      card_last4:               last4,
-      card_holder_name:         holderName.trim(),
-      expiry_mm_yy:             expiry,
-      card_variant:             variant.id,
-      card_network:             variant.network,
-      card_status:              'active',
-      balance:                  0,
-      is_physical:              isPhysical,
-      physical_shipping_status: isPhysical ? 'processing' : 'not_requested',
-      physical_fee_usd:         isPhysical ? 50 : 0,
-      shipping_fee_usd:         shippingFeeUsd,
-      kyc_verified:             true,
-      name_match:               true,
-      compliance_status:        'compliant',
-    };
+    // 5. Check if a VCC card already exists — upsert logic
+    const existing = await this.getCard(addr);
 
-    const { data, error } = await supabase
-      .from('vcc_cards')
-      .upsert(payload, { onConflict: 'wallet_address' })
-      .select()
-      .single();
-    if (error) throw error;
+    let vccCard: VCCCard;
 
-    // 5. Log issuance fee transaction
+    if (existing) {
+      const { data, error } = await supabase
+        .from('vcc_cards')
+        .update({
+          card_holder_name:         holderName.trim(),
+          card_last4:               last4,
+          expiry_mm_yy:             expiry,
+          card_variant:             variant.id,
+          card_network:             variant.network,
+          card_status:              'active',
+          is_physical:              isPhysical,
+          physical_fee_usd:         isPhysical ? shippingFeeUsd : 0,
+          shipping_fee_usd:         isPhysical ? shippingFeeUsd : 0,
+          physical_shipping_status: isPhysical ? 'processing' : 'not_requested',
+        })
+        .eq('wallet_address', addr)
+        .select()
+        .single();
+      if (error) throw error;
+      vccCard = data as VCCCard;
+    } else {
+      const { data, error } = await supabase
+        .from('vcc_cards')
+        .insert({
+          wallet_address:           addr,
+          card_last4:               last4,
+          card_holder_name:         holderName.trim(),
+          expiry_mm_yy:             expiry,
+          card_variant:             variant.id,
+          card_network:             variant.network,
+          card_status:              'active',
+          balance:                  0,
+          is_physical:              isPhysical,
+          physical_fee_usd:         isPhysical ? shippingFeeUsd : 0,
+          shipping_fee_usd:         isPhysical ? shippingFeeUsd : 0,
+          physical_shipping_status: isPhysical ? 'processing' : 'not_requested',
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      vccCard = data as VCCCard;
+    }
+
+    // 6. Log issuance fee (best-effort, non-blocking)
     if (variant.annual_fee_usd > 0) {
-      await supabase.from('transactions').insert({
+      supabase.from('transactions').insert({
         wallet_address: addr,
-        card_id:        data.id,
+        card_id:        vccCard.id,
         type:           'fee',
         token:          'USD',
         amount:         variant.annual_fee_usd,
@@ -607,10 +635,10 @@ export const vccService = {
         status:         'success',
         description:    'VCC Issuance Fee',
         label:          `${variant.variant_name} Card Annual Fee`,
-      });
+      }).then(({ error: e }) => { if (e) console.warn('[vccService] fee tx:', e.message); });
     }
 
-    return { vccCard: data, cardNumber, cvv };
+    return { vccCard, cardNumber, cvv };
   },
 
   async updateBalance(walletAddress: string, balance: number): Promise<void> {
@@ -655,35 +683,104 @@ export const shippingFeeService = {
 
 // ─── Physical Card Requests ───────────────────────────────────────────────────
 
+export const codegoCardService = {
+  async getCards(walletAddress: string): Promise<any[]> {
+    const kyc = await kycService.getStatus(walletAddress);
+    if (!kyc) return [];
+    const { data, error } = await supabase
+      .from('codego_cards')
+      .select('*')
+      .eq('user_id', kyc.id);
+    if (error) throw error;
+    return data || [];
+  }
+};
+
 export const cardRequestService = {
   async getRequests(walletAddress: string): Promise<CardRequest[]> {
+    const kyc = await kycService.getStatus(walletAddress);
+    if (!kyc || !kyc.id) return [];
+
     const { data, error } = await supabase
-      .from('card_requests')
+      .from('codego_cards')
       .select('*')
-      .eq('wallet_address', walletAddress.toLowerCase())
+      .eq('user_id', kyc.id)
+      .eq('type', 'physical')
       .order('created_at', { ascending: false });
     if (error) throw error;
-    return data ?? [];
+    
+    return (data ?? []).map(c => ({
+      id: c.id,
+      wallet_address: walletAddress,
+      card_type: c.display_name || 'Physical Card',
+      country: c.shipping_address?.country || 'Unknown',
+      shipping_address: c.shipping_address,
+      shipping_fee: 0,
+      total_cost: 0,
+      status: c.activation_status || 'approved',
+      shipping_tracking_number: c.shipping_tracking_number,
+      created_at: c.created_at,
+    }));
   },
 
   async hasPendingRequest(walletAddress: string): Promise<boolean> {
+    const kyc = await kycService.getStatus(walletAddress);
+    if (!kyc || !kyc.id) return false;
+
     const { data } = await supabase
-      .from('card_requests')
+      .from('codego_cards')
       .select('id')
-      .eq('wallet_address', walletAddress.toLowerCase())
-      .eq('status', 'pending')
+      .eq('user_id', kyc.id)
+      .eq('type', 'physical')
+      .eq('activation_status', 'pending')
       .maybeSingle();
     return !!data;
   },
 
   async submitRequest(req: Omit<CardRequest, 'id' | 'created_at' | 'status'>): Promise<CardRequest> {
+    const addr = req.wallet_address.toLowerCase();
+
+    // 1. Verify KYC
+    const kyc = await kycService.getStatus(addr);
+    if (!kyc || kyc.status !== 'verified') {
+      throw new Error('KYC_NOT_VERIFIED');
+    }
+
+    // 2. Insert physical card request directly into Supabase
     const { data, error } = await supabase
-      .from('card_requests')
-      .insert({ ...req, wallet_address: req.wallet_address.toLowerCase(), status: 'pending' })
+      .from('vcc_cards')
+      .insert({
+        wallet_address:           addr,
+        card_last4:               '0000',
+        card_holder_name:         kyc.full_name ?? 'CARD HOLDER',
+        expiry_mm_yy:             vccService.generateExpiry(),
+        card_variant:             req.card_type,
+        card_network:             'Visa',
+        card_status:              'pending',
+        balance:                  0,
+        is_physical:              true,
+        physical_fee_usd:         req.shipping_fee,
+        shipping_fee_usd:         req.shipping_fee,
+        physical_shipping_status: 'processing',
+        name_match:               true,
+        kyc_verified:             true,
+        compliance_status:        'compliant',
+      })
       .select()
       .single();
+
     if (error) throw error;
-    return data;
+
+    return {
+      id:             data.id,
+      wallet_address: req.wallet_address,
+      card_type:      req.card_type,
+      country:        req.country,
+      shipping_fee:   req.shipping_fee,
+      total_cost:     req.total_cost,
+      status:         'pending',
+      created_at:     data.created_at,
+    };
   },
 };
 
@@ -1171,4 +1268,59 @@ export const fiatRequestService = {
     return data ?? [];
   },
 };
+
+// ─── Codego Fiat Service ──────────────────────────────────────────────────────
+
+export const codegoFiatService = {
+  async submitDeposit(
+    walletAddress: string,
+    fiatCurrency: string,
+    amount: number,
+  ): Promise<any> {
+    const kyc = await kycService.getStatus(walletAddress);
+    if (!kyc || kyc.status !== 'verified') throw new Error('KYC_NOT_VERIFIED');
+
+    const vccCard = await vccService.getCard(walletAddress);
+    if (!vccCard) throw new Error('VIRTUAL_CARD_NOT_FOUND');
+
+    // Log deposit request directly to Supabase
+    const { data, error } = await supabase.from('fiat_crypto_requests').insert({
+      wallet_address: walletAddress.toLowerCase(),
+      type: 'deposit',
+      fiat_currency: fiatCurrency,
+      crypto_asset: 'USDC',
+      amount,
+      status: 'pending',
+    }).select().single();
+    if (error) throw error;
+    return data;
+  },
+
+  async submitWithdrawal(
+    walletAddress: string,
+    fiatCurrency: string,
+    amount: number,
+    bankDetails: {
+      accountName: string;
+      iban: string;
+      swiftCode: string;
+    }
+  ): Promise<any> {
+    const kyc = await kycService.getStatus(walletAddress);
+    if (!kyc || kyc.status !== 'verified') throw new Error('KYC_NOT_VERIFIED');
+
+    const vccCard = await vccService.getCard(walletAddress);
+    if (!vccCard) throw new Error('VIRTUAL_CARD_NOT_FOUND');
+
+    return fiatRequestService.submitWithdrawal(
+      walletAddress, 'USDC', fiatCurrency, amount, bankDetails
+    );
+  },
+
+  async getStatement(walletAddress: string, codegoCardId: string, startDate?: string, endDate?: string): Promise<any> {
+    // Return empty statement — Codego API not available in mobile client
+    return { transactions: [] };
+  },
+};
+
 
