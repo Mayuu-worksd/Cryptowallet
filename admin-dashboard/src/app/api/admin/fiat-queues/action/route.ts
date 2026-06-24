@@ -13,44 +13,64 @@ function getSupabaseClient() {
 
 export async function POST(request: Request) {
   try {
-    const { requestId, type, action, source } = await request.json();
+    const { requestId, type, action, source, adminNotes, cryptoAmount } = await request.json();
 
     if (!requestId || !type || !action || !source) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-    }
-
-    let table = 'fiat_crypto_requests';
-    if (source === 'codego') {
-      table = type === 'deposit' ? 'fiat_deposits' : 'fiat_withdrawals';
-    }
-
-    let newStatus = 'pending';
-
-    if (action === 'approve' || action === 'complete') {
-      newStatus = source === 'codego' ? 'completed' : 'approved';
-    } else if (action === 'reject') {
-      newStatus = source === 'codego' ? 'failed' : 'rejected';
-    } else if (action === 'under_review') {
-      newStatus = source === 'codego' ? 'processing' : 'under_review';
+      return NextResponse.json({ error: 'Missing required fields: requestId, type, action, source' }, { status: 400 });
     }
 
     const supabase = getSupabaseClient();
-    const { data, error } = await supabase
-      .from(table)
-      .update({ status: newStatus })
-      .eq('id', requestId)
-      .select()
-      .single();
+    let data = null;
+    let error = null;
+
+    if (source !== 'codego') {
+      // For legacy (fiat-crypto requests), use the database RPC function to process the request
+      // (which credits user's token balance, updates transactions, and ledger records)
+      const rpcParams = {
+        p_request_id: requestId,
+        p_action: action, // 'under_review', 'approve', 'reject', 'complete'
+        p_crypto_amount: cryptoAmount ? parseFloat(cryptoAmount) : null,
+        p_admin_notes: adminNotes || null
+      };
+
+      console.log('[Fiat queues action] Invoking admin_process_fiat_request RPC:', rpcParams);
+      const res = await supabase.rpc('admin_process_fiat_request', rpcParams);
+      data = res.data;
+      error = res.error;
+    } else {
+      // For Codego fiat deposits/withdrawals, update the record directly in the respective table
+      const table = type === 'deposit' ? 'fiat_deposits' : 'fiat_withdrawals';
+      let newStatus = 'pending';
+
+      if (action === 'approve' || action === 'complete') {
+        newStatus = 'completed';
+      } else if (action === 'reject') {
+        newStatus = 'failed';
+      } else if (action === 'under_review') {
+        newStatus = 'processing';
+      }
+
+      console.log(`[Fiat queues action] Updating table ${table} directly for Codego fiat request: status = ${newStatus}`);
+      const { data: updatedData, error: updateError } = await supabase
+        .from(table)
+        .update({ status: newStatus })
+        .eq('id', requestId)
+        .select()
+        .single();
+      
+      data = updatedData;
+      error = updateError;
+    }
 
     if (error) {
-      console.error(`Error updating ${table}:`, error);
-      return NextResponse.json({ error: 'Failed to update record' }, { status: 500 });
+      console.error('[Fiat queues action] Supabase error:', error);
+      return NextResponse.json({ error: error.message || 'Failed to update record' }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, data });
 
   } catch (error: any) {
     console.error('Error processing fiat action:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }
 }

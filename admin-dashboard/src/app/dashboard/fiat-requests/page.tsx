@@ -44,18 +44,23 @@ export default function FiatRequestsPage() {
 
   // Action Mutation
   const processMutation = useMutation({
-    mutationFn: async ({ requestId, action, type, source }: {
+    mutationFn: async ({ requestId, action, type, source, adminNotes, cryptoAmount }: {
       requestId: string;
       action: string;
       type: string;
       source: string;
+      adminNotes?: string;
+      cryptoAmount?: string;
     }) => {
       const res = await fetch('/api/admin/fiat-queues/action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requestId, action, type })
+        body: JSON.stringify({ requestId, action, type, source, adminNotes, cryptoAmount })
       });
-      if (!res.ok) throw new Error('Failed to process request');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to process request');
+      }
       return await res.json();
     },
     onSuccess: () => {
@@ -84,8 +89,13 @@ export default function FiatRequestsPage() {
   const handleAction = (action: string) => {
     if (!selectedRequest) return;
     
+    let targetAction = action;
+    if (action === 'approve' && selectedRequest.type === 'withdrawal' && selectedRequest.status === 'approved') {
+      targetAction = 'complete';
+    }
+    
     let parsedAmt = null;
-    if (action === 'approve' && selectedRequest.type === 'deposit') {
+    if (targetAction === 'approve' && selectedRequest.type === 'deposit') {
       parsedAmt = parseFloat(cryptoAmount);
       if (isNaN(parsedAmt) || parsedAmt <= 0) {
         alert('Please enter a valid crypto quantity to credit');
@@ -93,17 +103,19 @@ export default function FiatRequestsPage() {
       }
     }
 
-    if (action === 'reject' && !adminNotes.trim()) {
+    if (targetAction === 'reject' && !adminNotes.trim()) {
       alert('Please provide notes indicating the reason for rejection');
       return;
     }
 
-    if (confirm(`Are you sure you want to perform this action (${action.toUpperCase()}) on ticket ${selectedRequest.ticket_id}?`)) {
+    if (confirm(`Are you sure you want to perform this action (${targetAction.toUpperCase()}) on ticket ${selectedRequest.ticket_id}?`)) {
       processMutation.mutate({
         requestId: selectedRequest.id,
-        action,
+        action: targetAction,
         type: selectedRequest.type,
         source: selectedRequest.source,
+        adminNotes: adminNotes,
+        cryptoAmount: cryptoAmount,
       });
     }
   };
@@ -416,7 +428,9 @@ export default function FiatRequestsPage() {
                   disabled={processMutation.isPending}
                   className="col-span-2 w-full py-2.5 border-2 border-[#1a1a1a] bg-[#00ffcc] text-black text-xs font-black uppercase tracking-wider shadow-[2px_2px_0px_0px_#1a1a1a] transition-all cursor-pointer disabled:opacity-50"
                 >
-                  Mark as Completed
+                  {selectedRequest.type === 'withdrawal' && selectedRequest.status !== 'approved'
+                    ? 'Approve & Initiate Wire'
+                    : 'Mark as Completed'}
                 </button>
                 <button
                   onClick={() => handleAction('reject')}
