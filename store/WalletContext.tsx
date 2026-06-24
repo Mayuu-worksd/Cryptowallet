@@ -116,11 +116,11 @@ type WalletContextType = {
   sendCrypto: (coin: string, amount: number, label: string) => void;
   topupCard: (coin: string, amount: number) => boolean;
   spendCard: (coin: string, amountUSD: number, label: string, currency?: string) => boolean;
-  toggleFreezeCard: () => void;
+  toggleFreezeCard: () => void | Promise<void>;
   cardTransactions: CardTransaction[];
   enabledCardCurrencies: Record<string, boolean>;
   setEnabledCardCurrencies: (currencies: Record<string, boolean>) => Promise<void>;
-  cardDetails: { number: string; expiry: string; cvv: string; brand: 'VISA' | 'MASTERCARD'; holderName: string; design: string };
+  cardDetails: { number: string; expiry: string; cvv: string; brand: 'VISA' | 'MASTERCARD'; holderName: string; design: string; codegoCardId?: string };
   setCardDetails: (details: any) => void;
   cardCreated: boolean;
   createCard: (holderName: string, design: string) => void;
@@ -193,7 +193,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     adminSettingsService.getSetting<string[]>('payment_priority', ['USDT', 'BTC', 'ETH', 'BNB', 'TRX'])
       .then(setPaymentPriority).catch(() => {});
   }, []);
-  const [cardDetails,      setCardDetails]      = useState<{ number: string; expiry: string; cvv: string; brand: 'VISA' | 'MASTERCARD'; holderName: string; design: string }>({
+  const [cardDetails,      setCardDetails]      = useState<{ number: string; expiry: string; cvv: string; brand: 'VISA' | 'MASTERCARD'; holderName: string; design: string; codegoCardId?: string }>({
     number: '\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022',
     expiry: '\u2022\u2022/\u2022\u2022',
     cvv: '\u2022\u2022\u2022',
@@ -416,32 +416,61 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, [network, walletAddress, fetchBalance]);
 
   const toggleBalanceVisible = useCallback(() => setBalanceVisible(p => !p), []);
-  const toggleFreezeCard = useCallback(() => {
-    setCardFrozen(p => {
-      const newVal = !p;
-      cardService.setCardFrozen(newVal);
-      // Persist freeze state to Supabase (check both tables for safety during migration)
-      dbCardService.updateStatus(walletAddress, newVal ? 'frozen' : 'active').catch(() => {});
-      vccService.updateStatus(walletAddress, newVal ? 'frozen' : 'active').catch(() => {});
-      
-      // Log alert to admin dashboard
-      const action = newVal ? 'frozen' : 'unfrozen';
-      const message = `User ${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)} has ${action} their card.`;
-      adminAlertsService.logAlert(
-        `card_${action}`,
-        message,
-        walletAddress
-      ).catch(() => {});
-      
-      return newVal;
-    });
-  }, [walletAddress]);
+  const toggleFreezeCard = useCallback(async () => {
+    const newVal = !cardFrozen;
+    setCardFrozen(newVal);
+    cardService.setCardFrozen(newVal);
+    
+    // Sync to Codego if codegoCardId is present
+    const codegoCardId = cardDetails?.codegoCardId;
+    if (codegoCardId) {
+      try {
+        const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+        const res = await fetch(`${apiUrl}/api/codego/cards/${codegoCardId}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newVal ? 'frozen' : 'active' })
+        });
+        if (!res.ok) console.warn('[toggleFreezeCard] failed to sync status to Codego API');
+      } catch (e) {
+        console.warn('[toggleFreezeCard] error syncing status to Codego:', e);
+      }
+    }
+
+    // Persist freeze state to Supabase (check both tables for safety during migration)
+    dbCardService.updateStatus(walletAddress, newVal ? 'frozen' : 'active').catch(() => {});
+    vccService.updateStatus(walletAddress, newVal ? 'frozen' : 'active').catch(() => {});
+    
+    // Log alert to admin dashboard
+    const action = newVal ? 'frozen' : 'unfrozen';
+    const message = `User ${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)} has ${action} their card.`;
+    adminAlertsService.logAlert(
+      `card_${action}`,
+      message,
+      walletAddress
+    ).catch(() => {});
+  }, [walletAddress, cardFrozen, cardDetails]);
 
   const reportLostCard = useCallback(async () => {
     if (!walletAddress) return;
     try {
       cardService.setCardFrozen(true);
       setCardFrozen(true);
+
+      const codegoCardId = cardDetails?.codegoCardId;
+      if (codegoCardId) {
+        try {
+          const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+          await fetch(`${apiUrl}/api/codego/cards/${codegoCardId}/status`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'blocked' })
+          });
+        } catch (e) {
+          console.warn('[reportLostCard] failed to sync status to Codego API:', e);
+        }
+      }
+
       await dbCardService.updateStatus(walletAddress, 'frozen').catch(() => {});
       await vccService.updateStatus(walletAddress, 'frozen').catch(() => {});
       
@@ -454,7 +483,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       console.warn('[reportLostCard] Failed to report lost card:', e);
     }
-  }, [walletAddress]);
+  }, [walletAddress, cardDetails]);
 
   const refreshPinEnabled = useCallback(async () => {
     setPinEnabled(await hasPinSetup());
@@ -851,6 +880,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
                 brand:      (vcc.card_network === 'Mastercard' ? 'MASTERCARD' : 'VISA') as 'VISA' | 'MASTERCARD',
                 holderName: vcc.card_holder_name,
                 design:     variant?.color_hex ?? 'dark',
+                codegoCardId: vcc.codego_card_id,
               };
               setCardCreated(true);
               setCardBalance(vcc.balance);
@@ -2141,7 +2171,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           
           if (prev.number === newNum && prev.cvv === newCvv && prev.holderName === vcc.card_holder_name && prev.expiry === vcc.expiry_mm_yy) return prev;
           
-          const nextDetails = { ...prev, number: newNum, cvv: newCvv, holderName: vcc.card_holder_name, expiry: vcc.expiry_mm_yy };
+          const nextDetails = { ...prev, number: newNum, cvv: newCvv, holderName: vcc.card_holder_name, expiry: vcc.expiry_mm_yy, codegoCardId: vcc.codego_card_id };
           storageService.saveCardDetails(nextDetails).catch(() => {});
           return nextDetails;
         });
@@ -2229,25 +2259,64 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const variants = await cardVariantService.getVariants();
       const cardVariant = variants.find(v => v.id === variantId) ?? variants[0];
 
-      // Create card directly in Supabase (vcc_cards + cards tables)
-      const { cardNumber, cvv } = await vccService.applyCard(
-        walletAddress,
-        cardVariant,
-        cleanName,
-        false,
-        0,
-      );
+      let codegoSuccess = false;
 
-      const expiry = vccService.generateExpiry();
-      await dbCardService.saveCredentials(walletAddress, cardNumber, cvv, {
-        expiry_month: expiry.split('/')[0],
-        expiry_year:  expiry.split('/')[1],
-        card_type:    cardVariant.id,
-        balance:      0,
-        status:       'active',
-        holder_name:  cleanName,
-        design,
-      });
+      // 1. Try Codego API auto-provisioning
+      try {
+        const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+        const codegoRes = await fetch(`${apiUrl}/api/codego/cards`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            walletAddress,
+            type: 'virtual',
+            variant: cardVariant.id,
+            nameOnCard: cleanName,
+          }),
+        });
+        const codegoData = await codegoRes.json();
+        if (codegoRes.ok && codegoData.cardData) {
+          codegoSuccess = true;
+          const cardData = codegoData.cardData;
+          const expiryMmYy = (cardData.expiryMonth && cardData.expiryYear)
+            ? `${String(cardData.expiryMonth).padStart(2, '0')}/${String(cardData.expiryYear).slice(-2)}`
+            : '12/28';
+          
+          await dbCardService.saveCredentials(walletAddress, cardData.number || `4000 0000 0000 ${cardData.last4 || '0000'}`, cardData.cvv || '000', {
+            expiry_month: expiryMmYy.split('/')[0],
+            expiry_year:  expiryMmYy.split('/')[1],
+            card_type:    cardVariant.id,
+            balance:      cardData.limit?.amount ? cardData.limit.amount / 100 : 0,
+            status:       cardData.status === 'locked' ? 'frozen' : 'active',
+            holder_name:  cleanName,
+            design,
+          });
+        }
+      } catch (err) {
+        console.warn('[createCard] Codego auto-provisioning error, falling back:', err);
+      }
+
+      // 2. Local fallback if Codego provisioning failed or was skipped
+      if (!codegoSuccess) {
+        const { cardNumber, cvv } = await vccService.applyCard(
+          walletAddress,
+          cardVariant,
+          cleanName,
+          false,
+          0,
+        );
+
+        const expiry = vccService.generateExpiry();
+        await dbCardService.saveCredentials(walletAddress, cardNumber, cvv, {
+          expiry_month: expiry.split('/')[0],
+          expiry_year:  expiry.split('/')[1],
+          card_type:    cardVariant.id,
+          balance:      0,
+          status:       'active',
+          holder_name:  cleanName,
+          design,
+        });
+      }
 
       await refreshCardData();
       setIsGlobalLoading(false);
@@ -2258,7 +2327,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         ? 'KYC verification required before creating a card.'
         : e.message === 'NAME_MISMATCH'
           ? 'Card holder name must match your KYC name.'
-          : e.message);
+          : e.message || 'Failed to issue card. Please try again.');
     }
   }, [walletAddress, refreshCardData]);
 

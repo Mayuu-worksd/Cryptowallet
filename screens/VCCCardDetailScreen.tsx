@@ -13,7 +13,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Platform, StatusBar, ActivityIndicator, Alert,
+  Platform, StatusBar, ActivityIndicator, Alert, Modal, TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
@@ -51,6 +51,9 @@ export default function VCCCardDetailScreen({ navigation }: any) {
   const [showCVV, setShowCVV]           = useState(false);
   const [toast, setToast]               = useState({ visible: false, message: '', type: 'success' as any });
   const [gradientColors, setGradientColors] = useState<string[]>(['#1C1C2E', '#2D1B69']);
+  const [pinModalVisible, setPinModalVisible] = useState(false);
+  const [newPin, setNewPin]                   = useState('');
+  const [submittingPin, setSubmittingPin]     = useState(false);
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') =>
     setToast({ visible: true, message, type });
@@ -175,6 +178,35 @@ export default function VCCCardDetailScreen({ navigation }: any) {
       load();
     } catch (e: any) {
       showToast(e.message, 'error');
+    }
+  };
+
+  const handleChangePIN = () => {
+    setNewPin('');
+    setPinModalVisible(true);
+  };
+
+  const handleSubmitPIN = async () => {
+    if (!/^\d{4}$/.test(newPin)) {
+      showToast('PIN must be exactly 4 digits', 'error');
+      return;
+    }
+    setSubmittingPin(true);
+    try {
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+      const res = await fetch(`${apiUrl}/api/codego/cards/${cardData?.codegoCardId}/pin`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPin, walletAddress })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update PIN');
+      showToast('PIN updated successfully', 'success');
+      setPinModalVisible(false);
+    } catch (e: any) {
+      showToast(e.message, 'error');
+    } finally {
+      setSubmittingPin(false);
     }
   };
 
@@ -368,7 +400,7 @@ export default function VCCCardDetailScreen({ navigation }: any) {
           </View>
 
           {/* CVV */}
-          <View style={[s.detailRow, { borderBottomWidth: 0 }]}>
+          <View style={[s.detailRow, { borderBottomColor: T.border }]}>
             <View style={{ flex: 1 }}>
               <Text style={[s.detailLabel, { color: T.textDim }]}>CVV / CVC</Text>
               <Text style={[s.detailValue, { color: T.text, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }]}>
@@ -392,6 +424,22 @@ export default function VCCCardDetailScreen({ navigation }: any) {
               )}
             </View>
           </View>
+
+          {/* Card PIN */}
+          {cardData.codegoCardId && (
+            <View style={[s.detailRow, { borderBottomWidth: 0 }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.detailLabel, { color: T.textDim }]}>CARD PIN</Text>
+                <Text style={[s.detailValue, { color: T.text }]}>••••</Text>
+              </View>
+              <TouchableOpacity
+                style={[s.actionCapsule, { backgroundColor: T.primary, maxWidth: 100, height: 36, borderRadius: 18 }]}
+                onPress={handleChangePIN}
+              >
+                <Text style={[s.actionCapsuleText, { color: '#FFF', fontSize: 12 }]}>Set PIN</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {/* ── Security Notice ── */}
@@ -411,6 +459,47 @@ export default function VCCCardDetailScreen({ navigation }: any) {
         </View>
 
       </ScrollView>
+
+      {/* PIN Change Modal */}
+      <Modal visible={pinModalVisible} animationType="slide" transparent>
+        <View style={s.modalOverlay}>
+          <View style={[s.modalSheet, { backgroundColor: T.surface }]}>
+            <View style={s.modalHeader}>
+              <Text style={[s.modalTitle, { color: T.text }]}>Set Card PIN</Text>
+              <TouchableOpacity onPress={() => setPinModalVisible(false)}>
+                <Feather name="x" size={22} color={T.textMuted} />
+              </TouchableOpacity>
+            </View>
+            <View style={s.modalBody}>
+              <Text style={[s.modalSubtitle, { color: T.textMuted }]}>
+                Enter a new 4-digit PIN for your debit card.
+              </Text>
+              <TextInput
+                style={[s.pinInput, { color: T.text, borderColor: T.border, backgroundColor: T.surfaceLow }]}
+                keyboardType="numeric"
+                maxLength={4}
+                secureTextEntry
+                value={newPin}
+                onChangeText={setNewPin}
+                placeholder="••••"
+                placeholderTextColor={T.textMuted}
+                autoFocus
+              />
+              <TouchableOpacity
+                style={[s.modalSubmitBtn, { backgroundColor: T.primary }]}
+                onPress={handleSubmitPIN}
+                disabled={submittingPin}
+              >
+                {submittingPin ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <Text style={s.modalSubmitBtnText}>Save PIN</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -466,4 +555,13 @@ const s = StyleSheet.create({
   quickActionsRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   actionCapsule: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, flex: 1, justifyContent: 'center' },
   actionCapsuleText: { fontSize: 13, fontWeight: '700' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, minHeight: 300 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalTitle: { fontSize: 18, fontWeight: '900' },
+  modalBody: { gap: 16, alignItems: 'center', width: '100%' },
+  modalSubtitle: { fontSize: 14, textAlign: 'center', marginBottom: 8 },
+  pinInput: { width: '100%', height: 50, borderWidth: 1.5, borderRadius: 12, textAlign: 'center', fontSize: 24, letterSpacing: 8, fontWeight: 'bold' },
+  modalSubmitBtn: { width: '100%', height: 50, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
+  modalSubmitBtnText: { color: '#FFF', fontSize: 15, fontWeight: '800' },
 });

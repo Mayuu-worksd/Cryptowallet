@@ -82,19 +82,22 @@ export async function POST(req: NextRequest) {
         method: 'POST',
         headers: codegoHeaders,
         body: JSON.stringify({
-          externalUserId,
-          email: kycData.email,
+          walletAddress: walletAddress.toLowerCase(),
+          email: kycData.email || `${externalUserId}@example.com`,
           firstName,
           lastName,
           birthDate: kycData.dob || '1990-01-01',
-          phone: kycData.phone || '+10000000000',
+          phoneNumber: (kycData.phone || '10000000000').replace(/\D/g, ''),
+          phoneCountryCode: '1',
           ipAddress: req.headers.get('x-forwarded-for') || '127.0.0.1',
           address: {
             line1: kycData.address || '123 Main St',
             city: 'Unknown',
             postalCode: '00000',
-            country: kycData.nationality?.slice(0, 2).toUpperCase() || 'US',
+            countryCode: kycData.nationality?.slice(0, 2).toUpperCase() || 'US',
           },
+          nationalId: '123456789', // Sandbox requirement
+          countryOfIssue: kycData.nationality?.slice(0, 2).toUpperCase() || 'US',
           key: process.env.CODEGO_API_KEY || CODEGO_API_KEY,
         }),
       });

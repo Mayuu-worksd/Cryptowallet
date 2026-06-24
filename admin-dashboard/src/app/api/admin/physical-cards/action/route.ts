@@ -27,6 +27,32 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Failed to update record' }, { status: 500 });
     }
 
+    // Sync to Codego if status is shipped and not already synced
+    if (newStatus === 'shipped' && !data.codego_card_id) {
+      try {
+        const origin = new URL(request.url).origin;
+        const codegoRes = await fetch(`${origin}/api/codego/cards`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            walletAddress: data.wallet_address,
+            type: 'physical',
+            variant: data.card_variant,
+            nameOnCard: data.card_holder_name,
+          }),
+        });
+        
+        const codegoResult = await codegoRes.json();
+        if (!codegoRes.ok) {
+          console.warn('[Physical Card Action] Codego physical card sync warning:', codegoResult.error || codegoResult);
+        } else {
+          console.log('[Physical Card Action] Codego physical card issued successfully:', codegoResult);
+        }
+      } catch (err) {
+        console.error('[Physical Card Action] Error syncing physical card to Codego:', err);
+      }
+    }
+
     return NextResponse.json({ success: true, data });
 
   } catch (error: any) {
