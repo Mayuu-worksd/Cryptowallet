@@ -95,6 +95,7 @@ export async function POST(req: NextRequest) {
             postalCode: '00000',
             country: kycData.nationality?.slice(0, 2).toUpperCase() || 'US',
           },
+          key: process.env.CODEGO_API_KEY || CODEGO_API_KEY,
         }),
       });
 

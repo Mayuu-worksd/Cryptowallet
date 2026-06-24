@@ -69,6 +69,10 @@ export async function POST(req: NextRequest) {
         postalCode: '00000',
         country: kycData.nationality?.slice(0, 2).toUpperCase() || 'US',
       },
+      // Sandbox: 'key' is accepted as a server-to-server bypass when
+      // sumsubShareToken / personaShareToken are not available.
+      // Remove this in production and pass the real KYC token instead.
+      key: process.env.CODEGO_API_KEY || CODEGO_API_KEY,
     };
 
     const response = await fetch(`${CODEGO_API_URL}/applications`, {
