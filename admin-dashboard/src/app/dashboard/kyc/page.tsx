@@ -533,66 +533,102 @@ export default function KycPage() {
                 </div>
 
                 {/* Sandbox KYC Simulator Panel */}
-                <div className="p-4 border-2 border-[#1a1a1a] bg-[#ffcc00]/10 font-mono">
+                <div className={`p-4 border-2 border-[#1a1a1a] font-mono ${
+                  selectedKyc.status === 'verified'
+                    ? 'bg-[#00ffcc]/10 border-[#00c853]'
+                    : 'bg-[#ffcc00]/10'
+                }`}>
                   <h3 className="text-xs font-extrabold text-[#1a1a1a] uppercase tracking-wider mb-2 font-display flex items-center gap-1.5">
                     <Shield className="h-4 w-4 text-[#ffcc00]" />
                     <span>Sandbox KYC Simulator</span>
+                    {selectedKyc.status === 'verified' && (
+                      <span className="ml-auto px-2 py-0.5 bg-[#00c853] text-white text-[9px] font-extrabold uppercase border border-[#1a1a1a] flex items-center gap-1">
+                        <CheckCircle className="h-3 w-3" /> Verification Done
+                      </span>
+                    )}
                   </h3>
-                  <p className="text-[10px] text-gray-600 mb-3">
-                    In Sandbox mode, Codego requires cardholders to go through a verification flow to issue cards. Click below to generate their Sandbox KYC link.
-                  </p>
 
-                  {/* Live CodeGo Application Status */}
-                  <div className="mb-3 flex items-center justify-between text-xs font-bold bg-white p-2 border border-[#1a1a1a]">
-                    <div className="flex items-center gap-1.5">
-                      <span>CodeGo status:</span>
-                      {codegoStatusLoading ? (
-                        <span className="text-gray-500 animate-pulse uppercase text-[10px]">Checking...</span>
-                      ) : (
-                        <span className={
-                          codegoAppStatus === 'approved' ? 'text-[#00c853] font-extrabold text-[10px]' : 
-                          codegoAppStatus === 'needsVerification' ? 'text-[#e5a93c] font-extrabold text-[10px]' : 
-                          'text-gray-500 text-[10px]'
-                        }>
-                          {(codegoAppStatus || 'NOT_STARTED').toUpperCase()}
-                        </span>
-                      )}
-                    </div>
-                    <button 
-                      onClick={(e) => {
-                        e.preventDefault();
-                        refreshCodegoStatus(selectedKyc.wallet_address);
-                      }}
-                      disabled={codegoStatusLoading}
-                      className="brutalist-button px-2 py-0.5 text-[8px] font-bold shadow-[1px_1px_0px_0px_rgba(26,26,26,1)] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
-                    >
-                      Refresh
-                    </button>
-                  </div>
-                  
-                  {sandboxLink ? (
+                  {/* Already verified in Supabase — show done state */}
+                  {selectedKyc.status === 'verified' ? (
                     <div className="space-y-2">
-                      <div className="p-2 bg-white border border-[#1a1a1a] text-[10px] break-all select-all font-mono">
-                        {sandboxLink}
+                      <div className="p-3 bg-[#00c853]/10 border border-[#00c853] text-[10px] font-mono">
+                        <p className="text-[#00c853] font-extrabold uppercase flex items-center gap-1.5">
+                          <CheckCircle className="h-3.5 w-3.5" /> Identity Verified in Supabase
+                        </p>
+                        <p className="text-gray-600 mt-1">
+                          KYC status is <strong>verified</strong> — user can create cards. CodeGo sandbox status ({codegoAppStatus || 'needsVerification'}) is separate from our system approval.
+                        </p>
                       </div>
-                      <a
-                        href={sandboxLink}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="w-full text-center block px-4 py-2 border-2 border-[#1a1a1a] bg-[#0055ff] hover:bg-[#003cc5] text-white text-xs font-bold font-display uppercase tracking-wider shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] transition-all"
-                      >
-                        🚀 Open Sandbox KYC Verification Flow
-                      </a>
+                      {/* Show CodeGo status info but don't block */}
+                      <div className="flex items-center justify-between text-[10px] font-bold bg-white p-2 border border-[#1a1a1a]">
+                        <span className="text-gray-500">CodeGo sandbox status: <span className="text-[#e5a93c] uppercase">{codegoAppStatus || 'needsVerification'}</span></span>
+                        <span className="text-gray-400 italic text-[9px]">Does not affect our approval</span>
+                      </div>
                     </div>
                   ) : (
-                    <button
-                      onClick={() => handleGenerateSandboxLink(selectedKyc.wallet_address)}
-                      disabled={sandboxLoading}
-                      className="w-full px-4 py-2 border-2 border-[#1a1a1a] bg-white hover:bg-[#ffcc00]/10 text-xs font-bold font-display uppercase tracking-wider disabled:opacity-50 shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] flex items-center justify-center gap-2 transition-all"
-                    >
-                      {sandboxLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                      <span>{sandboxLoading ? 'Generating Link...' : 'Generate Sandbox KYC Link'}</span>
-                    </button>
+                    <>
+                      <p className="text-[10px] text-gray-600 mb-3">
+                        In Sandbox mode, Codego requires cardholders to go through a verification flow to issue cards. Click below to generate their Sandbox KYC link.
+                      </p>
+
+                      {/* Live CodeGo Application Status */}
+                      <div className="mb-3 flex items-center justify-between text-xs font-bold bg-white p-2 border border-[#1a1a1a]">
+                        <div className="flex items-center gap-1.5">
+                          <span>CodeGo status:</span>
+                          {codegoStatusLoading ? (
+                            <span className="text-gray-500 animate-pulse uppercase text-[10px]">Checking...</span>
+                          ) : (
+                            <span className={
+                              codegoAppStatus === 'approved' ? 'text-[#00c853] font-extrabold text-[10px]' :
+                              codegoAppStatus === 'needsVerification' ? 'text-[#e5a93c] font-extrabold text-[10px]' :
+                              'text-gray-500 text-[10px]'
+                            }>
+                              {(codegoAppStatus || 'NOT_STARTED').toUpperCase()}
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          onClick={(e) => { e.preventDefault(); refreshCodegoStatus(selectedKyc.wallet_address); }}
+                          disabled={codegoStatusLoading}
+                          className="brutalist-button px-2 py-0.5 text-[8px] font-bold shadow-[1px_1px_0px_0px_rgba(26,26,26,1)] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
+                        >
+                          Refresh
+                        </button>
+                      </div>
+
+                      {/* needsVerification info banner */}
+                      {codegoAppStatus === 'needsVerification' && (
+                        <div className="mb-3 p-2 bg-[#e5a93c]/10 border border-[#e5a93c] text-[10px] font-mono">
+                          <p className="text-[#e5a93c] font-extrabold uppercase">⚠️ CodeGo Sandbox: Awaiting Manual Review</p>
+                          <p className="text-gray-600 mt-0.5">KYC was submitted on CodeGo sandbox. They will email when approved. You can still force-verify below using admin override.</p>
+                        </div>
+                      )}
+
+                      {sandboxLink ? (
+                        <div className="space-y-2">
+                          <div className="p-2 bg-white border border-[#1a1a1a] text-[10px] break-all select-all font-mono">
+                            {sandboxLink}
+                          </div>
+                          <a
+                            href={sandboxLink}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="w-full text-center block px-4 py-2 border-2 border-[#1a1a1a] bg-[#0055ff] hover:bg-[#003cc5] text-white text-xs font-bold font-display uppercase tracking-wider shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] transition-all"
+                          >
+                            🚀 Open Sandbox KYC Verification Flow
+                          </a>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleGenerateSandboxLink(selectedKyc.wallet_address)}
+                          disabled={sandboxLoading}
+                          className="w-full px-4 py-2 border-2 border-[#1a1a1a] bg-white hover:bg-[#ffcc00]/10 text-xs font-bold font-display uppercase tracking-wider disabled:opacity-50 shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] flex items-center justify-center gap-2 transition-all"
+                        >
+                          {sandboxLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                          <span>{sandboxLoading ? 'Generating Link...' : 'Generate Sandbox KYC Link'}</span>
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
 
@@ -646,24 +682,34 @@ export default function KycPage() {
                     <XCircle className="h-4 w-4" />
                     <span>Reject Identity</span>
                   </button>
-                  <button
-                    onClick={async () => {
-                      if (codegoAppStatus !== 'approved') {
-                        alert(`❌ Cannot verify identity: Codego Sandbox KYC is not completed yet.\n\nCurrent status: ${codegoAppStatus === 'needsVerification' ? 'Needs Sandbox Verification' : codegoAppStatus === 'not_started' ? 'Not Started' : 'Unknown'}.\n\nPlease generate the Sandbox KYC Link, open the simulator, and complete verification first.`);
-                        return;
-                      }
-                      setShowVerifyModal(true);
-                    }}
-                    disabled={processReview.isPending || codegoStatusLoading}
-                    className="flex-1 brutalist-button-blue py-3 text-xs disabled:opacity-50 flex items-center justify-center gap-1.5"
-                  >
-                    {processReview.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
+                  {selectedKyc.status === 'verified' ? (
+                    <div className="flex-1 flex items-center justify-center gap-2 py-3 bg-[#00c853]/10 border-2 border-[#00c853] text-[#00c853] text-xs font-extrabold uppercase font-display">
                       <CheckCircle className="h-4 w-4" />
-                    )}
-                    <span>Verify Identity</span>
-                  </button>
+                      <span>Identity Already Verified</span>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        // Allow verify regardless of CodeGo sandbox status
+                        // Admin has authority to override sandbox limitations
+                        setShowVerifyModal(true);
+                      }}
+                      disabled={processReview.isPending}
+                      className="flex-1 brutalist-button-blue py-3 text-xs disabled:opacity-50 flex items-center justify-center gap-1.5"
+                    >
+                      {processReview.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <CheckCircle className="h-4 w-4" />
+                      )}
+                      <span>
+                        {codegoAppStatus === 'needsVerification'
+                          ? '⚡ Force Verify (Admin Override)'
+                          : 'Verify Identity'
+                        }
+                      </span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>

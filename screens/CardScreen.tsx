@@ -643,23 +643,19 @@ export default function CardScreen({ navigation, route }: any) {
             {activeTab === 'virtual' ? (
               <TouchableOpacity
                 onPress={async () => {
-                  if (kycStatus === 'verified') {
-                    setShowCreate(true);
-                  } else {
-                    try {
-                      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-                      const statusRes = await fetch(
-                        `${apiUrl}/api/admin/kyc/status?walletAddress=${walletAddress}`,
-                      );
-                      const { approved, status } = await statusRes.json();
-                      if (approved) {
-                        setShowCreate(true);
-                      } else {
-                        showToast(`Sandbox KYC not approved (status: ${status}).`, 'error');
-                      }
-                    } catch (error) {
-                      showToast('Failed to verify KYC status.', 'error');
+                  try {
+                    const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+                    const statusRes = await fetch(
+                      `${apiUrl}/api/admin/kyc/status?walletAddress=${walletAddress}`,
+                    );
+                    const { approved, status } = await statusRes.json();
+                    if (approved) {
+                      setShowCreate(true);
+                    } else {
+                      showToast(`Sandbox KYC not approved (status: ${status}).`, 'error');
                     }
+                  } catch (error) {
+                    showToast('Failed to verify KYC status.', 'error');
                   }
                 }}
                 style={[styles.applyButton, { backgroundColor: T.text }]}
