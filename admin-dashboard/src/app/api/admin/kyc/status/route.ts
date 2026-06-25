@@ -43,28 +43,28 @@ export async function GET(req: Request) {
     headers: codegoHeaders,
   });
 
+  // If Codego fetch fails or returns not approved — but Supabase already verified — trust Supabase
   if (!userRes.ok) {
-    return NextResponse.json({ error: 'Failed to fetch sandbox user status' }, { status: 400 });
+    const isVerified = kycData.status === 'verified';
+    return NextResponse.json({ approved: isVerified, status: isVerified ? 'admin_verified' : 'unreachable' });
   }
 
   const userData = await userRes.json();
-  const approved = userData.applicationStatus === 'approved';
+  console.log('[kyc/status] Codego user data:', JSON.stringify(userData));
+  const codegoApproved = userData.applicationStatus === 'approved';
 
-  // Auto-sync: if Codego says approved but Supabase kyc.status isn't verified yet, fix it now
-  if (approved) {
-    const { data: currentKyc } = await supabase
-      .from('kyc')
-      .select('status')
-      .eq('wallet_address', walletAddress.toLowerCase())
-      .maybeSingle();
+  // If Codego not approved but Supabase is verified — trust admin approval
+  const approved = codegoApproved || kycData.status === 'verified';
+  const status = codegoApproved ? 'approved' : kycData.status === 'verified' ? 'admin_verified' : (userData.applicationStatus ?? null);
 
-    if (currentKyc && currentKyc.status !== 'verified') {
+  // Auto-sync: if Codego approved, make sure Supabase reflects it
+  if (codegoApproved) {
+    if (kycData.status !== 'verified') {
       await supabase
         .from('kyc')
         .update({ status: 'verified', codego_application_status: 'approved' })
         .eq('wallet_address', walletAddress.toLowerCase());
-    } else if (currentKyc?.status === 'verified') {
-      // Already verified — just ensure codego_application_status is synced
+    } else {
       await supabase
         .from('kyc')
         .update({ codego_application_status: 'approved' })
@@ -72,5 +72,5 @@ export async function GET(req: Request) {
     }
   }
 
-  return NextResponse.json({ approved, status: userData.applicationStatus ?? null });
+  return NextResponse.json({ approved, status });
 }
