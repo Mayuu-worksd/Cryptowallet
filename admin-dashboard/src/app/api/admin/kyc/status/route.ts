@@ -19,12 +19,23 @@ export async function GET(req: Request) {
   // 1. Get KYC record to retrieve codego_cardholder_id
   const { data: kycData, error: kycError } = await supabase
     .from('kyc')
-    .select('codego_cardholder_id')
+    .select('codego_cardholder_id, status')
     .eq('wallet_address', walletAddress.toLowerCase())
     .maybeSingle();
 
-  if (kycError || !kycData?.codego_cardholder_id) {
-    return NextResponse.json({ error: 'User not linked to CodeGo sandbox' }, { status: 400 });
+  // If no codego_cardholder_id but admin already verified in Supabase — that's sufficient
+  if (kycError) {
+    return NextResponse.json({ error: 'Failed to fetch KYC record' }, { status: 400 });
+  }
+
+  if (!kycData) {
+    return NextResponse.json({ error: 'KYC record not found' }, { status: 404 });
+  }
+
+  // Admin-approved users without a Codego sandbox link — trust Supabase directly
+  if (!kycData.codego_cardholder_id) {
+    const isVerified = kycData.status === 'verified';
+    return NextResponse.json({ approved: isVerified, status: isVerified ? 'admin_verified' : kycData.status });
   }
 
   // 2. Query CodeGo sandbox for user status
