@@ -63,7 +63,7 @@ export default function CardScreen({ navigation, route }: any) {
     cardDetails, cardTransactions, cardCreated,
     balances, ethBalance, spendCard, cardBalance,
     isDarkMode, network,
-    createCard, updateCardDetails, kycStatus,
+    createCard, updateCardDetails, kycStatus, refreshKYCStatus,
     refreshCardData, refreshBalance, accountType,
     formatFiat, fiatSymbol, fiatCurrency, convertFiat,
     enabledCardCurrencies,
@@ -82,6 +82,31 @@ export default function CardScreen({ navigation, route }: any) {
   const physicalScrollRef = useRef<ScrollView>(null);
 
   const [showCreate, setShowCreate] = useState(false);
+  const [kycCheckLoading, setKycCheckLoading] = useState(false);
+
+  // Check live Codego status and auto-sync Supabase if approved
+  const checkAndSyncKYC = useCallback(async (): Promise<boolean> => {
+    try {
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+      const res = await fetch(`${apiUrl}/api/admin/kyc/status?walletAddress=${walletAddress}`);
+      if (!res.ok) return false;
+      const { approved } = await res.json();
+      if (approved) {
+        // Supabase was auto-synced by the API — refresh context now
+        await refreshKYCStatus();
+      }
+      return approved;
+    } catch {
+      return false;
+    }
+  }, [walletAddress, refreshKYCStatus]);
+
+  // On mount: if kycStatus not yet verified, silently check Codego to auto-resolve
+  useEffect(() => {
+    if (kycStatus === 'verified' || !walletAddress) return;
+    checkAndSyncKYC().catch(() => {});
+  }, [walletAddress]);
+
   const [showSpend, setShowSpend] = useState(false);
   const [showCreds, setShowCreds] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
@@ -164,11 +189,9 @@ export default function CardScreen({ navigation, route }: any) {
 
   const handleCardCreated = async (holderName: string) => {
     try {
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-      const statusRes = await fetch(`${apiUrl}/api/admin/kyc/status?walletAddress=${walletAddress}`);
-      const { approved, status } = await statusRes.json();
+      const approved = await checkAndSyncKYC();
       if (!approved) {
-        showToast(`Sandbox KYC not approved (status: ${status}).`, 'error');
+        showToast('Sandbox KYC not yet approved. Please complete the Codego KYC flow.', 'error');
         return;
       }
       await createCard(holderName, selectedSkin === 'standard' ? 'dark' : selectedSkin === 'solana' ? 'neon' : 'emerald');
@@ -643,26 +666,20 @@ export default function CardScreen({ navigation, route }: any) {
             {activeTab === 'virtual' ? (
               <TouchableOpacity
                 onPress={async () => {
-                  try {
-                    const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-                    const statusRes = await fetch(
-                      `${apiUrl}/api/admin/kyc/status?walletAddress=${walletAddress}`,
-                    );
-                    const { approved, status } = await statusRes.json();
-                    if (approved) {
-                      setShowCreate(true);
-                    } else {
-                      showToast(`Sandbox KYC not approved (status: ${status}).`, 'error');
-                    }
-                  } catch (error) {
-                    showToast('Failed to verify KYC status.', 'error');
+                  setKycCheckLoading(true);
+                  const approved = await checkAndSyncKYC();
+                  setKycCheckLoading(false);
+                  if (approved) {
+                    setShowCreate(true);
+                  } else {
+                    showToast('Sandbox KYC not yet approved. Complete the Codego KYC flow first.', 'error');
                   }
                 }}
                 style={[styles.applyButton, { backgroundColor: T.text }]}
                 activeOpacity={0.9}
               >
                 <Text style={[styles.applyButtonText, { color: T.background }]}>
-                  {kycStatus === 'verified' ? 'Create a Virtual Card' : 'Verify KYC to create card'}
+                  {kycCheckLoading ? 'Checking KYC...' : kycStatus === 'verified' ? 'Create a Virtual Card' : 'Verify KYC to create card'}
                 </Text>
               </TouchableOpacity>
             ) : (

@@ -38,5 +38,28 @@ export async function GET(req: Request) {
 
   const userData = await userRes.json();
   const approved = userData.applicationStatus === 'approved';
+
+  // Auto-sync: if Codego says approved but Supabase kyc.status isn't verified yet, fix it now
+  if (approved) {
+    const { data: currentKyc } = await supabase
+      .from('kyc')
+      .select('status')
+      .eq('wallet_address', walletAddress.toLowerCase())
+      .maybeSingle();
+
+    if (currentKyc && currentKyc.status !== 'verified') {
+      await supabase
+        .from('kyc')
+        .update({ status: 'verified', codego_application_status: 'approved' })
+        .eq('wallet_address', walletAddress.toLowerCase());
+    } else if (currentKyc?.status === 'verified') {
+      // Already verified — just ensure codego_application_status is synced
+      await supabase
+        .from('kyc')
+        .update({ codego_application_status: 'approved' })
+        .eq('wallet_address', walletAddress.toLowerCase());
+    }
+  }
+
   return NextResponse.json({ approved, status: userData.applicationStatus ?? null });
 }

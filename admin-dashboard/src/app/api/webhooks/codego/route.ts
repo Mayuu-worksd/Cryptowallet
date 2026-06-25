@@ -115,6 +115,48 @@ export async function POST(req: NextRequest) {
           break;
         }
 
+        // ── KYC / Application approved ──────────────────────────────────────────
+        // Codego fires these when sandbox KYC completes
+        case 'application.approved':
+        case 'kyc.approved':
+        case 'user.approved': {
+          const userId =
+            payload.data?.userId ||
+            payload.data?.id ||
+            payload.userId ||
+            payload.id ||
+            null;
+
+          if (userId) {
+            // Find matching kyc row by codego_cardholder_id
+            const { data: kycRow } = await supabase
+              .from('kyc')
+              .select('wallet_address, status')
+              .eq('codego_cardholder_id', userId)
+              .maybeSingle();
+
+            if (kycRow && kycRow.status !== 'verified') {
+              const { error: kycUpdateError } = await supabase
+                .from('kyc')
+                .update({ status: 'verified', codego_application_status: 'approved' })
+                .eq('codego_cardholder_id', userId);
+
+              if (kycUpdateError) {
+                console.error('[Webhook] Failed to auto-verify KYC:', kycUpdateError.message);
+              } else {
+                console.log('[Webhook] Auto-verified KYC for cardholder:', userId);
+              }
+            } else if (kycRow) {
+              // Already verified — just sync codego_application_status
+              await supabase
+                .from('kyc')
+                .update({ codego_application_status: 'approved' })
+                .eq('codego_cardholder_id', userId);
+            }
+          }
+          break;
+        }
+
         // ── Transaction events ──────────────────────────────────────────────────
         case 'transaction.created':
         case 'transaction.updated': {

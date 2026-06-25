@@ -69,7 +69,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const updateData = { 
+    const updateData = {
       physical_shipping_status: newStatus,
       ...(trackingNumber !== undefined && { tracking_number: trackingNumber })
     };
@@ -100,7 +100,7 @@ export async function POST(request: Request) {
             nameOnCard: data.card_holder_name,
           }),
         });
-        
+
         const codegoResult = await codegoRes.json();
         if (!codegoRes.ok) {
           console.warn('[Physical Card Action] Codego physical card sync warning:', codegoResult.error || codegoResult);

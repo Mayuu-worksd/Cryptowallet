@@ -152,14 +152,14 @@ export async function POST(req: NextRequest) {
       if (!appRes.ok) {
         const errData = await appRes.json().catch(() => ({}));
         console.warn('[Codego cards] /applications failed (falling back to mock card):', appRes.status, errData);
-        
+
         // Generate mock card details
         const mockCvv = String(Math.floor(100 + Math.random() * 900));
         const mockExpiryMonth = '12';
         const mockExpiryYear = '2028';
         const mockCardNumber = `400000000000${Math.floor(1000 + Math.random() * 9000)}`;
         const last4 = mockCardNumber.slice(-4);
-        
+
         const cardData = {
           id: `mock_cg_${Math.random().toString(36).substr(2, 9)}`,
           status: 'active',
@@ -210,9 +210,9 @@ export async function POST(req: NextRequest) {
             });
         }
 
-        return NextResponse.json({ 
-          message: 'Card issued successfully (local fallback)', 
-          cardData, 
+        return NextResponse.json({
+          message: 'Card issued successfully (local fallback)',
+          cardData,
           internalStatus,
           isMock: true
         });
@@ -339,14 +339,14 @@ export async function POST(req: NextRequest) {
     if (!cardRes.ok) {
       const errData = await cardRes.json().catch(() => ({}));
       console.warn('[Codego cards] Card creation failed (falling back to mock card):', cardRes.status, errData);
-      
+
       // Generate mock card details
       const mockCvv = String(Math.floor(100 + Math.random() * 900));
       const mockExpiryMonth = '12';
       const mockExpiryYear = '2028';
       const mockCardNumber = `400000000000${Math.floor(1000 + Math.random() * 9000)}`;
       const last4 = mockCardNumber.slice(-4);
-      
+
       const cardData = {
         id: `mock_cg_${Math.random().toString(36).substr(2, 9)}`,
         status: 'active',
@@ -397,9 +397,9 @@ export async function POST(req: NextRequest) {
           });
       }
 
-      return NextResponse.json({ 
-        message: 'Card issued successfully (local fallback)', 
-        cardData, 
+      return NextResponse.json({
+        message: 'Card issued successfully (local fallback)',
+        cardData,
         internalStatus,
         isMock: true
       });

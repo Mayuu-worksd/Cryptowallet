@@ -1,0 +1,991 @@
+{
+  "info": {
+    "_postman_id": "8c35f299-d41f-4ea9-bf88-75c1a84f3319",
+    "name": "Codego Sandbox APIs",
+    "description": "Official Postman Collection to verify the Codego Sandbox APIs for CryptoWallet integration.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Step 1 – Wallet",
+      "item": [
+        {
+          "name": "Generate/Create Wallet",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Wallet has address and privateKey\", function () {",
+                  "    pm.expect(jsonData).to.have.property('walletAddress');",
+                  "    pm.expect(jsonData).to.have.property('privateKey');",
+                  "});",
+                  "",
+                  "if (jsonData.walletAddress) {",
+                  "    pm.environment.set(\"walletAddress\", jsonData.walletAddress);",
+                  "    console.log(\"Saved walletAddress:\", jsonData.walletAddress);",
+                  "}"
+                ],
+                "type": "javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chain\": \"base\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/wallets",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "wallets"
+              ]
+            },
+            "description": "Generates a new self-custodial DeFi wallet on the Base chain."
+          },
+          "response": []
+        },
+        {
+          "name": "Verify wallet creation (Balance)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Balance response structure\", function () {",
+                  "    pm.expect(jsonData).to.have.property('balance');",
+                  "    pm.expect(jsonData.chain).to.eql('base');",
+                  "});"
+                ],
+                "type": "javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/wallets/{{walletAddress}}/balance?chain=base",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "wallets",
+                "{{walletAddress}}",
+                "balance"
+              ],
+              "query": [
+                {
+                  "key": "chain",
+                  "value": "base"
+                }
+              ]
+            },
+            "description": "Fetches the live on-chain USDC balance for the generated wallet address."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Step 2 – Individual KYC",
+      "item": [
+        {
+          "name": "Submit KYC Application (Bypass Key)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Cardholder created or exists\", function () {",
+                  "    pm.expect(jsonData).to.have.property('id');",
+                  "    pm.expect(jsonData).to.have.property('applicationStatus');",
+                  "});",
+                  "",
+                  "if (jsonData.id) {",
+                  "    pm.environment.set(\"userId\", jsonData.id);",
+                  "    console.log(\"Saved userId:\", jsonData.id);",
+                  "}"
+                ],
+                "type": "javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"walletAddress\": \"{{walletAddress}}\",\n  \"email\": \"postman_test_{{$randomInt}}@example.com\",\n  \"firstName\": \"Postman\",\n  \"lastName\": \"Test\",\n  \"birthDate\": \"1990-01-01\",\n  \"phoneNumber\": \"10000000000\",\n  \"phoneCountryCode\": \"1\",\n  \"ipAddress\": \"127.0.0.1\",\n  \"address\": {\n    \"line1\": \"123 Main St\",\n    \"city\": \"Unknown\",\n    \"postalCode\": \"00000\",\n    \"countryCode\": \"US\"\n  },\n  \"nationalId\": \"123456789\",\n  \"countryOfIssue\": \"US\",\n  \"key\": \"{{apiKey}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/applications",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "applications"
+              ]
+            },
+            "description": "Registers a new KYC application in the Codego system using the server-to-server pre-shared bypass 'key' field."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Sandbox KYC Session",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"KYC Session response has iframeUrl\", function () {",
+                  "    pm.expect(jsonData).to.have.property('iframeUrl');",
+                  "    pm.expect(jsonData).to.have.property('sessionId');",
+                  "});"
+                ],
+                "type": "javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"externalUserId\": \"{{userId}}\",\n  \"applicantType\": \"individual\",\n  \"email\": \"postman_test@example.com\",\n  \"returnUrl\": \"https://cryptowallet-dun.vercel.app\"\n}"
+            },
+            "url": {
+              "raw": "https://kyc-sandbox.codegotech.com/api/session/create",
+              "protocol": "https",
+              "host": [
+                "kyc-sandbox",
+                "codegotech",
+                "com"
+              ],
+              "path": [
+                "api",
+                "session",
+                "create"
+              ]
+            },
+            "description": "Requests a hosted Persona/Sumsub KYC simulator iframe session link from the Codego Sandbox KYC microservice."
+          },
+          "response": []
+        },
+        {
+          "name": "KYC status (Check Application)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 404 (Sandbox Limitation or Route Missing)\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 404]);",
+                  "});"
+                ],
+                "type": "javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/applications/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "applications",
+                "{{userId}}"
+              ]
+            },
+            "description": "GET /applications/{id} checks application status on the Codego side. May return 404 in sandbox unless KYC is pending sumsub token."
+          },
+          "response": []
+        },
+        {
+          "name": "User status (Check User Profile)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Checks user exists and holds status\", function () {",
+                  "    pm.expect(jsonData).to.have.property('applicationStatus');",
+                  "});"
+                ],
+                "type": "javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}"
+              ]
+            },
+            "description": "GET /users/{id} retrieves the cardholder record, containing applicationStatus (needsVerification, approved, not_started)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Step 3 – Funding",
+      "item": [
+        {
+          "name": "Get Collateral/Funding Wallet Balance",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/wallets/{{walletAddress}}/balance?chain=base",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "wallets",
+                "{{walletAddress}}",
+                "balance"
+              ],
+              "query": [
+                {
+                  "key": "chain",
+                  "value": "base"
+                }
+              ]
+            },
+            "description": "Reads on-chain collateral/funding wallet balances (USDC on Base Sepolia) used to back the card limit."
+          },
+          "response": []
+        },
+        {
+          "name": "Load Funds / Deposit Info (Sandbox Limitation)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 404 (Sandbox Limitation)\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ],
+                "type": "javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fiat/deposit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fiat",
+                "deposit"
+              ]
+            },
+            "description": "Attempts to get simulated bank deposit details. This route is not supported in the sandbox issuing environment (returns 404)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Step 4 – Card Issuance",
+      "item": [
+        {
+          "name": "Create Virtual Card",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 or 400 (If KYC not approved)\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 404]);",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.id) {",
+                  "    pm.environment.set(\"cardId\", jsonData.id);",
+                  "    console.log(\"Saved cardId:\", jsonData.id);",
+                  "}"
+                ],
+                "type": "javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"virtual\",\n  \"configuration\": {\n    \"displayName\": \"POSTMAN VIRTUAL CARD\",\n    \"productId\": \"1\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}/cards",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}",
+                "cards"
+              ]
+            },
+            "description": "Issues a virtual card bound to the cardholder user. Requires applicationStatus to be 'approved'."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Physical Card",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 or 400 (If KYC not approved)\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 404]);",
+                  "});"
+                ],
+                "type": "javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"physical\",\n  \"configuration\": {\n    \"displayName\": \"POSTMAN PHYSICAL CARD\",\n    \"productId\": \"1\"\n  },\n  \"billing\": {\n    \"line1\": \"123 Main St\",\n    \"city\": \"Unknown\",\n    \"postalCode\": \"00000\",\n    \"country\": \"US\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}/cards",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}",
+                "cards"
+              ]
+            },
+            "description": "Issues a physical card bound to the cardholder user. Requires billing address parameters and approved KYC status."
+          },
+          "response": []
+        },
+        {
+          "name": "List User Cards",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 or 404 (If user not found)\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 404]);",
+                  "});"
+                ],
+                "type": "javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}/cards",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}",
+                "cards"
+              ]
+            },
+            "description": "Lists all active/inactive virtual and physical cards issued to the cardholder."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Step 5 – Card Management",
+      "item": [
+        {
+          "name": "Get Card Details",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 or 404\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 404]);",
+                  "});"
+                ],
+                "type": "javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/cards/{{cardId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cards",
+                "{{cardId}}"
+              ]
+            },
+            "description": "Retrieves the core card parameters (masked PAN, last 4 digits, status, limits, and product configuration)."
+          },
+          "response": []
+        },
+        {
+          "name": "Freeze Card",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 or 404\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 404]);",
+                  "});"
+                ],
+                "type": "javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"locked\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/cards/{{cardId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cards",
+                "{{cardId}}"
+              ]
+            },
+            "description": "Freezes a card (changes status to locked on Codego) preventing authorizations."
+          },
+          "response": []
+        },
+        {
+          "name": "Unfreeze Card",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 or 404\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 404]);",
+                  "});"
+                ],
+                "type": "javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"active\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/cards/{{cardId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cards",
+                "{{cardId}}"
+              ]
+            },
+            "description": "Unfreezes a card (restores status to active on Codego) enabling authorizations."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Card Limits",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 or 404\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 404]);",
+                  "});"
+                ],
+                "type": "javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"limit\": {\n    \"amount\": 10000\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/cards/{{cardId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cards",
+                "{{cardId}}"
+              ]
+            },
+            "description": "Updates spending limits/balances associated with the card."
+          },
+          "response": []
+        },
+        {
+          "name": "Change PIN",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 or 404\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 404]);",
+                  "});"
+                ],
+                "type": "javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pin\": \"4321\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/cards/{{cardId}}/pin",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cards",
+                "{{cardId}}",
+                "pin"
+              ]
+            },
+            "description": "Configures a new 4-digit PIN for physical/virtual POS authorizations."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Step 6 – Transactions",
+      "item": [
+        {
+          "name": "List Transactions (Sandbox Limitation)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 404 (Sandbox Limitation)\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ],
+                "type": "javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/cards/{{cardId}}/transactions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cards",
+                "{{cardId}}",
+                "transactions"
+              ]
+            },
+            "description": "Lists card transactions. Returns 404 in Sandbox issuing (must fall back to Supabase/mock simulation)."
+          },
+          "response": []
+        },
+        {
+          "name": "Card Statement (Sandbox Limitation)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 404 (Sandbox Limitation)\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ],
+                "type": "javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/cards/{{cardId}}/statement",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cards",
+                "{{cardId}}",
+                "statement"
+              ]
+            },
+            "description": "Retrieves PDF/JSON card statements. Returns 404 in Sandbox (unsupported)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Step 7 – Webhooks (Simulated)",
+      "item": [
+        {
+          "name": "Trigger Webhook (Card Created)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"card.created\",\n  \"data\": {\n    \"id\": \"{{cardId}}\",\n    \"status\": \"active\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{webhookUrl}}",
+              "host": [
+                "{{webhookUrl}}"
+              ]
+            },
+            "description": "Simulates Codego sending a card.created webhook event to the application's webhook listener."
+          },
+          "response": []
+        },
+        {
+          "name": "Trigger Webhook (Card Locked/Frozen)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"card.locked\",\n  \"data\": {\n    \"cardId\": \"{{cardId}}\",\n    \"status\": \"locked\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{webhookUrl}}",
+              "host": [
+                "{{webhookUrl}}"
+              ]
+            },
+            "description": "Simulates Codego sending a card.locked webhook event to freeze the card in Supabase."
+          },
+          "response": []
+        },
+        {
+          "name": "Trigger Webhook (Transaction Created)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"transaction.created\",\n  \"data\": {\n    \"id\": \"tx-{{$timestamp}}\",\n    \"cardId\": \"{{cardId}}\",\n    \"amount\": -25.50,\n    \"currency\": \"USD\",\n    \"merchantName\": \"Postman Store\",\n    \"description\": \"Simulated Postman purchase\",\n    \"status\": \"approved\",\n    \"createdAt\": \"{{$isoTimestamp}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{webhookUrl}}",
+              "host": [
+                "{{webhookUrl}}"
+              ]
+            },
+            "description": "Simulates a card spend event sent by Codego to record a transaction in the database."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

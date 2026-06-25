@@ -498,7 +498,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setKycStatus(record?.status === 'approved' ? 'verified' : (record?.status ?? null));
       } else {
         const record = await kycService.getStatus(walletAddress);
-        setKycStatus(record?.status ?? null);
+        // Map 'approved' (Codego legacy) to 'verified' for UI consistency
+        const rawStatus = record?.status as any;
+        setKycStatus(rawStatus === 'approved' ? 'verified' : rawStatus ?? null);
         if (record?.email) {
           setKycEmail(record.email);
         } else {
@@ -753,7 +755,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             if (acctType === 'business') {
               setKycStatus(bizRecord?.status === 'approved' ? 'verified' : (bizRecord?.status as any ?? null));
             } else {
-              setKycStatus((kycRecord?.status as any) === 'approved' ? 'verified' : (kycRecord?.status as any ?? null));
+              // Map 'approved' (Codego legacy) to 'verified' for UI consistency
+              const rawStatus = kycRecord?.status as any;
+              setKycStatus(rawStatus === 'approved' ? 'verified' : rawStatus ?? null);
               if (kycRecord?.email) {
                 setKycEmail(kycRecord.email);
               }
@@ -992,6 +996,36 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     };
     startup();
   }, []);
+
+  // ── Realtime: KYC status live push ──
+  // Listens for UPDATE on kyc table for this wallet and refreshes kycStatus immediately.
+  // This ensures the mobile app reacts the moment admin verifies or Codego webhook fires.
+  useEffect(() => {
+    if (!walletAddress) return;
+    const channel = supabase
+      .channel(`kyc_live_${walletAddress}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'kyc',
+          filter: `wallet_address=eq.${walletAddress.toLowerCase()}`,
+        },
+        (payload: any) => {
+          const newStatus = payload.new?.status ?? null;
+          if (newStatus) {
+            // Map 'approved' (legacy) to 'verified' for UI consistency
+            const mapped = newStatus === 'approved' ? 'verified' : newStatus;
+            setKycStatus(mapped as KYCStatus);
+            if (payload.new?.email) setKycEmail(payload.new.email);
+            if (payload.new?.full_name) setKycFullName(payload.new.full_name);
+          }
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [walletAddress]);
 
   // ── Realtime: Admin Settings Live Push ──
   // Listens for any UPDATE on admin_settings and applies changes instantly — zero delay.
