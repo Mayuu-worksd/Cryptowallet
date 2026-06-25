@@ -130,6 +130,7 @@ export default function CardsPage() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [mutateError, setMutateError] = useState<string | null>(null);
   const [syncingCardId, setSyncingCardId] = useState<string | null>(null);
+  const [fixingCardId, setFixingCardId] = useState<string | null>(null);
   const [vCardSearch, setVCardSearch] = useState('');
   const queryClient = useQueryClient();
 
@@ -147,6 +148,26 @@ export default function CardsPage() {
     refetchInterval: 30000,
     enabled: activeTab === 'virtual',
   });
+
+  const handleFixCardSync = async (card: VirtualCard) => {
+    if (!confirm(`Resync card credentials for ${card.wallet_address.slice(0, 10)}...?\n\nThis will regenerate the encrypted card number in the cards table to match vcc_cards (last4: ${card.card_last4}).\n\nThe user must pull-to-refresh in the app to see the updated card.`)) return;
+    setFixingCardId(card.id);
+    try {
+      const res = await fetch('/api/admin/fix-card-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ walletAddress: card.wallet_address }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Fix failed');
+      alert(`✅ ${result.message}\n\nTell the user to pull-to-refresh in the app.`);
+      queryClient.invalidateQueries({ queryKey: ['admin-vcc-cards'] });
+    } catch (err: any) {
+      alert('❌ Fix failed: ' + err.message);
+    } finally {
+      setFixingCardId(null);
+    }
+  };
 
   const handleSyncToCodego = async (card: VirtualCard) => {
     if (!confirm(`Sync card for ${card.wallet_address.slice(0, 10)}... to Codego?`)) return;
@@ -749,20 +770,33 @@ export default function CardsPage() {
                           {new Date(card.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </td>
                         <td className="py-3 px-4 text-right">
-                          {!card.codego_card_id ? (
+                          <div className="flex items-center justify-end gap-2">
+                            {/* Fix Card Sync — always visible, fixes cards table mismatch */}
                             <button
-                              onClick={() => handleSyncToCodego(card)}
-                              disabled={syncingCardId === card.id}
-                              className="px-3 py-1.5 bg-[#0055ff] text-white border-2 border-[#1a1a1a] text-[10px] font-bold uppercase hover:bg-[#003cc5] disabled:opacity-50 flex items-center gap-1 ml-auto shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]"
+                              onClick={() => handleFixCardSync(card)}
+                              disabled={fixingCardId === card.id}
+                              title="Regenerate encrypted card credentials to match vcc_cards last4"
+                              className="px-2 py-1.5 bg-[#ffcc00] text-[#1a1a1a] border-2 border-[#1a1a1a] text-[10px] font-bold uppercase hover:bg-[#f0bf00] disabled:opacity-50 flex items-center gap-1 shadow-[1px_1px_0px_0px_rgba(26,26,26,1)]"
                             >
-                              {syncingCardId === card.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                              {syncingCardId === card.id ? 'Syncing...' : 'Sync to Codego'}
+                              {fixingCardId === card.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Settings className="h-3 w-3" />}
+                              {fixingCardId === card.id ? 'Fixing...' : 'Fix Sync'}
                             </button>
-                          ) : (
-                            <span className="text-[10px] font-bold text-green-600 uppercase flex items-center gap-1 justify-end">
-                              <CheckCircle className="h-3 w-3" /> Registered
-                            </span>
-                          )}
+
+                            {!card.codego_card_id ? (
+                              <button
+                                onClick={() => handleSyncToCodego(card)}
+                                disabled={syncingCardId === card.id}
+                                className="px-3 py-1.5 bg-[#0055ff] text-white border-2 border-[#1a1a1a] text-[10px] font-bold uppercase hover:bg-[#003cc5] disabled:opacity-50 flex items-center gap-1 shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]"
+                              >
+                                {syncingCardId === card.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                                {syncingCardId === card.id ? 'Syncing...' : 'Sync to Codego'}
+                              </button>
+                            ) : (
+                              <span className="text-[10px] font-bold text-green-600 uppercase flex items-center gap-1">
+                                <CheckCircle className="h-3 w-3" /> Registered
+                              </span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))
