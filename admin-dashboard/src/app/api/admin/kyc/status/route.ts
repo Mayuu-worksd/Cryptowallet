@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
-const CODEGO_API_KEY = process.env.CODEGO_API_KEY || 'vcc_sbx_f119144ea2221e4796778de28115c4cad97429da86e66552';
+const CODEGO_API_KEY = process.env.CODEGO_API_KEY || 'vcck_sbx_f119144ea2221e4796778de28115c4cad97429da86e66552';
 const CODEGO_API_URL = process.env.CODEGO_API_URL || 'https://vcc-sandbox.codegotech.com/api/v1';
 
 const codegoHeaders = {
