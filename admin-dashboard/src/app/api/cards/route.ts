@@ -1,211 +1,12 @@
 /**
- * /api/codego/cards/route.ts
+ * /api/cards/route.ts
  *
- * URL, request shape, and response shape are IDENTICAL to before.
- * Internally delegates to CodegoProvider instead of calling Codego directly.
- *
- * Backward compatibility: ✅ 100% — mobile app and admin dashboard unchanged.
+ * Generic provider-independent route for card creation and listing.
+ * Delegates to CardProvider.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { getCardProvider } from '@/lib/providers';
-
-export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const { walletAddress, type, variant, nameOnCard } = body;
-
-    if (!walletAddress || !type) {
-      return NextResponse.json({ error: 'walletAddress and type are required' }, { status: 400 });
-    }
-
-    // 1. Get KYC record
-    const { data: kycData, error: kycError } = await supabase
-      .from('kyc')
-      .select('*')
-      .eq('wallet_address', walletAddress.toLowerCase())
-      .maybeSingle();
-
-    if (kycError || !kycData) {
-      return NextResponse.json({ error: 'User KYC not found. KYC is required.' }, { status: 400 });
-    }
-
-    if (kycData.status !== 'verified') {
-      return NextResponse.json({ error: 'KYC is not verified' }, { status: 400 });
-    }
-
-    const provider = getCardProvider();
-
-    // 2. Check for existing vcc_cards record
-    const { data: existingVccCard } = await supabase
-      .from('vcc_cards')
-      .select('id, codego_card_id, card_status, card_last4, expiry_mm_yy')
-      .eq('wallet_address', walletAddress.toLowerCase())
-      .maybeSingle();
-
-    // If already synced, fetch live and return (same logic as before)
-    if (existingVccCard?.codego_card_id) {
-      const liveCard = await provider.getCard(existingVccCard.codego_card_id);
-      if (liveCard) {
-        return NextResponse.json({
-          message: 'Card already synced to Codego',
-          cardData: liveCard.raw || liveCard,
-          alreadyExists: true,
-        });
-      }
-      // Cached fallback
-      return NextResponse.json({
-        message: 'Card already synced to Codego (cached)',
-        cardData: {
-          id:          existingVccCard.codego_card_id,
-          status:      existingVccCard.card_status || 'active',
-          maskedPan:   `•••• •••• •••• ${existingVccCard.card_last4 || '0000'}`,
-          last4:       existingVccCard.card_last4 || '0000',
-          expiryMonth: existingVccCard.expiry_mm_yy ? existingVccCard.expiry_mm_yy.split('/')[0] : '12',
-          expiryYear:  existingVccCard.expiry_mm_yy ? '20' + existingVccCard.expiry_mm_yy.split('/')[1] : '2028',
-        },
-        alreadyExists: true,
-      });
-    }
-
-    // 3. Ensure Codego cardholder exists
-    let codegoCardholderId: string | null = kycData.codego_cardholder_id || null;
-
-    if (!codegoCardholderId) {
-      const nameParts = (kycData.full_name || 'Unknown User').trim().split(' ');
-      const result = await provider.registerCardholder({
-        walletAddress,
-        email:           kycData.email || '',
-        firstName:       nameParts[0] || 'Unknown',
-        lastName:        nameParts.slice(1).join(' ') || 'User',
-        birthDate:       kycData.dob,
-        phone:           kycData.phone || '10000000000',
-        phoneCountryCode: '1',
-        ipAddress:       req.headers.get('x-forwarded-for') || '127.0.0.1',
-        address: {
-          line1:       kycData.address || '123 Main St',
-          city:        'Unknown',
-          postalCode:  '00000',
-          countryCode: kycData.nationality?.slice(0, 2).toUpperCase() || 'US',
-        },
-        nationalId:     '123456789',
-        countryOfIssue: kycData.nationality?.slice(0, 2).toUpperCase() || 'US',
-      });
-
-      if (!result.cardholderId) {
-        // registerCardholder failed — issue mock card (same fallback as before)
-        const holderName = (nameOnCard || kycData.full_name || 'CARD HOLDER').toUpperCase();
-        const cardResult = await provider.createCard(
-          { cardholderId: '', type: type as 'virtual' | 'physical', variant, nameOnCard: holderName, walletAddress },
-          kycData,
-        );
-        await _upsertVccCard(supabase, existingVccCard, walletAddress, cardResult, type, variant);
-        return NextResponse.json({
-          message:        'Card issued successfully (local fallback)',
-          cardData:       cardResult.raw || cardResult,
-          internalStatus: cardResult.status,
-          isMock:         cardResult.isMock,
-        });
-      }
-
-      codegoCardholderId = result.cardholderId;
-      await supabase.from('kyc').update({ codego_cardholder_id: codegoCardholderId }).eq('wallet_address', walletAddress.toLowerCase());
-    }
-
-    // 4. Verify cardholder status on Codego
-    const holderStatus = await provider.getCardholder(codegoCardholderId);
-    const holderName   = (nameOnCard || kycData.full_name || 'CARD HOLDER').toUpperCase();
-
-    if (!holderStatus.found || holderStatus.status !== 'approved') {
-      console.warn(`[/api/codego/cards] Codego status=${holderStatus.status}, falling back to mock card`);
-      const cardResult = await provider.createCard(
-        { cardholderId: codegoCardholderId, type: type as 'virtual' | 'physical', variant, nameOnCard: holderName, walletAddress },
-        kycData,
-      );
-      await _upsertVccCard(supabase, existingVccCard, walletAddress, cardResult, type, variant);
-      return NextResponse.json({
-        message:        'Card issued successfully (admin verified)',
-        cardData:       cardResult.raw || _toCardData(cardResult),
-        internalStatus: cardResult.status,
-        isMock:         cardResult.isMock,
-      });
-    }
-
-    // 5. Check if user already has a card on Codego to adopt
-    const existingCards = await provider.listCards(codegoCardholderId);
-    const targetType    = type === 'physical' ? 'physical' : 'virtual';
-    const matchingCard  = existingCards.find((c: any) =>
-      ((c.raw as any)?.type || 'virtual').toLowerCase() === targetType,
-    );
-
-    if (matchingCard) {
-      await _upsertVccCard(supabase, existingVccCard, walletAddress, matchingCard, type, variant);
-      return NextResponse.json({
-        message:        'Existing Codego card retrieved and synced successfully',
-        cardData:       matchingCard.raw || _toCardData(matchingCard),
-        internalStatus: matchingCard.status,
-        alreadyExists:  true,
-      });
-    }
-
-    // 6. Create card on Codego
-    const billingAddress = type === 'physical' ? {
-      line1:      kycData.address || '123 Main St',
-      city:       'Unknown',
-      postalCode: '00000',
-      country:    kycData.nationality?.slice(0, 2).toUpperCase() || 'US',
-    } : undefined;
-
-    const cardResult = await provider.createCard(
-      { cardholderId: codegoCardholderId, type: type as 'virtual' | 'physical', variant, nameOnCard: holderName, billingAddress, walletAddress },
-      kycData,
-    );
-    await _upsertVccCard(supabase, existingVccCard, walletAddress, cardResult, type, variant);
-
-    return NextResponse.json({
-      message:        cardResult.isMock ? 'Card issued successfully (local fallback)' : 'Card issued successfully',
-      cardData:       cardResult.raw    || _toCardData(cardResult),
-      internalStatus: cardResult.status,
-      isMock:         cardResult.isMock,
-    });
-
-  } catch (error: any) {
-    console.error('[/api/codego/cards] Unexpected error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
-
-export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const walletAddress = searchParams.get('walletAddress');
-  if (!walletAddress) {
-    return NextResponse.json({ error: 'walletAddress query param required' }, { status: 400 });
-  }
-
-  const provider = getCardProvider();
-
-  const { data: kycData } = await supabase
-    .from('kyc')
-    .select('codego_cardholder_id')
-    .eq('wallet_address', walletAddress.toLowerCase())
-    .maybeSingle();
-
-  const { data: cards } = await supabase
-    .from('vcc_cards')
-    .select('*')
-    .eq('wallet_address', walletAddress.toLowerCase())
-    .order('created_at', { ascending: false });
-
-  let codegoCards: any[] = [];
-  if (kycData?.codego_cardholder_id) {
-    codegoCards = await provider.listCards(kycData.codego_cardholder_id);
-  }
-
-  return NextResponse.json({ cards: cards || [], codegoCards });
-}
-
-// ─── Shared helpers ───────────────────────────────────────────────────────────
-
 import type { CardResult } from '@/lib/providers';
 
 function _toCardData(r: CardResult) {
@@ -254,4 +55,188 @@ async function _upsertVccCard(
       ...row,
     });
   }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const { walletAddress, type, variant, nameOnCard } = body;
+
+    if (!walletAddress || !type) {
+      return NextResponse.json({ error: 'walletAddress and type are required' }, { status: 400 });
+    }
+
+    const { data: kycData, error: kycError } = await supabase
+      .from('kyc')
+      .select('*')
+      .eq('wallet_address', walletAddress.toLowerCase())
+      .maybeSingle();
+
+    if (kycError || !kycData) {
+      return NextResponse.json({ error: 'User KYC not found. KYC is required.' }, { status: 400 });
+    }
+
+    if (kycData.status !== 'verified') {
+      return NextResponse.json({ error: 'KYC is not verified' }, { status: 400 });
+    }
+
+    const provider = getCardProvider();
+
+    const { data: existingVccCard } = await supabase
+      .from('vcc_cards')
+      .select('id, codego_card_id, card_status, card_last4, expiry_mm_yy')
+      .eq('wallet_address', walletAddress.toLowerCase())
+      .maybeSingle();
+
+    if (existingVccCard?.codego_card_id) {
+      const liveCard = await provider.getCard(existingVccCard.codego_card_id);
+      if (liveCard) {
+        return NextResponse.json({
+          message: 'Card already synced to Provider',
+          cardData: liveCard.raw || liveCard,
+          alreadyExists: true,
+        });
+      }
+      return NextResponse.json({
+        message: 'Card already synced to Provider (cached)',
+        cardData: {
+          id:          existingVccCard.codego_card_id,
+          status:      existingVccCard.card_status || 'active',
+          maskedPan:   `•••• •••• •••• ${existingVccCard.card_last4 || '0000'}`,
+          last4:       existingVccCard.card_last4 || '0000',
+          expiryMonth: existingVccCard.expiry_mm_yy ? existingVccCard.expiry_mm_yy.split('/')[0] : '12',
+          expiryYear:  existingVccCard.expiry_mm_yy ? '20' + existingVccCard.expiry_mm_yy.split('/')[1] : '2028',
+        },
+        alreadyExists: true,
+      });
+    }
+
+    let providerCardholderId: string | null = kycData.codego_cardholder_id || null;
+
+    if (!providerCardholderId) {
+      const nameParts = (kycData.full_name || 'Unknown User').trim().split(' ');
+      const result = await provider.registerCardholder({
+        walletAddress,
+        email:           kycData.email || '',
+        firstName:       nameParts[0] || 'Unknown',
+        lastName:        nameParts.slice(1).join(' ') || 'User',
+        birthDate:       kycData.dob,
+        phone:           kycData.phone || '10000000000',
+        phoneCountryCode: '1',
+        ipAddress:       req.headers.get('x-forwarded-for') || '127.0.0.1',
+        address: {
+          line1:       kycData.address || '123 Main St',
+          city:        'Unknown',
+          postalCode:  '00000',
+          countryCode: kycData.nationality?.slice(0, 2).toUpperCase() || 'US',
+        },
+        nationalId:     '123456789',
+        countryOfIssue: kycData.nationality?.slice(0, 2).toUpperCase() || 'US',
+      });
+
+      if (!result.cardholderId) {
+        const holderName = (nameOnCard || kycData.full_name || 'CARD HOLDER').toUpperCase();
+        const cardResult = await provider.createCard(
+          { cardholderId: '', type: type as 'virtual' | 'physical', variant, nameOnCard: holderName, walletAddress },
+          kycData,
+        );
+        await _upsertVccCard(supabase, existingVccCard, walletAddress, cardResult, type, variant);
+        return NextResponse.json({
+          message:        'Card issued successfully (local fallback)',
+          cardData:       cardResult.raw || cardResult,
+          internalStatus: cardResult.status,
+          isMock:         cardResult.isMock,
+        });
+      }
+
+      providerCardholderId = result.cardholderId;
+      await supabase.from('kyc').update({ codego_cardholder_id: providerCardholderId }).eq('wallet_address', walletAddress.toLowerCase());
+    }
+
+    const holderStatus = await provider.getCardholder(providerCardholderId);
+    const holderName   = (nameOnCard || kycData.full_name || 'CARD HOLDER').toUpperCase();
+
+    if (!holderStatus.found || holderStatus.status !== 'approved') {
+      const cardResult = await provider.createCard(
+        { cardholderId: providerCardholderId, type: type as 'virtual' | 'physical', variant, nameOnCard: holderName, walletAddress },
+        kycData,
+      );
+      await _upsertVccCard(supabase, existingVccCard, walletAddress, cardResult, type, variant);
+      return NextResponse.json({
+        message:        'Card issued successfully (admin verified)',
+        cardData:       cardResult.raw || _toCardData(cardResult),
+        internalStatus: cardResult.status,
+        isMock:         cardResult.isMock,
+      });
+    }
+
+    const existingCards = await provider.listCards(providerCardholderId);
+    const targetType    = type === 'physical' ? 'physical' : 'virtual';
+    const matchingCard  = existingCards.find((c: any) =>
+      ((c.raw as any)?.type || 'virtual').toLowerCase() === targetType,
+    );
+
+    if (matchingCard) {
+      await _upsertVccCard(supabase, existingVccCard, walletAddress, matchingCard, type, variant);
+      return NextResponse.json({
+        message:        'Existing card retrieved and synced successfully',
+        cardData:       matchingCard.raw || _toCardData(matchingCard),
+        internalStatus: matchingCard.status,
+        alreadyExists:  true,
+      });
+    }
+
+    const billingAddress = type === 'physical' ? {
+      line1:      kycData.address || '123 Main St',
+      city:       'Unknown',
+      postalCode: '00000',
+      country:    kycData.nationality?.slice(0, 2).toUpperCase() || 'US',
+    } : undefined;
+
+    const cardResult = await provider.createCard(
+      { cardholderId: providerCardholderId, type: type as 'virtual' | 'physical', variant, nameOnCard: holderName, billingAddress, walletAddress },
+      kycData,
+    );
+    await _upsertVccCard(supabase, existingVccCard, walletAddress, cardResult, type, variant);
+
+    return NextResponse.json({
+      message:        cardResult.isMock ? 'Card issued successfully (local fallback)' : 'Card issued successfully',
+      cardData:       cardResult.raw    || _toCardData(cardResult),
+      internalStatus: cardResult.status,
+      isMock:         cardResult.isMock,
+    });
+
+  } catch (error: any) {
+    console.error('[/api/cards] Unexpected error:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
+
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const walletAddress = searchParams.get('walletAddress');
+  if (!walletAddress) {
+    return NextResponse.json({ error: 'walletAddress query param required' }, { status: 400 });
+  }
+
+  const provider = getCardProvider();
+
+  const { data: kycData } = await supabase
+    .from('kyc')
+    .select('codego_cardholder_id')
+    .eq('wallet_address', walletAddress.toLowerCase())
+    .maybeSingle();
+
+  const { data: cards } = await supabase
+    .from('vcc_cards')
+    .select('*')
+    .eq('wallet_address', walletAddress.toLowerCase())
+    .order('created_at', { ascending: false });
+
+  let providerCards: any[] = [];
+  if (kycData?.codego_cardholder_id) {
+    providerCards = await provider.listCards(kycData.codego_cardholder_id);
+  }
+
+  return NextResponse.json({ cards: cards || [], providerCards });
 }

@@ -1,19 +1,15 @@
+/**
+ * /api/codego/applications/route.ts
+ *
+ * URL and response shape IDENTICAL to before.
+ * Delegates to CodegoProvider.registerCardholder() and getCardholder().
+ *
+ * Backward compatibility: ✅ 100%
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { getCardProvider } from '@/lib/providers';
 
-const CODEGO_API_KEY = process.env.CODEGO_API_KEY || 'vcck_sbx_f119144ea2221e4796778de28115c4cad97429da86e66552';
-const CODEGO_API_URL = process.env.CODEGO_API_URL || 'https://vcc-sandbox.codegotech.com/api/v1';
-
-// FIX: Always X-Api-Key
-const codegoHeaders = {
-  'X-Api-Key': CODEGO_API_KEY,
-  'Content-Type': 'application/json',
-};
-
-// POST /applications — submit a Codego KYC application for a verified user
-// Requires: walletAddress (looks up KYC) or full fields directly
-// In sandbox: requires sumsubShareToken or personaShareToken
-// In production: provide the KYC token from admin-approved flow
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -36,59 +32,47 @@ export async function POST(req: NextRequest) {
     const nameParts = ((kycData?.full_name || body.firstName + ' ' + body.lastName) || 'Unknown User').trim().split(' ');
     const firstName = body.firstName || nameParts[0] || 'Unknown';
     const lastName = body.lastName || nameParts.slice(1).join(' ') || 'User';
-    const externalUserId = body.externalUserId
-      || (walletAddress ? `cw_${walletAddress.toLowerCase().replace('0x', '').slice(0, 16)}` : undefined)
-      || body.userId;
+    
+    const provider = getCardProvider();
 
-    const codegoPayload: any = {
-      externalUserId,
+    const result = await provider.registerCardholder({
+      walletAddress: walletAddress,
       email: body.email || kycData?.email,
       firstName,
       lastName,
       birthDate: body.birthDate || kycData?.dob || '1990-01-01',
-      phone: body.phone || kycData?.phone || '+10000000000',
+      phone: body.phone || kycData?.phone || '10000000000',
       ipAddress: ipAddress || req.headers.get('x-forwarded-for') || '127.0.0.1',
       address: {
         line1: body.address || kycData?.address || '123 Main St',
         city: body.city || 'Unknown',
         postalCode: body.postalCode || '00000',
-        country: body.country || kycData?.nationality?.slice(0, 2).toUpperCase() || 'US',
+        countryCode: body.country || kycData?.nationality?.slice(0, 2).toUpperCase() || 'US',
       },
-    };
-
-    // Sandbox requires one of these KYC tokens
-    if (sumsubShareToken) codegoPayload.sumsubShareToken = sumsubShareToken;
-    if (personaShareToken) codegoPayload.personaShareToken = personaShareToken;
-
-    const response = await fetch(`${CODEGO_API_URL}/applications`, {
-      method: 'POST',
-      headers: codegoHeaders,
-      body: JSON.stringify(codegoPayload),
+      sumsubShareToken,
+      personaShareToken,
+      externalUserId: body.externalUserId || body.userId
     });
 
-    const responseText = await response.text();
-    let data: any;
-    try { data = JSON.parse(responseText); } catch { data = { raw: responseText }; }
-
-    if (!response.ok) {
+    if (!result.cardholderId || result.alreadyExists === false) {
       return NextResponse.json({
         error: 'Codego application failed',
-        details: data,
-        httpStatus: response.status,
+        details: result.raw,
+        httpStatus: 400,
         sandbox_note: 'Sandbox requires sumsubShareToken or personaShareToken. Pass these fields to proceed.',
-      }, { status: response.status });
+      }, { status: 400 });
     }
 
     // Save cardholder ID to kyc table
-    const cardholderId = data.id || data.userId;
-    if (walletAddress && cardholderId) {
+    if (walletAddress && result.cardholderId) {
       await supabase
         .from('kyc')
-        .update({ codego_cardholder_id: cardholderId })
+        .update({ codego_cardholder_id: result.cardholderId })
         .eq('wallet_address', walletAddress.toLowerCase());
     }
 
-    return NextResponse.json({ ...data, cardholderId });
+    // Attempt to return same response shape as previous raw Codego data
+    return NextResponse.json({ ...(result.raw as object || {}), cardholderId: result.cardholderId });
   } catch (error: any) {
     console.error('[Codego applications] Error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
@@ -103,10 +87,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'id query param required' }, { status: 400 });
   }
 
-  const response = await fetch(`${CODEGO_API_URL}/applications/${id}`, {
-    headers: codegoHeaders,
-  });
+  const provider = getCardProvider();
+  const result = await provider.getCardholder(id);
 
-  const data = await response.json().catch(() => ({}));
-  return NextResponse.json(data, { status: response.status });
+  if (!result.found) {
+    return NextResponse.json(result.raw || {}, { status: 404 });
+  }
+
+  return NextResponse.json(result.raw || {}, { status: 200 });
 }

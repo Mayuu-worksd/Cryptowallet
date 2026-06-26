@@ -1,10 +1,7 @@
 /**
- * /api/codego/cards/[id]/status/route.ts
+ * /api/cards/[id]/status/route.ts
  *
- * URL and response shape IDENTICAL to before.
- * Delegates freeze/unfreeze/block to CodegoProvider.
- *
- * Backward compatibility: ✅ 100%
+ * Generic provider-independent route to update card status (freeze, unfreeze, block).
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { getCardProvider } from '@/lib/providers';
@@ -15,9 +12,9 @@ export async function PATCH(
 ) {
   const body = await req.json();
   const { status } = body;
-  const { id: codegoCardId } = await params;
+  const { id: providerCardId } = await params;
 
-  if (!status || !codegoCardId) {
+  if (!status || !providerCardId) {
     return NextResponse.json({ error: 'status and id are required' }, { status: 400 });
   }
 
@@ -34,19 +31,19 @@ export async function PATCH(
 
   switch (status) {
     case 'active':
-      result = await provider.unfreezeCard(codegoCardId);
+      result = await provider.unfreezeCard(providerCardId);
       break;
     case 'blocked':
     case 'canceled':
-      result = await provider.blockCard(codegoCardId);
+      result = await provider.blockCard(providerCardId);
       break;
     default: // frozen / locked
-      result = await provider.freezeCard(codegoCardId);
+      result = await provider.freezeCard(providerCardId);
   }
 
   return NextResponse.json({
     message:        'Card status updated successfully',
-    codegoStatus:   result.providerStatus,
+    providerStatus: result.providerStatus,
     internalStatus: result.internalStatus,
   });
 }

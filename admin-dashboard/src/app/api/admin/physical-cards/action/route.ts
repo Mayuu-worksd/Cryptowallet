@@ -90,7 +90,7 @@ export async function POST(request: Request) {
     if (newStatus === 'shipped' && !data.codego_card_id) {
       try {
         const origin = new URL(request.url).origin;
-        const codegoRes = await fetch(`${origin}/api/codego/cards`, {
+        const codegoRes = await fetch(`${origin}/api/cards`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

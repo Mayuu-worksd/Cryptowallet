@@ -47,7 +47,7 @@ export default function KycPage() {
     if (!walletAddress) return;
     setCodegoStatusLoading(true);
     try {
-      const res = await fetch(`/api/codego/cardholders?walletAddress=${walletAddress}`);
+      const res = await fetch(`/api/cardholders?walletAddress=${walletAddress}`);
       if (!res.ok) {
         setCodegoAppStatus('not_started');
         return;

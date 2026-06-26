@@ -1,10 +1,7 @@
 /**
- * /api/codego/cardholders/route.ts
+ * /api/cardholders/route.ts
  *
- * URL and response shape IDENTICAL to before.
- * Delegates to CodegoProvider.registerCardholder() and getCardholder().
- *
- * Backward compatibility: ✅ 100%
+ * Generic provider-independent route to register or lookup a cardholder.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
@@ -19,7 +16,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'walletAddress is required' }, { status: 400 });
     }
 
-    // 1. Get KYC record
     const { data: kycData, error: kycError } = await supabase
       .from('kyc')
       .select('*')
@@ -34,10 +30,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'KYC is not verified' }, { status: 400 });
     }
 
-    // 2. Idempotency: if already mapped, return existing ID
     if (kycData.codego_cardholder_id) {
       return NextResponse.json({
-        message: 'User already mapped to Codego',
+        message: 'User already mapped to provider',
         cardholderId: kycData.codego_cardholder_id,
         alreadyExists: true,
       });
@@ -50,7 +45,7 @@ export async function POST(req: NextRequest) {
     const lastName = nameParts.slice(1).join(' ') || 'User';
 
     const result = await provider.registerCardholder({
-      walletAddress,
+      walletAddress: walletAddress,
       email: kycData.email || '',
       firstName,
       lastName,
@@ -70,35 +65,33 @@ export async function POST(req: NextRequest) {
 
     if (!result.cardholderId || result.alreadyExists === false) {
        return NextResponse.json({
-        error: 'Codego application submission failed',
+        error: 'Provider application submission failed',
         details: result.raw,
         httpStatus: 400,
-        note: 'Sandbox may require sumsubShareToken or personaShareToken. Card issuance is admin-managed until production KYC token is configured.',
+        note: 'Provider application failed.',
       }, { status: 400 });
     }
 
-    // 4. Save codego_cardholder_id to kyc table
     const { error: updateError } = await supabase
       .from('kyc')
       .update({ codego_cardholder_id: result.cardholderId })
       .eq('wallet_address', walletAddress.toLowerCase());
 
     if (updateError) {
-      console.error('[Codego cardholders] Failed to update kyc.codego_cardholder_id:', updateError.message);
+      console.error('[/api/cardholders] Failed to update kyc.codego_cardholder_id:', updateError.message);
     }
 
     return NextResponse.json({
-      message: 'Codego application submitted successfully',
+      message: 'Provider application submitted successfully',
       cardholderId: result.cardholderId,
       externalUserId: result.externalUserId,
     });
   } catch (error: any) {
-    console.error('[Codego cardholders] Unexpected error:', error);
+    console.error('[/api/cardholders] Unexpected error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
-// GET — look up existing Codego cardholder by wallet address
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const walletAddress = searchParams.get('walletAddress');
@@ -117,7 +110,7 @@ export async function GET(req: NextRequest) {
   }
 
   if (!kycData.codego_cardholder_id) {
-    return NextResponse.json({ cardholderId: null, message: 'Not yet mapped to Codego' });
+    return NextResponse.json({ cardholderId: null, message: 'Not yet mapped to provider' });
   }
 
   const provider = getCardProvider();
@@ -125,7 +118,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     cardholderId: kycData.codego_cardholder_id,
-    codegoStatus: holderStatus.found ? 'found' : 'not_found_in_codego',
-    codegoData: holderStatus.found ? holderStatus.raw : null,
+    providerStatus: holderStatus.found ? 'found' : 'not_found',
+    providerData: holderStatus.found ? holderStatus.raw : null,
   });
 }

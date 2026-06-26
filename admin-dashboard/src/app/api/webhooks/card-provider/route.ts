@@ -1,11 +1,7 @@
 /**
- * /api/webhooks/codego/route.ts
+ * /api/webhooks/card-provider/route.ts
  *
- * Webhook pipeline refactored to use CardProvider.parseWebhook().
- * Database updates are now driven by the generic ParsedWebhookEvent,
- * meaning this pipeline will work with ANY provider.
- *
- * Backward compatibility: ✅ 100%
+ * Generic provider-independent webhook pipeline.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
@@ -14,17 +10,18 @@ import { getCardProvider } from '@/lib/providers';
 export async function POST(req: NextRequest) {
   try {
     const payload = await req.json();
-    const eventType: string = payload.type || payload.event_type || payload.eventType || '';
 
-    if (!eventType) {
-      return NextResponse.json({ error: 'Missing event_type in webhook payload' }, { status: 400 });
+    const provider = getCardProvider();
+    const parsedEvent = provider.parseWebhook(payload);
+
+    if (parsedEvent.category === 'unknown') {
+      return NextResponse.json({ error: 'Unknown event type' }, { status: 400 });
     }
 
-    // 1. Log webhook for auditing
     const { data: logEntry, error: logError } = await supabase
       .from('codego_webhooks_log')
       .insert({
-        event_type: eventType,
+        event_type: parsedEvent.category,
         payload,
         processed: false,
       })
@@ -34,9 +31,6 @@ export async function POST(req: NextRequest) {
     if (logError) {
       console.error('[Webhook] Failed to log:', logError.message);
     }
-
-    const provider = getCardProvider();
-    const parsedEvent = provider.parseWebhook(payload);
 
     try {
       switch (parsedEvent.category) {
@@ -78,7 +72,6 @@ export async function POST(req: NextRequest) {
         case 'kyc.approved': {
           const userId = parsedEvent.providerCardholderId;
           if (userId) {
-            // Find matching kyc row by codego_cardholder_id
             const { data: kycRow } = await supabase
               .from('kyc')
               .select('wallet_address, status')
@@ -97,7 +90,6 @@ export async function POST(req: NextRequest) {
                 console.log('[Webhook] Auto-verified KYC for cardholder:', userId);
               }
             } else if (kycRow) {
-              // Already verified — just sync codego_application_status
               await supabase
                 .from('kyc')
                 .update({ codego_application_status: 'approved' })
@@ -112,7 +104,6 @@ export async function POST(req: NextRequest) {
         case 'transaction.updated': {
           const tx = parsedEvent.transactionData;
           if (tx && parsedEvent.providerCardId) {
-            // Find the wallet_address from vcc_cards
             const { data: vccCard } = await supabase
               .from('vcc_cards')
               .select('wallet_address, id')
@@ -142,8 +133,6 @@ export async function POST(req: NextRequest) {
                   created_at: tx.createdAt || new Date().toISOString(),
                 }, { onConflict: 'reference_id' });
 
-              // Deduct spend from wallet token_balances in wallet_profiles
-              // This keeps the mobile app's "Card Balance" (total crypto USD) in sync
               if (isSpend && spendAmountUSD > 0 && tx.status === 'approved') {
                 const { data: profile } = await supabase
                   .from('wallet_profiles')
@@ -156,10 +145,9 @@ export async function POST(req: NextRequest) {
                     ? JSON.parse(profile.token_balances)
                     : { ...profile.token_balances };
 
-                  // Deduct from USDT first, then USDC, then ETH (priority order)
                   const priority = ['USDT', 'USDC', 'ETH', 'BNB', 'TRX'];
                   let remaining = spendAmountUSD;
-                  const ETH_PRICE = 3500; // fallback — good enough for sandbox
+                  const ETH_PRICE = 3500;
 
                   for (const token of priority) {
                     if (remaining <= 0) break;
@@ -211,7 +199,6 @@ export async function POST(req: NextRequest) {
           console.log('[Webhook] Unhandled event category:', parsedEvent.category);
       }
 
-      // Mark as processed
       if (logEntry?.id) {
         await supabase
           .from('codego_webhooks_log')
@@ -219,10 +206,10 @@ export async function POST(req: NextRequest) {
           .eq('id', logEntry.id);
       }
 
-      return NextResponse.json({ success: true, eventType });
+      return NextResponse.json({ success: true, eventType: parsedEvent.category });
 
     } catch (processError: any) {
-      console.error(`[Webhook] Error processing ${eventType}:`, processError);
+      console.error(`[Webhook] Error processing ${parsedEvent.category}:`, processError);
       if (logEntry?.id) {
         await supabase
           .from('codego_webhooks_log')

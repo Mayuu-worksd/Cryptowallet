@@ -185,7 +185,7 @@ export default function CardsPage() {
     if (!confirm(`Sync card for ${card.wallet_address.slice(0, 10)}... to Codego?`)) return;
     setSyncingCardId(card.id);
     try {
-      const res = await fetch('/api/codego/cards', {
+      const res = await fetch('/api/cards', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

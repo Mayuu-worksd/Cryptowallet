@@ -1,10 +1,7 @@
 /**
- * /api/codego/fiat/withdraw/route.ts
+ * /api/fiat/withdraw/route.ts
  *
- * URL and response shape IDENTICAL to before.
- * Delegates to CodegoProvider.withdrawFiat().
- *
- * Backward compatibility: ✅ 100%
+ * Generic provider-independent route to withdraw fiat.
  */
 import { NextResponse } from 'next/server';
 import { getCardProvider } from '@/lib/providers';
@@ -35,12 +32,12 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       withdrawal: result.withdrawalRecord,
-      processedViaCodego: result.processedViaProvider,
+      processedViaProvider: result.processedViaProvider,
       sandbox_note: result.sandboxNote,
     });
 
   } catch (error: any) {
-    console.error('[Fiat withdraw] Error:', error);
+    console.error('[/api/fiat/withdraw] Error:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }
 }

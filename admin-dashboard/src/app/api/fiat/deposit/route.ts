@@ -1,10 +1,7 @@
 /**
- * /api/codego/fiat/deposit/route.ts
+ * /api/fiat/deposit/route.ts
  *
- * URL and response shape IDENTICAL to before.
- * Delegates to CodegoProvider.depositFiat().
- *
- * Backward compatibility: ✅ 100%
+ * Generic provider-independent route to deposit fiat.
  */
 import { NextResponse } from 'next/server';
 import { getCardProvider } from '@/lib/providers';
@@ -33,11 +30,11 @@ export async function POST(request: Request) {
       success: true,
       deposit: result.depositRecord,
       paymentInstructions: result.paymentInstructions,
-      sandbox_note: 'POST /transfers/outgoing is not available in Codego sandbox. Fiat deposits are admin-managed.',
+      sandbox_note: 'POST /transfers/outgoing may not be available in provider sandbox. Fiat deposits are admin-managed.',
     });
 
   } catch (error: any) {
-    console.error('[Fiat deposit] Error:', error);
+    console.error('[/api/fiat/deposit] Error:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }
 }

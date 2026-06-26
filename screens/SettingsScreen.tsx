@@ -150,8 +150,8 @@ export default function SettingsScreen({ navigation }: any) {
       const codegoCardId = cardDetails?.codegoCardId;
       const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
       const endpoint = codegoCardId
-        ? `${apiUrl}/api/codego/cards/${codegoCardId}/pin`
-        : `${apiUrl}/api/codego/cards/mock/pin`;
+        ? `${apiUrl}/api/cards/${codegoCardId}/pin`
+        : `${apiUrl}/api/cards/mock/pin`;
       const res = await fetch(endpoint, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -177,7 +177,7 @@ export default function SettingsScreen({ navigation }: any) {
       const codegoCardId = cardDetails?.codegoCardId;
       if (codegoCardId) {
         const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-        await fetch(`${apiUrl}/api/codego/cards/${codegoCardId}`, {
+        await fetch(`${apiUrl}/api/cards/${codegoCardId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ limit: { daily, monthly } }),

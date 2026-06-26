@@ -1,10 +1,7 @@
 /**
- * /api/codego/cards/[id]/statement/route.ts
+ * /api/cards/[id]/statement/route.ts
  *
- * URL and response shape IDENTICAL to before.
- * Delegates to CodegoProvider.getStatement().
- *
- * Backward compatibility: ✅ 100%
+ * Generic provider-independent route to get card statement.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { getCardProvider } from '@/lib/providers';
@@ -13,8 +10,8 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { id: codegoCardId } = await params;
-  if (!codegoCardId) {
+  const { id: providerCardId } = await params;
+  if (!providerCardId) {
     return NextResponse.json({ error: 'Missing Card ID' }, { status: 400 });
   }
 
@@ -23,15 +20,14 @@ export async function GET(
   const endDate   = searchParams.get('end_date')   ?? undefined;
 
   const provider = getCardProvider();
-  const result   = await provider.getStatement(codegoCardId, { startDate, endDate });
+  const result   = await provider.getStatement(providerCardId, { startDate, endDate });
 
-  // Return the same shape as the original route
   if (result.source === 'provider') {
-    return NextResponse.json({ ...(result as any).raw, source: 'codego' });
+    return NextResponse.json({ ...(result as any).raw, source: 'provider' });
   }
 
   return NextResponse.json({
-    cardId:       codegoCardId,
+    cardId:       providerCardId,
     holderName:   result.holderName,
     balance:      result.balance,
     transactions: result.transactions,

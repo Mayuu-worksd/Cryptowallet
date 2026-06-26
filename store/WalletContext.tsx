@@ -426,7 +426,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (codegoCardId) {
       try {
         const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-        const res = await fetch(`${apiUrl}/api/codego/cards/${codegoCardId}/status`, {
+        const res = await fetch(`${apiUrl}/api/cards/${codegoCardId}/status`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: newVal ? 'frozen' : 'active' })
@@ -461,7 +461,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       if (codegoCardId) {
         try {
           const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-          await fetch(`${apiUrl}/api/codego/cards/${codegoCardId}/status`, {
+          await fetch(`${apiUrl}/api/cards/${codegoCardId}/status`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status: 'blocked' })
@@ -2385,7 +2385,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       // 1. Try Codego API auto-provisioning
       try {
         const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-        const codegoRes = await fetch(`${apiUrl}/api/codego/cards`, {
+        const codegoRes = await fetch(`${apiUrl}/api/cards`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2413,7 +2413,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             holder_name:  cleanName,
             design,
           });
-          // The API route (admin-dashboard/api/codego/cards) already writes to vcc_cards.
+          // The API route (admin-dashboard/api/cards) already writes to vcc_cards.
           // No need to duplicate that here.
         }
       } catch (err) {

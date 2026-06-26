@@ -168,7 +168,7 @@ export default function VCCCardDetailScreen({ navigation }: any) {
     const newStatus = cardData.status === 'frozen' ? 'active' : 'frozen';
     try {
       const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-      const res = await fetch(`${apiUrl}/api/codego/cards/${cardData.codegoCardId}/status`, {
+      const res = await fetch(`${apiUrl}/api/cards/${cardData.codegoCardId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus })
@@ -194,7 +194,7 @@ export default function VCCCardDetailScreen({ navigation }: any) {
     setSubmittingPin(true);
     try {
       const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-      const res = await fetch(`${apiUrl}/api/codego/cards/${cardData?.codegoCardId}/pin`, {
+      const res = await fetch(`${apiUrl}/api/cards/${cardData?.codegoCardId}/pin`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ newPin, walletAddress })

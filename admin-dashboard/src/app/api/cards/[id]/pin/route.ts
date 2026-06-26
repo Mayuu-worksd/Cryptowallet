@@ -1,11 +1,7 @@
 /**
- * /api/codego/cards/[id]/pin/route.ts
+ * /api/cards/[id]/pin/route.ts
  *
- * URL and response shape IDENTICAL to before.
- * Delegates PIN update to CodegoProvider.
- * Audit log (codego_card_pin_audits) retained exactly as before.
- *
- * Backward compatibility: ✅ 100%
+ * Generic provider-independent route to update card PIN.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
@@ -15,7 +11,7 @@ export async function PUT(
   req: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
-  const { id: codegoCardId } = await context.params;
+  const { id: providerCardId } = await context.params;
   const body = await req.json();
   const { newPin, walletAddress } = body;
 
@@ -24,15 +20,15 @@ export async function PUT(
   }
 
   const provider = getCardProvider();
-  const result   = await provider.setPin(codegoCardId, newPin);
+  const result   = await provider.setPin(providerCardId, newPin);
 
-  // Audit log — identical to original implementation
-  if (walletAddress || codegoCardId) {
+  // Audit log
+  if (walletAddress || providerCardId) {
     try {
       const { data: vccCard } = await supabase
         .from('vcc_cards')
         .select('id')
-        .eq('codego_card_id', codegoCardId)
+        .eq('codego_card_id', providerCardId)
         .maybeSingle();
 
       if (vccCard?.id) {
@@ -43,7 +39,7 @@ export async function PUT(
         });
       }
     } catch (e) {
-      console.warn('[/api/codego/cards/[id]/pin] Audit log failed:', e);
+      console.warn('[/api/cards/[id]/pin] Audit log failed:', e);
     }
   }
 
