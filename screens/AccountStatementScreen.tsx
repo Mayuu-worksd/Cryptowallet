@@ -8,7 +8,7 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
 import { Theme, Fonts } from '../constants';
 import Toast from '../components/Toast';
-import { fiatRequestService, FiatCryptoRequest, LedgerEntry } from '../services/supabaseService';
+import { fiatRequestService, FiatCryptoRequest, LedgerEntry, txService } from '../services/supabaseService';
 
 import { haptics } from '../utils/haptics';
 
@@ -19,12 +19,13 @@ type DateFilter = typeof DATE_FILTERS[number];
 
 export default function AccountStatementScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
-  const { isDarkMode, walletAddress, formatFiat, cardTransactions } = useWallet() as any;
+  const { isDarkMode, walletAddress, formatFiat } = useWallet() as any;
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
 
   const [activeTab, setActiveTab] = useState<Tab>('ledger');
   const [requests, setRequests] = useState<FiatCryptoRequest[]>([]);
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
+  const [cardTxns, setCardTxns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -46,12 +47,35 @@ export default function AccountStatementScreen({ navigation }: any) {
     else           setLoading(true);
 
     try {
-      const [reqData, ledData] = await Promise.all([
+      const [reqData, ledData, dbTxs] = await Promise.all([
         fiatRequestService.getRequests(walletAddress),
-        fiatRequestService.getLedgerEntries(walletAddress)
+        fiatRequestService.getLedgerEntries(walletAddress),
+        txService.getAll(walletAddress, 200),
       ]);
       setRequests(reqData);
       setLedger(ledData);
+
+      // Build card txns from Supabase — deduplicated by id
+      const seen = new Set<string>();
+      const mapped = dbTxs
+        .filter(t => t.type === 'card_topup' || t.type === 'card_spend')
+        .filter(t => {
+          const key = t.id ?? `${t.type}-${t.amount}-${t.created_at}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .map(t => ({
+          id: t.id,
+          type: t.type === 'card_topup' ? 'topup' : 'spend',
+          amount: t.usd_value ?? t.amount,
+          label: t.label ?? (t.type === 'card_topup' ? 'Top-up' : 'Card Spend'),
+          coin: t.token,
+          status: t.status,
+          timestamp: t.created_at,
+          currencyUsed: t.token ?? 'USD',
+        }));
+      setCardTxns(mapped);
     } catch (err: any) {
       showToast(err.message || 'Failed to load statements data', 'error');
     } finally {
@@ -285,7 +309,7 @@ export default function AccountStatementScreen({ navigation }: any) {
           );
         })}
 
-        {activeTab === 'statements' && !loading && cardTransactions.length === 0 && (
+        {activeTab === 'statements' && !loading && cardTxns.length === 0 && (
           <View style={styles.emptyWrap}>
             <Feather name="credit-card" size={48} color={T.textDim} style={{ marginBottom: 12 }} />
             <Text style={[styles.emptyTitle, { color: T.text }]}>No Card Transactions</Text>
@@ -295,7 +319,7 @@ export default function AccountStatementScreen({ navigation }: any) {
           </View>
         )}
 
-        {activeTab === 'statements' && !loading && cardTransactions.map((tx: any, i: number) => {
+        {activeTab === 'statements' && !loading && cardTxns.map((tx: any, i: number) => {
           const isCredit = tx.type === 'topup' || Number(tx.amount) > 0;
           const sign = isCredit ? '+' : '';
           const amtColor = isCredit ? T.success : T.text;
