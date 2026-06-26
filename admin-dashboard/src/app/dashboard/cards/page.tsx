@@ -134,6 +134,19 @@ export default function CardsPage() {
   const [vCardSearch, setVCardSearch] = useState('');
   const queryClient = useQueryClient();
 
+  // Realtime: invalidate virtual cards cache on any INSERT/UPDATE to vcc_cards
+  React.useEffect(() => {
+    const channel = supabase
+      .channel('admin_vcc_cards_live')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'vcc_cards' },
+        () => { queryClient.invalidateQueries({ queryKey: ['admin-vcc-cards'] }); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [queryClient]);
+
   // ─── Query Virtual Cards (vcc_cards) ─────────────────────────────────────────
   const { data: virtualCards, isLoading: isVirtualLoading, refetch: refetchVirtual } = useQuery({
     queryKey: ['admin-vcc-cards'],
@@ -146,7 +159,6 @@ export default function CardsPage() {
       return (data || []) as VirtualCard[];
     },
     refetchInterval: 30000,
-    enabled: activeTab === 'virtual',
   });
 
   const handleFixCardSync = async (card: VirtualCard) => {

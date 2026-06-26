@@ -2440,6 +2440,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       }
 
       await refreshCardData();
+      // Notify admin that a new virtual card was issued
+      adminAlertsService.logAlert(
+        'card_created',
+        `User ${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)} created a new virtual card.`,
+        walletAddress
+      ).catch(() => {});
       setIsGlobalLoading(false);
     } catch (e: any) {
       setIsGlobalLoading(false);
