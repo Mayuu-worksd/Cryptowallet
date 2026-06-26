@@ -895,7 +895,17 @@ export const txService = {
       .order('created_at', { ascending: false })
       .limit(limit);
     if (error) throw error;
-    return data ?? [];
+    const rows = data ?? [];
+    // Deduplicate — keep first occurrence by reference_id, then by type+amount+created_at
+    const seen = new Set<string>();
+    return rows.filter(t => {
+      const key = t.reference_id
+        ? `ref:${t.reference_id}`
+        : `${t.type}:${t.amount}:${t.token}:${t.created_at}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   },
 
   async getByType(walletAddress: string, type: TxType): Promise<DBTransaction[]> {

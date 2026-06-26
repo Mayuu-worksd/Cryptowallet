@@ -192,7 +192,15 @@ export const transactionService = {
     try { const p = rawSwap  ? JSON.parse(String(rawSwap))  : []; swapTxs  = Array.isArray(p) ? p : []; } catch (_e) {}
 
     const fromLocal = localTxs.map(fromLocalTx);
-    const fromCard  = cardTxs.map(fromCardTx);
+    // Deduplicate card transactions by id before converting
+    const seenCardIds = new Set<string>();
+    const dedupedCardTxs = cardTxs.filter(tx => {
+      const key = tx.id ?? `${tx.type}-${tx.amount}-${tx.timestamp}`;
+      if (seenCardIds.has(key)) return false;
+      seenCardIds.add(key);
+      return true;
+    });
+    const fromCard  = dedupedCardTxs.map(fromCardTx);
     const fromSwapStore: UnifiedTx[] = swapTxs.map((s: any) => ({
       id:       s.id ?? s.txHash ?? Date.now().toString(),
       type:     'swap' as const,

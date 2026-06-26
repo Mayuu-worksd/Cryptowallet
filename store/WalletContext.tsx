@@ -593,8 +593,29 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         if (address) {
           setWalletAddress(address);
           setHasWallet(true);
-          // FIX 1: set wallet in Supabase session so RLS policies work
           setWallet(address).catch(() => {});
+
+          // One-time cleanup: wipe corrupt duplicate card transactions from AsyncStorage
+          // These were written by the old topupCard flow (now deprecated) on 27/5/2026
+          const savedCardTxsRaw = await AsyncStorage.getItem('cw_card_transactions');
+          if (savedCardTxsRaw) {
+            try {
+              const parsed = JSON.parse(savedCardTxsRaw);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                // Detect corrupt data: >3 entries with same timestamp within 1 minute
+                const timestamps = parsed.map((t: any) => t.timestamp).filter(Boolean);
+                const firstTs = timestamps[0];
+                const sameCount = timestamps.filter((ts: string) =>
+                  Math.abs(new Date(ts).getTime() - new Date(firstTs).getTime()) < 60000
+                ).length;
+                if (sameCount >= 3) {
+                  // Corrupt data — wipe it, Supabase will replace on next sync
+                  await AsyncStorage.removeItem('cw_card_transactions');
+                  setCardTransactions([]);
+                }
+              }
+            } catch { await AsyncStorage.removeItem('cw_card_transactions'); }
+          }
           // Load TRON address — derive from mnemonic if not yet stored
           storageService.getTronAddress().then(async t => {
             if (t) { setTronAddress(t); return; }
@@ -973,13 +994,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
                 status:     'success' as const,
                 timestamp:  t.created_at ?? new Date().toISOString(),
               }));
-            if (vcc || dbCard) {
-              setCardTransactions(dbCardTxs);
-              AsyncStorage.setItem('cw_card_transactions', JSON.stringify(dbCardTxs)).catch(() => {});
-            } else {
-              setCardTransactions([]);
-              AsyncStorage.removeItem('cw_card_transactions').catch(() => {});
-            }
+            // Always replace AsyncStorage card txns with Supabase data
+            // This cleans up old corrupt/duplicate entries on the device
+            const cleanCardTxs = dbCardTxs;
+            setCardTransactions(cleanCardTxs);
+            AsyncStorage.setItem('cw_card_transactions', JSON.stringify(cleanCardTxs)).catch(() => {});
           } catch {
             // Supabase offline — AsyncStorage data already loaded above, nothing lost
           }
@@ -2367,13 +2386,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           status:     'success' as const,
           timestamp:  t.created_at ?? new Date().toISOString(),
         }));
-      if (cardCreated) {
-        setCardTransactions(cardTxs);
-        AsyncStorage.setItem('cw_card_transactions', JSON.stringify(cardTxs)).catch(() => {});
-      } else {
-        setCardTransactions([]);
-        AsyncStorage.removeItem('cw_card_transactions').catch(() => {});
-      }
+      // Always update — replaces old corrupt/duplicate data with fresh Supabase data
+      setCardTransactions(cardTxs);
+      AsyncStorage.setItem('cw_card_transactions', JSON.stringify(cardTxs)).catch(() => {});
     } catch {}
   }, [walletAddress]);
 
