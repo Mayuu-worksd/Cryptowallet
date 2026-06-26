@@ -1027,6 +1027,46 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return () => { supabase.removeChannel(channel); };
   }, [walletAddress]);
 
+  // ── Realtime: vcc_cards live push (sandbox terminal events → mobile) ──
+  // Listens for INSERT/UPDATE on vcc_cards for this wallet and refreshes card state immediately.
+  useEffect(() => {
+    if (!walletAddress) return;
+    const channel = supabase
+      .channel(`vcc_cards_live_${walletAddress}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'vcc_cards',
+          filter: `wallet_address=eq.${walletAddress.toLowerCase()}`,
+        },
+        () => { refreshCardData(); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [walletAddress, refreshCardData]);
+
+  // ── Realtime: transactions live push (sandbox card spends → mobile) ──
+  // Listens for INSERT on transactions for this wallet and refreshes card transactions immediately.
+  useEffect(() => {
+    if (!walletAddress) return;
+    const channel = supabase
+      .channel(`transactions_live_${walletAddress}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'transactions',
+          filter: `wallet_address=eq.${walletAddress.toLowerCase()}`,
+        },
+        () => { refreshCardData(); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [walletAddress, refreshCardData]);
+
   // ── Realtime: Admin Settings Live Push ──
   // Listens for any UPDATE on admin_settings and applies changes instantly — zero delay.
   useEffect(() => {
