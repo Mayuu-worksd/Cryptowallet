@@ -47,6 +47,34 @@ export default function SandboxTerminalPage() {
   const [results, setResults] = useState<SimResult[]>([]);
   const [bulkRunning, setBulkRunning] = useState(false);
 
+  // KYC section
+  const [kycWallet, setKycWallet] = useState('');
+  const [kycLoading, setKycLoading] = useState(false);
+  const [kycIframeUrl, setKycIframeUrl] = useState('');
+  const [kycResult, setKycResult] = useState<{ success?: boolean; cardholderId?: string; error?: string } | null>(null);
+
+  const handleGenerateKycLink = async () => {
+    if (!kycWallet.trim()) { alert('Enter a wallet address'); return; }
+    setKycLoading(true);
+    setKycIframeUrl('');
+    setKycResult(null);
+    try {
+      const res = await fetch('/api/admin/sandbox-kyc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ walletAddress: kycWallet.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to generate KYC session');
+      setKycIframeUrl(data.iframeUrl);
+      setKycResult({ success: true, cardholderId: data.cardholderId });
+    } catch (e: any) {
+      setKycResult({ success: false, error: e.message });
+    } finally {
+      setKycLoading(false);
+    }
+  };
+
   // Load all cards
   const { data: cards, isLoading: cardsLoading } = useQuery({
     queryKey: ['sandbox-cards'],
@@ -394,6 +422,91 @@ export default function SandboxTerminalPage() {
             <p className="text-[9px] font-mono text-gray-400 mt-1">
               Admin fires event → /api/codego/simulate-webhook → /api/webhooks/codego → Supabase transactions → Mobile app ✅
             </p>
+            <p className="text-[9px] font-mono text-[#f59e0b] mt-2 font-bold uppercase">Codego Sandbox Note:</p>
+            <p className="text-[9px] font-mono text-gray-400 mt-1">
+              Codego sandbox does NOT fire real transaction webhooks (GET /cards/&#123;id&#125;/transactions returns 404).
+              This terminal IS the correct simulation method per Codego&apos;s own Postman collection (Step 7).
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Codego Real KYC Section ─────────────────────────────────────────── */}
+      <div className="bg-[#1a1a1a] border-3 border-[#1a1a1a] p-6 shadow-[4px_4px_0px_0px_rgba(255,204,0,1)]">
+        <div className="flex items-center gap-3 mb-4">
+          <Shield className="h-6 w-6 text-[#ffcc00]" />
+          <div>
+            <h2 className="text-xl font-extrabold text-white font-display uppercase">Codego Real KYC Activation</h2>
+            <p className="text-[10px] text-gray-400 font-mono mt-1">
+              Cards are currently issued as <span className="text-red-400">mock_cg_</span> because Codego sandbox needs real KYC completion.
+              Use this to get a real Codego cardholder ID and issue a real card.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="space-y-3">
+            <label className="text-[10px] font-bold uppercase text-gray-400 font-mono">User Wallet Address</label>
+            <input
+              type="text"
+              value={kycWallet}
+              onChange={e => setKycWallet(e.target.value)}
+              placeholder="0x..."
+              className="w-full border-2 border-[#ffffff30] bg-[#2a2a2a] px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-[#ffcc00]"
+            />
+            <button
+              onClick={handleGenerateKycLink}
+              disabled={kycLoading}
+              className="w-full flex items-center justify-center gap-2 bg-[#ffcc00] border-2 border-[#ffcc00] px-4 py-3 text-xs font-extrabold uppercase font-display text-[#1a1a1a] hover:bg-[#f0bf00] disabled:opacity-50"
+            >
+              {kycLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wifi className="h-4 w-4" />}
+              {kycLoading ? 'Generating...' : 'Generate Real Codego KYC Link'}
+            </button>
+
+            {kycResult && (
+              <div className={`p-3 text-[10px] font-mono border ${
+                kycResult.success ? 'border-[#00ffcc]/30 bg-[#00ffcc]/5 text-[#00ffcc]' : 'border-red-500/30 bg-red-500/5 text-red-400'
+              }`}>
+                {kycResult.success ? (
+                  <>
+                    <div className="font-bold">✅ KYC session created on Codego</div>
+                    <div className="text-gray-400 mt-1">Cardholder ID: <span className="text-white">{kycResult.cardholderId}</span></div>
+                    <div className="text-gray-400 mt-1">Open the link below, complete the KYC flow, then Codego fires application.approved webhook automatically.</div>
+                  </>
+                ) : (
+                  <div>❌ {kycResult.error}</div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-3">
+            {kycIframeUrl ? (
+              <>
+                <label className="text-[10px] font-bold uppercase text-gray-400 font-mono">Codego KYC Link</label>
+                <div className="bg-[#2a2a2a] border border-[#ffcc00]/40 p-3">
+                  <a
+                    href={kycIframeUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#ffcc00] text-[10px] font-mono break-all underline hover:text-[#f0bf00]"
+                  >
+                    {kycIframeUrl}
+                  </a>
+                </div>
+                <p className="text-[9px] font-mono text-gray-500">
+                  1. Open this link in browser → complete Codego KYC sandbox flow<br/>
+                  2. Codego fires <span className="text-[#00ffcc]">application.approved</span> webhook automatically<br/>
+                  3. Webhook updates Supabase KYC status → user can now get a real Codego card
+                </p>
+              </>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-gray-600 text-[10px] font-mono text-center space-y-2 py-8">
+                <Shield className="h-8 w-8 opacity-30" />
+                <p>Enter a wallet address and click Generate to get a real Codego KYC link.</p>
+                <p className="text-[9px] text-gray-700">This creates a real cardholder on Codego sandbox and returns the KYC iframe URL.</p>
+              </div>
+            )}
           </div>
         </div>
       </div>

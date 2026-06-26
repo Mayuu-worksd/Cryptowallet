@@ -170,9 +170,10 @@ export async function POST(req: NextRequest) {
               .maybeSingle();
 
             if (vccCard) {
-              const spendAmountUSD = Math.abs(tx.amount || 0);
-              const isSpend = (tx.amount || 0) < 0 || tx.type === 'spend';
-              const isTopup = (tx.amount || 0) > 0 || tx.type === 'topup';
+              const rawAmount = tx.amount || 0;
+              const isTopup = rawAmount > 0 || tx.type === 'topup';
+              const isSpend = !isTopup;
+              const spendAmountUSD = Math.abs(rawAmount);
               const txType = isTopup ? 'card_topup' : 'card_spend';
 
               await supabase

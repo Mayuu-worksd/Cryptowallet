@@ -1080,17 +1080,43 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   // Listens for INSERT on transactions for this wallet and refreshes card transactions immediately.
   useEffect(() => {
     if (!walletAddress) return;
+    const addr = walletAddress.toLowerCase();
     const channel = supabase
-      .channel(`transactions_live_${walletAddress}`)
+      .channel(`transactions_live_${addr}`)
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
           table: 'transactions',
-          filter: `wallet_address=eq.${walletAddress.toLowerCase()}`,
+          filter: `wallet_address=eq.${addr}`,
         },
-        () => { refreshCardData(); }
+        (payload: any) => {
+          const row = payload.new;
+          if (!row) return;
+          // Refresh card transactions list
+          refreshCardData();
+          // Also push into main transactions state so HistoryScreen updates
+          if (row.type === 'card_spend' || row.type === 'card_topup') {
+            const newCardTx: CardTransaction = {
+              id: row.id ?? Date.now().toString(),
+              type: row.type === 'card_topup' ? 'topup' : 'spend',
+              amount: row.usd_value ?? row.amount ?? 0,
+              label: row.label ?? (row.type === 'card_topup' ? 'Top-up' : 'Card Spend'),
+              coin: row.token,
+              coinAmount: row.amount,
+              status: 'success',
+              timestamp: row.created_at ?? new Date().toISOString(),
+            };
+            setCardTransactions(prev => {
+              const exists = prev.some(t => t.id === newCardTx.id);
+              if (exists) return prev;
+              const updated = [newCardTx, ...prev];
+              AsyncStorage.setItem('cw_card_transactions', JSON.stringify(updated)).catch(() => {});
+              return updated;
+            });
+          }
+        }
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
