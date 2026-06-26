@@ -1,14 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
-const CODEGO_API_KEY = process.env.CODEGO_API_KEY || 'vcck_sbx_f119144ea2221e4796778de28115c4cad97429da86e66552';
-const CODEGO_API_URL = process.env.CODEGO_API_URL || 'https://vcc-sandbox.codegotech.com/api/v1';
-
-const codegoHeaders = {
-  'X-Api-Key': CODEGO_API_KEY,
-  'Content-Type': 'application/json',
-};
-
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -21,45 +13,18 @@ export async function POST(req: NextRequest) {
     const normalizedAddr = walletAddress.trim().toLowerCase();
 
     if (status === 'verified') {
-      // 1. Fetch KYC record from Supabase
+      // Admin has full authority to verify — no Codego sandbox check required.
+      // The card creation flow (/api/codego/cards) already handles mock card issuance
+      // for users whose Codego sandbox status is not 'approved'.
+      // We just update Supabase directly.
       const { data: kycData, error: kycError } = await supabase
         .from('kyc')
-        .select('*')
+        .select('id')
         .eq('wallet_address', normalizedAddr)
         .maybeSingle();
 
       if (kycError || !kycData) {
         return NextResponse.json({ error: 'KYC record not found for this wallet' }, { status: 404 });
-      }
-
-      const codegoCardholderId = kycData.codego_cardholder_id;
-      if (!codegoCardholderId) {
-        return NextResponse.json({
-          error: 'User has not started Sandbox KYC verification yet. Please generate the Sandbox KYC Link first.'
-        }, { status: 400 });
-      }
-
-      // 2. Fetch live status from Codego Sandbox
-      console.log(`[Admin KYC Verify Action] Fetching Codego user status for ${codegoCardholderId}`);
-      const res = await fetch(`${CODEGO_API_URL}/users/${codegoCardholderId}`, {
-        headers: codegoHeaders,
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        console.error(`[Admin KYC Verify Action] Codego fetch failed:`, res.status, errText);
-        return NextResponse.json({
-          error: `User not found in CodeGo Sandbox or CodeGo API failed (HTTP ${res.status}).`
-        }, { status: 400 });
-      }
-
-      const userData = await res.json();
-      const appStatus = userData.applicationStatus || 'needsVerification';
-
-      if (appStatus !== 'approved') {
-        return NextResponse.json({
-          error: `CodeGo Sandbox KYC is not completed/approved yet (current status: ${appStatus.toUpperCase()}). Please open the Sandbox KYC simulator link and complete verification first.`
-        }, { status: 400 });
       }
     }
 

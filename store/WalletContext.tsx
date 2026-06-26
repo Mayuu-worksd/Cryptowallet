@@ -2402,8 +2402,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           const expiryMmYy = (cardData.expiryMonth && cardData.expiryYear)
             ? `${String(cardData.expiryMonth).padStart(2, '0')}/${String(cardData.expiryYear).slice(-2)}`
             : '12/28';
-          
-          await dbCardService.saveCredentials(walletAddress, cardData.number || `4000 0000 0000 ${cardData.last4 || '0000'}`, cardData.cvv || '000', {
+          const last4 = (cardData.number || '').replace(/\s/g, '').slice(-4) || cardData.last4 || '0000';
+
+          await dbCardService.saveCredentials(walletAddress, cardData.number || `4000 0000 0000 ${last4}`, cardData.cvv || '000', {
             expiry_month: expiryMmYy.split('/')[0],
             expiry_year:  expiryMmYy.split('/')[1],
             card_type:    cardVariant.id,
@@ -2412,6 +2413,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             holder_name:  cleanName,
             design,
           });
+          // The API route (admin-dashboard/api/codego/cards) already writes to vcc_cards.
+          // No need to duplicate that here.
         }
       } catch (err) {
         console.warn('[createCard] Codego auto-provisioning error, falling back:', err);
