@@ -1027,6 +1027,35 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return () => { supabase.removeChannel(channel); };
   }, [walletAddress]);
 
+  // ── Realtime: wallet_profiles live push (card spend balance deduction → mobile) ──
+  useEffect(() => {
+    if (!walletAddress) return;
+    const channel = supabase
+      .channel(`wallet_profile_live_${walletAddress}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'wallet_profiles',
+          filter: `wallet_address=eq.${walletAddress.toLowerCase()}`,
+        },
+        (payload: any) => {
+          const tb = payload.new?.token_balances;
+          if (!tb) return;
+          const parsed = typeof tb === 'string' ? JSON.parse(tb) : tb;
+          if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+            setBalances(parsed);
+            balancesRef.current = parsed;
+            setEthBalance(Number(parsed.ETH ?? 0).toFixed(6));
+            ethBalanceRef.current = Number(parsed.ETH ?? 0).toFixed(6);
+          }
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [walletAddress]);
+
   // ── Realtime: vcc_cards live push (sandbox terminal events → mobile) ──
   // Listens for INSERT/UPDATE on vcc_cards for this wallet and refreshes card state immediately.
   useEffect(() => {

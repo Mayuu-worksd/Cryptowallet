@@ -170,21 +170,64 @@ export async function POST(req: NextRequest) {
               .maybeSingle();
 
             if (vccCard) {
+              const spendAmountUSD = Math.abs(tx.amount || 0);
+              const isSpend = (tx.amount || 0) < 0 || tx.type === 'spend';
+              const isTopup = (tx.amount || 0) > 0 || tx.type === 'topup';
+              const txType = isTopup ? 'card_topup' : 'card_spend';
+
               await supabase
                 .from('transactions')
                 .upsert({
                   wallet_address: vccCard.wallet_address,
                   card_id: vccCard.id,
-                  type: 'card_spend',
+                  type: txType,
                   token: tx.currency || 'USD',
-                  amount: tx.amount || 0,
-                  usd_value: tx.amount || 0,
+                  amount: spendAmountUSD,
+                  usd_value: spendAmountUSD,
                   status: tx.status === 'approved' ? 'success' : tx.status === 'declined' ? 'failed' : 'pending',
                   reference_id: tx.id,
                   label: tx.merchantName || 'Card Transaction',
                   description: tx.description || null,
                   created_at: tx.createdAt || new Date().toISOString(),
                 }, { onConflict: 'reference_id' });
+
+              // Deduct spend from wallet token_balances in wallet_profiles
+              // This keeps the mobile app's "Card Balance" (total crypto USD) in sync
+              if (isSpend && spendAmountUSD > 0 && tx.status === 'approved') {
+                const { data: profile } = await supabase
+                  .from('wallet_profiles')
+                  .select('token_balances')
+                  .eq('wallet_address', vccCard.wallet_address)
+                  .maybeSingle();
+
+                if (profile?.token_balances) {
+                  const balances: Record<string, number> = typeof profile.token_balances === 'string'
+                    ? JSON.parse(profile.token_balances)
+                    : { ...profile.token_balances };
+
+                  // Deduct from USDT first, then USDC, then ETH (priority order)
+                  const priority = ['USDT', 'USDC', 'ETH', 'BNB', 'TRX'];
+                  let remaining = spendAmountUSD;
+                  const ETH_PRICE = 3500; // fallback — good enough for sandbox
+
+                  for (const token of priority) {
+                    if (remaining <= 0) break;
+                    const bal = balances[token] ?? 0;
+                    if (bal <= 0) continue;
+                    const tokenPrice = (token === 'ETH' || token === 'BNB') ? ETH_PRICE : 1;
+                    const balUSD = bal * tokenPrice;
+                    const deductUSD = Math.min(balUSD, remaining);
+                    const deductToken = deductUSD / tokenPrice;
+                    balances[token] = Math.max(0, bal - deductToken);
+                    remaining -= deductUSD;
+                  }
+
+                  await supabase
+                    .from('wallet_profiles')
+                    .update({ token_balances: balances })
+                    .eq('wallet_address', vccCard.wallet_address);
+                }
+              }
             }
           }
           break;
