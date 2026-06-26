@@ -55,12 +55,14 @@ export default function AccountStatementScreen({ navigation }: any) {
       setRequests(reqData);
       setLedger(ledData);
 
-      // Build card txns from Supabase — deduplicated by id
+      // Build card txns from Supabase — deduplicated by reference_id or label+time bucket
       const seen = new Set<string>();
       const mapped = dbTxs
         .filter(t => t.type === 'card_topup' || t.type === 'card_spend')
         .filter(t => {
-          const key = t.id ?? `${t.type}-${t.amount}-${t.created_at}`;
+          const key = t.reference_id
+            ? `ref:${t.reference_id}`
+            : `${t.type}:${t.label}:${t.created_at ? new Date(t.created_at).toISOString().slice(0, 16) : ''}:${t.usd_value}`;
           if (seen.has(key)) return false;
           seen.add(key);
           return true;
@@ -73,7 +75,7 @@ export default function AccountStatementScreen({ navigation }: any) {
           coin: t.token,
           status: t.status,
           timestamp: t.created_at,
-          currencyUsed: t.token ?? 'USD',
+          currencyUsed: (t as any).currency_used ?? t.token ?? 'USD',
         }));
       setCardTxns(mapped);
     } catch (err: any) {

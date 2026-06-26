@@ -982,8 +982,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             }
 
             // ── Transaction restore: merge Supabase + AsyncStorage ──
-            const dbCardTxs: CardTransaction[] = dbTxs
-              .filter(t => t.type === 'card_topup' || t.type === 'card_spend')
+            const rawDbCardTxs = dbTxs.filter(t => t.type === 'card_topup' || t.type === 'card_spend');
+            const seenStartupKeys = new Set<string>();
+            const dbCardTxs: CardTransaction[] = rawDbCardTxs
+              .filter(t => {
+                const key = t.reference_id
+                  ? `ref:${t.reference_id}`
+                  : `${t.type}:${t.label}:${t.created_at ? new Date(t.created_at).toISOString().slice(0, 16) : ''}:${t.usd_value}`;
+                if (seenStartupKeys.has(key)) return false;
+                seenStartupKeys.add(key);
+                return true;
+              })
               .map(t => ({
                 id:         t.id ?? Date.now().toString(),
                 type:       t.type === 'card_topup' ? 'topup' as const : 'spend' as const,
@@ -993,6 +1002,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
                 coinAmount: t.amount,
                 status:     'success' as const,
                 timestamp:  t.created_at ?? new Date().toISOString(),
+                currencyUsed: (t as any).currency_used,
               }));
             // Always replace AsyncStorage card txns with Supabase data
             // This cleans up old corrupt/duplicate entries on the device
@@ -1113,27 +1123,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         (payload: any) => {
           const row = payload.new;
           if (!row) return;
-          // Refresh card transactions list
-          refreshCardData();
-          // Also push into main transactions state so HistoryScreen updates
+          // Only refresh for card transactions inserted by admin/sandbox terminal
+          // (local spendCard already updates state directly — avoid double-counting)
           if (row.type === 'card_spend' || row.type === 'card_topup') {
-            const newCardTx: CardTransaction = {
-              id: row.id ?? Date.now().toString(),
-              type: row.type === 'card_topup' ? 'topup' : 'spend',
-              amount: row.usd_value ?? row.amount ?? 0,
-              label: row.label ?? (row.type === 'card_topup' ? 'Top-up' : 'Card Spend'),
-              coin: row.token,
-              coinAmount: row.amount,
-              status: 'success',
-              timestamp: row.created_at ?? new Date().toISOString(),
-            };
-            setCardTransactions(prev => {
-              const exists = prev.some(t => t.id === newCardTx.id);
-              if (exists) return prev;
-              const updated = [newCardTx, ...prev];
-              AsyncStorage.setItem('cw_card_transactions', JSON.stringify(updated)).catch(() => {});
-              return updated;
-            });
+            const isLocalSpend = row.reference_id != null;
+            // reference_id is set by local spendCard — skip to avoid duplicate
+            if (!isLocalSpend) {
+              refreshCardData();
+            }
           }
         }
       )
@@ -1190,9 +1187,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         // Add existing IDs or labels to prevent duplicates
         const existingLabels = new Set(dbTxs.map(t => `${t.type}-${t.amount}-${t.token}-${t.status}`));
 
-        // 1. Sync standard local txs (including fees)
+        // 1. Sync standard local txs (excluding card and swap types — handled separately or consolidated)
         for (const tx of localTxs) {
-          if (tx.type === 'card_topup' || tx.type === 'card_spend' || tx.type === 'swap') continue; // handled elsewhere
+          if (tx.type === 'card_topup' || tx.type === 'card_spend' || tx.type === 'swap' || tx.type === 'fee') continue;
           const isFee = tx.type === 'fee';
           const typeStr = isFee ? 'fee' : (tx.type === 'sent' ? 'send' : 'receive');
           const token = tx.coin;
@@ -2139,14 +2136,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     for (const asset of availableAssets) {
       if (remainingUSD <= 0) break;
       
-      // Calculate how much of the remaining USD this asset can cover
-      // If it's not the settlement currency, we will also incur a settlement fee on the deducted amount.
       const settlementFeeRate = asset.isSettlement ? 0 : (commissionService.getRates().settlement_fee.type === 'percentage' ? commissionService.getRates().settlement_fee.value / 100 : 0);
-      // Fixed settlement fee applies once per swap, but we'll simplify by applying percentage or proportional fixed fee.
       const settlementFeeFixed = asset.isSettlement ? 0 : (commissionService.getRates().settlement_fee.type === 'fixed' ? commissionService.getRates().settlement_fee.value : 0);
       
-      // The maximum USD value this asset can provide after its own settlement fee is taken out
-      // asset.usdValue = usableUSD + (usableUSD * rate) + fixed
       const usableUSD = asset.isSettlement 
         ? asset.usdValue 
         : Math.max(0, (asset.usdValue - settlementFeeFixed) / (1 + settlementFeeRate));
@@ -2170,36 +2162,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       
       remainingUSD -= deductUsableUSD;
       totalSettlementFeeDeducted += settlementFeeUSD;
-      
       settlementBreakdown[asset.coin] = (settlementBreakdown[asset.coin] || 0) + deductUsableUSD;
-      
-      // If it's not the settlement currency, log the auto-swap
-      if (!asset.isSettlement) {
-        addTx({ type: 'swap', coin: `${asset.coin} \u2192 ${SETTLEMENT_CURRENCY}`, amount: deductAmount.toFixed(6), usdValue: totalDeductUSD.toFixed(2), address: 'Auto Settlement', status: 'success' });
-        txService.log({
-          wallet_address: walletAddress,
-          type: 'swap',
-          token: asset.coin,
-          amount: deductAmount,
-          usd_value: totalDeductUSD,
-          status: 'success',
-          label: `${asset.coin} \u2192 ${SETTLEMENT_CURRENCY}`,
-          swap_to_token: SETTLEMENT_CURRENCY,
-          swap_to_amount: totalDeductUSD // Note: Assuming USD value maps 1:1 with USDT for simplicity
-        }).catch(() => {});
-      }
-      
-      addTx({ type: 'card_spend', coin: asset.coin, amount: (deductUsableUSD / asset.usdPrice).toFixed(6), usdValue: deductUsableUSD.toFixed(2), address: label, status: 'success' });
-      
-      txService.log({
-        wallet_address: walletAddress,
-        type:      'card_spend',
-        token:     asset.coin,
-        amount:    deductUsableUSD / asset.usdPrice,
-        usd_value: deductUsableUSD,
-        status:    'success',
-        label,
-      }).catch(() => {});
     }
     
     // If we couldn't cover it (due to fees eating up the balance), revert.
@@ -2221,16 +2184,19 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       country: 'USA', // Default mock
     };
     
-    // 5. Log Fees
-    if (cardFeeUSD > 0) {
-      addTx({ type: 'fee', coin: 'USD', amount: cardFeeUSD.toFixed(2), usdValue: cardFeeUSD.toFixed(2), address: 'Card Fee', status: 'success' });
-      txService.log({ wallet_address: walletAddress, type: 'fee', token: 'USD', amount: cardFeeUSD, usd_value: cardFeeUSD, status: 'success', label: 'Card Fee' }).catch(() => {});
-    }
-    if (totalSettlementFeeDeducted > 0) {
-      addTx({ type: 'fee', coin: 'USD', amount: totalSettlementFeeDeducted.toFixed(2), usdValue: totalSettlementFeeDeducted.toFixed(2), address: 'Auto Swap Settlement Fee', status: 'success' });
-      txService.log({ wallet_address: walletAddress, type: 'fee', token: 'USD', amount: totalSettlementFeeDeducted, usd_value: totalSettlementFeeDeducted, status: 'success', label: 'Auto Swap Settlement Fee' }).catch(() => {});
-    }
-    
+    // 5. Log ONE consolidated card_spend to Supabase (prevents duplicate entries in statements)
+    const primaryAsset = availableAssets[0]?.coin || 'USD';
+    txService.log({
+      wallet_address: walletAddress,
+      type:      'card_spend',
+      token:     primaryAsset,
+      amount:    amountUSD / (prices[primaryAsset]?.usd || 1),
+      usd_value: amountUSD,
+      status:    'success',
+      label,
+      reference_id: cardTx.id,
+    }).catch(() => {});
+
     // 6. Update local state
     setBalances(newBalances);
     balancesRef.current = newBalances;
@@ -2374,18 +2340,30 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         });
         AsyncStorage.setItem('cw_card_balance', String(dbCard.balance)).catch(() => {});
       }
-      const cardTxs: CardTransaction[] = dbTxs
-        .filter(t => t.type === 'card_topup' || t.type === 'card_spend')
-        .map(t => ({
-          id:         t.id ?? Date.now().toString(),
-          type:       t.type === 'card_topup' ? 'topup' as const : 'spend' as const,
-          amount:     t.usd_value,
-          label:      t.label ?? (t.type === 'card_topup' ? 'Top-up' : 'Spend'),
-          coin:       t.token,
-          coinAmount: t.amount,
-          status:     'success' as const,
-          timestamp:  t.created_at ?? new Date().toISOString(),
-        }));
+      // Deduplicate card txs: group by reference_id (sandbox) or label+created_at minute bucket
+      // This cleans up old per-asset duplicate entries written by previous versions
+      const rawCardTxs = dbTxs.filter(t => t.type === 'card_topup' || t.type === 'card_spend');
+      const seenCardKeys = new Set<string>();
+      const dedupedCardTxs = rawCardTxs.filter(t => {
+        // Prefer reference_id dedup (sandbox terminal inserts)
+        const key = t.reference_id
+          ? `ref:${t.reference_id}`
+          : `${t.type}:${t.label}:${t.created_at ? new Date(t.created_at).toISOString().slice(0, 16) : ''}:${t.usd_value}`;
+        if (seenCardKeys.has(key)) return false;
+        seenCardKeys.add(key);
+        return true;
+      });
+      const cardTxs: CardTransaction[] = dedupedCardTxs.map(t => ({
+        id:         t.id ?? Date.now().toString(),
+        type:       t.type === 'card_topup' ? 'topup' as const : 'spend' as const,
+        amount:     t.usd_value,
+        label:      t.label ?? (t.type === 'card_topup' ? 'Top-up' : 'Spend'),
+        coin:       t.token,
+        coinAmount: t.amount,
+        status:     'success' as const,
+        timestamp:  t.created_at ?? new Date().toISOString(),
+        currencyUsed: (t as any).currency_used,
+      }));
       // Always update — replaces old corrupt/duplicate data with fresh Supabase data
       setCardTransactions(cardTxs);
       AsyncStorage.setItem('cw_card_transactions', JSON.stringify(cardTxs)).catch(() => {});

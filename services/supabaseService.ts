@@ -896,14 +896,18 @@ export const txService = {
       .limit(limit);
     if (error) throw error;
     const rows = data ?? [];
-    // Deduplicate — keep first occurrence by reference_id, then by type+amount+created_at
-    const seen = new Set<string>();
+    // Deduplicate by DB primary key (id) first, then by reference_id for sandbox-originated txs
+    const seenIds = new Set<string>();
+    const seenRefs = new Set<string>();
     return rows.filter(t => {
-      const key = t.reference_id
-        ? `ref:${t.reference_id}`
-        : `${t.type}:${t.amount}:${t.token}:${t.created_at}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
+      if (t.id) {
+        if (seenIds.has(t.id)) return false;
+        seenIds.add(t.id);
+      }
+      if (t.reference_id) {
+        if (seenRefs.has(t.reference_id)) return false;
+        seenRefs.add(t.reference_id);
+      }
       return true;
     });
   },

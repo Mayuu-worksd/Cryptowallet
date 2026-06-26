@@ -25,6 +25,27 @@ export default function TransactionsPage() {
   const [typeFilter, setTypeFilter] = useState('all');
   const [networkFilter, setNetworkFilter] = useState('all');
   const [tokenFilter, setTokenFilter] = useState('all');
+  const [cleaning, setCleaning] = useState(false);
+  const [cleanResult, setCleanResult] = useState<string | null>(null);
+
+  const handleCleanDuplicates = async () => {
+    setCleaning(true);
+    setCleanResult(null);
+    try {
+      const res = await fetch('/api/admin/clean-transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      setCleanResult(data.message || `Deleted ${data.deleted} duplicates`);
+      refetch();
+    } catch (e: any) {
+      setCleanResult('Error: ' + e.message);
+    } finally {
+      setCleaning(false);
+    }
+  };
 
   // 1. Fetch Transactions
   const { data: transactions, isLoading, refetch, isRefetching } = useQuery({
