@@ -2260,8 +2260,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           if (typeof crypto !== 'undefined' && crypto.getRandomValues) crypto.getRandomValues(cvvBuf);
           else { cvvBuf[0] = Math.floor(Math.random() * 256); cvvBuf[1] = Math.floor(Math.random() * 256); }
           decryptedCvv = String(100 + ((cvvBuf[0] * 256 + cvvBuf[1]) % 900));
-          
-          dbCardService.saveCredentials(walletAddress, decryptedNumber, decryptedCvv, {
+
+          await dbCardService.saveCredentials(walletAddress, decryptedNumber, decryptedCvv, {
             expiry_month: vcc.expiry_mm_yy?.split('/')[0] || '12',
             expiry_year: vcc.expiry_mm_yy?.split('/')[1] || '28',
             card_type: vcc.card_variant,
@@ -2269,22 +2269,21 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             status: vcc.card_status === 'frozen' ? 'frozen' : 'active',
             holder_name: vcc.card_holder_name,
             design: variants?.[0]?.color_hex || 'dark'
-          }).catch(() => {});
+          });
         }
         setCardCreated(true);
         setCardBalance(vcc.balance);
         setCardFrozen(vcc.card_status === 'frozen');
         setCardDetails(prev => {
-          // A valid prev number contains at least 15 digits (VISA/Mastercard). Don't overwrite it with dots if decryption fails.
           const prevDigitsLength = String(prev.number).replace(/\s/g, '').replace(/\D/g, '').length;
           const hasValidPrev = prevDigitsLength >= 15;
           const hasValidPrevCvv = String(prev.cvv).replace(/\D/g, '').length >= 3;
-          
+
           const newNum = decryptedNumber || (hasValidPrev ? prev.number : ('•••• •••• •••• ' + vcc.card_last4));
           const newCvv = decryptedCvv    || (hasValidPrevCvv ? prev.cvv : '•••');
-          
+
           if (prev.number === newNum && prev.cvv === newCvv && prev.holderName === vcc.card_holder_name && prev.expiry === vcc.expiry_mm_yy) return prev;
-          
+
           const nextDetails = { ...prev, number: newNum, cvv: newCvv, holderName: vcc.card_holder_name, expiry: vcc.expiry_mm_yy, codegoCardId: vcc.codego_card_id };
           storageService.saveCardDetails(nextDetails).catch(() => {});
           return nextDetails;
@@ -2309,8 +2308,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           if (typeof crypto !== 'undefined' && crypto.getRandomValues) crypto.getRandomValues(cvvBuf);
           else { cvvBuf[0] = Math.floor(Math.random() * 256); cvvBuf[1] = Math.floor(Math.random() * 256); }
           decryptedCvv = String(100 + ((cvvBuf[0] * 256 + cvvBuf[1]) % 900));
-          
-          dbCardService.saveCredentials(walletAddress, decryptedNumber, decryptedCvv, {
+
+          await dbCardService.saveCredentials(walletAddress, decryptedNumber, decryptedCvv, {
             expiry_month: dbCard.expiry_month,
             expiry_year: dbCard.expiry_year,
             card_type: dbCard.card_type,
@@ -2318,7 +2317,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             status: dbCard.status,
             holder_name: dbCard.holder_name,
             design: dbCard.design
-          }).catch(() => {});
+          });
         }
 
         setCardCreated(true);

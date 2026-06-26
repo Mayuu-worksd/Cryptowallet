@@ -938,6 +938,7 @@ export default function CardScreen({ navigation, route }: any) {
                   mutedColor={T.textMuted}
                   widgetBg={T.surfaceLow}
                   widgetBorder={T.border}
+                  onRetry={onRefresh}
                 />
               </View>
             )}

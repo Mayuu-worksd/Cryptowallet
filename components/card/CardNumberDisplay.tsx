@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  AppState, ActivityIndicator, Alert,
+  AppState, ActivityIndicator,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { haptics } from '../../utils/haptics';
@@ -25,6 +25,7 @@ interface Props {
   widgetMode?: boolean;
   widgetBg?:   string;
   widgetBorder?: string;
+  onRetry?:    () => void;
 }
 
 function normalizeNumber(raw: any): string {
@@ -51,6 +52,7 @@ export function CardCredentialsWidget({
   cardNumber, expiry, cvv, holderName,
   textColor, accentColor, mutedColor,
   widgetBg = '#1c1b1b', widgetBorder = '#2a2a2a',
+  onRetry,
 }: Props) {
   const [revealed, setRevealed] = useState(false);
   const [loading,  setLoading]  = useState(false);
@@ -83,13 +85,15 @@ export function CardCredentialsWidget({
 
   const handleToggle = useCallback(() => {
     if (loading) return;
-    
-    // Check if we actually have real data to reveal (not just bullets)
+
+    // If credentials are still masked/missing, show loading and let parent retry via onRetry
     if (!hasFullNumber(realNumber) || realCvv.includes('•') || realExpiry.includes('•')) {
-      haptics.error();
-      // Use standard alert to inform user that credentials need to be fetched
-      // since the context currently holds the fallback masked version.
-      Alert.alert('Unavailable', 'Secure credentials unavailable. Please pull down to refresh the card data.');
+      haptics.selection();
+      setLoading(true);
+      // Auto-dismiss loading after 1.5s — parent should call refreshCardData
+      // which will update the props and re-render with real values
+      onRetry?.();
+      setTimeout(() => setLoading(false), 1500);
       return;
     }
 
@@ -100,7 +104,7 @@ export function CardCredentialsWidget({
     } else {
       setRevealed(false);
     }
-  }, [loading, revealed, realNumber, realCvv, realExpiry]);
+  }, [loading, revealed, realNumber, realCvv, realExpiry, onRetry]);
 
   const displayNumber = revealed && realNumber ? realNumber : maskNumber(realNumber);
   const displayCvv    = revealed && realCvv    ? realCvv    : '•••';
@@ -129,7 +133,7 @@ export function CardCredentialsWidget({
             : <Feather name={revealed ? 'eye' : 'eye-off'} size={14} color={accentColor} />
           }
           <Text style={[w.revealText, { color: accentColor }]} allowFontScaling={false}>
-            {revealed ? 'Hide' : 'Reveal'}
+            {loading ? 'Syncing...' : revealed ? 'Hide' : 'Reveal'}
           </Text>
         </TouchableOpacity>
       </View>
