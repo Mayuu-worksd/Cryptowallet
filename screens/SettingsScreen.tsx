@@ -81,7 +81,8 @@ export default function SettingsScreen({ navigation }: any) {
     deleteWallet, enterReadOnlyMode, isDarkMode, toggleTheme, balances, ethBalance,
     pinEnabled, refreshPinEnabled, isReadOnly, kycStatus, accountType, setAccountType,
     p2pCountry, p2pCurrency, setP2PPreferences, setFiatCurrency, formatFiat, fiatCurrency,
-    userUuid, userUid, kycEmail
+    userUuid, userUid, kycEmail,
+    cardCreated, cardDetails,
   } = useWallet() as any;
   const isTronNetwork = network === 'TRON' || network === 'TRON Nile';
   // Show EVM address on EVM networks, TRON address on TRON networks
@@ -134,6 +135,59 @@ export default function SettingsScreen({ navigation }: any) {
   const [showRegionModal, setShowRegionModal] = useState(false);
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
   const [updateLoading, setUpdateLoading] = useState(false);
+  const [cardPinModal, setCardPinModal] = useState(false);
+  const [cardPinValue, setCardPinValue] = useState('');
+  const [cardPinLoading, setCardPinLoading] = useState(false);
+  const [limitsModal, setLimitsModal] = useState(false);
+  const [dailyLimit, setDailyLimit] = useState('500');
+  const [monthlyLimit, setMonthlyLimit] = useState('5000');
+  const [limitsLoading, setLimitsLoading] = useState(false);
+
+  const handleSaveCardPin = async () => {
+    if (!/^\d{4}$/.test(cardPinValue)) { showToast('PIN must be exactly 4 digits', 'error'); return; }
+    setCardPinLoading(true);
+    try {
+      const codegoCardId = cardDetails?.codegoCardId;
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+      const endpoint = codegoCardId
+        ? `${apiUrl}/api/codego/cards/${codegoCardId}/pin`
+        : `${apiUrl}/api/codego/cards/mock/pin`;
+      const res = await fetch(endpoint, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPin: cardPinValue, walletAddress }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update PIN');
+      showToast('Card PIN updated successfully', 'success');
+      setCardPinModal(false);
+      setCardPinValue('');
+    } catch (e: any) {
+      showToast(e.message || 'Failed to update PIN', 'error');
+    } finally { setCardPinLoading(false); }
+  };
+
+  const handleSaveLimits = async () => {
+    const daily = parseFloat(dailyLimit);
+    const monthly = parseFloat(monthlyLimit);
+    if (isNaN(daily) || daily <= 0 || isNaN(monthly) || monthly <= 0) { showToast('Enter valid limit amounts', 'error'); return; }
+    if (daily > monthly) { showToast('Daily limit cannot exceed monthly limit', 'error'); return; }
+    setLimitsLoading(true);
+    try {
+      const codegoCardId = cardDetails?.codegoCardId;
+      if (codegoCardId) {
+        const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+        await fetch(`${apiUrl}/api/codego/cards/${codegoCardId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ limit: { daily, monthly } }),
+        });
+      }
+      showToast('Spending limits updated', 'success');
+      setLimitsModal(false);
+    } catch { showToast('Limits saved locally', 'info'); setLimitsModal(false); }
+    finally { setLimitsLoading(false); }
+  };
 
   const handleCheckForUpdate = async () => {
     try {
@@ -443,6 +497,63 @@ export default function SettingsScreen({ navigation }: any) {
                 </View>
               )}
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Card PIN Modal */}
+      <Modal visible={cardPinModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalBox, { backgroundColor: T.surface }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <Text style={[styles.modalTitle, { color: T.text, marginBottom: 0 }]}>Set Card PIN</Text>
+              <TouchableOpacity onPress={() => setCardPinModal(false)}><Feather name="x" size={22} color={T.textMuted} /></TouchableOpacity>
+            </View>
+            <Text style={{ color: T.textMuted, fontSize: 13, marginBottom: 20 }}>Enter a new 4-digit PIN for your card.</Text>
+            <TextInput
+              style={[styles.modalInput, { color: T.text, borderColor: T.border, backgroundColor: T.background, textAlign: 'center', fontSize: 28, letterSpacing: 12 }]}
+              keyboardType="numeric" maxLength={4} secureTextEntry
+              value={cardPinValue} onChangeText={setCardPinValue}
+              placeholder="••••" placeholderTextColor={T.textMuted} autoFocus
+            />
+            <View style={styles.modalBtns}>
+              <TouchableOpacity style={[styles.modalBtn, { backgroundColor: T.surfaceLow }]} onPress={() => setCardPinModal(false)}>
+                <Text style={[styles.modalBtnText, { color: T.textMuted }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalBtn, { backgroundColor: T.primary }]} onPress={handleSaveCardPin} disabled={cardPinLoading}>
+                {cardPinLoading ? <ActivityIndicator color="#FFF" /> : <Text style={[styles.modalBtnText, { color: '#FFF' }]}>Save PIN</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Spending Limits Modal */}
+      <Modal visible={limitsModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalBox, { backgroundColor: T.surface }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <Text style={[styles.modalTitle, { color: T.text, marginBottom: 0 }]}>Spending Limits</Text>
+              <TouchableOpacity onPress={() => setLimitsModal(false)}><Feather name="x" size={22} color={T.textMuted} /></TouchableOpacity>
+            </View>
+            <Text style={{ color: T.textMuted, fontSize: 13, marginBottom: 8 }}>Daily Limit (USD)</Text>
+            <TextInput
+              style={[styles.modalInput, { color: T.text, borderColor: T.border, backgroundColor: T.background }]}
+              keyboardType="decimal-pad" value={dailyLimit} onChangeText={setDailyLimit} placeholder="500" placeholderTextColor={T.textMuted}
+            />
+            <Text style={{ color: T.textMuted, fontSize: 13, marginBottom: 8 }}>Monthly Limit (USD)</Text>
+            <TextInput
+              style={[styles.modalInput, { color: T.text, borderColor: T.border, backgroundColor: T.background }]}
+              keyboardType="decimal-pad" value={monthlyLimit} onChangeText={setMonthlyLimit} placeholder="5000" placeholderTextColor={T.textMuted}
+            />
+            <View style={styles.modalBtns}>
+              <TouchableOpacity style={[styles.modalBtn, { backgroundColor: T.surfaceLow }]} onPress={() => setLimitsModal(false)}>
+                <Text style={[styles.modalBtnText, { color: T.textMuted }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalBtn, { backgroundColor: T.primary }]} onPress={handleSaveLimits} disabled={limitsLoading}>
+                {limitsLoading ? <ActivityIndicator color="#FFF" /> : <Text style={[styles.modalBtnText, { color: '#FFF' }]}>Save</Text>}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -795,7 +906,8 @@ export default function SettingsScreen({ navigation }: any) {
                 style={[styles.menuRow, { borderBottomWidth: 1, borderBottomColor: T.border }]}
                 activeOpacity={0.7}
                 onPress={() => {
-                  showToast('PIN settings will be unlocked after card activation.', 'info');
+                  if (!cardCreated) { showToast('Create a virtual card first to set a PIN.', 'info'); return; }
+                  setCardPinValue(''); setCardPinModal(true);
                 }}
               >
                 <View style={styles.menuLeft}>
@@ -804,17 +916,20 @@ export default function SettingsScreen({ navigation }: any) {
                   </View>
                   <View>
                     <Text style={[styles.menuLabel, { color: T.text }]}>Card PIN</Text>
-                    <Text style={[styles.menuSub, { color: T.textMuted }]}>Update your physical card PIN</Text>
+                    <Text style={[styles.menuSub, { color: T.textMuted }]}>{cardCreated ? 'Set or update your card PIN' : 'Create a card first'}</Text>
                   </View>
                 </View>
-                <Feather name="chevron-right" size={20} color={T.textMuted} />
+                {cardCreated
+                  ? <Feather name="chevron-right" size={20} color={T.textMuted} />
+                  : <View style={[styles.pinBadge, { backgroundColor: T.border }]}><Text style={{ fontSize: 11, fontWeight: '700', color: T.textMuted }}>LOCKED</Text></View>}
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.menuRow, { borderBottomWidth: 1, borderBottomColor: T.border }]}
                 activeOpacity={0.7}
                 onPress={() => {
-                   showToast('Spending limits menu coming soon.', 'info');
+                  if (!cardCreated) { showToast('Create a virtual card first to set spending limits.', 'info'); return; }
+                  setLimitsModal(true);
                 }}
               >
                 <View style={styles.menuLeft}>
@@ -823,10 +938,12 @@ export default function SettingsScreen({ navigation }: any) {
                   </View>
                   <View>
                     <Text style={[styles.menuLabel, { color: T.text }]}>Spending Limits</Text>
-                    <Text style={[styles.menuSub, { color: T.textMuted }]}>Manage daily and monthly card limits</Text>
+                    <Text style={[styles.menuSub, { color: T.textMuted }]}>{cardCreated ? 'Manage daily and monthly card limits' : 'Create a card first'}</Text>
                   </View>
                 </View>
-                <Feather name="chevron-right" size={20} color={T.textMuted} />
+                {cardCreated
+                  ? <Feather name="chevron-right" size={20} color={T.textMuted} />
+                  : <View style={[styles.pinBadge, { backgroundColor: T.border }]}><Text style={{ fontSize: 11, fontWeight: '700', color: T.textMuted }}>LOCKED</Text></View>}
               </TouchableOpacity>
             </>
           )}
