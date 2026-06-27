@@ -1,0 +1,297 @@
+{
+  "id": "f1219899-cddc-400c-a076-ba6e6c80f6a2",
+  "name": "Striga Public Env.",
+  "values": [
+    {
+      "key": "server_url",
+      "value": "https://www.sandbox.striga.com/api/v1",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "email",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "application_id",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "api_key",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "secret",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "hmac_key",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "card_public_key",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "user_id",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "card_id",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "wallet_id",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "btc_account_id",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "eur_account_id",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "usdc_account_id",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "usdt_account_id",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "card_account_id",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "account_deposit_id",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "card_type",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "cor_eur_id",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "card_status",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "sepa_txid",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "ui_key",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "refresh_token",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "cor_busd_id",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "cor_eth_id",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "cor_btc_id",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "cor_usdt_id",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "password",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "cor_usdc_id",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "applicationId",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "cor_defi_busd_id",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "cor_defi_eth_id",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "cor_defi_btc_id",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "cor_defi_usdt_id",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "cor_defi_usdc_id",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "eth_account_id",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "busd_account_id",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "card_linked_acc_id",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "challenge_id",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "cor_defi_bnb_id",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "ln_txid",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "bnb_account_id",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "whitelisted_address_id",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "1inch_account_id",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "uni_account_id",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "matic_account_id",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    },
+    {
+      "key": "jwt",
+      "value": "",
+      "type": "any",
+      "enabled": true
+    }
+  ],
+  "_postman_variable_scope": "environment",
+  "_postman_exported_at": "2023-08-23T12:06:49.893Z",
+  "_postman_exported_using": "Postman/10.17.2"
+}
