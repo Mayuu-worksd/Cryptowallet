@@ -132,6 +132,138 @@ export default function CardsPage() {
   const [syncingCardId, setSyncingCardId] = useState<string | null>(null);
   const [fixingCardId, setFixingCardId] = useState<string | null>(null);
   const [vCardSearch, setVCardSearch] = useState('');
+
+  // Card Management Modal state
+  const [managingCard, setManagingCard] = useState<VirtualCard | null>(null);
+  const [fundAmount, setFundAmount] = useState('10');
+  const [isFunding, setIsFunding] = useState(false);
+  const [isTogglingStatus, setIsTogglingStatus] = useState(false);
+  const [isTerminating, setIsTerminating] = useState(false);
+  const [isSyncingProvider, setIsSyncingProvider] = useState(false);
+
+  // Admin Card Issuance Modal state
+  const [isIssueModalOpen, setIsIssueModalOpen] = useState(false);
+  const [issueWallet, setIssueWallet] = useState('');
+  const [issueHolderName, setIssueHolderName] = useState('CARD HOLDER');
+  const [isIssuing, setIsIssuing] = useState(false);
+
+  const handleFundCard = async () => {
+    if (!managingCard?.codego_card_id) {
+      alert('Card ID missing');
+      return;
+    }
+    const amt = Number(fundAmount);
+    if (isNaN(amt) || amt <= 0) {
+      alert('Enter a valid top-up amount');
+      return;
+    }
+    setIsFunding(true);
+    try {
+      const res = await fetch(`/api/cards/${managingCard.codego_card_id}/fund`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: amt, currency: 'USD' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || data.error || 'Top-up failed');
+      alert(`✅ Funded card successfully with $${amt}`);
+      queryClient.invalidateQueries({ queryKey: ['admin-vcc-cards'] });
+      setManagingCard((prev) => prev ? { ...prev, balance: (prev.balance || 0) + amt } : null);
+      setFundAmount('10');
+    } catch (err: any) {
+      alert(`❌ Top-up error: ${err.message}`);
+    } finally {
+      setIsFunding(false);
+    }
+  };
+
+  const handleToggleFreeze = async () => {
+    if (!managingCard?.codego_card_id) return;
+    const newStatus = managingCard.card_status === 'frozen' ? 'active' : 'frozen';
+    setIsTogglingStatus(true);
+    try {
+      const res = await fetch(`/api/cards/${managingCard.codego_card_id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Status change failed');
+      alert(`✅ Card status changed to ${newStatus.toUpperCase()}`);
+      queryClient.invalidateQueries({ queryKey: ['admin-vcc-cards'] });
+      setManagingCard((prev) => prev ? { ...prev, card_status: newStatus } : null);
+    } catch (err: any) {
+      alert(`❌ Status error: ${err.message}`);
+    } finally {
+      setIsTogglingStatus(false);
+    }
+  };
+
+  const handleTerminateCard = async () => {
+    if (!managingCard?.codego_card_id) return;
+    if (!confirm(`Are you sure you want to TERMINATE card ${managingCard.codego_card_id}? This performs soft cancellation via freeze.`)) return;
+    setIsTerminating(true);
+    try {
+      const res = await fetch(`/api/cards/${managingCard.codego_card_id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || 'Termination failed');
+      alert('✅ Card terminated successfully');
+      queryClient.invalidateQueries({ queryKey: ['admin-vcc-cards'] });
+      setManagingCard((prev) => prev ? { ...prev, card_status: 'terminated' } : null);
+    } catch (err: any) {
+      alert(`❌ Termination error: ${err.message}`);
+    } finally {
+      setIsTerminating(false);
+    }
+  };
+
+  const handleSyncProvider = async () => {
+    if (!managingCard?.codego_card_id) return;
+    setIsSyncingProvider(true);
+    try {
+      const res = await fetch(`/api/cards/${managingCard.codego_card_id}/sync`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || 'Sync failed');
+      alert('✅ Card synced with KripiCard provider');
+      queryClient.invalidateQueries({ queryKey: ['admin-vcc-cards'] });
+    } catch (err: any) {
+      alert(`❌ Sync error: ${err.message}`);
+    } finally {
+      setIsSyncingProvider(false);
+    }
+  };
+
+  const handleIssueVirtualCard = async () => {
+    if (!issueWallet.trim()) {
+      alert('Enter a valid wallet address');
+      return;
+    }
+    setIsIssuing(true);
+    try {
+      const res = await fetch('/api/cards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          walletAddress: issueWallet.trim(),
+          type: 'virtual',
+          variant: 'classic',
+          nameOnCard: issueHolderName.trim() || 'CARD HOLDER',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || data.error || 'Card issuance failed');
+      alert('✅ Virtual Card issued successfully via KripiCard production provider!');
+      setIsIssueModalOpen(false);
+      setIssueWallet('');
+      setIssueHolderName('CARD HOLDER');
+      queryClient.invalidateQueries({ queryKey: ['admin-vcc-cards'] });
+    } catch (err: any) {
+      alert(`❌ Issuance error: ${err.message}`);
+    } finally {
+      setIsIssuing(false);
+    }
+  };
+
   const queryClient = useQueryClient();
 
   // Realtime: invalidate virtual cards cache on any INSERT/UPDATE to vcc_cards
@@ -693,17 +825,26 @@ export default function CardsPage() {
             ))}
           </div>
 
-          {/* Search */}
+          {/* Search & Issue Button */}
           <div className="brutalist-card">
-            <div className="p-4 border-b-3 border-[#1a1a1a] flex items-center gap-3 bg-[#f5f0e8]">
-              <Search className="h-4 w-4 text-[#1a1a1a]" />
-              <input
-                type="text"
-                placeholder="Search wallet address or holder name..."
-                value={vCardSearch}
-                onChange={e => setVCardSearch(e.target.value)}
-                className="flex-1 bg-transparent text-xs font-mono text-[#1a1a1a] outline-none placeholder-gray-400"
-              />
+            <div className="p-4 border-b-3 border-[#1a1a1a] flex flex-wrap items-center justify-between gap-3 bg-[#f5f0e8]">
+              <div className="flex items-center gap-3 flex-1 min-w-[240px]">
+                <Search className="h-4 w-4 text-[#1a1a1a]" />
+                <input
+                  type="text"
+                  placeholder="Search wallet address or holder name..."
+                  value={vCardSearch}
+                  onChange={e => setVCardSearch(e.target.value)}
+                  className="flex-1 bg-transparent text-xs font-mono text-[#1a1a1a] outline-none placeholder-gray-400"
+                />
+              </div>
+              <button
+                onClick={() => setIsIssueModalOpen(true)}
+                className="px-4 py-2 bg-[#1a1a1a] text-white text-xs font-bold uppercase tracking-wider flex items-center gap-2 shadow-[2px_2px_0px_0px_rgba(255,204,0,1)] hover:bg-[#333]"
+              >
+                <Plus className="h-4 w-4 text-[#ffcc00]" />
+                <span>Issue Virtual Card</span>
+              </button>
             </div>
 
             <div className="overflow-x-auto">
@@ -783,6 +924,14 @@ export default function CardsPage() {
                         </td>
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => setManagingCard(card)}
+                              className="px-3 py-1.5 bg-[#1a1a1a] text-white border-2 border-[#1a1a1a] text-[10px] font-bold uppercase hover:bg-[#333] flex items-center gap-1 shadow-[2px_2px_0px_0px_rgba(255,204,0,1)]"
+                            >
+                              <Edit className="h-3 w-3 text-[#ffcc00]" />
+                              Manage Card
+                            </button>
+
                             {/* Fix Card Sync — always visible, fixes cards table mismatch */}
                             <button
                               onClick={() => handleFixCardSync(card)}
@@ -1849,6 +1998,164 @@ export default function CardsPage() {
           </div>
         </div>
       )}
+
+      {/* Card Management Modal */}
+      {managingCard && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="brutalist-card bg-white w-full max-w-lg p-6 space-y-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b-3 border-[#1a1a1a] pb-4">
+              <div>
+                <h3 className="text-lg font-extrabold font-display uppercase">Manage Virtual Card</h3>
+                <p className="text-xs font-mono text-gray-500">{managingCard.codego_card_id || managingCard.id}</p>
+              </div>
+              <button onClick={() => setManagingCard(null)} className="p-1 hover:bg-gray-100">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 text-xs font-mono">
+              <div className="p-3 bg-[#f5f0e8] border-2 border-[#1a1a1a]">
+                <p className="text-gray-500 font-bold uppercase text-[9px]">Holder</p>
+                <p className="font-extrabold mt-1">{managingCard.card_holder_name}</p>
+              </div>
+              <div className="p-3 bg-[#f5f0e8] border-2 border-[#1a1a1a]">
+                <p className="text-gray-500 font-bold uppercase text-[9px]">Card Number</p>
+                <p className="font-extrabold mt-1">•••• {managingCard.card_last4} ({managingCard.expiry_mm_yy})</p>
+              </div>
+              <div className="p-3 bg-[#f5f0e8] border-2 border-[#1a1a1a]">
+                <p className="text-gray-500 font-bold uppercase text-[9px]">Balance</p>
+                <p className="text-lg font-extrabold mt-1">${(managingCard.balance || 0).toFixed(2)} USD</p>
+              </div>
+              <div className="p-3 bg-[#f5f0e8] border-2 border-[#1a1a1a]">
+                <p className="text-gray-500 font-bold uppercase text-[9px]">Status</p>
+                <span className="inline-block mt-1 px-2 py-0.5 bg-[#1a1a1a] text-white text-[10px] font-bold uppercase">
+                  {managingCard.card_status}
+                </span>
+              </div>
+            </div>
+
+            {/* Top-up Card section */}
+            <div className="p-4 border-2 border-[#1a1a1a] bg-[#ffcc00]/10 space-y-3">
+              <h4 className="text-xs font-extrabold uppercase font-display flex items-center gap-2">
+                <DollarSign className="h-4 w-4 text-[#1a1a1a]" />
+                Fund / Top Up Card
+              </h4>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  value={fundAmount}
+                  onChange={(e) => setFundAmount(e.target.value)}
+                  placeholder="Amount in USD"
+                  className="flex-1 brutalist-input text-xs"
+                />
+                <button
+                  onClick={handleFundCard}
+                  disabled={isFunding}
+                  className="px-4 py-2 bg-[#1a1a1a] text-white font-bold text-xs uppercase shadow-[2px_2px_0px_0px_rgba(255,204,0,1)] disabled:opacity-50"
+                >
+                  {isFunding ? 'Funding...' : 'Top Up ($)'}
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-extrabold uppercase font-display">Production Controls</h4>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  onClick={handleToggleFreeze}
+                  disabled={isTogglingStatus}
+                  className="p-2 border-2 border-[#1a1a1a] bg-white text-xs font-bold uppercase hover:bg-gray-50 flex flex-col items-center gap-1"
+                >
+                  <ToggleLeft className="h-4 w-4" />
+                  {managingCard.card_status === 'frozen' ? 'Unfreeze' : 'Freeze'}
+                </button>
+                <button
+                  onClick={handleSyncProvider}
+                  disabled={isSyncingProvider}
+                  className="p-2 border-2 border-[#1a1a1a] bg-white text-xs font-bold uppercase hover:bg-gray-50 flex flex-col items-center gap-1"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Sync Provider
+                </button>
+                <button
+                  onClick={handleTerminateCard}
+                  disabled={isTerminating}
+                  className="p-2 border-2 border-[#1a1a1a] bg-[#e63b2e] text-white text-xs font-bold uppercase hover:bg-red-700 flex flex-col items-center gap-1"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Terminate
+                </button>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button
+                onClick={() => setManagingCard(null)}
+                className="w-full py-2.5 bg-[#1a1a1a] text-white font-bold text-xs uppercase"
+              >
+                Close Manager
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Issue Virtual Card Modal */}
+      {isIssueModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="brutalist-card bg-white w-full max-w-md p-6 space-y-5">
+            <div className="flex items-center justify-between border-b-3 border-[#1a1a1a] pb-3">
+              <h3 className="text-lg font-extrabold font-display uppercase">Issue Production Card</h3>
+              <button onClick={() => setIsIssueModalOpen(false)}>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-bold uppercase font-mono block mb-1">Wallet Address</label>
+                <input
+                  type="text"
+                  placeholder="0x..."
+                  value={issueWallet}
+                  onChange={(e) => setIssueWallet(e.target.value)}
+                  className="w-full brutalist-input text-xs font-mono"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase font-mono block mb-1">Holder Name</label>
+                <input
+                  type="text"
+                  placeholder="CARD HOLDER"
+                  value={issueHolderName}
+                  onChange={(e) => setIssueHolderName(e.target.value)}
+                  className="w-full brutalist-input text-xs font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-3 border-t-2 border-[#1a1a1a]">
+              <button
+                type="button"
+                onClick={() => setIsIssueModalOpen(false)}
+                className="flex-1 brutalist-button-white py-2.5 text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleIssueVirtualCard}
+                disabled={isIssuing}
+                className="flex-1 brutalist-button py-2.5 text-xs !bg-[#ffcc00] font-black"
+              >
+                {isIssuing ? 'Issuing...' : 'Issue Card'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

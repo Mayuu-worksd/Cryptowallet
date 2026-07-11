@@ -1,12 +1,44 @@
 /**
  * providers/index.ts
  *
- * Barrel export for the provider abstraction layer.
+ * Barrel export for the Provider Abstraction Layer.
  * Import from here, not from individual files:
  *
- *   import { getCardProvider } from '@/lib/providers';
- *   import type { CardProvider, FinancialProvider } from '@/lib/providers';
+ *   import { getCardProvider, ProviderLogger, createSuccessResponse } from '@/lib/providers';
+ *   import type { UnifiedCard, UnifiedApiResponse, CardProvider, FinancialProvider } from '@/lib/providers';
  */
+
+// Unified Domain Models & API Response Envelopes
+export type {
+  UnifiedCard,
+  UnifiedCardStatus,
+  UnifiedCardType,
+  UnifiedCardholder,
+  UnifiedTransaction,
+  UnifiedApiError,
+  UnifiedApiResponse,
+} from './models';
+
+export {
+  createSuccessResponse,
+  createErrorResponse,
+} from './models';
+
+// Unified Exception Hierarchy
+export {
+  ProviderException,
+  ProviderNotConfiguredException,
+  ProviderNotImplementedException,
+  ProviderAuthenticationException,
+  ProviderAPIException,
+  ProviderKYCException,
+  ProviderRateLimitException,
+  ProviderCardNotFoundException,
+  normalizeProviderError,
+} from './exceptions';
+
+// Structured Logger
+export { ProviderLogger, sanitizeLogData } from './logger';
 
 // Legacy CardProvider Interface + all shared types
 export type {
@@ -35,9 +67,6 @@ export type {
 
 // New FinancialProvider Interface
 export type { FinancialProvider } from './FinancialProvider';
-
-// Custom Exceptions
-export { ProviderNotConfiguredException, ProviderNotImplementedException } from './exceptions';
 
 // Provider implementations
 export { CodegoProvider } from './CodegoProvider';

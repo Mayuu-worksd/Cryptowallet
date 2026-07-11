@@ -13,7 +13,7 @@
  */
 
 // ─── Normalised status values used throughout the wallet ─────────────────────
-export type CardStatus = 'active' | 'frozen' | 'blocked' | 'pending';
+export type CardStatus = 'active' | 'frozen' | 'blocked' | 'pending' | 'terminated';
 
 // ─── Cardholder (KYC identity) ────────────────────────────────────────────────
 export interface CardholderInput {

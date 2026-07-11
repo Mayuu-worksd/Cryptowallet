@@ -83,12 +83,13 @@ export type CardVariant = VCCCardVariant;
 export type VCCCard = {
   id?: string;
   wallet_address: string;
+  codego_card_id?: string;
   card_last4: string;
   card_holder_name: string;
   expiry_mm_yy: string;
   card_variant: string;
   card_network: string;
-  card_status: 'pending' | 'active' | 'frozen' | 'blocked';
+  card_status: 'pending' | 'active' | 'frozen' | 'blocked' | 'terminated';
   balance: number;
   is_physical: boolean;
   physical_shipping_status: 'not_requested' | 'processing' | 'shipped' | 'delivered';
@@ -503,9 +504,44 @@ export const vccService = {
       .from('vcc_cards')
       .select('*')
       .eq('wallet_address', walletAddress.toLowerCase())
+      .neq('card_status', 'terminated')
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
-    if (error) throw error;
-    return data;
+    if (error && error.code !== 'PGRST116') console.warn('[vccService.getCard] vcc_cards lookup error:', error.message);
+    if (data) return data;
+
+    // Check provider_cards fallback for existing users
+    const { data: provCard } = await supabase
+      .from('provider_cards')
+      .select('*')
+      .eq('wallet_address', walletAddress.toLowerCase())
+      .neq('status', 'terminated')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!provCard) return null;
+
+    return {
+      id: provCard.id,
+      wallet_address: provCard.wallet_address,
+      card_last4: provCard.card_last4 || '0000',
+      card_holder_name: provCard.card_holder_name || 'CARD HOLDER',
+      expiry_mm_yy: provCard.expiry_mm_yy || '12/28',
+      card_variant: provCard.card_variant || 'classic',
+      card_network: 'Visa',
+      card_status: provCard.status === 'frozen' ? 'frozen' : 'active',
+      balance: Number(provCard.balance || 0),
+      codego_card_id: provCard.provider_card_id,
+      is_physical: provCard.card_type === 'physical',
+      physical_shipping_status: 'not_requested',
+      physical_fee_usd: 0,
+      shipping_fee_usd: 0,
+      kyc_verified: true,
+      name_match: true,
+      compliance_status: 'compliant',
+      created_at: provCard.created_at,
+    } as VCCCard;
   },
 
   // FIX 2: Card number is cryptographically random — NOT derived from wallet address

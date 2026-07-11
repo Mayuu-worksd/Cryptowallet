@@ -1,14 +1,18 @@
 /**
  * ProviderManager.ts
  *
- * Registry and manager for financial/card providers.
+ * Registry and configuration-driven manager for financial/card providers.
  * Loads the active provider based on CARD_PROVIDER environment variable,
  * validates its credentials, and exposes the unified provider instance.
+ *
+ * Changing the active provider requires zero code changes — only updating
+ * CARD_PROVIDER in environment configuration.
  */
 
 import type { CardProvider } from './CardProvider';
 import type { FinancialProvider } from './FinancialProvider';
 import { ProviderNotConfiguredException } from './exceptions';
+import { ProviderLogger } from './logger';
 
 // Import all provider adapters
 import { CodegoProvider } from './CodegoProvider';
@@ -38,9 +42,10 @@ class ProviderManagerRegistry {
     for (let i = 0; i < specificKeys.length; i++) {
       const specificKey = specificKeys[i];
       const genericKey = genericKeys[i];
-      
+
       const val = process.env[specificKey] || process.env[genericKey];
       if (!val) {
+        ProviderLogger.warn(providerName, 'checkCredentials', `Missing config key "${specificKey}" or "${genericKey}"`);
         throw new ProviderNotConfiguredException(providerName, specificKey);
       }
       resolved[genericKey] = val;
@@ -62,7 +67,6 @@ class ProviderManagerRegistry {
 
     switch (providerName) {
       case 'codego': {
-        // Codego has sandbox fallbacks, but we validate keys if present
         this.checkCredentials(
           'codego',
           ['CODEGO_API_KEY', 'CODEGO_API_URL'],
@@ -133,20 +137,80 @@ class ProviderManagerRegistry {
       }
 
       default: {
-        console.warn(`[ProviderManager] Unknown CARD_PROVIDER="${providerName}". Falling back to Codego.`);
+        ProviderLogger.warn('System', 'loadProvider', `Unknown CARD_PROVIDER="${providerName}". Falling back to Codego.`);
         instance = new CodegoProvider();
       }
     }
 
-    console.log(`[ProviderManager] Successfully instantiated provider: ${instance.name}`);
+    ProviderLogger.info(
+      instance.name,
+      'loadProvider',
+      `Active provider initialized successfully: ${instance.name}`
+    );
+
     this.activeProviderInstance = instance;
     return instance;
+  }
+
+  /**
+   * Returns the currently configured provider name from environment variable.
+   */
+  public getActiveProviderName(): string {
+    return (process.env.CARD_PROVIDER || 'codego').toLowerCase();
+  }
+
+  /**
+   * Returns a list of all registered provider names available for configuration.
+   */
+  public listAvailableProviders(): string[] {
+    return [
+      'codego',
+      'kripicard',
+      'striga',
+      'rain',
+      'pintopay',
+      'kulipa',
+      'future',
+    ];
+  }
+
+  /**
+   * Validates if the active provider configuration and credentials are ready for use.
+   */
+  public async validateConfiguration(): Promise<{
+    provider: string;
+    configured: boolean;
+    healthy?: boolean;
+    error?: string;
+  }> {
+    const providerName = this.getActiveProviderName();
+    try {
+      const provider = this.loadProvider();
+      const health = await provider.healthCheck().catch((err) => ({
+        status: 'unhealthy' as const,
+        error: err.message || String(err),
+      }));
+
+      return {
+        provider: providerName,
+        configured: true,
+        healthy: health.status === 'healthy',
+        error: health.error,
+      };
+    } catch (err: any) {
+      return {
+        provider: providerName,
+        configured: false,
+        error: err.message || String(err),
+      };
+    }
   }
 
   /**
    * Reset the active provider singleton (mostly for testing / provider switching).
    */
   public reset(): void {
+    ProviderLogger.info('System', 'reset', 'Active provider singleton reset.');
     this.activeProviderInstance = null;
   }
 }
@@ -154,15 +218,15 @@ class ProviderManagerRegistry {
 export const ProviderManager = new ProviderManagerRegistry();
 
 /**
- * Legacy getCardProvider function mapping to ProviderManager for backward compatibility.
- * This guarantees zero changes are needed in existing routes/pages.
+ * Primary helper mapping to ProviderManager for backward compatibility.
+ * Route handlers call getCardProvider() without needing to know which provider is active.
  */
 export function getCardProvider(): UnifiedProvider {
   return ProviderManager.loadProvider();
 }
 
 /**
- * Legacy resetCardProvider mapping.
+ * Reset helper mapping to ProviderManager.
  */
 export function resetCardProvider(): void {
   ProviderManager.reset();

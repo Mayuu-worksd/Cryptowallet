@@ -41,7 +41,7 @@ type CardData = {
 
 export default function VCCCardDetailScreen({ navigation }: any) {
   usePreventScreenCapture();
-  const { walletAddress, isDarkMode, cardDetails, cardCreated, formatFiat, fiatCurrency, cardBalance } = useWallet() as any;
+  const { walletAddress, isDarkMode, cardDetails, cardCreated, formatFiat, fiatCurrency, cardBalance, fundVirtualCard } = useWallet() as any;
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const insets = useSafeAreaInsets();
 
@@ -54,6 +54,8 @@ export default function VCCCardDetailScreen({ navigation }: any) {
   const [pinModalVisible, setPinModalVisible] = useState(false);
   const [newPin, setNewPin]                   = useState('');
   const [submittingPin, setSubmittingPin]     = useState(false);
+  const [showFundModal, setShowFundModal]     = useState(false);
+  const [fundAmountUSD, setFundAmountUSD]     = useState('');
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') =>
     setToast({ visible: true, message, type });
@@ -123,9 +125,31 @@ export default function VCCCardDetailScreen({ navigation }: any) {
         cvv:         cardDetails.cvv,
         balance:     cardBalance,
         status:      'active',
-        network:     cardDetails.brand,
+        network:     cardDetails.brand || 'Visa',
         variant:     'classic',
+        codegoCardId: cardDetails.codegoCardId,
       });
+    }
+
+    const cid = (vcc as any)?.codego_card_id || cardDetails?.codegoCardId;
+    if (cid) {
+      try {
+        const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+        const liveRes = await fetch(`${apiUrl}/api/cards/${cid}`);
+        if (liveRes.ok) {
+          const liveJson = await liveRes.json();
+          const liveCard = liveJson.data?.card || liveJson.card;
+          if (liveCard) {
+            setCardData((prev: any) => prev ? ({
+              ...prev,
+              balance: liveCard.balance ?? prev.balance,
+              status: liveCard.status ?? prev.status,
+            }) : prev);
+          }
+        }
+      } catch (e) {
+        // Fallback silently to database values if API server unreachable
+      }
     }
 
     // Configure Dynamic Colors
@@ -212,13 +236,15 @@ export default function VCCCardDetailScreen({ navigation }: any) {
 
   const handleCodegoAction = (action: 'topup' | 'withdraw') => {
     haptics.selection();
-    // In a full implementation, this would open a modal or navigate to a dedicated
-    // Codego Deposit/Withdraw screen specifically for the card.
-    Alert.alert(
-      action === 'topup' ? 'Top Up Card' : 'Withdraw from Card',
-      'This feature connects directly to Codego fiat services.',
-      [{ text: 'OK' }]
-    );
+    if (action === 'topup') {
+      setShowFundModal(true);
+    } else {
+      Alert.alert(
+        'Withdraw from Card',
+        'Virtual card withdrawals can be requested through customer support.',
+        [{ text: 'OK' }]
+      );
+    }
   };
 
 
@@ -450,14 +476,6 @@ export default function VCCCardDetailScreen({ navigation }: any) {
           </Text>
         </View>
 
-        {/* ── API Integration Note (dev only) ── */}
-        <View style={[s.apiNote, { backgroundColor: '#F59E0B10', borderColor: '#F59E0B30' }]}>
-          <Feather name="code" size={14} color="#F59E0B" />
-          <Text style={[s.securityText, { color: '#F59E0B' }]}>
-            Ready for live API: Replace the fetch in VCCCardDetailScreen.tsx with your card issuer endpoint.
-          </Text>
-        </View>
-
       </ScrollView>
 
       {/* PIN Change Modal */}
@@ -500,6 +518,55 @@ export default function VCCCardDetailScreen({ navigation }: any) {
           </View>
         </View>
       </Modal>
+
+      {/* Top Up Modal */}
+      {showFundModal && (
+        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', zIndex: 9999, padding: 24 }]}>
+          <View style={{ width: '100%', maxWidth: 400, backgroundColor: T.surface, borderRadius: 24, padding: 24, borderWidth: 1, borderColor: T.border }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Text style={{ fontSize: 20, fontWeight: '800', color: T.text }}>Top Up Virtual Card</Text>
+              <TouchableOpacity onPress={() => setShowFundModal(false)}>
+                <Feather name="x" size={20} color={T.textMuted} />
+              </TouchableOpacity>
+            </View>
+            <Text style={{ fontSize: 13, color: T.textMuted, marginBottom: 16 }}>
+              Enter the amount in USD to add to your virtual card balance.
+            </Text>
+            <View style={{ backgroundColor: T.surfaceLow, borderRadius: 16, borderWidth: 1, borderColor: T.border, paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}>
+              <Text style={{ fontSize: 18, color: T.text, marginRight: 8, fontWeight: '700' }}>$</Text>
+              <TextInput
+                style={{ flex: 1, fontSize: 18, color: T.text, fontWeight: '700' }}
+                placeholder="100.00"
+                placeholderTextColor={T.textMuted}
+                keyboardType="decimal-pad"
+                value={fundAmountUSD}
+                onChangeText={setFundAmountUSD}
+              />
+            </View>
+            <TouchableOpacity
+              style={{ backgroundColor: T.primary, paddingVertical: 14, borderRadius: 16, alignItems: 'center' }}
+              onPress={async () => {
+                const amt = parseFloat(fundAmountUSD);
+                if (isNaN(amt) || amt <= 0) {
+                  showToast('Please enter a valid amount', 'error');
+                  return;
+                }
+                const success = await fundVirtualCard(amt);
+                if (success) {
+                  showToast(`Successfully funded $${amt.toFixed(2)}`, 'success');
+                  setFundAmountUSD('');
+                  setShowFundModal(false);
+                  load();
+                } else {
+                  showToast('Failed to fund virtual card', 'error');
+                }
+              }}
+            >
+              <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '800' }}>Confirm Top Up</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </View>
   );
 }

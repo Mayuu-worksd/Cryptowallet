@@ -63,7 +63,7 @@ export default function CardScreen({ navigation, route }: any) {
     cardDetails, cardTransactions, cardCreated,
     balances, ethBalance, spendCard, cardBalance,
     isDarkMode, network,
-    createCard, updateCardDetails, kycStatus, refreshKYCStatus,
+    createCard, deleteCard, fundVirtualCard, updateCardDetails, kycStatus, refreshKYCStatus,
     refreshCardData, refreshBalance, accountType,
     formatFiat, fiatSymbol, fiatCurrency, convertFiat,
     enabledCardCurrencies,
@@ -113,6 +113,8 @@ export default function CardScreen({ navigation, route }: any) {
   const [showCurrencies, setShowCurrencies] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
   const [balanceHidden, setBalanceHidden] = useState(false);
+  const [showFundModal, setShowFundModal] = useState(false);
+  const [fundAmountUSD, setFundAmountUSD] = useState('');
 
   const [merchant, setMerchant] = useState<CustomMerchant>({ name: '', amount: '', icon: '🛍️', currency: 'USD' });
   const [loading, setLoading] = useState(false);
@@ -702,7 +704,7 @@ export default function CardScreen({ navigation, route }: any) {
             <View style={{ alignItems: 'center', marginBottom: 16 }}>
               <Text style={{ fontSize: 13, color: T.textMuted, fontFamily: 'Inter_600SemiBold', marginBottom: 4 }}>Card Balance</Text>
               <Text style={{ fontSize: 32, color: T.text, fontFamily: 'Inter_800ExtraBold', letterSpacing: -1 }}>
-                {balanceHidden ? '****' : <CurrencyText amount={totalWalletUsd} code={fiatCurrency} />}
+                {balanceHidden ? '****' : <CurrencyText amount={cardBalance || 0} code={fiatCurrency} />}
               </Text>
             </View>
             
@@ -859,7 +861,27 @@ export default function CardScreen({ navigation, route }: any) {
                   </View>
 
                   <View style={styles.circularActionWrap}>
-                    <TouchableOpacity style={[styles.circularBtn, { backgroundColor: T.surface, borderColor: T.border }]} activeOpacity={0.7}>
+                    <TouchableOpacity 
+                      style={[styles.circularBtn, { backgroundColor: T.surface, borderColor: T.border }]} 
+                      onPress={() => {
+                        Alert.alert(
+                          'Delete Virtual Card',
+                          'Are you sure you want to terminate your virtual card? This cannot be undone.',
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            {
+                              text: 'Delete',
+                              style: 'destructive',
+                              onPress: async () => {
+                                await deleteCard();
+                                showToast('Virtual card terminated', 'info');
+                              }
+                            }
+                          ]
+                        );
+                      }}
+                      activeOpacity={0.7}
+                    >
                       <Feather name="trash-2" size={22} color={T.text} />
                     </TouchableOpacity>
                     <Text style={[styles.circularActionLabel, { color: T.text }]}>Delete card</Text>
@@ -881,6 +903,17 @@ export default function CardScreen({ navigation, route }: any) {
                   <View style={styles.circularActionWrap}>
                     <TouchableOpacity 
                       style={[styles.circularBtn, { backgroundColor: T.surface, borderColor: T.border }]} 
+                      onPress={() => setShowFundModal(true)} 
+                      activeOpacity={0.7}
+                    >
+                      <Feather name="plus-circle" size={22} color={T.text} />
+                    </TouchableOpacity>
+                    <Text style={[styles.circularActionLabel, { color: T.text }]}>Top Up</Text>
+                  </View>
+
+                  <View style={styles.circularActionWrap}>
+                    <TouchableOpacity 
+                      style={[styles.circularBtn, { backgroundColor: T.surface, borderColor: T.border }]} 
                       onPress={() => { setShowCreds(false); setShowSpend(false); toggleFreezeCard(); }} 
                       activeOpacity={0.7}
                     >
@@ -892,12 +925,12 @@ export default function CardScreen({ navigation, route }: any) {
                   <View style={styles.circularActionWrap}>
                     <TouchableOpacity 
                       style={[styles.circularBtn, { backgroundColor: T.surface, borderColor: T.border }]} 
-                      onPress={() => setShowSpend(v => !v)} 
+                      onPress={() => navigation.navigate('VCCCardDetail')} 
                       activeOpacity={0.7}
                     >
-                      <Feather name="sliders" size={22} color={T.text} />
+                      <Feather name="file-text" size={22} color={T.text} />
                     </TouchableOpacity>
-                    <Text style={[styles.circularActionLabel, { color: T.text }]}>Limit</Text>
+                    <Text style={[styles.circularActionLabel, { color: T.text }]}>Details</Text>
                   </View>
 
                   <View style={styles.circularActionWrap}>
@@ -909,17 +942,6 @@ export default function CardScreen({ navigation, route }: any) {
                       <Feather name="settings" size={22} color={T.text} />
                     </TouchableOpacity>
                     <Text style={[styles.circularActionLabel, { color: T.text }]}>Settings</Text>
-                  </View>
-
-                  <View style={styles.circularActionWrap}>
-                    <TouchableOpacity 
-                      style={[styles.circularBtn, { backgroundColor: T.surface, borderColor: T.border }]} 
-                      onPress={() => setShowCurrencies(true)}
-                      activeOpacity={0.7}
-                    >
-                      <Feather name="dollar-sign" size={22} color={T.text} />
-                    </TouchableOpacity>
-                    <Text style={[styles.circularActionLabel, { color: T.text }]}>Currency</Text>
                   </View>
                 </>
               )}
@@ -1112,6 +1134,53 @@ export default function CardScreen({ navigation, route }: any) {
           }}
           onClose={() => setShowEdit(false)}
         />
+      )}
+
+      {showFundModal && (
+        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', zIndex: 9999, padding: 24 }]}>
+          <View style={{ width: '100%', maxWidth: 400, backgroundColor: T.surface, borderRadius: 24, padding: 24, borderWidth: 1, borderColor: T.border }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Text style={{ fontSize: 20, fontWeight: '800', color: T.text }}>Top Up Virtual Card</Text>
+              <TouchableOpacity onPress={() => setShowFundModal(false)}>
+                <Feather name="x" size={20} color={T.textDim} />
+              </TouchableOpacity>
+            </View>
+            <Text style={{ fontSize: 13, color: T.textMuted, marginBottom: 16 }}>
+              Enter the amount in USD to add to your virtual card balance.
+            </Text>
+            <View style={{ backgroundColor: T.surfaceLow, borderRadius: 16, borderWidth: 1, borderColor: T.border, paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}>
+              <Text style={{ fontSize: 18, color: T.text, marginRight: 8, fontWeight: '700' }}>$</Text>
+              <TextInput
+                style={{ flex: 1, fontSize: 18, color: T.text, fontWeight: '700' }}
+                placeholder="100.00"
+                placeholderTextColor={T.textDim}
+                keyboardType="decimal-pad"
+                value={fundAmountUSD}
+                onChangeText={setFundAmountUSD}
+              />
+            </View>
+            <TouchableOpacity
+              style={{ backgroundColor: T.primary, paddingVertical: 14, borderRadius: 16, alignItems: 'center' }}
+              onPress={async () => {
+                const amt = parseFloat(fundAmountUSD);
+                if (isNaN(amt) || amt <= 0) {
+                  showToast('Please enter a valid amount', 'error');
+                  return;
+                }
+                const success = await fundVirtualCard(amt);
+                if (success) {
+                  showToast(`Successfully funded $${amt.toFixed(2)}`, 'success');
+                  setFundAmountUSD('');
+                  setShowFundModal(false);
+                } else {
+                  showToast('Failed to fund virtual card', 'error');
+                }
+              }}
+            >
+              <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '800' }}>Confirm Top Up</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       )}
     </View>
   );

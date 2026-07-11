@@ -5,6 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { getCardProvider } from '@/lib/providers';
+import { supabase } from '@/lib/supabase';
 
 export async function PATCH(
   req: NextRequest,
@@ -40,6 +41,22 @@ export async function PATCH(
     default: // frozen / locked
       result = await provider.freezeCard(providerCardId);
   }
+
+  const normalizedStatus = status === 'locked' ? 'frozen' : status;
+  try {
+    await supabase
+      .from('vcc_cards')
+      .update({ card_status: normalizedStatus })
+      .eq('codego_card_id', providerCardId);
+
+    await supabase
+      .from('provider_cards')
+      .update({ status: normalizedStatus })
+      .eq('provider_card_id', providerCardId);
+  } catch (_e) {
+    // Ignore database error if row missing
+  }
+
 
   return NextResponse.json({
     message:        'Card status updated successfully',

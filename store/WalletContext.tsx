@@ -124,6 +124,8 @@ type WalletContextType = {
   setCardDetails: (details: any) => void;
   cardCreated: boolean;
   createCard: (holderName: string, design: string) => void;
+  deleteCard: () => Promise<void>;
+  fundVirtualCard: (amountUsd: number) => Promise<boolean>;
   updateCardDetails: (patch: { holderName?: string; design?: string }) => void;
   generateCardDetails: () => void;
   applySwapBalances: (sellToken: string, sellAmt: number, buyToken: string, buyAmt: number) => Promise<void>;
@@ -484,6 +486,67 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.warn('[reportLostCard] Failed to report lost card:', e);
     }
   }, [walletAddress, cardDetails]);
+
+  const deleteCard = useCallback(async () => {
+    if (!walletAddress) return;
+    try {
+      const codegoCardId = cardDetails?.codegoCardId;
+      if (codegoCardId) {
+        try {
+          const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+          await fetch(`${apiUrl}/api/cards/${codegoCardId}`, {
+            method: 'DELETE',
+          });
+        } catch (e) {
+          console.warn('[deleteCard] failed to sync DELETE to API:', e);
+        }
+      }
+
+      await vccService.updateStatus(walletAddress, 'terminated').catch(() => {});
+      await dbCardService.updateStatus(walletAddress, 'frozen').catch(() => {});
+
+      setCardCreated(false);
+      setCardBalance(0);
+      setCardFrozen(false);
+      await AsyncStorage.multiRemove([
+        'cw_card_created',
+        'cw_card_balance',
+      ]);
+    } catch (e) {
+      console.warn('[deleteCard] error:', e);
+    }
+  }, [walletAddress, cardDetails]);
+
+  const fundVirtualCard = useCallback(async (amountUsd: number): Promise<boolean> => {
+    if (!walletAddress || amountUsd <= 0) return false;
+    try {
+      const codegoCardId = cardDetails?.codegoCardId;
+      if (codegoCardId) {
+        try {
+          const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+          const res = await fetch(`${apiUrl}/api/cards/${codegoCardId}/fund`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: amountUsd, currency: 'USD' })
+          });
+          if (!res.ok) {
+            console.warn('[fundVirtualCard] API call failed');
+          }
+        } catch (e) {
+          console.warn('[fundVirtualCard] error calling fund endpoint:', e);
+        }
+      }
+      const newBal = cardBalance + amountUsd;
+      setCardBalance(newBal);
+      await vccService.updateBalance(walletAddress, newBal).catch(() => {});
+      await dbCardService.updateBalance(walletAddress, newBal).catch(() => {});
+      await AsyncStorage.setItem('cw_card_balance', String(newBal)).catch(() => {});
+      return true;
+    } catch (e) {
+      console.warn('[fundVirtualCard] error:', e);
+      return false;
+    }
+  }, [walletAddress, cardDetails, cardBalance]);
 
   const refreshPinEnabled = useCallback(async () => {
     setPinEnabled(await hasPinSetup());
@@ -2551,7 +2614,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     walletAddress, tronAddress, walletName, setWalletName: handleSetWalletName,
     ethBalance, isLoadingBalance, hasWallet, isLoadingWallet, isReadOnly, isSyncing,
     balances, cardBalance, cardFrozen, network, transactions,
-    cardDetails, cardCreated, createCard, updateCardDetails, generateCardDetails, cardTransactions,
+    cardDetails, cardCreated, createCard, deleteCard, fundVirtualCard, updateCardDetails, generateCardDetails, cardTransactions,
     enabledCardCurrencies, setEnabledCardCurrencies,
     setCardDetails,
     addTx,
@@ -2578,7 +2641,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     pinEnabled, refreshPinEnabled, addTx, updateTxStatus, walletAddress, tronAddress, walletName, handleSetWalletName,
     ethBalance, isLoadingBalance, hasWallet, isLoadingWallet, isReadOnly, isSyncing,
     balances, cardBalance, cardFrozen, network, transactions,
-    cardDetails, cardCreated, createCard, updateCardDetails, generateCardDetails, cardTransactions,
+    cardDetails, cardCreated, createCard, deleteCard, fundVirtualCard, updateCardDetails, generateCardDetails, cardTransactions,
     enabledCardCurrencies, setEnabledCardCurrencies,
     createWallet, importWallet, deleteWallet, enterReadOnlyMode, refreshBalance, refreshCardData, fetchBalance,
     sendETH, sendCrypto, topupCard, spendCard, toggleFreezeCard, reportLostCard, applySwapBalances, switchNetwork,

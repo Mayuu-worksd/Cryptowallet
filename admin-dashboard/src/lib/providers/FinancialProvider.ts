@@ -3,7 +3,12 @@
  *
  * Interface that all financial service providers must implement.
  * Ensures provider interchangeability without rewriting business logic.
+ *
+ * All methods communicate using Unified domain models so mobile/app UI
+ * remains completely decoupled from provider-specific response schemas.
  */
+
+import type { UnifiedCard, UnifiedCardStatus } from './models';
 
 export interface FinancialProvider {
   readonly name: string;
@@ -14,7 +19,7 @@ export interface FinancialProvider {
     variant?: string;
     nameOnCard?: string;
     walletAddress: string;
-  }): Promise<any>;
+  }): Promise<UnifiedCard | any>;
 
   /** Fund a virtual card with a specific amount */
   fundVirtualCard(cardId: string, amount: number, currency: string): Promise<any>;
@@ -29,10 +34,10 @@ export interface FinancialProvider {
   deleteCard(cardId: string): Promise<any>;
 
   /** Retrieve all cards associated with a cardholder */
-  listCards(cardholderId: string): Promise<any[]>;
+  listCards(cardholderId: string): Promise<(UnifiedCard | any)[]>;
 
   /** Fetch sensitive details for a card (PAN, CVV, expiry, balance) */
-  getCardDetails(cardId: string): Promise<any>;
+  getCardDetails(cardId: string): Promise<UnifiedCard | any>;
 
   /** Get historical transactions for a card */
   getTransactions(cardId: string, filters?: { startDate?: string; endDate?: string; limit?: number }): Promise<any>;
