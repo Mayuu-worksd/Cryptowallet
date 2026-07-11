@@ -1,5 +1,6 @@
 /**
  * /api/admin/test-kripicard — DEBUG ONLY, delete after use
+ * Tests all KripiCard API endpoints against card 34350
  */
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -13,55 +14,44 @@ export async function GET(req: NextRequest) {
     env: { baseUrl, apiKeySet: !!apiKey, apiKeyPrefix: apiKey.slice(0, 8) + '...' },
   };
 
-  // 1. createcard with amount=10
-  try {
-    const res = await fetch(`${baseUrl}/api/external/cards/createcard`, {
+  const post = async (path: string, body: Record<string, any>) => {
+    const res = await fetch(`${baseUrl}${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: apiKey, bin: '441357', amount: 10, name_on_card: 'TEST USER', email: 'test@kripicard.user' }),
+      body: JSON.stringify({ api_key: apiKey, ...body }),
     });
-    let body: any;
-    try { body = await res.json(); } catch { body = await res.text(); }
-    results.createcard = { status: res.status, body };
+    let data: any;
+    try { data = await res.json(); } catch { data = await res.text(); }
+    return { status: res.status, body: data };
+  };
 
-    // 2. carddetails on newly created card
-    if (body?.success && body?.card_id) {
-      try {
-        const dRes = await fetch(`${baseUrl}/api/external/cards/carddetails`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ api_key: apiKey, card_id: body.card_id }),
-        });
-        let dBody: any;
-        try { dBody = await dRes.json(); } catch { dBody = await dRes.text(); }
-        results.carddetails_new = { status: dRes.status, body: dBody };
-      } catch (e: any) { results.carddetails_new = { error: e.message }; }
-    }
-  } catch (e: any) { results.createcard = { error: e.message }; }
+  const CARD_ID = '34350';
 
-  // 3. carddetails on existing card 34350
-  try {
-    const res = await fetch(`${baseUrl}/api/external/cards/carddetails`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: apiKey, card_id: '34350' }),
-    });
-    let body: any;
-    try { body = await res.json(); } catch { body = await res.text(); }
-    results.carddetails_34350 = { status: res.status, body };
-  } catch (e: any) { results.carddetails_34350 = { error: e.message }; }
+  // 1. List cards
+  results.list = await post('/api/external/cards/list', {}).catch(e => ({ error: e.message }));
 
-  // 4. list all cards
-  try {
-    const res = await fetch(`${baseUrl}/api/external/cards/list`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: apiKey }),
-    });
-    let body: any;
-    try { body = await res.json(); } catch { body = await res.text(); }
-    results.listcards = { status: res.status, body };
-  } catch (e: any) { results.listcards = { error: e.message }; }
+  // 2. Card details
+  results.carddetails = await post('/api/external/cards/carddetails', { card_id: CARD_ID }).catch(e => ({ error: e.message }));
+
+  // 3. Fund card
+  results.fund = await post('/api/external/cards/fundcard', { card_id: CARD_ID, amount: 5 }).catch(e => ({ error: e.message }));
+
+  // 4. Freeze card
+  results.freeze = await post('/api/external/premium/Freeze_Unfreeze', { card_id: CARD_ID, action: 'freeze' }).catch(e => ({ error: e.message }));
+
+  // 5. Unfreeze card
+  results.unfreeze = await post('/api/external/premium/Freeze_Unfreeze', { card_id: CARD_ID, action: 'unfreeze' }).catch(e => ({ error: e.message }));
+
+  // 6. Transactions
+  results.transactions = await post('/api/external/cards/transactions', { card_id: CARD_ID }).catch(e => ({ error: e.message }));
+
+  // 7. Delete card (soft)
+  results.deletecard = await post('/api/external/cards/deletecard', { card_id: CARD_ID }).catch(e => ({ error: e.message }));
+
+  // 8. Create card (will fail if insufficient balance — shows exact error)
+  results.createcard = await post('/api/external/cards/createcard', {
+    bin: '441357', amount: 10, name_on_card: 'TEST USER', email: 'test@kripicard.user',
+  }).catch(e => ({ error: e.message }));
 
   return NextResponse.json(results, { status: 200 });
 }
