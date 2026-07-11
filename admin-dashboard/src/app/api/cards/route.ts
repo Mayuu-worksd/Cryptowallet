@@ -159,8 +159,9 @@ export async function POST(req: NextRequest) {
       .eq('wallet_address', walletAddress.toLowerCase())
       .maybeSingle();
 
-    if (existingVccCard?.codego_card_id) {
-      const liveCard = await provider.getCard(existingVccCard.codego_card_id);
+    const isRealCard = existingVccCard?.codego_card_id && !existingVccCard.codego_card_id.startsWith('mock_cg_');
+    if (isRealCard) {
+      const liveCard = await provider.getCard(existingVccCard!.codego_card_id!);
       if (liveCard) {
         return NextResponse.json(
           _makeCardResponse(_toCardData(liveCard), provider.name, liveCard.isMock)
@@ -168,12 +169,12 @@ export async function POST(req: NextRequest) {
       }
       return NextResponse.json(
         _makeCardResponse({
-          id:          existingVccCard.codego_card_id,
-          status:      existingVccCard.card_status || 'active',
-          maskedPan:   `•••• •••• •••• ${existingVccCard.card_last4 || '0000'}`,
-          last4:       existingVccCard.card_last4 || '0000',
-          expiryMonth: existingVccCard.expiry_mm_yy ? existingVccCard.expiry_mm_yy.split('/')[0] : '12',
-          expiryYear:  existingVccCard.expiry_mm_yy ? '20' + existingVccCard.expiry_mm_yy.split('/')[1] : '2028',
+          id:          existingVccCard!.codego_card_id,
+          status:      existingVccCard!.card_status || 'active',
+          maskedPan:   `•••• •••• •••• ${existingVccCard!.card_last4 || '0000'}`,
+          last4:       existingVccCard!.card_last4 || '0000',
+          expiryMonth: existingVccCard!.expiry_mm_yy ? existingVccCard!.expiry_mm_yy.split('/')[0] : '12',
+          expiryYear:  existingVccCard!.expiry_mm_yy ? '20' + existingVccCard!.expiry_mm_yy.split('/')[1] : '2028',
           isMock:      false,
         }, provider.name, false)
       );
