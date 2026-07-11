@@ -15,10 +15,10 @@ import {
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const provider = getCardProvider();
-  const cardId = params.id;
+  const { id: cardId } = await params;
 
   try {
     const body = await req.json();

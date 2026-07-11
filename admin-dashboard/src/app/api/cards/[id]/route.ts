@@ -16,10 +16,10 @@ import {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const provider = getCardProvider();
-  const cardId = params.id;
+  const { id: cardId } = await params;
 
   try {
     ProviderLogger.info(provider.name, `GET /api/cards/${cardId}`, 'Fetching live card details');
@@ -49,10 +49,10 @@ export async function GET(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const provider = getCardProvider();
-  const cardId = params.id;
+  const { id: cardId } = await params;
 
   try {
     ProviderLogger.info(provider.name, `DELETE /api/cards/${cardId}`, 'Soft-terminating card');

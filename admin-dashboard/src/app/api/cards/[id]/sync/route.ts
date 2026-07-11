@@ -15,10 +15,10 @@ import {
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const provider = getCardProvider();
-  const cardId = params.id;
+  const { id: cardId } = await params;
 
   try {
     ProviderLogger.info(provider.name, `POST /api/cards/${cardId}/sync`, 'Syncing card with live provider');
