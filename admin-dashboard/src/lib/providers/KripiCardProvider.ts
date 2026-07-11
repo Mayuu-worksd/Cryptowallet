@@ -256,7 +256,8 @@ export class KripiCardProvider implements CardProvider, FinancialProvider {
 
   async getTransactions(providerCardId: string, _filters?: any): Promise<GetTransactionsResult> {
     const result = await this.request('/api/external/cards/transactions', 'POST', { card_id: providerCardId });
-    const rawTxns = result?.data?.transactions || [];
+    // KripiCard returns { success, data: { card_id, balance, transactions: [] } }
+    const rawTxns = result?.data?.transactions || result?.transactions || [];
 
     const transactions = rawTxns.map((tx: any, idx: number) => ({
       id: String(tx.id || `kripi-${providerCardId}-${idx}`),
@@ -421,7 +422,7 @@ export class KripiCardProvider implements CardProvider, FinancialProvider {
     return {
       cardId: providerCardId,
       holderName: card?.holderName || 'CARD HOLDER',
-      balance: (card?.raw as any)?.balance || 0,
+      balance: (card?.raw as any)?.data?.balance ?? (card?.raw as any)?.balance ?? 0,
       transactions: txRes.transactions,
       source: 'provider',
     };
