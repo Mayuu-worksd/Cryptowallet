@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
         event_type: payload?.event || payload?.type || 'raw',
         payload,
         processed: false,
-      }).catch(() => {});
+      });
       return NextResponse.json({ success: true, note: 'logged_raw' });
     }
 
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     if (parsedEvent.category === 'unknown') {
       // Still log it but don't process
       await supabase.from('codego_webhooks_log').update({ processed: true })
-        .eq('id', logEntry?.id).catch(() => {});
+        .eq('id', logEntry?.id);
       return NextResponse.json({ success: true, note: 'unhandled_event', event: parsedEvent.rawEvent });
     }
 
