@@ -441,8 +441,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         }
         setEnabledCardCurrenciesState(base);
       }
-      if (vcc) {
-        // If vcc now has a real KripiCard id but cards table has no credentials yet, fetch from KripiCard
+      if (vcc && vcc.codego_card_id) {
         if (vcc.codego_card_id && (!dbCard || !dbCardService.decryptNumber(dbCard, walletAddress))) {
           try {
             const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
@@ -516,6 +515,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           return nextDetails;
         });
         AsyncStorage.multiSet([['cw_card_balance', String(vcc.balance)]]).catch(() => {});
+      } else if (vcc && !vcc.codego_card_id) {
+        // Mock card — delete it so user can create a real KripiCard
+        await supabase.from('vcc_cards').delete().eq('wallet_address', walletAddress.toLowerCase()).catch(() => {});
+        await AsyncStorage.multiRemove(['cw_card_created', 'cw_card_balance', 'cw_card_transactions']);
+        storageService.clearCardDetails().catch(() => {});
+        setCardCreated(false);
+        setCardBalance(0);
+        setCardDetails({ number: '\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022', expiry: '\u2022\u2022/\u2022\u2022', cvv: '\u2022\u2022\u2022', brand: 'VISA', holderName: 'CARD HOLDER', design: 'dark' });
       } else if (dbCard) {
         let decryptedNumber = dbCardService.decryptNumber(dbCard, walletAddress);
         let decryptedCvv    = dbCardService.decryptCvv(dbCard, walletAddress);
@@ -1109,7 +1116,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
               return { number: num, cvv };
             };
 
-            if (vcc) {
+            if (vcc && vcc.codego_card_id) {
               const variant = variants.find(v => v.id === vcc.card_variant);
               let finalNumber = dbCard ? dbCardService.decryptNumber(dbCard, address) : '';
               let finalCvv    = dbCard ? dbCardService.decryptCvv(dbCard, address)    : '';
@@ -1158,6 +1165,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
                 ['cw_card_balance', String(vcc.balance)],
               ]);
               storageService.saveCardDetails(restoredDetails).catch(() => {});
+            } else if (vcc && !vcc.codego_card_id) {
+              // Mock card (no real KripiCard id) — reset so user can create a real card
+              await supabase.from('vcc_cards').delete().eq('wallet_address', address.toLowerCase()).catch(() => {});
+              await AsyncStorage.multiRemove(['cw_card_created', 'cw_card_balance', 'cw_card_transactions']);
+              storageService.clearCardDetails().catch(() => {});
+              setCardCreated(false);
+              setCardBalance(0);
+              setCardDetails({ number: '\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022', expiry: '\u2022\u2022/\u2022\u2022', cvv: '\u2022\u2022\u2022', brand: 'VISA', holderName: 'CARD HOLDER', design: 'dark' });
             } else if (dbCard) {
               let finalNumber = dbCardService.decryptNumber(dbCard, address);
               let finalCvv    = dbCardService.decryptCvv(dbCard, address);

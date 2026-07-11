@@ -407,8 +407,45 @@ export class KripiCardProvider implements CardProvider, FinancialProvider {
     throw new ProviderNotImplementedException(this.name, 'depositFiat');
   }
 
-  parseWebhook(_payload: unknown): ParsedWebhookEvent {
-    throw new ProviderNotImplementedException(this.name, 'parseWebhook');
+  parseWebhook(payload: unknown): ParsedWebhookEvent {
+    const p = payload as any;
+    const event = p?.event || p?.type || '';
+    const data  = p?.data  || p || {};
+
+    // transaction.created / deposit.completed
+    if (event === 'transaction.created' || event === 'deposit.completed') {
+      return {
+        category:        'transaction.created',
+        providerCardId:  String(data.card_id || data.cardId || ''),
+        transactionData: {
+          id:           String(data.id || data.transaction_id || ''),
+          amount:       Number(data.amount || 0),
+          currency:     String(data.currency || 'USD'),
+          type:         event === 'deposit.completed' ? 'topup' : 'spend',
+          status:       String(data.status || 'approved'),
+          merchantName: String(data.merchant || data.description || 'KripiCard'),
+          description:  data.description || null,
+          createdAt:    data.created_at || data.date || new Date().toISOString(),
+        },
+      };
+    }
+
+    // card.created / card.funded
+    if (event === 'card.created' || event === 'card.funded') {
+      return {
+        category:       event === 'card.funded' ? 'card.updated' : 'card.activated',
+        providerCardId: String(data.card_id || data.id || ''),
+        newStatus:      'active',
+        providerStatus: 'active',
+      };
+    }
+
+    // Any other events — log and ignore
+    return {
+      category:       'unknown',
+      providerCardId: String(data.card_id || data.id || ''),
+      rawEvent:       event,
+    };
   }
 
   async simulateWebhook(_input: SimulateWebhookInput): Promise<unknown> {

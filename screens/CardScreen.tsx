@@ -108,31 +108,7 @@ export default function CardScreen({ navigation, route }: any) {
     checkAndSyncKYC().catch(() => {});
   }, [walletAddress]);
 
-  // Auto-migrate mock card users to real KripiCard
-  useEffect(() => {
-    if (!cardCreated || !walletAddress) return;
-    if (cardDetails?.codegoCardId) return; // already has real card
-    const migrate = async () => {
-      try {
-        const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-        const res = await fetch(`${apiUrl}/api/cards/migrate-mock`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            walletAddress,
-            nameOnCard: cardDetails?.holderName || 'CARD HOLDER',
-          }),
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data.success && data.card) {
-          // Refresh card data from Supabase — now has real codego_card_id
-          await refreshCardData();
-        }
-      } catch (_e) {}
-    };
-    migrate();
-  }, [cardCreated, walletAddress, cardDetails?.codegoCardId]);
+
 
   const [showSpend, setShowSpend] = useState(false);
   const [showCreds, setShowCreds] = useState(false);
@@ -947,17 +923,6 @@ export default function CardScreen({ navigation, route }: any) {
                       <MaterialCommunityIcons name="snowflake" size={24} color={T.text} />
                     </TouchableOpacity>
                     <Text style={[styles.circularActionLabel, { color: T.text }]}>Freeze</Text>
-                  </View>
-
-                  <View style={styles.circularActionWrap}>
-                    <TouchableOpacity 
-                      style={[styles.circularBtn, { backgroundColor: T.surface, borderColor: T.border }]} 
-                      onPress={() => navigation.navigate('VCCCardDetail')} 
-                      activeOpacity={0.7}
-                    >
-                      <Feather name="file-text" size={22} color={T.text} />
-                    </TouchableOpacity>
-                    <Text style={[styles.circularActionLabel, { color: T.text }]}>Details</Text>
                   </View>
 
                   <View style={styles.circularActionWrap}>

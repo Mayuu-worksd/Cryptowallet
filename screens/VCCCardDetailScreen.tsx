@@ -341,7 +341,7 @@ export default function VCCCardDetailScreen({ navigation }: any) {
         <View style={[s.balanceCard, { backgroundColor: T.surface, borderColor: T.border }]}>
           <Text style={[s.balanceLabel, { color: T.textDim }]}>CARD BALANCE</Text>
           <CurrencyText amount={cardData.balance} code={fiatCurrency} style={[s.balanceValue, { color: T.text }]} />
-          <Text style={[s.balanceSub, { color: T.textMuted }]}>Codego Wallet Balance</Text>
+          <Text style={[s.balanceSub, { color: T.textMuted }]}>KripiCard Balance</Text>
         </View>
 
         {/* ── Quick Actions ── */}

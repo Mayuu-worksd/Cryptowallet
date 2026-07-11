@@ -6,30 +6,51 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { getCardProvider } from '@/lib/providers';
+import crypto from 'crypto';
+
+function verifySignature(rawBody: string, signature: string, secret: string): boolean {
+  const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+}
 
 export async function POST(req: NextRequest) {
   try {
-    const payload = await req.json();
-
-    const provider = getCardProvider();
-    const parsedEvent = provider.parseWebhook(payload);
-
-    if (parsedEvent.category === 'unknown') {
-      return NextResponse.json({ error: 'Unknown event type' }, { status: 400 });
+    const rawBody = await req.text();
+    const secret = process.env.KRIPICARD_WEBHOOK_SECRET;
+    if (secret) {
+      const sig = req.headers.get('x-kripicard-signature') || req.headers.get('x-webhook-signature') || '';
+      if (!sig || !verifySignature(rawBody, sig, secret)) {
+        return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+      }
     }
+    const payload = JSON.parse(rawBody);
+    const provider = getCardProvider();
 
-    const { data: logEntry, error: logError } = await supabase
-      .from('codego_webhooks_log')
-      .insert({
-        event_type: parsedEvent.category,
+    let parsedEvent: any;
+    try {
+      parsedEvent = provider.parseWebhook(payload);
+    } catch (_e) {
+      // parseWebhook not implemented — log raw and return ok
+      await supabase.from('codego_webhooks_log').insert({
+        event_type: payload?.event || payload?.type || 'raw',
         payload,
         processed: false,
-      })
+      }).catch(() => {});
+      return NextResponse.json({ success: true, note: 'logged_raw' });
+    }
+
+    // Log all events including unknown
+    const { data: logEntry } = await supabase
+      .from('codego_webhooks_log')
+      .insert({ event_type: parsedEvent.category, payload, processed: false })
       .select('id')
       .single();
 
-    if (logError) {
-      console.error('[Webhook] Failed to log:', logError.message);
+    if (parsedEvent.category === 'unknown') {
+      // Still log it but don't process
+      await supabase.from('codego_webhooks_log').update({ processed: true })
+        .eq('id', logEntry?.id).catch(() => {});
+      return NextResponse.json({ success: true, note: 'unhandled_event', event: parsedEvent.rawEvent });
     }
 
     try {
