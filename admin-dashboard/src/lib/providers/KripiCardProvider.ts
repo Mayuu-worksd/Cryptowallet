@@ -151,7 +151,7 @@ export class KripiCardProvider implements CardProvider, FinancialProvider {
     const bin = '441357'; // default global BIN — no DOB required
     const payload: Record<string, any> = {
       bin,
-      amount: 10,
+      amount: 1,
       name_on_card: nameOnCard,
     };
     if (email) payload.email = email;
@@ -163,19 +163,39 @@ export class KripiCardProvider implements CardProvider, FinancialProvider {
       throw new ProviderAPIException(this.name, result?.message || 'Card creation failed', 400, result);
     }
 
-    const last4 = String(result.last_4 || '0000');
-    const normalizedStatus = this.normalizeStatus('active');
+    const cardId = String(result.card_id);
+
+    // Fetch full card details (number, cvv, expiry) immediately after creation
+    let number: string | undefined;
+    let cvv: string | undefined;
+    let last4 = String(result.last_4 || '0000');
+    let expiryMmYy = '12/28';
+
+    try {
+      const details = await this.request('/api/external/cards/carddetails', 'POST', { card_id: cardId });
+      if (details?.success) {
+        const rawNumber = String(details.card_number || '').replace(/\s/g, '');
+        if (rawNumber.length >= 4) last4 = rawNumber.slice(-4);
+        number = details.card_number;
+        cvv = details.cvv;
+        // KripiCard returns expiry as MM/YY — keep as-is
+        if (details.expiry) expiryMmYy = details.expiry;
+      }
+    } catch (_e) {
+      // Fall back to create response values
+      if (result.expiry) expiryMmYy = result.expiry;
+    }
 
     ProviderLogger.info(this.name, 'createCard', `Card issued successfully for ${input.walletAddress}`);
 
     return {
-      providerCardId: String(result.card_id),
-      status: normalizedStatus,
+      providerCardId: cardId,
+      status: this.normalizeStatus('active'),
       providerStatus: 'active',
       last4,
-      expiryMmYy: result.expiry ? result.expiry.replace('/', '/').split('/').reverse().join('/') : '06/31',
-      number: undefined,
-      cvv: undefined,
+      expiryMmYy,
+      number,
+      cvv,
       holderName: nameOnCard.toUpperCase(),
       isMock: false,
       raw: result,
