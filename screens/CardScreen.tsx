@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   TextInput, Platform, ActivityIndicator, StatusBar, Dimensions, RefreshControl,
+  Alert,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { haptics } from '../utils/haptics';

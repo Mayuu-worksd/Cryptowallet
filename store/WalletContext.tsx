@@ -417,6 +417,159 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [network, walletAddress, fetchBalance]);
 
+  // Refresh card balance + transactions from Supabase on demand
+  const refreshCardData = useCallback(async () => {
+    if (!walletAddress) return;
+    try {
+      await setWallet(walletAddress);
+      const [vcc, dbCard, dbTxs, variants, priorityData, platformCurrencies] = await Promise.all([
+        vccService.getCard(walletAddress),
+        dbCardService.getCard(walletAddress),
+        txService.getAll(walletAddress, 200),
+        cardVariantService.getVariants(),
+        adminSettingsService.getSetting<string[]>('payment_asset_priority', ['USDT', 'BTC', 'ETH', 'BNB', 'TRX']),
+        adminSettingsService.getSetting<Record<string, boolean>>('card_currencies_config', {}),
+      ]);
+      setPaymentPriority(priorityData);
+      // Re-apply admin currency config on every refresh — Supabase only, no AsyncStorage
+      {
+        const base: Record<string, boolean> = {};
+        ['USDT','USDC','ETH','BTC','BNB','TRX','SOL','XRP','TON','SUI'].forEach(t => { base[t] = true; });
+        ['USD','EUR','GBP','INR','AED','AUD','SGD','RUB','BHD','VND','SAR','KWD','THB','HKD','JPY'].forEach(f => { base[f] = true; });
+        if (platformCurrencies && Object.keys(platformCurrencies).length > 0) {
+          Object.entries(platformCurrencies).forEach(([k, v]) => { base[k] = v; });
+        }
+        setEnabledCardCurrenciesState(base);
+      }
+      if (vcc) {
+        // Try Supabase decrypt; fall back to current state (already loaded from AsyncStorage)
+        let decryptedNumber = dbCard ? dbCardService.decryptNumber(dbCard, walletAddress) : '';
+        let decryptedCvv    = dbCard ? dbCardService.decryptCvv(dbCard, walletAddress)    : '';
+
+        // Auto-recover missing credentials to prevent locking the user out
+        if (!decryptedNumber && walletAddress) {
+          const prefix = vcc.card_network === 'Mastercard' ? 5 : 4;
+          const buf = new Uint8Array(14);
+          if (typeof crypto !== 'undefined' && crypto.getRandomValues) crypto.getRandomValues(buf);
+          else for (let i = 0; i < 14; i++) buf[i] = Math.floor(Math.random() * 256);
+          const d: number[] = [prefix, ...Array.from(buf).map(b => b % 10)];
+          let s = 0;
+          for (let i = 0; i < 15; i++) { let v = d[i]; if ((15 - i) % 2 === 0) { v *= 2; if (v > 9) v -= 9; } s += v; }
+          d.push((10 - (s % 10)) % 10);
+          decryptedNumber = `${d.slice(0,4).join('')} ${d.slice(4,8).join('')} ${d.slice(8,12).join('')} ${d.slice(12,16).join('')}`;
+          const cvvBuf = new Uint8Array(2);
+          if (typeof crypto !== 'undefined' && crypto.getRandomValues) crypto.getRandomValues(cvvBuf);
+          else { cvvBuf[0] = Math.floor(Math.random() * 256); cvvBuf[1] = Math.floor(Math.random() * 256); }
+          decryptedCvv = String(100 + ((cvvBuf[0] * 256 + cvvBuf[1]) % 900));
+
+          await dbCardService.saveCredentials(walletAddress, decryptedNumber, decryptedCvv, {
+            expiry_month: vcc.expiry_mm_yy?.split('/')[0] || '12',
+            expiry_year: vcc.expiry_mm_yy?.split('/')[1] || '28',
+            card_type: vcc.card_variant,
+            balance: vcc.balance,
+            status: vcc.card_status === 'frozen' ? 'frozen' : 'active',
+            holder_name: vcc.card_holder_name,
+            design: variants?.[0]?.color_hex || 'dark'
+          });
+        }
+        setCardCreated(true);
+        setCardBalance(vcc.balance);
+        setCardFrozen(vcc.card_status === 'frozen');
+        setCardDetails(prev => {
+          const prevDigitsLength = String(prev.number).replace(/\s/g, '').replace(/\D/g, '').length;
+          const hasValidPrev = prevDigitsLength >= 15;
+          const hasValidPrevCvv = String(prev.cvv).replace(/\D/g, '').length >= 3;
+
+          const newNum = decryptedNumber || (hasValidPrev ? prev.number : ('•••• •••• •••• ' + vcc.card_last4));
+          const newCvv = decryptedCvv    || (hasValidPrevCvv ? prev.cvv : '•••');
+
+          if (prev.number === newNum && prev.cvv === newCvv && prev.holderName === vcc.card_holder_name && prev.expiry === vcc.expiry_mm_yy) return prev;
+
+          const nextDetails = { ...prev, number: newNum, cvv: newCvv, holderName: vcc.card_holder_name, expiry: vcc.expiry_mm_yy, codegoCardId: vcc.codego_card_id };
+          storageService.saveCardDetails(nextDetails).catch(() => {});
+          return nextDetails;
+        });
+        AsyncStorage.multiSet([['cw_card_balance', String(vcc.balance)]]).catch(() => {});
+      } else if (dbCard) {
+        let decryptedNumber = dbCardService.decryptNumber(dbCard, walletAddress);
+        let decryptedCvv    = dbCardService.decryptCvv(dbCard, walletAddress);
+
+        // Auto-recover missing credentials to prevent locking the user out
+        if (!decryptedNumber && walletAddress) {
+          const prefix = dbCard.card_type?.includes('mastercard') ? 5 : 4;
+          const buf = new Uint8Array(14);
+          if (typeof crypto !== 'undefined' && crypto.getRandomValues) crypto.getRandomValues(buf);
+          else for (let i = 0; i < 14; i++) buf[i] = Math.floor(Math.random() * 256);
+          const d: number[] = [prefix, ...Array.from(buf).map(b => b % 10)];
+          let s = 0;
+          for (let i = 0; i < 15; i++) { let v = d[i]; if ((15 - i) % 2 === 0) { v *= 2; if (v > 9) v -= 9; } s += v; }
+          d.push((10 - (s % 10)) % 10);
+          decryptedNumber = `${d.slice(0,4).join('')} ${d.slice(4,8).join('')} ${d.slice(8,12).join('')} ${d.slice(12,16).join('')}`;
+          const cvvBuf = new Uint8Array(2);
+          if (typeof crypto !== 'undefined' && crypto.getRandomValues) crypto.getRandomValues(cvvBuf);
+          else { cvvBuf[0] = Math.floor(Math.random() * 256); cvvBuf[1] = Math.floor(Math.random() * 256); }
+          decryptedCvv = String(100 + ((cvvBuf[0] * 256 + cvvBuf[1]) % 900));
+
+          await dbCardService.saveCredentials(walletAddress, decryptedNumber, decryptedCvv, {
+            expiry_month: dbCard.expiry_month,
+            expiry_year: dbCard.expiry_year,
+            card_type: dbCard.card_type,
+            balance: dbCard.balance,
+            status: dbCard.status,
+            holder_name: dbCard.holder_name,
+            design: dbCard.design
+          });
+        }
+
+        setCardCreated(true);
+        setCardBalance(dbCard.balance);
+        setCardFrozen(dbCard.status === 'frozen');
+        setCardDetails(prev => {
+          const prevDigitsLength = String(prev.number).replace(/\s/g, '').replace(/\D/g, '').length;
+          const hasValidPrev = prevDigitsLength >= 15;
+          const hasValidPrevCvv = String(prev.cvv).replace(/\D/g, '').length >= 3;
+          
+          const newNum = decryptedNumber || (hasValidPrev ? prev.number : ('•••• •••• •••• ' + dbCard.card_last4));
+          const newCvv = decryptedCvv    || (hasValidPrevCvv ? prev.cvv : '•••');
+          
+          if (prev.number === newNum && prev.cvv === newCvv) return prev;
+          
+          const nextDetails = { ...prev, number: newNum, cvv: newCvv, holderName: dbCard.holder_name, expiry: dbCard.expiry_month + '/' + dbCard.expiry_year };
+          storageService.saveCardDetails(nextDetails).catch(() => {});
+          return nextDetails;
+        });
+        AsyncStorage.setItem('cw_card_balance', String(dbCard.balance)).catch(() => {});
+      }
+      // Deduplicate card txs: group by reference_id (sandbox) or label+created_at minute bucket
+      // This cleans up old per-asset duplicate entries written by previous versions
+      const rawCardTxs = dbTxs.filter(t => t.type === 'card_topup' || t.type === 'card_spend');
+      const seenCardKeys = new Set<string>();
+      const dedupedCardTxs = rawCardTxs.filter(t => {
+        // Prefer reference_id dedup (sandbox terminal inserts)
+        const key = t.reference_id
+          ? `ref:${t.reference_id}`
+          : `${t.type}:${t.label}:${t.created_at ? new Date(t.created_at).toISOString().slice(0, 16) : ''}:${t.usd_value}`;
+        if (seenCardKeys.has(key)) return false;
+        seenCardKeys.add(key);
+        return true;
+      });
+      const cardTxs: CardTransaction[] = dedupedCardTxs.map(t => ({
+        id:         t.id ?? Date.now().toString(),
+        type:       t.type === 'card_topup' ? 'topup' as const : 'spend' as const,
+        amount:     t.usd_value,
+        label:      t.label ?? (t.type === 'card_topup' ? 'Top-up' : 'Spend'),
+        coin:       t.token,
+        coinAmount: t.amount,
+        status:     'success' as const,
+        timestamp:  t.created_at ?? new Date().toISOString(),
+        currencyUsed: (t as any).currency_used,
+      }));
+      // Always update — replaces old corrupt/duplicate data with fresh Supabase data
+      setCardTransactions(cardTxs);
+      AsyncStorage.setItem('cw_card_transactions', JSON.stringify(cardTxs)).catch(() => {});
+    } catch {}
+  }, [walletAddress]);
+
   const toggleBalanceVisible = useCallback(() => setBalanceVisible(p => !p), []);
   const toggleFreezeCard = useCallback(async () => {
     const newVal = !cardFrozen;
@@ -2279,158 +2432,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     // no-op: card details are set at creation time and restored from Supabase
   }, []);
 
-  // Refresh card balance + transactions from Supabase on demand
-  const refreshCardData = useCallback(async () => {
-    if (!walletAddress) return;
-    try {
-      await setWallet(walletAddress);
-      const [vcc, dbCard, dbTxs, variants, priorityData, platformCurrencies] = await Promise.all([
-        vccService.getCard(walletAddress),
-        dbCardService.getCard(walletAddress),
-        txService.getAll(walletAddress, 200),
-        cardVariantService.getVariants(),
-        adminSettingsService.getSetting<string[]>('payment_asset_priority', ['USDT', 'BTC', 'ETH', 'BNB', 'TRX']),
-        adminSettingsService.getSetting<Record<string, boolean>>('card_currencies_config', {}),
-      ]);
-      setPaymentPriority(priorityData);
-      // Re-apply admin currency config on every refresh — Supabase only, no AsyncStorage
-      {
-        const base: Record<string, boolean> = {};
-        ['USDT','USDC','ETH','BTC','BNB','TRX','SOL','XRP','TON','SUI'].forEach(t => { base[t] = true; });
-        ['USD','EUR','GBP','INR','AED','AUD','SGD','RUB','BHD','VND','SAR','KWD','THB','HKD','JPY'].forEach(f => { base[f] = true; });
-        if (platformCurrencies && Object.keys(platformCurrencies).length > 0) {
-          Object.entries(platformCurrencies).forEach(([k, v]) => { base[k] = v; });
-        }
-        setEnabledCardCurrenciesState(base);
-      }
-      if (vcc) {
-        // Try Supabase decrypt; fall back to current state (already loaded from AsyncStorage)
-        let decryptedNumber = dbCard ? dbCardService.decryptNumber(dbCard, walletAddress) : '';
-        let decryptedCvv    = dbCard ? dbCardService.decryptCvv(dbCard, walletAddress)    : '';
 
-        // Auto-recover missing credentials to prevent locking the user out
-        if (!decryptedNumber && walletAddress) {
-          const prefix = vcc.card_network === 'Mastercard' ? 5 : 4;
-          const buf = new Uint8Array(14);
-          if (typeof crypto !== 'undefined' && crypto.getRandomValues) crypto.getRandomValues(buf);
-          else for (let i = 0; i < 14; i++) buf[i] = Math.floor(Math.random() * 256);
-          const d: number[] = [prefix, ...Array.from(buf).map(b => b % 10)];
-          let s = 0;
-          for (let i = 0; i < 15; i++) { let v = d[i]; if ((15 - i) % 2 === 0) { v *= 2; if (v > 9) v -= 9; } s += v; }
-          d.push((10 - (s % 10)) % 10);
-          decryptedNumber = `${d.slice(0,4).join('')} ${d.slice(4,8).join('')} ${d.slice(8,12).join('')} ${d.slice(12,16).join('')}`;
-          const cvvBuf = new Uint8Array(2);
-          if (typeof crypto !== 'undefined' && crypto.getRandomValues) crypto.getRandomValues(cvvBuf);
-          else { cvvBuf[0] = Math.floor(Math.random() * 256); cvvBuf[1] = Math.floor(Math.random() * 256); }
-          decryptedCvv = String(100 + ((cvvBuf[0] * 256 + cvvBuf[1]) % 900));
-
-          await dbCardService.saveCredentials(walletAddress, decryptedNumber, decryptedCvv, {
-            expiry_month: vcc.expiry_mm_yy?.split('/')[0] || '12',
-            expiry_year: vcc.expiry_mm_yy?.split('/')[1] || '28',
-            card_type: vcc.card_variant,
-            balance: vcc.balance,
-            status: vcc.card_status === 'frozen' ? 'frozen' : 'active',
-            holder_name: vcc.card_holder_name,
-            design: variants?.[0]?.color_hex || 'dark'
-          });
-        }
-        setCardCreated(true);
-        setCardBalance(vcc.balance);
-        setCardFrozen(vcc.card_status === 'frozen');
-        setCardDetails(prev => {
-          const prevDigitsLength = String(prev.number).replace(/\s/g, '').replace(/\D/g, '').length;
-          const hasValidPrev = prevDigitsLength >= 15;
-          const hasValidPrevCvv = String(prev.cvv).replace(/\D/g, '').length >= 3;
-
-          const newNum = decryptedNumber || (hasValidPrev ? prev.number : ('•••• •••• •••• ' + vcc.card_last4));
-          const newCvv = decryptedCvv    || (hasValidPrevCvv ? prev.cvv : '•••');
-
-          if (prev.number === newNum && prev.cvv === newCvv && prev.holderName === vcc.card_holder_name && prev.expiry === vcc.expiry_mm_yy) return prev;
-
-          const nextDetails = { ...prev, number: newNum, cvv: newCvv, holderName: vcc.card_holder_name, expiry: vcc.expiry_mm_yy, codegoCardId: vcc.codego_card_id };
-          storageService.saveCardDetails(nextDetails).catch(() => {});
-          return nextDetails;
-        });
-        AsyncStorage.multiSet([['cw_card_balance', String(vcc.balance)]]).catch(() => {});
-      } else if (dbCard) {
-        let decryptedNumber = dbCardService.decryptNumber(dbCard, walletAddress);
-        let decryptedCvv    = dbCardService.decryptCvv(dbCard, walletAddress);
-
-        // Auto-recover missing credentials to prevent locking the user out
-        if (!decryptedNumber && walletAddress) {
-          const prefix = dbCard.card_type?.includes('mastercard') ? 5 : 4;
-          const buf = new Uint8Array(14);
-          if (typeof crypto !== 'undefined' && crypto.getRandomValues) crypto.getRandomValues(buf);
-          else for (let i = 0; i < 14; i++) buf[i] = Math.floor(Math.random() * 256);
-          const d: number[] = [prefix, ...Array.from(buf).map(b => b % 10)];
-          let s = 0;
-          for (let i = 0; i < 15; i++) { let v = d[i]; if ((15 - i) % 2 === 0) { v *= 2; if (v > 9) v -= 9; } s += v; }
-          d.push((10 - (s % 10)) % 10);
-          decryptedNumber = `${d.slice(0,4).join('')} ${d.slice(4,8).join('')} ${d.slice(8,12).join('')} ${d.slice(12,16).join('')}`;
-          const cvvBuf = new Uint8Array(2);
-          if (typeof crypto !== 'undefined' && crypto.getRandomValues) crypto.getRandomValues(cvvBuf);
-          else { cvvBuf[0] = Math.floor(Math.random() * 256); cvvBuf[1] = Math.floor(Math.random() * 256); }
-          decryptedCvv = String(100 + ((cvvBuf[0] * 256 + cvvBuf[1]) % 900));
-
-          await dbCardService.saveCredentials(walletAddress, decryptedNumber, decryptedCvv, {
-            expiry_month: dbCard.expiry_month,
-            expiry_year: dbCard.expiry_year,
-            card_type: dbCard.card_type,
-            balance: dbCard.balance,
-            status: dbCard.status,
-            holder_name: dbCard.holder_name,
-            design: dbCard.design
-          });
-        }
-
-        setCardCreated(true);
-        setCardBalance(dbCard.balance);
-        setCardFrozen(dbCard.status === 'frozen');
-        setCardDetails(prev => {
-          const prevDigitsLength = String(prev.number).replace(/\s/g, '').replace(/\D/g, '').length;
-          const hasValidPrev = prevDigitsLength >= 15;
-          const hasValidPrevCvv = String(prev.cvv).replace(/\D/g, '').length >= 3;
-          
-          const newNum = decryptedNumber || (hasValidPrev ? prev.number : ('•••• •••• •••• ' + dbCard.card_last4));
-          const newCvv = decryptedCvv    || (hasValidPrevCvv ? prev.cvv : '•••');
-          
-          if (prev.number === newNum && prev.cvv === newCvv) return prev;
-          
-          const nextDetails = { ...prev, number: newNum, cvv: newCvv, holderName: dbCard.holder_name, expiry: dbCard.expiry_month + '/' + dbCard.expiry_year };
-          storageService.saveCardDetails(nextDetails).catch(() => {});
-          return nextDetails;
-        });
-        AsyncStorage.setItem('cw_card_balance', String(dbCard.balance)).catch(() => {});
-      }
-      // Deduplicate card txs: group by reference_id (sandbox) or label+created_at minute bucket
-      // This cleans up old per-asset duplicate entries written by previous versions
-      const rawCardTxs = dbTxs.filter(t => t.type === 'card_topup' || t.type === 'card_spend');
-      const seenCardKeys = new Set<string>();
-      const dedupedCardTxs = rawCardTxs.filter(t => {
-        // Prefer reference_id dedup (sandbox terminal inserts)
-        const key = t.reference_id
-          ? `ref:${t.reference_id}`
-          : `${t.type}:${t.label}:${t.created_at ? new Date(t.created_at).toISOString().slice(0, 16) : ''}:${t.usd_value}`;
-        if (seenCardKeys.has(key)) return false;
-        seenCardKeys.add(key);
-        return true;
-      });
-      const cardTxs: CardTransaction[] = dedupedCardTxs.map(t => ({
-        id:         t.id ?? Date.now().toString(),
-        type:       t.type === 'card_topup' ? 'topup' as const : 'spend' as const,
-        amount:     t.usd_value,
-        label:      t.label ?? (t.type === 'card_topup' ? 'Top-up' : 'Spend'),
-        coin:       t.token,
-        coinAmount: t.amount,
-        status:     'success' as const,
-        timestamp:  t.created_at ?? new Date().toISOString(),
-        currencyUsed: (t as any).currency_used,
-      }));
-      // Always update — replaces old corrupt/duplicate data with fresh Supabase data
-      setCardTransactions(cardTxs);
-      AsyncStorage.setItem('cw_card_transactions', JSON.stringify(cardTxs)).catch(() => {});
-    } catch {}
-  }, [walletAddress]);
 
   const createCard = useCallback(async (holderName: string, design: string) => {
     try {

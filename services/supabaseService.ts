@@ -686,7 +686,7 @@ export const vccService = {
     if (error) throw error;
   },
 
-  async updateStatus(walletAddress: string, status: 'active' | 'frozen' | 'blocked'): Promise<void> {
+  async updateStatus(walletAddress: string, status: 'active' | 'frozen' | 'blocked' | 'terminated'): Promise<void> {
     const { error } = await supabase
       .from('vcc_cards')
       .update({ card_status: status })
