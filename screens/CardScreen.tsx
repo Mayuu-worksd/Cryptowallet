@@ -108,6 +108,32 @@ export default function CardScreen({ navigation, route }: any) {
     checkAndSyncKYC().catch(() => {});
   }, [walletAddress]);
 
+  // Auto-migrate mock card users to real KripiCard
+  useEffect(() => {
+    if (!cardCreated || !walletAddress) return;
+    if (cardDetails?.codegoCardId) return; // already has real card
+    const migrate = async () => {
+      try {
+        const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+        const res = await fetch(`${apiUrl}/api/cards/migrate-mock`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            walletAddress,
+            nameOnCard: cardDetails?.holderName || 'CARD HOLDER',
+          }),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.success && data.card) {
+          // Refresh card data from Supabase — now has real codego_card_id
+          await refreshCardData();
+        }
+      } catch (_e) {}
+    };
+    migrate();
+  }, [cardCreated, walletAddress, cardDetails?.codegoCardId]);
+
   const [showSpend, setShowSpend] = useState(false);
   const [showCreds, setShowCreds] = useState(false);
   const [showEdit, setShowEdit] = useState(false);

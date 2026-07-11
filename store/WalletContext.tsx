@@ -442,6 +442,32 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setEnabledCardCurrenciesState(base);
       }
       if (vcc) {
+        // If vcc now has a real KripiCard id but cards table has no credentials yet, fetch from KripiCard
+        if (vcc.codego_card_id && (!dbCard || !dbCardService.decryptNumber(dbCard, walletAddress))) {
+          try {
+            const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+            const liveRes = await fetch(`${apiUrl}/api/cards/${vcc.codego_card_id}`);
+            if (liveRes.ok) {
+              const liveJson = await liveRes.json();
+              const liveCard = liveJson.data?.card || liveJson.card;
+              if (liveCard?.number && liveCard?.cvv) {
+                await dbCardService.saveCredentials(walletAddress, liveCard.number, liveCard.cvv, {
+                  expiry_month: vcc.expiry_mm_yy?.split('/')[0] || '12',
+                  expiry_year: vcc.expiry_mm_yy?.split('/')[1] || '28',
+                  card_type: vcc.card_variant,
+                  balance: vcc.balance,
+                  status: vcc.card_status === 'frozen' ? 'frozen' : 'active',
+                  holder_name: vcc.card_holder_name,
+                  design: 'dark',
+                });
+              }
+            }
+          } catch (_e) {}
+          // Re-fetch dbCard after saving
+          const { data: freshDbCard } = await (await import('../services/supabaseClient')).supabase
+            .from('cards').select('*').eq('wallet_address', walletAddress.toLowerCase()).maybeSingle();
+          if (freshDbCard) (dbCard as any) = freshDbCard;
+        }
         // Try Supabase decrypt; fall back to current state (already loaded from AsyncStorage)
         let decryptedNumber = dbCard ? dbCardService.decryptNumber(dbCard, walletAddress) : '';
         let decryptedCvv    = dbCard ? dbCardService.decryptCvv(dbCard, walletAddress)    : '';
