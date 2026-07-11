@@ -471,31 +471,29 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         let decryptedNumber = dbCard ? dbCardService.decryptNumber(dbCard, walletAddress) : '';
         let decryptedCvv    = dbCard ? dbCardService.decryptCvv(dbCard, walletAddress)    : '';
 
-        // Auto-recover missing credentials to prevent locking the user out
-        if (!decryptedNumber && walletAddress) {
-          const prefix = vcc.card_network === 'Mastercard' ? 5 : 4;
-          const buf = new Uint8Array(14);
-          if (typeof crypto !== 'undefined' && crypto.getRandomValues) crypto.getRandomValues(buf);
-          else for (let i = 0; i < 14; i++) buf[i] = Math.floor(Math.random() * 256);
-          const d: number[] = [prefix, ...Array.from(buf).map(b => b % 10)];
-          let s = 0;
-          for (let i = 0; i < 15; i++) { let v = d[i]; if ((15 - i) % 2 === 0) { v *= 2; if (v > 9) v -= 9; } s += v; }
-          d.push((10 - (s % 10)) % 10);
-          decryptedNumber = `${d.slice(0,4).join('')} ${d.slice(4,8).join('')} ${d.slice(8,12).join('')} ${d.slice(12,16).join('')}`;
-          const cvvBuf = new Uint8Array(2);
-          if (typeof crypto !== 'undefined' && crypto.getRandomValues) crypto.getRandomValues(cvvBuf);
-          else { cvvBuf[0] = Math.floor(Math.random() * 256); cvvBuf[1] = Math.floor(Math.random() * 256); }
-          decryptedCvv = String(100 + ((cvvBuf[0] * 256 + cvvBuf[1]) % 900));
-
-          await dbCardService.saveCredentials(walletAddress, decryptedNumber, decryptedCvv, {
-            expiry_month: vcc.expiry_mm_yy?.split('/')[0] || '12',
-            expiry_year: vcc.expiry_mm_yy?.split('/')[1] || '28',
-            card_type: vcc.card_variant,
-            balance: vcc.balance,
-            status: vcc.card_status === 'frozen' ? 'frozen' : 'active',
-            holder_name: vcc.card_holder_name,
-            design: variants?.[0]?.color_hex || 'dark'
-          });
+        // Auto-recover missing credentials — fetch from KripiCard API
+        if (!decryptedNumber && vcc.codego_card_id && walletAddress) {
+          try {
+            const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+            const liveRes = await fetch(`${apiUrl}/api/cards/${vcc.codego_card_id}`);
+            if (liveRes.ok) {
+              const liveJson = await liveRes.json();
+              const liveCard = liveJson.data?.card || liveJson.card;
+              if (liveCard?.number && liveCard?.cvv) {
+                decryptedNumber = liveCard.number;
+                decryptedCvv = liveCard.cvv;
+                await dbCardService.saveCredentials(walletAddress, decryptedNumber, decryptedCvv, {
+                  expiry_month: vcc.expiry_mm_yy?.split('/')[0] || '12',
+                  expiry_year: vcc.expiry_mm_yy?.split('/')[1] || '28',
+                  card_type: vcc.card_variant,
+                  balance: vcc.balance,
+                  status: vcc.card_status === 'frozen' ? 'frozen' : 'active',
+                  holder_name: vcc.card_holder_name,
+                  design: variants?.[0]?.color_hex || 'dark',
+                });
+              }
+            }
+          } catch (_e) {}
         }
         setCardCreated(true);
         setCardBalance(vcc.balance);
@@ -527,32 +525,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         let decryptedNumber = dbCardService.decryptNumber(dbCard, walletAddress);
         let decryptedCvv    = dbCardService.decryptCvv(dbCard, walletAddress);
 
-        // Auto-recover missing credentials to prevent locking the user out
-        if (!decryptedNumber && walletAddress) {
-          const prefix = dbCard.card_type?.includes('mastercard') ? 5 : 4;
-          const buf = new Uint8Array(14);
-          if (typeof crypto !== 'undefined' && crypto.getRandomValues) crypto.getRandomValues(buf);
-          else for (let i = 0; i < 14; i++) buf[i] = Math.floor(Math.random() * 256);
-          const d: number[] = [prefix, ...Array.from(buf).map(b => b % 10)];
-          let s = 0;
-          for (let i = 0; i < 15; i++) { let v = d[i]; if ((15 - i) % 2 === 0) { v *= 2; if (v > 9) v -= 9; } s += v; }
-          d.push((10 - (s % 10)) % 10);
-          decryptedNumber = `${d.slice(0,4).join('')} ${d.slice(4,8).join('')} ${d.slice(8,12).join('')} ${d.slice(12,16).join('')}`;
-          const cvvBuf = new Uint8Array(2);
-          if (typeof crypto !== 'undefined' && crypto.getRandomValues) crypto.getRandomValues(cvvBuf);
-          else { cvvBuf[0] = Math.floor(Math.random() * 256); cvvBuf[1] = Math.floor(Math.random() * 256); }
-          decryptedCvv = String(100 + ((cvvBuf[0] * 256 + cvvBuf[1]) % 900));
-
-          await dbCardService.saveCredentials(walletAddress, decryptedNumber, decryptedCvv, {
-            expiry_month: dbCard.expiry_month,
-            expiry_year: dbCard.expiry_year,
-            card_type: dbCard.card_type,
-            balance: dbCard.balance,
-            status: dbCard.status,
-            holder_name: dbCard.holder_name,
-            design: dbCard.design
-          });
-        }
+        // No credentials and no codego_card_id — nothing to recover from
 
         setCardCreated(true);
         setCardBalance(dbCard.balance);
@@ -1088,64 +1061,37 @@ export function WalletProvider({ children }: { children: ReactNode }) {
                 }
               }
             }
-            // Helper: generate a Luhn-valid 16-digit number + CVV and save to Supabase
-            const generateAndSaveCredentials = (network: 'Visa' | 'Mastercard' = 'Visa'): { number: string; cvv: string } => {
-              const prefix = network === 'Mastercard' ? 5 : 4;
-              const buf = new Uint8Array(14);
-              crypto.getRandomValues(buf);
-              const d: number[] = [prefix, ...Array.from(buf).map(b => b % 10)];
-              let s = 0;
-              for (let i = 0; i < 15; i++) { let v = d[i]; if ((15 - i) % 2 === 0) { v *= 2; if (v > 9) v -= 9; } s += v; }
-              d.push((10 - (s % 10)) % 10);
-              const num = `${d.slice(0,4).join('')} ${d.slice(4,8).join('')} ${d.slice(8,12).join('')} ${d.slice(12,16).join('')}`;
-              const cvvBuf = new Uint8Array(1);
-              crypto.getRandomValues(cvvBuf);
-              const cvv = String(100 + (cvvBuf[0] % 900));
-              
-              const [expMonth, expYear] = vcc ? vcc.expiry_mm_yy.split('/') : ['12', '28'];
-              const variant = vcc ? variants.find(v => v.id === vcc.card_variant) : null;
-              dbCardService.saveCredentials(address, num, cvv, {
-                expiry_month: expMonth ?? '12',
-                expiry_year: expYear ?? '28',
-                card_type: vcc ? vcc.card_variant : 'classic',
-                balance: vcc ? vcc.balance : 0,
-                status: vcc ? (vcc.card_status === 'frozen' ? 'frozen' : 'active') : 'active',
-                holder_name: vcc ? vcc.card_holder_name : 'CARD HOLDER',
-                design: variant?.color_hex ?? 'dark',
-              }).catch(() => {});
-              return { number: num, cvv };
+            // Helper: fetch real credentials from KripiCard API
+            const fetchKripiCredentials = async (kripiCardId: string, vccRow: any, variantRow: any): Promise<{ number: string; cvv: string } | null> => {
+              try {
+                const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+                const res = await fetch(`${apiUrl}/api/cards/${kripiCardId}`);
+                if (!res.ok) return null;
+                const json = await res.json();
+                const card = json.data?.card || json.card;
+                if (!card?.number || !card?.cvv) return null;
+                const [expMonth, expYear] = (vccRow?.expiry_mm_yy || '12/28').split('/');
+                dbCardService.saveCredentials(address, card.number, card.cvv, {
+                  expiry_month: expMonth ?? '12',
+                  expiry_year: expYear ?? '28',
+                  card_type: vccRow?.card_variant ?? 'classic',
+                  balance: vccRow?.balance ?? 0,
+                  status: vccRow?.card_status === 'frozen' ? 'frozen' : 'active',
+                  holder_name: vccRow?.card_holder_name ?? 'CARD HOLDER',
+                  design: variantRow?.color_hex ?? 'dark',
+                }).catch(() => {});
+                return { number: card.number, cvv: card.cvv };
+              } catch { return null; }
             };
 
             if (vcc && vcc.codego_card_id) {
               const variant = variants.find(v => v.id === vcc.card_variant);
               let finalNumber = dbCard ? dbCardService.decryptNumber(dbCard, address) : '';
               let finalCvv    = dbCard ? dbCardService.decryptCvv(dbCard, address)    : '';
-              // Fall back to AsyncStorage
+              // Still nothing — fetch real credentials from KripiCard API
               if (!finalNumber) {
-                const local = savedDetails ? JSON.parse(savedDetails) : null;
-                if (/^\d{4}\s\d{4}\s\d{4}\s\d{4}$/.test(local?.number ?? '')) {
-                  finalNumber = local.number;
-                  if (/^\d{3}$/.test(local?.cvv ?? '')) {
-                    finalCvv = local.cvv;
-                    // Persist this local fallback to Supabase cards table so it's backed up!
-                    const [expMonth, expYear] = vcc.expiry_mm_yy.split('/');
-                    dbCardService.saveCredentials(address, finalNumber, finalCvv, {
-                      expiry_month: expMonth ?? '12',
-                      expiry_year: expYear ?? '28',
-                      card_type: vcc.card_variant,
-                      balance: vcc.balance,
-                      status: vcc.card_status === 'frozen' ? 'frozen' : 'active',
-                      holder_name: vcc.card_holder_name,
-                      design: variant?.color_hex ?? 'dark',
-                    }).catch(() => {});
-                  }
-                }
-              }
-              // Still nothing — generate fresh credentials for this existing user
-              if (!finalNumber) {
-                const fresh = generateAndSaveCredentials(vcc.card_network as 'Visa' | 'Mastercard');
-                finalNumber = fresh.number;
-                finalCvv    = fresh.cvv;
+                const live = await fetchKripiCredentials(vcc.codego_card_id, vcc, variant);
+                if (live) { finalNumber = live.number; finalCvv = live.cvv; }
               }
               const restoredDetails = {
                 number:     finalNumber,
@@ -1176,31 +1122,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             } else if (dbCard) {
               let finalNumber = dbCardService.decryptNumber(dbCard, address);
               let finalCvv    = dbCardService.decryptCvv(dbCard, address);
-              // Fall back to AsyncStorage
-              if (!finalNumber) {
-                const local = savedDetails ? JSON.parse(savedDetails) : null;
-                if (/^\d{4}\s\d{4}\s\d{4}\s\d{4}$/.test(local?.number ?? '')) {
-                  finalNumber = local.number;
-                  if (/^\d{3}$/.test(local?.cvv ?? '')) {
-                    finalCvv = local.cvv;
-                    dbCardService.saveCredentials(address, finalNumber, finalCvv, {
-                      expiry_month: dbCard.expiry_month,
-                      expiry_year: dbCard.expiry_year,
-                      card_type: dbCard.card_type,
-                      balance: dbCard.balance,
-                      status: dbCard.status,
-                      holder_name: dbCard.holder_name,
-                      design: dbCard.design,
-                    }).catch(() => {});
-                  }
-                }
-              }
-              // Still nothing — generate fresh credentials
-              if (!finalNumber) {
-                const fresh = generateAndSaveCredentials('Visa');
-                finalNumber = fresh.number;
-                finalCvv    = fresh.cvv;
-              }
               const localDetails = savedDetails ? JSON.parse(savedDetails) : null;
               const restoredDetails = {
                 number:     finalNumber,
@@ -1939,45 +1860,30 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           const variant = variants.find(v => v.id === vcc.card_variant);
           let decryptedNumber = dbCard ? dbCardService.decryptNumber(dbCard, data.address) : '';
           let decryptedCvv    = dbCard ? dbCardService.decryptCvv(dbCard, data.address)    : '';
-          
-          if (!decryptedNumber) {
-            // Generate fresh Luhn-valid credentials since they don't exist in Supabase cards table yet
-            const prefix = vcc.card_network === 'Mastercard' ? 5 : 4;
-            const buf = new Uint8Array(14);
-            if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
-              crypto.getRandomValues(buf);
-            } else {
-              for (let i = 0; i < 14; i++) buf[i] = Math.floor(Math.random() * 256);
-            }
-            const d: number[] = [prefix, ...Array.from(buf).map(b => b % 10)];
-            let sum = 0;
-            for (let i = 0; i < 15; i++) {
-              let v = d[i];
-              if ((15 - i) % 2 === 0) { v *= 2; if (v > 9) v -= 9; }
-              sum += v;
-            }
-            d.push((10 - (sum % 10)) % 10);
-            decryptedNumber = `${d.slice(0,4).join('')} ${d.slice(4,8).join('')} ${d.slice(8,12).join('')} ${d.slice(12,16).join('')}`;
-            
-            const cvvBuf = new Uint8Array(2);
-            if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
-              crypto.getRandomValues(cvvBuf);
-            } else {
-              cvvBuf[0] = Math.floor(Math.random() * 256);
-              cvvBuf[1] = Math.floor(Math.random() * 256);
-            }
-            decryptedCvv = String(100 + ((cvvBuf[0] * 256 + cvvBuf[1]) % 900));
 
-            const [expMonth, expYear] = vcc.expiry_mm_yy.split('/');
-            dbCardService.saveCredentials(data.address, decryptedNumber, decryptedCvv, {
-              expiry_month: expMonth ?? '12',
-              expiry_year: expYear ?? '28',
-              card_type: vcc.card_variant,
-              balance: vcc.balance,
-              status: vcc.card_status === 'frozen' ? 'frozen' : 'active',
-              holder_name: vcc.card_holder_name,
-              design: variant?.color_hex ?? 'dark',
-            }).catch(() => {});
+          if (!decryptedNumber && vcc.codego_card_id) {
+            try {
+              const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+              const liveRes = await fetch(`${apiUrl}/api/cards/${vcc.codego_card_id}`);
+              if (liveRes.ok) {
+                const liveJson = await liveRes.json();
+                const liveCard = liveJson.data?.card || liveJson.card;
+                if (liveCard?.number && liveCard?.cvv) {
+                  decryptedNumber = liveCard.number;
+                  decryptedCvv = liveCard.cvv;
+                  const [expMonth, expYear] = vcc.expiry_mm_yy.split('/');
+                  dbCardService.saveCredentials(data.address, decryptedNumber, decryptedCvv, {
+                    expiry_month: expMonth ?? '12',
+                    expiry_year: expYear ?? '28',
+                    card_type: vcc.card_variant,
+                    balance: vcc.balance,
+                    status: vcc.card_status === 'frozen' ? 'frozen' : 'active',
+                    holder_name: vcc.card_holder_name,
+                    design: variant?.color_hex ?? 'dark',
+                  }).catch(() => {});
+                }
+              }
+            } catch (_e) {}
           }
 
           const restoredDetails = {
@@ -2000,45 +1906,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         } else if (dbCard) {
           let decryptedNumber = dbCardService.decryptNumber(dbCard, data.address);
           let decryptedCvv    = dbCardService.decryptCvv(dbCard, data.address);
-          
-          if (!decryptedNumber) {
-            // Generate fresh Luhn-valid credentials since they don't exist in Supabase cards table yet
-            const prefix = 4;
-            const buf = new Uint8Array(14);
-            if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
-              crypto.getRandomValues(buf);
-            } else {
-              for (let i = 0; i < 14; i++) buf[i] = Math.floor(Math.random() * 256);
-            }
-            const d: number[] = [prefix, ...Array.from(buf).map(b => b % 10)];
-            let sum = 0;
-            for (let i = 0; i < 15; i++) {
-              let v = d[i];
-              if ((15 - i) % 2 === 0) { v *= 2; if (v > 9) v -= 9; }
-              sum += v;
-            }
-            d.push((10 - (sum % 10)) % 10);
-            decryptedNumber = `${d.slice(0,4).join('')} ${d.slice(4,8).join('')} ${d.slice(8,12).join('')} ${d.slice(12,16).join('')}`;
-            
-            const cvvBuf = new Uint8Array(2);
-            if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
-              crypto.getRandomValues(cvvBuf);
-            } else {
-              cvvBuf[0] = Math.floor(Math.random() * 256);
-              cvvBuf[1] = Math.floor(Math.random() * 256);
-            }
-            decryptedCvv = String(100 + ((cvvBuf[0] * 256 + cvvBuf[1]) % 900));
-
-            dbCardService.saveCredentials(data.address, decryptedNumber, decryptedCvv, {
-              expiry_month: dbCard.expiry_month,
-              expiry_year: dbCard.expiry_year,
-              card_type: dbCard.card_type,
-              balance: dbCard.balance,
-              status: dbCard.status,
-              holder_name: dbCard.holder_name,
-              design: dbCard.design,
-            }).catch(() => {});
-          }
 
           const restoredDetails = {
             number:     decryptedNumber,
@@ -2486,67 +2353,35 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const variants = await cardVariantService.getVariants();
       const cardVariant = variants.find(v => v.id === variantId) ?? variants[0];
 
-      let codegoSuccess = false;
-
-      // 1. Try Codego API auto-provisioning
-      try {
-        const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-        const codegoRes = await fetch(`${apiUrl}/api/cards`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            walletAddress,
-            type: 'virtual',
-            variant: cardVariant.id,
-            nameOnCard: cleanName,
-          }),
-        });
-        const codegoData = await codegoRes.json();
-        if (codegoRes.ok && codegoData.cardData) {
-          codegoSuccess = true;
-          const cardData = codegoData.cardData;
-          const expiryMmYy = (cardData.expiryMonth && cardData.expiryYear)
-            ? `${String(cardData.expiryMonth).padStart(2, '0')}/${String(cardData.expiryYear).slice(-2)}`
-            : '12/28';
-          const last4 = (cardData.number || '').replace(/\s/g, '').slice(-4) || cardData.last4 || '0000';
-
-          await dbCardService.saveCredentials(walletAddress, cardData.number || `4000 0000 0000 ${last4}`, cardData.cvv || '000', {
-            expiry_month: expiryMmYy.split('/')[0],
-            expiry_year:  expiryMmYy.split('/')[1],
-            card_type:    cardVariant.id,
-            balance:      cardData.limit?.amount ? cardData.limit.amount / 100 : 0,
-            status:       cardData.status === 'locked' ? 'frozen' : 'active',
-            holder_name:  cleanName,
-            design,
-          });
-          // The API route (admin-dashboard/api/cards) already writes to vcc_cards.
-          // No need to duplicate that here.
-        }
-      } catch (err) {
-        console.warn('[createCard] Codego auto-provisioning error, falling back:', err);
-      }
-
-      // 2. Local fallback if Codego provisioning failed or was skipped
-      if (!codegoSuccess) {
-        const { cardNumber, cvv } = await vccService.applyCard(
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+      const kripiRes = await fetch(`${apiUrl}/api/cards`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           walletAddress,
-          cardVariant,
-          cleanName,
-          false,
-          0,
-        );
-
-        const expiry = vccService.generateExpiry();
-        await dbCardService.saveCredentials(walletAddress, cardNumber, cvv, {
-          expiry_month: expiry.split('/')[0],
-          expiry_year:  expiry.split('/')[1],
-          card_type:    cardVariant.id,
-          balance:      0,
-          status:       'active',
-          holder_name:  cleanName,
-          design,
-        });
+          type: 'virtual',
+          variant: cardVariant.id,
+          nameOnCard: cleanName,
+        }),
+      });
+      const kripiData = await kripiRes.json();
+      if (!kripiRes.ok || !kripiData.cardData) {
+        throw new Error(kripiData?.error?.message || 'KripiCard API failed. Please try again.');
       }
+      const cardData = kripiData.cardData;
+      const expiryMmYy = (cardData.expiryMonth && cardData.expiryYear)
+        ? `${String(cardData.expiryMonth).padStart(2, '0')}/${String(cardData.expiryYear).slice(-2)}`
+        : '12/28';
+      const last4 = (cardData.number || '').replace(/\s/g, '').slice(-4) || cardData.last4 || '0000';
+      await dbCardService.saveCredentials(walletAddress, cardData.number || `4000 0000 0000 ${last4}`, cardData.cvv || '000', {
+        expiry_month: expiryMmYy.split('/')[0],
+        expiry_year:  expiryMmYy.split('/')[1],
+        card_type:    cardVariant.id,
+        balance:      cardData.limit?.amount ? cardData.limit.amount / 100 : 0,
+        status:       cardData.status === 'locked' ? 'frozen' : 'active',
+        holder_name:  cleanName,
+        design,
+      });
 
       await refreshCardData();
       // Notify admin that a new virtual card was issued

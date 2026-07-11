@@ -313,8 +313,8 @@ export default function CardsPage() {
     }
   };
 
-  const handleSyncToCodego = async (card: VirtualCard) => {
-    if (!confirm(`Sync card for ${card.wallet_address.slice(0, 10)}... to Codego?`)) return;
+  const handleMigrateToKripiCard = async (card: VirtualCard) => {
+    if (!confirm(`Migrate mock card for ${card.wallet_address.slice(0, 10)}... to a real KripiCard?\n\nThis will issue a real card via the KripiCard API and replace the mock entry.`)) return;
     setSyncingCardId(card.id);
     try {
       const res = await fetch('/api/cards', {
@@ -328,9 +328,9 @@ export default function CardsPage() {
         }),
       });
       const result = await res.json();
-      if (!res.ok) throw new Error(result.error || 'Codego sync failed');
+      if (!res.ok) throw new Error(result.error || 'KripiCard migration failed');
       queryClient.invalidateQueries({ queryKey: ['admin-vcc-cards'] });
-      alert('✅ Card synced to Codego successfully!');
+      alert('✅ Mock card migrated to real KripiCard successfully! User will see the real card on next app refresh.');
     } catch (err: any) {
       alert('❌ Sync failed: ' + err.message);
     } finally {
@@ -734,7 +734,7 @@ export default function CardsPage() {
           </h1>
           <p className="text-xs text-[#1a1a1a] font-bold mt-2 font-mono uppercase tracking-wider">
             {activeTab === 'virtual'
-              ? 'All virtual cards issued to users — sync unregistered cards to Codego'
+              ? 'All virtual cards issued to users — mock cards must be migrated to real KripiCards'
               : activeTab === 'requests'
               ? 'Review, approve, and dispatch physical smartcard orders from verified wallets'
               : activeTab === 'variants'
@@ -812,8 +812,8 @@ export default function CardsPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
               { label: 'Total Issued', value: (virtualCards || []).length },
-              { label: 'Synced to Codego', value: (virtualCards || []).filter(c => c.codego_card_id).length },
-              { label: 'Pending Sync', value: (virtualCards || []).filter(c => !c.codego_card_id).length },
+              { label: 'Real KripiCards', value: (virtualCards || []).filter(c => c.codego_card_id).length },
+              { label: 'Mock (Need Migration)', value: (virtualCards || []).filter(c => !c.codego_card_id).length },
               { label: 'Active', value: (virtualCards || []).filter(c => c.card_status === 'active').length },
             ].map(s => (
               <div key={s.label} className="brutalist-card p-4">
@@ -856,7 +856,7 @@ export default function CardsPage() {
                     <th className="py-3.5 px-4 border-r border-[#1a1a1a] font-display">Card</th>
                     <th className="py-3.5 px-4 border-r border-[#1a1a1a] font-display">Variant</th>
                     <th className="py-3.5 px-4 border-r border-[#1a1a1a] font-display">Status</th>
-                    <th className="py-3.5 px-4 border-r border-[#1a1a1a] font-display">Codego</th>
+                    <th className="py-3.5 px-4 border-r border-[#1a1a1a] font-display">KripiCard</th>
                     <th className="py-3.5 px-4 border-r border-[#1a1a1a] font-display">Created</th>
                     <th className="py-3.5 px-4 font-display text-right">Action</th>
                   </tr>
@@ -914,8 +914,8 @@ export default function CardsPage() {
                             </div>
                           ) : (
                             <div className="flex items-center gap-1.5">
-                              <AlertTriangle className="h-3.5 w-3.5 text-[#e63b2e]" />
-                              <span className="text-[9px] font-bold text-[#e63b2e] uppercase">Not synced</span>
+                              <AlertTriangle className="h-3.5 w-3.5 text-[#ffcc00]" />
+                              <span className="text-[9px] font-bold text-[#e63b2e] uppercase">Mock Card</span>
                             </div>
                           )}
                         </td>
@@ -945,16 +945,16 @@ export default function CardsPage() {
 
                             {!card.codego_card_id ? (
                               <button
-                                onClick={() => handleSyncToCodego(card)}
+                                onClick={() => handleMigrateToKripiCard(card)}
                                 disabled={syncingCardId === card.id}
-                                className="px-3 py-1.5 bg-[#0055ff] text-white border-2 border-[#1a1a1a] text-[10px] font-bold uppercase hover:bg-[#003cc5] disabled:opacity-50 flex items-center gap-1 shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]"
+                                className="px-3 py-1.5 bg-[#e63b2e] text-white border-2 border-[#1a1a1a] text-[10px] font-bold uppercase hover:bg-red-700 disabled:opacity-50 flex items-center gap-1 shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]"
                               >
                                 {syncingCardId === card.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                                {syncingCardId === card.id ? 'Syncing...' : 'Sync to Codego'}
+                                {syncingCardId === card.id ? 'Migrating...' : 'Migrate to KripiCard'}
                               </button>
                             ) : (
                               <span className="text-[10px] font-bold text-green-600 uppercase flex items-center gap-1">
-                                <CheckCircle className="h-3 w-3" /> Registered
+                                <CheckCircle className="h-3 w-3" /> Real Card
                               </span>
                             )}
                           </div>

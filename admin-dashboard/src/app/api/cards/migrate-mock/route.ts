@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
         address: '123 Fintech Way',
         dob: '1990-01-01',
       };
-      await supabase.from('kyc').upsert(kycData, { onConflict: 'wallet_address' }).catch(() => {});
+      await supabase.from('kyc').upsert(kycData, { onConflict: 'wallet_address' });
     }
 
     // 3. Issue real KripiCard
@@ -130,7 +130,7 @@ export async function POST(req: NextRequest) {
       balance: currentBalance,
       is_mock: false,
       provider_response: cardResult.raw || {},
-    }, { onConflict: 'provider_card_id' }).catch(() => {});
+    }, { onConflict: 'provider_card_id' });
 
     ProviderLogger.info(provider.name, 'migrate-mock', `Migration complete for ${addr} → card_id: ${cardResult.providerCardId}`);
 

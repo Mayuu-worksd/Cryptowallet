@@ -107,7 +107,7 @@ export default function SandboxTerminalPage() {
 
       if (selectedEvent.category === 'tx' || isTopup) {
         // Use the per-card simulate endpoint for transactions
-        endpoint = `/api/codego/cards/${selectedCard}/simulate-transaction`;
+        endpoint = `/api/provider/cards/${selectedCard}/simulate-transaction`;
         body = {
           merchantName: isTopup ? 'Card Top-Up' : merchant,
           amount: isTopup ? parseFloat(amount) : -parseFloat(amount),
@@ -117,7 +117,7 @@ export default function SandboxTerminalPage() {
         };
       } else {
         // Use the general webhook simulator for lifecycle events
-        endpoint = '/api/codego/simulate-webhook';
+        endpoint = '/api/provider/simulate-webhook';
         body = {
           eventType: selectedEvent.event,
           codegoCardId: selectedCard,
@@ -157,7 +157,7 @@ export default function SandboxTerminalPage() {
     setBulkRunning(true);
     for (const m of MERCHANTS.slice(0, 5)) {
       try {
-        const res = await fetch(`/api/codego/cards/${selectedCard}/simulate-transaction`, {
+        const res = await fetch(`/api/provider/cards/${selectedCard}/simulate-transaction`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -191,7 +191,7 @@ export default function SandboxTerminalPage() {
               Sandbox Test Terminal
             </h1>
             <p className="text-xs text-gray-400 font-mono mt-1">
-              Simulate real CodeGo events — fires through the full production webhook pipeline
+              Simulate real provider events — fires through the full production webhook pipeline
             </p>
           </div>
         </div>
@@ -235,7 +235,7 @@ export default function SandboxTerminalPage() {
                 {(cards || []).map(c => (
                   <option key={c.id} value={c.codego_card_id || c.id}>
                     {c.card_holder_name} •••• {c.card_last4} [{c.card_status}]
-                    {c.codego_card_id ? ` — ${c.codego_card_id.slice(0, 12)}...` : ' — NO CODEGO ID'}
+                    {c.codego_card_id ? ` — ${c.codego_card_id.slice(0, 12)}...` : ' — NO PROVIDER ID'}
                   </option>
                 ))}
               </select>
@@ -243,7 +243,7 @@ export default function SandboxTerminalPage() {
             {selectedCardData && (
               <div className="bg-[#f5f0e8] border border-[#1a1a1a]/20 p-3 text-[10px] font-mono space-y-0.5">
                 <div><span className="text-gray-500">WALLET:</span> {selectedCardData.wallet_address.slice(0,10)}...{selectedCardData.wallet_address.slice(-6)}</div>
-                <div><span className="text-gray-500">CODEGO ID:</span> {selectedCardData.codego_card_id || '⚠️ None — some simulations may not work'}</div>
+                <div><span className="text-gray-500">PROVIDER ID:</span> {selectedCardData.codego_card_id || '⚠️ None — some simulations may not work'}</div>
                 <div><span className="text-gray-500">STATUS:</span> <span className="font-bold uppercase">{selectedCardData.card_status}</span></div>
               </div>
             )}
@@ -420,26 +420,25 @@ export default function SandboxTerminalPage() {
           <div className="p-4 border-t-2 border-[#1a1a1a] bg-[#f5f0e8]">
             <p className="text-[9px] font-mono text-gray-500 uppercase font-bold">Pipeline (same as production):</p>
             <p className="text-[9px] font-mono text-gray-400 mt-1">
-              Admin fires event → /api/codego/simulate-webhook → /api/webhooks/codego → Supabase transactions → Mobile app ✅
+              Admin fires event → /api/provider/simulate-webhook → /api/webhooks/card-provider → Supabase transactions → Mobile app ✅
             </p>
-            <p className="text-[9px] font-mono text-[#f59e0b] mt-2 font-bold uppercase">Codego Sandbox Note:</p>
+            <p className="text-[9px] font-mono text-[#f59e0b] mt-2 font-bold uppercase">Provider Sandbox Note:</p>
             <p className="text-[9px] font-mono text-gray-400 mt-1">
-              Codego sandbox does NOT fire real transaction webhooks (GET /cards/&#123;id&#125;/transactions returns 404).
-              This terminal IS the correct simulation method per Codego&apos;s own Postman collection (Step 7).
+              Provider sandbox does NOT fire real transaction webhooks (GET /cards/&#123;id&#125;/transactions returns 404).
+              This terminal IS the correct simulation method.
             </p>
           </div>
         </div>
       </div>
 
-      {/* ── Codego Real KYC Section ─────────────────────────────────────────── */}
+      {/* ── KripiCard Real KYC Section ─────────────────────────────────────────── */}
       <div className="bg-[#1a1a1a] border-3 border-[#1a1a1a] p-6 shadow-[4px_4px_0px_0px_rgba(255,204,0,1)]">
         <div className="flex items-center gap-3 mb-4">
           <Shield className="h-6 w-6 text-[#ffcc00]" />
           <div>
-            <h2 className="text-xl font-extrabold text-white font-display uppercase">Codego Real KYC Activation</h2>
+            <h2 className="text-xl font-extrabold text-white font-display uppercase">KripiCard Real KYC Activation</h2>
             <p className="text-[10px] text-gray-400 font-mono mt-1">
-              Cards are currently issued as <span className="text-red-400">mock_cg_</span> because Codego sandbox needs real KYC completion.
-              Use this to get a real Codego cardholder ID and issue a real card.
+              Use this to get a real KripiCard cardholder ID and issue a real card.
             </p>
           </div>
         </div>
@@ -460,7 +459,7 @@ export default function SandboxTerminalPage() {
               className="w-full flex items-center justify-center gap-2 bg-[#ffcc00] border-2 border-[#ffcc00] px-4 py-3 text-xs font-extrabold uppercase font-display text-[#1a1a1a] hover:bg-[#f0bf00] disabled:opacity-50"
             >
               {kycLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wifi className="h-4 w-4" />}
-              {kycLoading ? 'Generating...' : 'Generate Real Codego KYC Link'}
+              {kycLoading ? 'Generating...' : 'Generate Real KripiCard KYC Link'}
             </button>
 
             {kycResult && (
@@ -469,9 +468,9 @@ export default function SandboxTerminalPage() {
               }`}>
                 {kycResult.success ? (
                   <>
-                    <div className="font-bold">✅ KYC session created on Codego</div>
+                    <div className="font-bold">✅ KYC session created on KripiCard</div>
                     <div className="text-gray-400 mt-1">Cardholder ID: <span className="text-white">{kycResult.cardholderId}</span></div>
-                    <div className="text-gray-400 mt-1">Open the link below, complete the KYC flow, then Codego fires application.approved webhook automatically.</div>
+                    <div className="text-gray-400 mt-1">Open the link below, complete the KYC flow, then KripiCard fires application.approved webhook automatically.</div>
                   </>
                 ) : (
                   <div>❌ {kycResult.error}</div>
@@ -483,7 +482,7 @@ export default function SandboxTerminalPage() {
           <div className="space-y-3">
             {kycIframeUrl ? (
               <>
-                <label className="text-[10px] font-bold uppercase text-gray-400 font-mono">Codego KYC Link</label>
+                <label className="text-[10px] font-bold uppercase text-gray-400 font-mono">KripiCard KYC Link</label>
                 <div className="bg-[#2a2a2a] border border-[#ffcc00]/40 p-3">
                   <a
                     href={kycIframeUrl}
@@ -495,16 +494,16 @@ export default function SandboxTerminalPage() {
                   </a>
                 </div>
                 <p className="text-[9px] font-mono text-gray-500">
-                  1. Open this link in browser → complete Codego KYC sandbox flow<br/>
-                  2. Codego fires <span className="text-[#00ffcc]">application.approved</span> webhook automatically<br/>
-                  3. Webhook updates Supabase KYC status → user can now get a real Codego card
+                  1. Open this link in browser → complete KripiCard KYC sandbox flow<br/>
+                  2. KripiCard fires <span className="text-[#00ffcc]">application.approved</span> webhook automatically<br/>
+                  3. Webhook updates Supabase KYC status → user can now get a real KripiCard
                 </p>
               </>
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-gray-600 text-[10px] font-mono text-center space-y-2 py-8">
                 <Shield className="h-8 w-8 opacity-30" />
-                <p>Enter a wallet address and click Generate to get a real Codego KYC link.</p>
-                <p className="text-[9px] text-gray-700">This creates a real cardholder on Codego sandbox and returns the KYC iframe URL.</p>
+                <p>Enter a wallet address and click Generate to get a real KripiCard KYC link.</p>
+                <p className="text-[9px] text-gray-700">This creates a real cardholder on KripiCard and returns the KYC iframe URL.</p>
               </div>
             )}
           </div>

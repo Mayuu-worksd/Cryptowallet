@@ -316,7 +316,7 @@ export default function AccountStatementScreen({ navigation }: any) {
             <Feather name="credit-card" size={48} color={T.textDim} style={{ marginBottom: 12 }} />
             <Text style={[styles.emptyTitle, { color: T.text }]}>No Card Transactions</Text>
             <Text style={[styles.emptyDesc, { color: T.textMuted }]}>
-              Transactions made with your Codego card will appear here.
+              Transactions made with your virtual card will appear here.
             </Text>
           </View>
         )}

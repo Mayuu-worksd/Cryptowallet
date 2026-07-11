@@ -85,7 +85,7 @@ export default function CardScreen({ navigation, route }: any) {
   const [showCreate, setShowCreate] = useState(false);
   const [kycCheckLoading, setKycCheckLoading] = useState(false);
 
-  // Check live Codego status and auto-sync Supabase if approved
+  // Check live KYC status and auto-sync Supabase if approved
   const checkAndSyncKYC = useCallback(async (): Promise<boolean> => {
     try {
       const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
@@ -102,7 +102,7 @@ export default function CardScreen({ navigation, route }: any) {
     }
   }, [walletAddress, refreshKYCStatus]);
 
-  // On mount: if kycStatus not yet verified, silently check Codego to auto-resolve
+  // On mount: if kycStatus not yet verified, silently check KYC to auto-resolve
   useEffect(() => {
     if (kycStatus === 'verified' || !walletAddress) return;
     checkAndSyncKYC().catch(() => {});
@@ -196,7 +196,7 @@ export default function CardScreen({ navigation, route }: any) {
     try {
       const approved = await checkAndSyncKYC();
       if (!approved) {
-        showToast('Sandbox KYC not yet approved. Please complete the Codego KYC flow.', 'error');
+        showToast('KYC not yet approved. Please complete the KYC verification flow.', 'error');
         return;
       }
       await createCard(holderName, selectedSkin === 'standard' ? 'dark' : selectedSkin === 'solana' ? 'neon' : 'emerald');
@@ -677,7 +677,7 @@ export default function CardScreen({ navigation, route }: any) {
                   if (approved) {
                     setShowCreate(true);
                   } else {
-                    showToast('Sandbox KYC not yet approved. Complete the Codego KYC flow first.', 'error');
+                    showToast('KYC not yet approved. Complete the KYC verification flow first.', 'error');
                   }
                 }}
                 style={[styles.applyButton, { backgroundColor: T.text }]}

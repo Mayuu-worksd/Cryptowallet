@@ -62,7 +62,7 @@ class ProviderManagerRegistry {
       return this.activeProviderInstance;
     }
 
-    const providerName = (process.env.CARD_PROVIDER || 'codego').toLowerCase();
+    const providerName = (process.env.CARD_PROVIDER || 'kripicard').toLowerCase();
     let instance: UnifiedProvider;
 
     switch (providerName) {
@@ -137,8 +137,8 @@ class ProviderManagerRegistry {
       }
 
       default: {
-        ProviderLogger.warn('System', 'loadProvider', `Unknown CARD_PROVIDER="${providerName}". Falling back to Codego.`);
-        instance = new CodegoProvider();
+        ProviderLogger.warn('System', 'loadProvider', `Unknown CARD_PROVIDER="${providerName}". Falling back to KripiCard.`);
+        instance = new KripiCardProvider();
       }
     }
 
@@ -156,7 +156,7 @@ class ProviderManagerRegistry {
    * Returns the currently configured provider name from environment variable.
    */
   public getActiveProviderName(): string {
-    return (process.env.CARD_PROVIDER || 'codego').toLowerCase();
+    return (process.env.CARD_PROVIDER || 'kripicard').toLowerCase();
   }
 
   /**
@@ -164,8 +164,8 @@ class ProviderManagerRegistry {
    */
   public listAvailableProviders(): string[] {
     return [
-      'codego',
       'kripicard',
+      'codego',
       'striga',
       'rain',
       'pintopay',

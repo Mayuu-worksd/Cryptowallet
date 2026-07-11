@@ -40,29 +40,29 @@ export default function KycPage() {
   const [sandboxLoading, setSandboxLoading] = useState<boolean>(false);
   const queryClient = useQueryClient();
 
-  const [codegoAppStatus, setCodegoAppStatus] = useState<string | null>(null);
-  const [codegoStatusLoading, setCodegoStatusLoading] = useState<boolean>(false);
+  const [providerAppStatus, setProviderAppStatus] = useState<string | null>(null);
+  const [providerStatusLoading, setProviderStatusLoading] = useState<boolean>(false);
 
-  const refreshCodegoStatus = async (walletAddress: string) => {
+  const refreshProviderStatus = async (walletAddress: string) => {
     if (!walletAddress) return;
-    setCodegoStatusLoading(true);
+    setProviderStatusLoading(true);
     try {
       const res = await fetch(`/api/cardholders?walletAddress=${walletAddress}`);
       if (!res.ok) {
-        setCodegoAppStatus('not_started');
+        setProviderAppStatus('not_started');
         return;
       }
       const data = await res.json();
       if (data.codegoStatus === 'not_found_in_codego' || !data.cardholderId) {
-        setCodegoAppStatus('not_started');
+        setProviderAppStatus('not_started');
       } else {
-        setCodegoAppStatus(data.codegoData?.applicationStatus || 'needsVerification');
+        setProviderAppStatus(data.codegoData?.applicationStatus || 'needsVerification');
       }
     } catch (err) {
-      console.error('Failed to check Codego status:', err);
-      setCodegoAppStatus('error');
+      console.error('Failed to check provider status:', err);
+      setProviderAppStatus('error');
     } finally {
-      setCodegoStatusLoading(false);
+      setProviderStatusLoading(false);
     }
   };
 
@@ -78,7 +78,7 @@ export default function KycPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to generate link');
       setSandboxLink(data.iframeUrl);
-      refreshCodegoStatus(walletAddress);
+      refreshProviderStatus(walletAddress);
     } catch (err: any) {
       alert('❌ Error: ' + err.message);
     } finally {
@@ -93,8 +93,8 @@ export default function KycPage() {
     setSandboxLoading(false);
     setSignedUrls({});
     setUrlsLoading(true);
-    setCodegoAppStatus(null);
-    refreshCodegoStatus(kyc.wallet_address);
+    setProviderAppStatus(null);
+    refreshProviderStatus(kyc.wallet_address);
     try {
       const [doc, selfie, video] = await Promise.all([
         kyc.document_url ? getKYCSignedUrl(extractStoragePath(kyc.document_url)) : Promise.resolve(''),
@@ -556,40 +556,40 @@ export default function KycPage() {
                           <CheckCircle className="h-3.5 w-3.5" /> Identity Verified in Supabase
                         </p>
                         <p className="text-gray-600 mt-1">
-                          KYC status is <strong>verified</strong> — user can create cards. CodeGo sandbox status ({codegoAppStatus || 'needsVerification'}) is separate from our system approval.
+                          KYC status is <strong>verified</strong> — user can create cards. Provider sandbox status ({providerAppStatus || 'needsVerification'}) is separate from our system approval.
                         </p>
                       </div>
                       {/* Show CodeGo status info but don't block */}
                       <div className="flex items-center justify-between text-[10px] font-bold bg-white p-2 border border-[#1a1a1a]">
-                        <span className="text-gray-500">CodeGo sandbox status: <span className="text-[#e5a93c] uppercase">{codegoAppStatus || 'needsVerification'}</span></span>
+                        <span className="text-gray-500">Provider sandbox status: <span className="text-[#e5a93c] uppercase">{providerAppStatus || 'needsVerification'}</span></span>
                         <span className="text-gray-400 italic text-[9px]">Does not affect our approval</span>
                       </div>
                     </div>
                   ) : (
                     <>
                       <p className="text-[10px] text-gray-600 mb-3">
-                        In Sandbox mode, Codego requires cardholders to go through a verification flow to issue cards. Click below to generate their Sandbox KYC link.
+                        In Sandbox mode, the card provider requires cardholders to go through a verification flow to issue cards. Click below to generate their Sandbox KYC link.
                       </p>
 
                       {/* Live CodeGo Application Status */}
                       <div className="mb-3 flex items-center justify-between text-xs font-bold bg-white p-2 border border-[#1a1a1a]">
                         <div className="flex items-center gap-1.5">
-                          <span>CodeGo status:</span>
-                          {codegoStatusLoading ? (
+                          <span>Provider status:</span>
+                          {providerStatusLoading ? (
                             <span className="text-gray-500 animate-pulse uppercase text-[10px]">Checking...</span>
                           ) : (
                             <span className={
-                              codegoAppStatus === 'approved' ? 'text-[#00c853] font-extrabold text-[10px]' :
-                              codegoAppStatus === 'needsVerification' ? 'text-[#e5a93c] font-extrabold text-[10px]' :
+                              providerAppStatus === 'approved' ? 'text-[#00c853] font-extrabold text-[10px]' :
+                              providerAppStatus === 'needsVerification' ? 'text-[#e5a93c] font-extrabold text-[10px]' :
                               'text-gray-500 text-[10px]'
                             }>
-                              {(codegoAppStatus || 'NOT_STARTED').toUpperCase()}
+                              {(providerAppStatus || 'NOT_STARTED').toUpperCase()}
                             </span>
                           )}
                         </div>
                         <button
-                          onClick={(e) => { e.preventDefault(); refreshCodegoStatus(selectedKyc.wallet_address); }}
-                          disabled={codegoStatusLoading}
+                          onClick={(e) => { e.preventDefault(); refreshProviderStatus(selectedKyc.wallet_address); }}
+                          disabled={providerStatusLoading}
                           className="brutalist-button px-2 py-0.5 text-[8px] font-bold shadow-[1px_1px_0px_0px_rgba(26,26,26,1)] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
                         >
                           Refresh
@@ -597,10 +597,10 @@ export default function KycPage() {
                       </div>
 
                       {/* needsVerification info banner */}
-                      {codegoAppStatus === 'needsVerification' && (
+                      {providerAppStatus === 'needsVerification' && (
                         <div className="mb-3 p-2 bg-[#e5a93c]/10 border border-[#e5a93c] text-[10px] font-mono">
-                          <p className="text-[#e5a93c] font-extrabold uppercase">⚠️ CodeGo Sandbox: Awaiting Manual Review</p>
-                          <p className="text-gray-600 mt-0.5">KYC was submitted on CodeGo sandbox. They will email when approved. You can still force-verify below using admin override.</p>
+                          <p className="text-[#e5a93c] font-extrabold uppercase">⚠️ Provider Sandbox: Awaiting Manual Review</p>
+                          <p className="text-gray-600 mt-0.5">KYC was submitted on the provider sandbox. They will email when approved. You can still force-verify below using admin override.</p>
                         </div>
                       )}
 
@@ -690,7 +690,7 @@ export default function KycPage() {
                   ) : (
                     <button
                       onClick={() => {
-                        // Allow verify regardless of CodeGo sandbox status
+                        // Allow verify regardless of provider sandbox status
                         // Admin has authority to override sandbox limitations
                         setShowVerifyModal(true);
                       }}
@@ -703,7 +703,7 @@ export default function KycPage() {
                         <CheckCircle className="h-4 w-4" />
                       )}
                       <span>
-                        {codegoAppStatus === 'needsVerification'
+                        {providerAppStatus === 'needsVerification'
                           ? '⚡ Force Verify (Admin Override)'
                           : 'Verify Identity'
                         }

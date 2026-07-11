@@ -47,7 +47,7 @@ export class KripiCardProvider implements CardProvider, FinancialProvider {
 
   constructor() {
     this.apiKey = process.env.KRIPICARD_API_KEY || '';
-    this.baseUrl = process.env.KRIPICARD_BASE_URL || 'https://home.kripicard.com/api/premium';
+    this.baseUrl = process.env.KRIPICARD_BASE_URL || 'https://appapi.kripicard.com';
   }
 
   /**
@@ -143,64 +143,69 @@ export class KripiCardProvider implements CardProvider, FinancialProvider {
   // ─── Card Lifecycle Methods ────────────────────────────────────────────────
 
   async createCard(input: CreateCardInput, kycData: Record<string, unknown>): Promise<CardResult> {
-    const firstName = kycData.full_name ? String(kycData.full_name).split(' ')[0] : 'First';
-    const lastName = kycData.full_name
-      ? String(kycData.full_name).split(' ').slice(1).join(' ')
-      : 'Last';
+    const nameOnCard = (input.nameOnCard || String(kycData.full_name || 'CARD HOLDER')).trim();
+    const email = String(kycData.email || '');
+    const dob   = String(kycData.dob || '');
 
-    const result = await this.request('/Create_card', 'POST', {
-      amount: 10.0, // default minimum initial load
-      bankBin: 1,   // default BIN identifier
-      first_name: firstName,
-      last_name: lastName,
-    });
+    // Supported BINs: 533171 (SG), 246001 (UK), 441357, 49387519, 49387520
+    const bin = '441357'; // default global BIN — no DOB required
+    const payload: Record<string, any> = {
+      bin,
+      amount: 10,
+      name_on_card: nameOnCard,
+    };
+    if (email) payload.email = email;
+    if (dob)   payload.dateOfBirth = dob;
 
-    const rawNumber = String(result.card_number || '0000').replace(/\s/g, '');
-    const last4 = rawNumber.slice(-4);
-    const holderName = result.holder_name || (input.nameOnCard || `${firstName} ${lastName}`).toUpperCase();
+    const result = await this.request('/api/external/cards/createcard', 'POST', payload);
 
-    const normalizedStatus = this.normalizeStatus(result.status);
+    if (!result?.success) {
+      throw new ProviderAPIException(this.name, result?.message || 'Card creation failed', 400, result);
+    }
+
+    const last4 = String(result.last_4 || '0000');
+    const normalizedStatus = this.normalizeStatus('active');
 
     ProviderLogger.info(this.name, 'createCard', `Card issued successfully for ${input.walletAddress}`);
 
     return {
-      providerCardId: String(result.card_id || result.id || `kripi_${Date.now()}`),
+      providerCardId: String(result.card_id),
       status: normalizedStatus,
-      providerStatus: result.status || 'active',
+      providerStatus: 'active',
       last4,
-      expiryMmYy: result.expiry || '12/28',
-      number: result.card_number,
-      cvv: result.cvv,
-      holderName,
+      expiryMmYy: result.expiry ? result.expiry.replace('/', '/').split('/').reverse().join('/') : '06/31',
+      number: undefined,
+      cvv: undefined,
+      holderName: nameOnCard.toUpperCase(),
       isMock: false,
       raw: result,
     };
   }
 
   async getCard(providerCardId: string): Promise<CardResult | null> {
-    const result = await this.request('/Get_CardDetails', 'GET', { card_id: providerCardId });
-    if (!result || !result.card_id) return null;
+    const result = await this.request('/api/external/cards/carddetails', 'POST', { card_id: providerCardId });
+    if (!result?.success) return null;
 
     const rawNumber = String(result.card_number || '0000').replace(/\s/g, '');
     const last4 = rawNumber.slice(-4);
     const normalizedStatus = this.normalizeStatus(result.status);
 
     return {
-      providerCardId: String(result.card_id),
+      providerCardId,
       status: normalizedStatus,
       providerStatus: result.status || 'active',
       last4,
       expiryMmYy: result.expiry || '12/28',
       number: result.card_number,
       cvv: result.cvv,
-      holderName: result.holder_name || 'CARD HOLDER',
+      holderName: 'CARD HOLDER',
       isMock: false,
       raw: result,
     };
   }
 
   async freezeCard(providerCardId: string): Promise<CardStatusResult> {
-    await this.request('/Freeze_Unfreeze', 'POST', {
+    await this.request('/api/external/premium/Freeze_Unfreeze', 'POST', {
       card_id: providerCardId,
       action: 'freeze',
     });
@@ -215,7 +220,7 @@ export class KripiCardProvider implements CardProvider, FinancialProvider {
   }
 
   async unfreezeCard(providerCardId: string): Promise<CardStatusResult> {
-    await this.request('/Freeze_Unfreeze', 'POST', {
+    await this.request('/api/external/premium/Freeze_Unfreeze', 'POST', {
       card_id: providerCardId,
       action: 'unfreeze',
     });
@@ -230,24 +235,21 @@ export class KripiCardProvider implements CardProvider, FinancialProvider {
   }
 
   async getTransactions(providerCardId: string, _filters?: any): Promise<GetTransactionsResult> {
-    const result = await this.request('/Get_CardDetails', 'GET', { card_id: providerCardId });
-    const rawTxns = result.Transactions || [];
+    const result = await this.request('/api/external/cards/transactions', 'POST', { card_id: providerCardId });
+    const rawTxns = result?.data?.transactions || [];
 
     const transactions = rawTxns.map((tx: any, idx: number) => ({
       id: String(tx.id || `kripi-${providerCardId}-${idx}`),
       amount: Number(tx.amount || 0),
-      currency: String(tx.currency || 'USD'),
+      currency: 'USD',
       merchantName: String(tx.merchant || 'Unknown Merchant'),
-      description: tx.description,
-      status: 'approved',
+      description: tx.type || tx.description,
+      status: tx.success ? 'approved' : 'declined',
       createdAt: tx.date || new Date().toISOString(),
       raw: tx,
     }));
 
-    return {
-      transactions,
-      source: 'provider',
-    };
+    return { transactions, source: 'provider' };
   }
 
   // ─── FinancialProvider Specific Card Methods ───────────────────────────────
@@ -290,7 +292,7 @@ export class KripiCardProvider implements CardProvider, FinancialProvider {
   }
 
   async fundVirtualCard(cardId: string, amount: number, _currency: string): Promise<any> {
-    const result = await this.request('/Fund_Card', 'POST', {
+    const result = await this.request('/api/external/cards/fundcard', 'POST', {
       card_id: cardId,
       amount,
     });
@@ -303,10 +305,9 @@ export class KripiCardProvider implements CardProvider, FinancialProvider {
   }
 
   async deleteCard(cardId: string): Promise<any> {
-    // KripiCard v1.6 has no permanent deletion endpoint; perform soft cancellation via freeze
-    await this.freezeCard(cardId);
-    ProviderLogger.info(this.name, 'deleteCard', `Card ${cardId} soft-canceled via freeze`);
-    return { success: true, providerCardId: cardId, status: 'terminated' };
+    const result = await this.request('/api/external/cards/deletecard', 'POST', { card_id: cardId });
+    ProviderLogger.info(this.name, 'deleteCard', `Card ${cardId} deleted. Refunded: $${result?.refunded ?? 0}`);
+    return { success: true, providerCardId: cardId, status: 'terminated', raw: result };
   }
 
   async getCardDetails(cardId: string): Promise<any> {
@@ -319,12 +320,12 @@ export class KripiCardProvider implements CardProvider, FinancialProvider {
 
   // ─── Fiat & Deposits ───────────────────────────────────────────────────────
 
-  async createDeposit(_input: any): Promise<any> {
-    throw new ProviderNotImplementedException(this.name, 'createDeposit');
+  async createDeposit(input: { walletAddress: string; cardId?: string; amount: number; currency: string; network?: string; order_id?: string }): Promise<any> {
+    return this.request('/api/external/deposits/create', 'POST', input);
   }
 
-  async depositStatus(_depositId: string): Promise<any> {
-    throw new ProviderNotImplementedException(this.name, 'depositStatus');
+  async depositStatus(depositId: string): Promise<any> {
+    return this.request('/api/external/deposits/status', 'POST', { id: depositId });
   }
 
   async withdrawFiat(_input: any): Promise<any> {
@@ -343,9 +344,8 @@ export class KripiCardProvider implements CardProvider, FinancialProvider {
 
   async healthCheck(): Promise<{ status: 'healthy' | 'unhealthy'; error?: string }> {
     try {
-      const res = await fetch(this.baseUrl).catch(() => null);
-      if (res) return { status: 'healthy' };
-      return { status: 'healthy' }; // Sandbox/Premium host reachable
+      const result = await this.request('/api/external/cards/list', 'POST', {});
+      return result?.success ? { status: 'healthy' } : { status: 'unhealthy', error: result?.message };
     } catch (e: any) {
       return { status: 'unhealthy', error: e.message };
     }
@@ -371,8 +371,12 @@ export class KripiCardProvider implements CardProvider, FinancialProvider {
   }
 
   async listCards(_cardholderId: string): Promise<any[]> {
-    // KripiCard Premium BIN API v1.6 does not document /List_Cards; rely on database mapping
-    return [];
+    try {
+      const result = await this.request('/api/external/cards/list', 'POST', {});
+      return result?.data || [];
+    } catch {
+      return [];
+    }
   }
 
   async blockCard(providerCardId: string): Promise<CardStatusResult> {
@@ -427,6 +431,7 @@ export class KripiCardProvider implements CardProvider, FinancialProvider {
           description:  data.description || null,
           createdAt:    data.created_at || data.date || new Date().toISOString(),
         },
+        raw: payload,
       };
     }
 
@@ -437,6 +442,7 @@ export class KripiCardProvider implements CardProvider, FinancialProvider {
         providerCardId: String(data.card_id || data.id || ''),
         newStatus:      'active',
         providerStatus: 'active',
+        raw:            payload,
       };
     }
 
@@ -444,7 +450,7 @@ export class KripiCardProvider implements CardProvider, FinancialProvider {
     return {
       category:       'unknown',
       providerCardId: String(data.card_id || data.id || ''),
-      rawEvent:       event,
+      raw:            payload,
     };
   }
 

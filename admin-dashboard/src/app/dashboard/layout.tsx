@@ -168,7 +168,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'Card Requests', href: '/dashboard/cards', icon: CreditCard },
     { name: 'Fiat Requests', href: '/dashboard/fiat-requests', icon: Landmark },
     { name: 'Alerts Log', href: '/dashboard/alerts', icon: AlertTriangle },
-    { name: 'Codego Webhooks', href: '/dashboard/codego-webhooks', icon: Network },
+    { name: 'Provider Webhooks', href: '/dashboard/codego-webhooks', icon: Network },
     { name: 'Sandbox Terminal', href: '/dashboard/sandbox-terminal', icon: Terminal, badge: 'DEV' },
     { name: 'Bank Accounts', href: '/dashboard/bank-accounts', icon: Landmark },
     { name: 'Networks', href: '/dashboard/networks', icon: Network },

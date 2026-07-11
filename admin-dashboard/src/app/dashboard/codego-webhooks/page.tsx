@@ -5,9 +5,9 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { RefreshCw, Activity, CheckCircle, XCircle } from 'lucide-react';
 
-export default function CodegoWebhooksPage() {
+export default function ProviderWebhooksPage() {
   const { data: webhooks, isLoading, refetch } = useQuery({
-    queryKey: ['admin-codego-webhooks'],
+    queryKey: ['admin-provider-webhooks'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('codego_webhooks_log')
@@ -24,10 +24,10 @@ export default function CodegoWebhooksPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-2 border-[var(--border-color)] pb-4">
         <div>
           <h1 className="text-2xl font-bold font-display uppercase tracking-wider text-[var(--foreground)]">
-            Codego Webhooks
+            Provider Webhooks
           </h1>
           <p className="text-sm text-gray-500 font-mono mt-1">
-            Incoming events from Codego BaaS
+            Incoming events from card provider
           </p>
         </div>
         <button
@@ -87,7 +87,7 @@ export default function CodegoWebhooksPage() {
             <div className="p-12 text-center border-2 border-[var(--border-color)] bg-[var(--card-bg)] shadow-[4px_4px_0px_0px_var(--border-color)]">
               <Activity className="h-12 w-12 mx-auto text-gray-400 mb-4 opacity-50" />
               <h3 className="text-lg font-bold font-display uppercase tracking-wider mb-2">No Webhooks Yet</h3>
-              <p className="text-gray-500 font-mono text-sm">Listening for incoming Codego events...</p>
+              <p className="text-gray-500 font-mono text-sm">Listening for incoming provider events...</p>
             </div>
           )}
         </div>

@@ -35,7 +35,7 @@ type CardData = {
   status: string;
   network: string;
   variant: string;
-  codegoCardId?: string;
+  codegoCardId?: string;  // kept for backward compat — maps to codego_card_id DB column
   vccId?: string;
 };
 
@@ -131,7 +131,7 @@ export default function VCCCardDetailScreen({ navigation }: any) {
       });
     }
 
-    const cid = (vcc as any)?.codego_card_id || cardDetails?.codegoCardId;
+      const cid = (vcc as any)?.codego_card_id || cardDetails?.codegoCardId;
     if (cid) {
       try {
         const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
