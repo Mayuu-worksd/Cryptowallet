@@ -812,8 +812,8 @@ export default function CardsPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
               { label: 'Total Issued', value: (virtualCards || []).length },
-              { label: 'Real KripiCards', value: (virtualCards || []).filter(c => c.codego_card_id).length },
-              { label: 'Mock (Need Migration)', value: (virtualCards || []).filter(c => !c.codego_card_id).length },
+              { label: 'Real KripiCards', value: (virtualCards || []).filter(c => c.codego_card_id && !c.codego_card_id.startsWith('mock_cg_')).length },
+              { label: 'Mock (Need Migration)', value: (virtualCards || []).filter(c => !c.codego_card_id || c.codego_card_id.startsWith('mock_cg_')).length },
               { label: 'Active', value: (virtualCards || []).filter(c => c.card_status === 'active').length },
             ].map(s => (
               <div key={s.label} className="brutalist-card p-4">
@@ -905,7 +905,7 @@ export default function CardsPage() {
                           }`}>{card.card_status}</span>
                         </td>
                         <td className="py-3 px-4 border-r border-[#1a1a1a]/10">
-                          {card.codego_card_id ? (
+                          {card.codego_card_id && !card.codego_card_id.startsWith('mock_cg_') ? (
                             <div className="flex items-center gap-1.5">
                               <CheckCircle className="h-3.5 w-3.5 text-green-600" />
                               <span className="text-[9px] font-mono text-green-700 font-bold truncate max-w-[80px]" title={card.codego_card_id}>
@@ -943,7 +943,7 @@ export default function CardsPage() {
                               {fixingCardId === card.id ? 'Fixing...' : 'Fix Sync'}
                             </button>
 
-                            {!card.codego_card_id ? (
+                            {(!card.codego_card_id || card.codego_card_id.startsWith('mock_cg_')) ? (
                               <button
                                 onClick={() => handleMigrateToKripiCard(card)}
                                 disabled={syncingCardId === card.id}

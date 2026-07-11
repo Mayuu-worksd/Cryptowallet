@@ -441,7 +441,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         }
         setEnabledCardCurrenciesState(base);
       }
-      if (vcc && vcc.codego_card_id) {
+      if (vcc && vcc.codego_card_id && !vcc.codego_card_id.startsWith('mock_cg_')) {
         if (vcc.codego_card_id && (!dbCard || !dbCardService.decryptNumber(dbCard, walletAddress))) {
           try {
             const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
@@ -513,7 +513,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           return nextDetails;
         });
         AsyncStorage.multiSet([['cw_card_balance', String(vcc.balance)]]).catch(() => {});
-      } else if (vcc && !vcc.codego_card_id) {
+      } else if (vcc && (!vcc.codego_card_id || vcc.codego_card_id.startsWith('mock_cg_'))) {
         // Mock card — delete it so user can create a real KripiCard
         await supabase.from('vcc_cards').delete().eq('wallet_address', walletAddress.toLowerCase()).catch(() => {});
         await AsyncStorage.multiRemove(['cw_card_created', 'cw_card_balance', 'cw_card_transactions']);
@@ -1084,7 +1084,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
               } catch { return null; }
             };
 
-            if (vcc && vcc.codego_card_id) {
+            if (vcc && vcc.codego_card_id && !vcc.codego_card_id.startsWith('mock_cg_')) {
               const variant = variants.find(v => v.id === vcc.card_variant);
               let finalNumber = dbCard ? dbCardService.decryptNumber(dbCard, address) : '';
               let finalCvv    = dbCard ? dbCardService.decryptCvv(dbCard, address)    : '';
@@ -1111,8 +1111,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
                 ['cw_card_balance', String(vcc.balance)],
               ]);
               storageService.saveCardDetails(restoredDetails).catch(() => {});
-            } else if (vcc && !vcc.codego_card_id) {
-              // Mock card (no real KripiCard id) — reset so user can create a real card
+            } else if (vcc && (!vcc.codego_card_id || vcc.codego_card_id.startsWith('mock_cg_'))) {
+              // Mock card (no real KripiCard id or mock_cg_ prefix) — reset so user can create a real card
               await supabase.from('vcc_cards').delete().eq('wallet_address', address.toLowerCase()).catch(() => {});
               await AsyncStorage.multiRemove(['cw_card_created', 'cw_card_balance', 'cw_card_transactions']);
               storageService.clearCardDetails().catch(() => {});
