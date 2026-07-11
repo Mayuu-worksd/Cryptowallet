@@ -151,7 +151,7 @@ export class KripiCardProvider implements CardProvider, FinancialProvider {
     const bin = '441357'; // default global BIN — no DOB required
     const payload: Record<string, any> = {
       bin,
-      amount: 1,
+      amount: 10,
       name_on_card: nameOnCard,
     };
     if (email) payload.email = email;

@@ -1,7 +1,5 @@
 /**
- * /api/admin/test-kripicard
- * GET: Test raw KripiCard API — shows exactly what the API returns for createcard + carddetails
- * DELETE THIS FILE after debugging is done.
+ * /api/admin/test-kripicard — DEBUG ONLY, delete after use
  */
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -9,68 +7,61 @@ export async function GET(req: NextRequest) {
   const apiKey = process.env.KRIPICARD_API_KEY || '';
   const baseUrl = process.env.KRIPICARD_BASE_URL || 'https://appapi.kripicard.com';
 
-  if (!apiKey) {
-    return NextResponse.json({ error: 'KRIPICARD_API_KEY not set in env' }, { status: 500 });
-  }
+  if (!apiKey) return NextResponse.json({ error: 'KRIPICARD_API_KEY not set' }, { status: 500 });
 
   const results: Record<string, any> = {
-    env: {
-      baseUrl,
-      apiKeySet: !!apiKey,
-      apiKeyPrefix: apiKey.slice(0, 8) + '...',
-    },
+    env: { baseUrl, apiKeySet: !!apiKey, apiKeyPrefix: apiKey.slice(0, 8) + '...' },
   };
 
-  // Step 1: Try createcard
+  // 1. createcard with amount=10
   try {
-    const createRes = await fetch(`${baseUrl}/api/external/cards/createcard`, {
+    const res = await fetch(`${baseUrl}/api/external/cards/createcard`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        api_key: apiKey,
-        bin: '441357',
-        amount: 1,
-        name_on_card: 'TEST USER',
-        email: 'test@kripicard.user',
-      }),
+      body: JSON.stringify({ api_key: apiKey, bin: '441357', amount: 10, name_on_card: 'TEST USER', email: 'test@kripicard.user' }),
     });
-    const createStatus = createRes.status;
-    let createBody: any;
-    try { createBody = await createRes.json(); } catch { createBody = await createRes.text(); }
-    results.createcard = { status: createStatus, body: createBody };
+    let body: any;
+    try { body = await res.json(); } catch { body = await res.text(); }
+    results.createcard = { status: res.status, body };
 
-    // Step 2: If card created, try carddetails
-    if (createBody?.success && createBody?.card_id) {
+    // 2. carddetails on newly created card
+    if (body?.success && body?.card_id) {
       try {
-        const detailRes = await fetch(`${baseUrl}/api/external/cards/carddetails`, {
+        const dRes = await fetch(`${baseUrl}/api/external/cards/carddetails`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ api_key: apiKey, card_id: createBody.card_id }),
+          body: JSON.stringify({ api_key: apiKey, card_id: body.card_id }),
         });
-        let detailBody: any;
-        try { detailBody = await detailRes.json(); } catch { detailBody = await detailRes.text(); }
-        results.carddetails = { status: detailRes.status, body: detailBody };
-      } catch (e: any) {
-        results.carddetails = { error: e.message };
-      }
+        let dBody: any;
+        try { dBody = await dRes.json(); } catch { dBody = await dRes.text(); }
+        results.carddetails_new = { status: dRes.status, body: dBody };
+      } catch (e: any) { results.carddetails_new = { error: e.message }; }
     }
-  } catch (e: any) {
-    results.createcard = { error: e.message };
-  }
+  } catch (e: any) { results.createcard = { error: e.message }; }
 
-  // Step 3: Try list cards
+  // 3. carddetails on existing card 34350
   try {
-    const listRes = await fetch(`${baseUrl}/api/external/cards/list`, {
+    const res = await fetch(`${baseUrl}/api/external/cards/carddetails`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: apiKey, card_id: '34350' }),
+    });
+    let body: any;
+    try { body = await res.json(); } catch { body = await res.text(); }
+    results.carddetails_34350 = { status: res.status, body };
+  } catch (e: any) { results.carddetails_34350 = { error: e.message }; }
+
+  // 4. list all cards
+  try {
+    const res = await fetch(`${baseUrl}/api/external/cards/list`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ api_key: apiKey }),
     });
-    let listBody: any;
-    try { listBody = await listRes.json(); } catch { listBody = await listRes.text(); }
-    results.listcards = { status: listRes.status, body: listBody };
-  } catch (e: any) {
-    results.listcards = { error: e.message };
-  }
+    let body: any;
+    try { body = await res.json(); } catch { body = await res.text(); }
+    results.listcards = { status: res.status, body };
+  } catch (e: any) { results.listcards = { error: e.message }; }
 
   return NextResponse.json(results, { status: 200 });
 }
