@@ -187,7 +187,7 @@ export default function PublicCardPage() {
                   </div>
                   <div className="text-right">
                     <p className={`text-sm font-black font-mono ${tx.type === 'topup' ? 'text-green-600' : 'text-[#1a1a1a]'}`}>
-                      {tx.amount > 0 ? (tx.type === 'topup' ? '+' : '-') + '$' + Number(tx.amount).toFixed(2) : 'Auth Hold'}
+                      {tx.type === 'topup' ? '+' : '-'}${Number(tx.amount).toFixed(2)}
                     </p>
                     {tx.postBalance != null && (
                       <p className="text-[9px] font-mono text-gray-400">Bal: ${Number(tx.postBalance).toFixed(2)}</p>
@@ -196,7 +196,7 @@ export default function PublicCardPage() {
                       tx.status === 'approved' ? 'bg-[#00ffcc] text-[#1a1a1a]' :
                       tx.status === 'pending' ? 'bg-[#ffcc00] text-[#1a1a1a]' :
                       'bg-[#e63b2e] text-white'}`}>
-                      {tx.status}
+                      {tx.rawType || tx.status}
                     </span>
                   </div>
                 </div>
