@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { CreditCard, RefreshCw, ArrowDownLeft, ArrowUpRight, Clock, Eye, EyeOff, Copy, Check } from 'lucide-react';
+import { CreditCard, RefreshCw, ArrowDownLeft, ArrowUpRight, Clock } from 'lucide-react';
 
 interface CardData {
   last4: string;
@@ -27,20 +27,6 @@ interface Transaction {
   date: string | null;
 }
 
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-  const copy = () => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-  return (
-    <button onClick={copy} className="ml-2 p-1 border border-white/30 hover:bg-white/10 transition-colors">
-      {copied ? <Check className="h-3 w-3 text-[#00ffcc]" /> : <Copy className="h-3 w-3 text-gray-400" />}
-    </button>
-  );
-}
-
 export default function PublicCardPage() {
   const params = useParams();
   const last4 = params['last4'] as string;
@@ -50,7 +36,6 @@ export default function PublicCardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
-  const [revealed, setRevealed] = useState(false);
 
   const cardId = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('card_id') || '' : '';
 
@@ -102,7 +87,6 @@ export default function PublicCardPage() {
     ? 'bg-[#0055ff] text-white'
     : 'bg-[#e63b2e] text-white';
 
-  const displayNumber = revealed && card.fullNumber ? card.fullNumber : card.maskedNumber;
 
   return (
     <div className="min-h-screen bg-[#f5f0e8] p-4 md:p-8">
@@ -111,7 +95,7 @@ export default function PublicCardPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-black uppercase font-display text-[#1a1a1a] leading-none">KripiCard</h1>
+            <h1 className="text-2xl font-black uppercase font-display text-[#1a1a1a] leading-none">CryptoWallet</h1>
             <p className="text-xs font-mono text-gray-500 mt-1 uppercase tracking-wider">Virtual Card View</p>
           </div>
           <button onClick={() => fetchCard(true)} disabled={refreshing}
@@ -127,7 +111,7 @@ export default function PublicCardPage() {
 
           <div className="flex justify-between items-start z-10">
             <div>
-              <p className="text-[10px] font-mono text-gray-400 uppercase tracking-widest">KripiCard</p>
+              <p className="text-[10px] font-mono text-gray-400 uppercase tracking-widest">CryptoWallet</p>
               <p className="text-xs font-bold text-white uppercase mt-0.5">{card.variant}</p>
             </div>
             <span className={`px-2 py-0.5 text-[9px] font-black uppercase border border-white/20 ${statusColor}`}>
@@ -137,10 +121,7 @@ export default function PublicCardPage() {
 
           {/* Card Number Row */}
           <div className="z-10">
-            <div className="flex items-center gap-2">
-              <p className="text-xl font-mono font-bold text-white tracking-widest">{displayNumber}</p>
-              {revealed && card.fullNumber && <CopyButton text={card.fullNumber.replace(/\s/g, '')} />}
-            </div>
+            <p className="text-xl font-mono font-bold text-white tracking-widest">{card.maskedNumber}</p>
           </div>
 
           {/* Bottom Row */}
@@ -155,23 +136,11 @@ export default function PublicCardPage() {
             </div>
             <div className="text-right">
               <p className="text-[9px] text-gray-400 uppercase tracking-wider">CVV</p>
-              <div className="flex items-center justify-end gap-1">
-                <p className="text-sm font-bold text-white font-mono">
-                  {revealed && card.cvv ? card.cvv : '•••'}
-                </p>
-                {revealed && card.cvv && <CopyButton text={card.cvv} />}
-              </div>
+              <p className="text-sm font-bold text-white font-mono">•••</p>
             </div>
           </div>
 
-          {/* Reveal Button */}
-          <button
-            onClick={() => setRevealed(r => !r)}
-            className="z-10 flex items-center gap-2 self-start px-3 py-1.5 border border-white/30 text-[10px] font-bold uppercase font-mono text-white hover:bg-white/10 transition-colors"
-          >
-            {revealed ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-            {revealed ? 'Hide Details' : 'Reveal Card Number & CVV'}
-          </button>
+
         </div>
 
         {/* Balance */}
@@ -223,7 +192,7 @@ export default function PublicCardPage() {
         </div>
 
         <p className="text-center text-[10px] font-mono text-gray-400 uppercase tracking-wider">
-          Powered by KripiCard · Demo View
+          CryptoWallet · Virtual Card
         </p>
       </div>
     </div>
