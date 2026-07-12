@@ -18,7 +18,14 @@ async function verifyToken(signed: string): Promise<boolean> {
 }
 
 export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  const { pathname, searchParams } = request.nextUrl;
+
+  // Strip ?card_id from /card/* URLs — redirect to clean URL
+  if (pathname.startsWith('/card/') && searchParams.has('card_id')) {
+    const cleanUrl = new URL(pathname, request.url);
+    return NextResponse.redirect(cleanUrl);
+  }
+
   const sessionCookie = request.cookies.get('admin_session')?.value ?? '';
   const isAuthenticated = await verifyToken(sessionCookie);
 
