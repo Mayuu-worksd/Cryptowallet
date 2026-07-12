@@ -58,6 +58,11 @@ export async function GET(
     return NextResponse.json({ error: 'KripiCard fetch failed', detail: detailJson }, { status: 502 });
   }
 
+  // Debug mode — return raw KripiCard response to inspect field names
+  if (searchParams.get('debug') === '1') {
+    return NextResponse.json({ detailJson, txJson });
+  }
+
   const d = detailJson.data || detailJson;
   const cardLast4 = (d.last_4 || d.last4 || d.card_number?.slice(-4) || last4).toString();
 
