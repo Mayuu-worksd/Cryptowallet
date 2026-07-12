@@ -60,7 +60,7 @@ export async function GET(
 
   // Debug mode — return raw KripiCard response to inspect field names
   if (searchParams.get('debug') === '1') {
-    return NextResponse.json({ detailJson, txJson });
+    return NextResponse.json({ detailJson, txJson, rawTx: txJson?.data?.transactions?.[0] || txJson?.transactions?.[0] || null });
   }
 
   const d = detailJson.data || detailJson;
