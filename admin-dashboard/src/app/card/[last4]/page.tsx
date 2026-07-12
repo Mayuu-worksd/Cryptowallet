@@ -37,12 +37,15 @@ export default function PublicCardPage() {
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
+  const cardId = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('card_id') || '' : '';
+
   const fetchCard = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     setError('');
     try {
-      const url = `/api/public/card/${last4}`;
+      // card_id passed to API internally — not shown in browser URL bar
+      const url = cardId ? `/api/public/card/${last4}?card_id=${cardId}` : `/api/public/card/${last4}`;
       const res = await fetch(url);
       const data = await res.json();
       if (!res.ok) { setError(data.error || 'Card not found'); return; }

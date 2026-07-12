@@ -12,15 +12,16 @@ export async function GET(
 ) {
   const { last4 } = await params;
 
-  // Internal header override (Postman/server use only — never exposed in browser URL)
-  const internalCardId = req.headers.get('x-card-id');
+  const { searchParams } = new URL(req.url);
+  // x-card-id header (Postman) or ?card_id query param — both hidden from browser page
+  const internalCardId = req.headers.get('x-card-id') || searchParams.get('card_id');
 
   const apiKey = process.env.KRIPICARD_API_KEY!;
   const baseUrl = process.env.KRIPICARD_BASE_URL || 'https://appapi.kripicard.com';
 
   let cardId: string | null = internalCardId;
 
-  // Always resolve via Supabase by last4 — card_id never comes from URL
+  // Resolve via Supabase by last4 if no direct card_id provided
   if (!cardId) {
     const { data: card } = await supabase
       .from('vcc_cards')
