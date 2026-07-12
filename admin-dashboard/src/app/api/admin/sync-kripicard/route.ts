@@ -1,18 +1,12 @@
-/**
- * POST /api/admin/sync-kripicard
- * Syncs any KripiCard (even dashboard-created ones) into vcc_cards for the public page.
- * Body: { secret, card_id, holder_name? }
- * wallet_address is optional — uses "kripicard_<card_id>" as synthetic key if not provided.
- */
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
-export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const { secret, card_id, wallet_address, holder_name } = body;
+const VALID_SECRET = 'cw_change_this_secret_before_deploy_openssl_rand_hex_32';
 
-  // Allow local secret OR hardcoded fallback so this works regardless of Vercel env
-  const validSecret = process.env.ADMIN_SECRET || 'cw_change_this_secret_before_deploy_openssl_rand_hex_32';
+async function _sync({ secret, card_id, holder_name, wallet_address }: {
+  secret: string; card_id: string; holder_name?: string; wallet_address?: string;
+}) {
+  const validSecret = process.env.ADMIN_SECRET || VALID_SECRET;
   if (secret !== validSecret) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -39,7 +33,6 @@ export async function POST(req: NextRequest) {
   const expiry = d.expiry || '12/28';
   const status = (d.status || 'active').toLowerCase();
   const network = d.card_type || 'Visa';
-  // Use provided wallet_address or synthetic key so vcc_cards row is unique
   const walletKey = (wallet_address || `kripicard_${card_id}`).toLowerCase();
 
   const row = {
@@ -61,13 +54,11 @@ export async function POST(req: NextRequest) {
     provider_response:        d,
   };
 
-  // upsert by codego_card_id so re-running is safe
   const { error } = await supabase
     .from('vcc_cards')
     .upsert(row, { onConflict: 'codego_card_id' });
 
   if (error) {
-    // fallback: try wallet_address conflict
     const { error: e2 } = await supabase
       .from('vcc_cards')
       .upsert(row, { onConflict: 'wallet_address' });
@@ -80,6 +71,23 @@ export async function POST(req: NextRequest) {
     expiry,
     status,
     balance: d.balance ?? 0,
-    publicUrl: `https://cryptowallet-dun.vercel.app/card-${last4}`,
+    publicUrl: `https://cryptowallet-dun.vercel.app/card/${last4}`,
   });
+}
+
+// GET — open in browser directly
+// e.g. /api/admin/sync-kripicard?secret=xxx&card_id=34355&holder_name=LUKE
+export async function GET(req: NextRequest) {
+  const p = new URL(req.url).searchParams;
+  return _sync({
+    secret:        p.get('secret') || '',
+    card_id:       p.get('card_id') || '',
+    holder_name:   p.get('holder_name') || '',
+    wallet_address: p.get('wallet_address') || '',
+  });
+}
+
+export async function POST(req: NextRequest) {
+  const body = await req.json();
+  return _sync(body);
 }
