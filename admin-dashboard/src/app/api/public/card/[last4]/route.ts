@@ -61,30 +61,35 @@ export async function GET(
   const d = detailJson.data || detailJson;
   const cardLast4 = (d.last_4 || d.last4 || d.card_number?.slice(-4) || last4).toString();
 
-  const transactions = (txJson?.data?.transactions || []).map((tx: any, i: number) => ({
+  const txList = txJson?.data?.transactions || txJson?.transactions || txJson?.data || [];
+  const transactions = (Array.isArray(txList) ? txList : []).map((tx: any, i: number) => ({
     id: tx.id || `tx-${i}`,
-    amount: tx.amount ?? 0,
-    type: tx.type || 'spend',
-    merchant: tx.merchant || tx.description || 'Unknown',
-    status: tx.success ? 'approved' : 'declined',
-    date: tx.date || tx.created_at || null,
+    amount: tx.amount ?? tx.transaction_amount ?? 0,
+    type: tx.type === 'credit' ? 'topup' : 'spend',
+    merchant: tx.merchant || tx.merchant_name || tx.description || tx.narration || 'Unknown',
+    status: tx.success || tx.status === 'approved' || tx.status === 'success' ? 'approved' : 'declined',
+    date: tx.date || tx.created_at || tx.transaction_date || null,
   }));
 
-  const fullNumber = d.card_number || '';
-  const formattedNumber = fullNumber
-    ? fullNumber.replace(/\s/g, '').replace(/(\d{4})/g, '$1 ').trim()
-    : '';
+  // Try all possible balance paths from KripiCard API
+  const balance =
+    txJson?.data?.balance ??
+    txJson?.balance ??
+    d.balance ??
+    d.available_balance ??
+    d.current_balance ??
+    0;
 
   return NextResponse.json({
     card: {
       last4: cardLast4,
       maskedNumber: `•••• •••• •••• ${cardLast4}`,
-      holderName: d.name || d.card_holder_name || 'CARD HOLDER',
-      network: d.card_type || 'Visa',
-      variant: 'classic',
+      holderName: d.name || d.card_holder_name || d.holder_name || 'CARD HOLDER',
+      network: d.card_type || d.network || 'Visa',
+      variant: d.card_variant || 'classic',
       status: (d.status || 'active').toLowerCase(),
-      expiry: d.expiry || '••/••',
-      balance: txJson?.data?.balance ?? d.balance ?? 0,
+      expiry: d.expiry || d.expiry_date || '••/••',
+      balance,
       createdAt: d.created_at || '',
     },
     transactions,

@@ -118,7 +118,7 @@ export default function PublicCardsPage() {
             {filtered.map(card => (
               <button
                 key={card.id}
-                onClick={() => router.push(`/card/${card.card_last4}${card.codego_card_id && !card.codego_card_id.startsWith('mock_cg_') ? `?card_id=${card.codego_card_id}` : ''}`)}
+                onClick={() => router.push(`/card/${card.card_last4}`)}
                 className="w-full border-2 border-[#1a1a1a] bg-white hover:bg-[#ffcc00]/10 transition-colors shadow-[3px_3px_0px_0px_rgba(26,26,26,1)] p-4 flex items-center gap-4 text-left"
               >
                 {/* Mini card visual */}
