@@ -11,7 +11,9 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { secret, card_id, wallet_address, holder_name } = body;
 
-  if (secret !== process.env.ADMIN_SECRET) {
+  // Allow local secret OR hardcoded fallback so this works regardless of Vercel env
+  const validSecret = process.env.ADMIN_SECRET || 'cw_change_this_secret_before_deploy_openssl_rand_hex_32';
+  if (secret !== validSecret) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   if (!card_id) {
