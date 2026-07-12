@@ -60,7 +60,7 @@ export default function PublicCardsPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-black uppercase font-mono text-[#1a1a1a] leading-none">KripiCard</h1>
+            <h1 className="text-3xl font-black uppercase font-mono text-[#1a1a1a] leading-none">CryptoWallet</h1>
             <p className="text-xs font-mono text-gray-500 mt-1 uppercase tracking-wider">All Issued Cards</p>
           </div>
           <button
@@ -89,7 +89,7 @@ export default function PublicCardsPage() {
           {[
             { label: 'Total Cards', value: cards.length },
             { label: 'Active', value: cards.filter(c => c.card_status === 'active').length },
-            { label: 'Real KripiCards', value: cards.filter(c => c.codego_card_id && !c.codego_card_id.startsWith('mock_cg_')).length },
+            { label: 'Real Cards', value: cards.filter(c => c.codego_card_id && !c.codego_card_id.startsWith('mock_cg_')).length },
           ].map(s => (
             <div key={s.label} className="border-2 border-[#1a1a1a] bg-white p-4 shadow-[3px_3px_0px_0px_rgba(26,26,26,1)]">
               <p className="text-[9px] font-bold uppercase font-mono tracking-wider text-gray-500">{s.label}</p>
@@ -123,7 +123,7 @@ export default function PublicCardsPage() {
               >
                 {/* Mini card visual */}
                 <div className="h-12 w-20 bg-[#1a1a1a] border border-[#1a1a1a] flex flex-col justify-between p-1.5 shrink-0">
-                  <p className="text-[7px] font-mono text-gray-400 uppercase">KripiCard</p>
+                  <p className="text-[7px] font-mono text-gray-400 uppercase">CryptoWallet</p>
                   <p className="text-[9px] font-bold text-white font-mono">•••• {card.card_last4}</p>
                 </div>
 
@@ -153,7 +153,7 @@ export default function PublicCardsPage() {
         )}
 
         <p className="text-center text-[10px] font-mono text-gray-400 uppercase tracking-wider">
-          Powered by KripiCard · {filtered.length} card{filtered.length !== 1 ? 's' : ''} shown
+          CryptoWallet · {filtered.length} card{filtered.length !== 1 ? 's' : ''} shown
         </p>
       </div>
     </div>
