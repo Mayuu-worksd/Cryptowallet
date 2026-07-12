@@ -89,8 +89,16 @@ h1, h2, h3, h4, h5, h6, .display-font {
 .dark .text-gray-400      { color: var(--text-dim) !important; }
 .dark .text-gray-500      { color: var(--text-muted) !important; }
 .dark .text-gray-600      { color: var(--text-dim) !important; }
+.dark .text-gray-700      { color: var(--text-muted) !important; }
 /* keep blue/red accent text readable */
 .dark .text-\[\#0055ff\]  { color: #60a5fa !important; }
+/* table body text */
+.dark tbody td            { color: var(--foreground) !important; }
+.dark tbody tr            { color: var(--foreground) !important; }
+/* font-mono text in tables */
+.dark .font-mono          { color: inherit; }
+/* chart labels */
+.dark .text-\[\#1a1a1a\].font-mono { color: var(--foreground) !important; }
 
 /* Ensure yellow background elements maintain high-contrast dark text in dark mode */
 .dark .bg-\[\#ffcc00\],
@@ -132,18 +140,23 @@ h1, h2, h3, h4, h5, h6, .display-font {
 .dark .bg-white                    { background-color: var(--card-bg) !important; }
 .dark .bg-\[\#f5f0e8\]            { background-color: var(--surface-low) !important; }
 .dark .bg-\[\#f5f0e8\]\/10        { background-color: rgba(32,31,31,0.5) !important; }
+.dark .bg-\[\#f5f0e8\]\/50        { background-color: rgba(32,31,31,0.5) !important; }
 /* stat card tints */
 .dark .\!bg-\[\#ffcc00\]\/10      { background-color: rgba(236,38,41,0.08) !important; }
 .dark .\!bg-\[\#ffcc00\]\/20      { background-color: rgba(236,38,41,0.12) !important; }
 .dark .\!bg-\[\#0055ff\]\/10      { background-color: rgba(96,165,250,0.08) !important; }
 /* chart tab toggle bg */
 .dark .bg-\[\#f5f0e8\]            { background-color: var(--surface-low) !important; }
-/* chart tab active */
-.dark .bg-\[\#1a1a1a\]            { background-color: var(--surface-high) !important; }
+/* chart tab active — only when it's a button/tab, not the whole card bg */
+.dark button.bg-\[\#1a1a1a\]      { background-color: var(--surface-high) !important; }
 /* hover row tint */
 .dark .hover\:bg-\[\#ffcc00\]\/5:hover { background-color: rgba(236,38,41,0.05) !important; }
 .dark .hover\:bg-white:hover       { background-color: var(--surface-high) !important; }
 .dark .hover\:bg-\[\#f5f0e8\]:hover { background-color: var(--surface-high) !important; }
+/* table header bg */
+.dark thead tr, .dark thead th     { background-color: var(--surface-low) !important; color: var(--foreground) !important; }
+/* View Ledger / white bg buttons that need dark text override */
+.dark a.bg-white, .dark a.bg-white span { background-color: var(--surface-high) !important; color: var(--foreground) !important; }
 
 /* ── Borders ── */
 .dark .border-\[\#1a1a1a\]         { border-color: var(--border-color) !important; }
