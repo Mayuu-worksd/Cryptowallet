@@ -27,6 +27,7 @@ interface Transaction {
   date: string | null;
   charge?: number;
   postBalance?: number | null;
+  rawType?: string;
 }
 
 export default function PublicCardPage() {
@@ -177,6 +178,7 @@ export default function PublicCardPage() {
                       <p className="text-xs font-bold text-[#1a1a1a] uppercase">{tx.merchant}</p>
                       <p className="text-[10px] font-mono text-gray-400">
                         {tx.date ? new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                        {tx.rawType ? <span className="ml-1 text-gray-300">· {tx.rawType}</span> : null}
                       </p>
                       {tx.charge != null && tx.charge > 0 && (
                         <p className="text-[9px] font-mono text-gray-400">Fee: ${Number(tx.charge).toFixed(2)}</p>
@@ -185,12 +187,15 @@ export default function PublicCardPage() {
                   </div>
                   <div className="text-right">
                     <p className={`text-sm font-black font-mono ${tx.type === 'topup' ? 'text-green-600' : 'text-[#1a1a1a]'}`}>
-                      {tx.type === 'topup' ? '+' : '-'}${Number(tx.amount).toFixed(2)}
+                      {tx.amount > 0 ? (tx.type === 'topup' ? '+' : '-') + '$' + Number(tx.amount).toFixed(2) : 'Auth Hold'}
                     </p>
                     {tx.postBalance != null && (
                       <p className="text-[9px] font-mono text-gray-400">Bal: ${Number(tx.postBalance).toFixed(2)}</p>
                     )}
-                    <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 border border-[#1a1a1a] ${tx.status === 'approved' ? 'bg-[#00ffcc] text-[#1a1a1a]' : 'bg-[#e63b2e] text-white'}`}>
+                    <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 border border-[#1a1a1a] ${
+                      tx.status === 'approved' ? 'bg-[#00ffcc] text-[#1a1a1a]' :
+                      tx.status === 'pending' ? 'bg-[#ffcc00] text-[#1a1a1a]' :
+                      'bg-[#e63b2e] text-white'}`}>
                       {tx.status}
                     </span>
                   </div>

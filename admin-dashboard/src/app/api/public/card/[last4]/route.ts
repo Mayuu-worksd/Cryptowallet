@@ -70,20 +70,21 @@ export async function GET(
   // { success, data: { balance, transactions: [{ id, amount, merchant, success, date, type, charge, post_balance, details }] } }
   const txList = txJson?.data?.transactions || txJson?.transactions || [];
   const transactions = (Array.isArray(txList) ? txList : []).map((tx: any, i: number) => {
-    // amount can be negative (debit) or positive (credit) — use Math.abs for display
-    const rawAmount = tx.amount ?? tx.transaction_amount ?? tx.billing_amount ?? 0;
+    const rawAmount = tx.amount ?? 0;
     const absAmount = Math.abs(Number(rawAmount));
-    // type: positive = topup/credit, negative = spend/debit
-    const isCredit = Number(rawAmount) > 0 || tx.type === 'credit' || tx.type === 'topup';
+    const txType = (tx.type || '').toLowerCase();
+    const isCredit = Number(rawAmount) > 0 || txType === 'credit' || txType === 'topup' || txType === 'deposit';
+    const isAuth = txType === 'authorize' || txType === 'authorisation' || txType === 'auth';
     return {
       id: tx.id || tx.trx || `tx-${i}`,
       amount: absAmount,
       type: isCredit ? 'topup' : 'spend',
       merchant: tx.merchant || tx.details || tx.description || tx.narration || (isCredit ? 'Deposit' : 'Card Spend'),
-      status: tx.success !== false ? 'approved' : 'declined',
+      status: isAuth ? 'pending' : (tx.status === 'success' || tx.success !== false ? 'approved' : 'declined'),
       date: tx.date || tx.created_at || tx.transaction_date || null,
       charge: tx.charge ?? 0,
       postBalance: tx.post_balance ?? null,
+      rawType: tx.type || '',
     };
   });
 
