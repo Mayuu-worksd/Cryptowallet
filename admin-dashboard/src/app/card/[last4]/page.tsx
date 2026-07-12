@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { CreditCard, RefreshCw, ArrowDownLeft, ArrowUpRight, Clock } from 'lucide-react';
+import { CreditCard, RefreshCw, ArrowDownLeft, ArrowUpRight, Clock, Eye, EyeOff, Copy, Check } from 'lucide-react';
 
 interface CardData {
   last4: string;
   maskedNumber: string;
+  fullNumber: string;
+  cvv: string;
   holderName: string;
   network: string;
   variant: string;
@@ -25,6 +27,20 @@ interface Transaction {
   date: string | null;
 }
 
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <button onClick={copy} className="ml-2 p-1 border border-white/30 hover:bg-white/10 transition-colors">
+      {copied ? <Check className="h-3 w-3 text-[#00ffcc]" /> : <Copy className="h-3 w-3 text-gray-400" />}
+    </button>
+  );
+}
+
 export default function PublicCardPage() {
   const params = useParams();
   const last4 = params['last4'] as string;
@@ -34,9 +50,9 @@ export default function PublicCardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [revealed, setRevealed] = useState(false);
 
-  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-  const cardId = searchParams?.get('card_id') || '';
+  const cardId = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('card_id') || '' : '';
 
   const fetchCard = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -86,6 +102,8 @@ export default function PublicCardPage() {
     ? 'bg-[#0055ff] text-white'
     : 'bg-[#e63b2e] text-white';
 
+  const displayNumber = revealed && card.fullNumber ? card.fullNumber : card.maskedNumber;
+
   return (
     <div className="min-h-screen bg-[#f5f0e8] p-4 md:p-8">
       <div className="max-w-lg mx-auto space-y-6">
@@ -93,24 +111,20 @@ export default function PublicCardPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-black uppercase font-display text-[#1a1a1a] leading-none">
-              KripiCard
-            </h1>
+            <h1 className="text-2xl font-black uppercase font-display text-[#1a1a1a] leading-none">KripiCard</h1>
             <p className="text-xs font-mono text-gray-500 mt-1 uppercase tracking-wider">Virtual Card View</p>
           </div>
-          <button
-            onClick={() => fetchCard(true)}
-            disabled={refreshing}
-            className="p-2 border-2 border-[#1a1a1a] bg-white hover:bg-[#ffcc00] transition-colors shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]"
-          >
+          <button onClick={() => fetchCard(true)} disabled={refreshing}
+            className="p-2 border-2 border-[#1a1a1a] bg-white hover:bg-[#ffcc00] transition-colors shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]">
             <RefreshCw className={`h-4 w-4 text-[#1a1a1a] ${refreshing ? 'animate-spin' : ''}`} />
           </button>
         </div>
 
         {/* Card Visual */}
-        <div className="relative h-48 bg-[#1a1a1a] border-3 border-[#1a1a1a] shadow-[6px_6px_0px_0px_rgba(26,26,26,1)] p-6 flex flex-col justify-between overflow-hidden">
+        <div className="relative bg-[#1a1a1a] border-3 border-[#1a1a1a] shadow-[6px_6px_0px_0px_rgba(26,26,26,1)] p-6 flex flex-col gap-4 overflow-hidden">
           <div className="absolute inset-0 opacity-10"
             style={{ background: 'radial-gradient(circle at 80% 20%, #ffcc00 0%, transparent 60%)' }} />
+
           <div className="flex justify-between items-start z-10">
             <div>
               <p className="text-[10px] font-mono text-gray-400 uppercase tracking-widest">KripiCard</p>
@@ -120,25 +134,44 @@ export default function PublicCardPage() {
               {card.status}
             </span>
           </div>
+
+          {/* Card Number Row */}
           <div className="z-10">
-            <p className="text-xl font-mono font-bold text-white tracking-widest mb-3">
-              {card.maskedNumber}
-            </p>
-            <div className="flex justify-between items-end">
-              <div>
-                <p className="text-[9px] text-gray-400 uppercase tracking-wider">Card Holder</p>
-                <p className="text-sm font-bold text-white uppercase">{card.holderName}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-[9px] text-gray-400 uppercase tracking-wider">Expires</p>
-                <p className="text-sm font-bold text-white">{card.expiry || '••/••'}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-[9px] text-gray-400 uppercase tracking-wider">Network</p>
-                <p className="text-sm font-bold text-white uppercase">{card.network}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-xl font-mono font-bold text-white tracking-widest">{displayNumber}</p>
+              {revealed && card.fullNumber && <CopyButton text={card.fullNumber.replace(/\s/g, '')} />}
+            </div>
+          </div>
+
+          {/* Bottom Row */}
+          <div className="flex justify-between items-end z-10">
+            <div>
+              <p className="text-[9px] text-gray-400 uppercase tracking-wider">Card Holder</p>
+              <p className="text-sm font-bold text-white uppercase">{card.holderName}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-[9px] text-gray-400 uppercase tracking-wider">Expires</p>
+              <p className="text-sm font-bold text-white">{card.expiry || '••/••'}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-[9px] text-gray-400 uppercase tracking-wider">CVV</p>
+              <div className="flex items-center justify-end gap-1">
+                <p className="text-sm font-bold text-white font-mono">
+                  {revealed && card.cvv ? card.cvv : '•••'}
+                </p>
+                {revealed && card.cvv && <CopyButton text={card.cvv} />}
               </div>
             </div>
           </div>
+
+          {/* Reveal Button */}
+          <button
+            onClick={() => setRevealed(r => !r)}
+            className="z-10 flex items-center gap-2 self-start px-3 py-1.5 border border-white/30 text-[10px] font-bold uppercase font-mono text-white hover:bg-white/10 transition-colors"
+          >
+            {revealed ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+            {revealed ? 'Hide Details' : 'Reveal Card Number & CVV'}
+          </button>
         </div>
 
         {/* Balance */}
@@ -155,7 +188,6 @@ export default function PublicCardPage() {
           <div className="p-4 border-b-3 border-[#1a1a1a] bg-[#f5f0e8]">
             <h2 className="text-sm font-black uppercase font-display text-[#1a1a1a]">Transaction History</h2>
           </div>
-
           {transactions.length === 0 ? (
             <div className="p-10 text-center">
               <Clock className="h-8 w-8 mx-auto text-gray-300 mb-3" />
@@ -167,9 +199,7 @@ export default function PublicCardPage() {
                 <div key={tx.id} className="p-4 flex items-center justify-between hover:bg-[#ffcc00]/5 transition-colors">
                   <div className="flex items-center gap-3">
                     <div className={`h-8 w-8 border-2 border-[#1a1a1a] flex items-center justify-center ${tx.type === 'topup' ? 'bg-[#00ffcc]' : 'bg-[#f5f0e8]'}`}>
-                      {tx.type === 'topup'
-                        ? <ArrowDownLeft className="h-4 w-4 text-[#1a1a1a]" />
-                        : <ArrowUpRight className="h-4 w-4 text-[#1a1a1a]" />}
+                      {tx.type === 'topup' ? <ArrowDownLeft className="h-4 w-4 text-[#1a1a1a]" /> : <ArrowUpRight className="h-4 w-4 text-[#1a1a1a]" />}
                     </div>
                     <div>
                       <p className="text-xs font-bold text-[#1a1a1a] uppercase">{tx.merchant}</p>

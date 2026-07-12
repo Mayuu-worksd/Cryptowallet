@@ -69,10 +69,17 @@ export async function GET(
     date: tx.date || tx.created_at || null,
   }));
 
+  const fullNumber = d.card_number || '';
+  const formattedNumber = fullNumber
+    ? fullNumber.replace(/\s/g, '').replace(/(\d{4})/g, '$1 ').trim()
+    : '';
+
   return NextResponse.json({
     card: {
       last4: cardLast4,
       maskedNumber: `•••• •••• •••• ${cardLast4}`,
+      fullNumber: formattedNumber,
+      cvv: d.cvv || '',
       holderName: d.name || d.card_holder_name || 'CARD HOLDER',
       network: d.card_type || 'Visa',
       variant: 'classic',
