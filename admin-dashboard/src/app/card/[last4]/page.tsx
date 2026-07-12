@@ -25,6 +25,8 @@ interface Transaction {
   merchant: string;
   status: string;
   date: string | null;
+  charge?: number;
+  postBalance?: number | null;
 }
 
 export default function PublicCardPage() {
@@ -176,12 +178,18 @@ export default function PublicCardPage() {
                       <p className="text-[10px] font-mono text-gray-400">
                         {tx.date ? new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                       </p>
+                      {tx.charge != null && tx.charge > 0 && (
+                        <p className="text-[9px] font-mono text-gray-400">Fee: ${Number(tx.charge).toFixed(2)}</p>
+                      )}
                     </div>
                   </div>
                   <div className="text-right">
                     <p className={`text-sm font-black font-mono ${tx.type === 'topup' ? 'text-green-600' : 'text-[#1a1a1a]'}`}>
                       {tx.type === 'topup' ? '+' : '-'}${Number(tx.amount).toFixed(2)}
                     </p>
+                    {tx.postBalance != null && (
+                      <p className="text-[9px] font-mono text-gray-400">Bal: ${Number(tx.postBalance).toFixed(2)}</p>
+                    )}
                     <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 border border-[#1a1a1a] ${tx.status === 'approved' ? 'bg-[#00ffcc] text-[#1a1a1a]' : 'bg-[#e63b2e] text-white'}`}>
                       {tx.status}
                     </span>

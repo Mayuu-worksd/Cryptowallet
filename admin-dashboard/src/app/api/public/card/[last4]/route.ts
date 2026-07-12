@@ -61,28 +61,28 @@ export async function GET(
   const d = detailJson.data || detailJson;
   const cardLast4 = (d.last_4 || d.last4 || d.card_number?.slice(-4) || last4).toString();
 
-  const txList = txJson?.data?.transactions || txJson?.transactions || txJson?.data || [];
-  // Log raw tx to see exact field names from KripiCard
-  if (Array.isArray(txList) && txList.length > 0) {
-    console.log('[KripiCard TX sample]', JSON.stringify(txList[0]));
-  }
-  const transactions = (Array.isArray(txList) ? txList : []).map((tx: any, i: number) => ({
-    id: tx.id || `tx-${i}`,
-    amount: tx.amount ?? tx.transaction_amount ?? tx.billing_amount ?? tx.debit_amount ?? tx.credit_amount ?? tx.value ?? 0,
-    type: tx.type === 'credit' ? 'topup' : 'spend',
-    merchant: tx.merchant || tx.merchant_name || tx.description || tx.narration || tx.merchant_details?.name || 'Unknown',
-    status: tx.success || tx.status === 'approved' || tx.status === 'success' ? 'approved' : 'declined',
-    date: tx.date || tx.created_at || tx.transaction_date || tx.posted_date || null,
-  }));
+  // KripiCard transactions endpoint returns:
+  // { success, data: { balance, transactions: [{ id, amount, merchant, success, date, type, charge, post_balance, details }] } }
+  const txList = txJson?.data?.transactions || txJson?.transactions || [];
+  const transactions = (Array.isArray(txList) ? txList : []).map((tx: any, i: number) => {
+    // amount can be negative (debit) or positive (credit) — use Math.abs for display
+    const rawAmount = tx.amount ?? tx.transaction_amount ?? tx.billing_amount ?? 0;
+    const absAmount = Math.abs(Number(rawAmount));
+    // type: positive = topup/credit, negative = spend/debit
+    const isCredit = Number(rawAmount) > 0 || tx.type === 'credit' || tx.type === 'topup';
+    return {
+      id: tx.id || tx.trx || `tx-${i}`,
+      amount: absAmount,
+      type: isCredit ? 'topup' : 'spend',
+      merchant: tx.merchant || tx.details || tx.description || tx.narration || (isCredit ? 'Deposit' : 'Card Spend'),
+      status: tx.success !== false ? 'approved' : 'declined',
+      date: tx.date || tx.created_at || tx.transaction_date || null,
+      charge: tx.charge ?? 0,
+      postBalance: tx.post_balance ?? null,
+    };
+  });
 
-  // Try all possible balance paths from KripiCard API
-  const balance =
-    txJson?.data?.balance ??
-    txJson?.balance ??
-    d.balance ??
-    d.available_balance ??
-    d.current_balance ??
-    0;
+  const balance = txJson?.data?.balance ?? txJson?.balance ?? d.balance ?? d.available_balance ?? 0;
 
   return NextResponse.json({
     card: {
