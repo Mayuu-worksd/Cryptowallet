@@ -62,13 +62,17 @@ export async function GET(
   const cardLast4 = (d.last_4 || d.last4 || d.card_number?.slice(-4) || last4).toString();
 
   const txList = txJson?.data?.transactions || txJson?.transactions || txJson?.data || [];
+  // Log raw tx to see exact field names from KripiCard
+  if (Array.isArray(txList) && txList.length > 0) {
+    console.log('[KripiCard TX sample]', JSON.stringify(txList[0]));
+  }
   const transactions = (Array.isArray(txList) ? txList : []).map((tx: any, i: number) => ({
     id: tx.id || `tx-${i}`,
-    amount: tx.amount ?? tx.transaction_amount ?? 0,
+    amount: tx.amount ?? tx.transaction_amount ?? tx.billing_amount ?? tx.debit_amount ?? tx.credit_amount ?? tx.value ?? 0,
     type: tx.type === 'credit' ? 'topup' : 'spend',
-    merchant: tx.merchant || tx.merchant_name || tx.description || tx.narration || 'Unknown',
+    merchant: tx.merchant || tx.merchant_name || tx.description || tx.narration || tx.merchant_details?.name || 'Unknown',
     status: tx.success || tx.status === 'approved' || tx.status === 'success' ? 'approved' : 'declined',
-    date: tx.date || tx.created_at || tx.transaction_date || null,
+    date: tx.date || tx.created_at || tx.transaction_date || tx.posted_date || null,
   }));
 
   // Try all possible balance paths from KripiCard API
