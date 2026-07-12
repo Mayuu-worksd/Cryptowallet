@@ -442,6 +442,35 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setEnabledCardCurrenciesState(base);
       }
       if (vcc && vcc.codego_card_id && !vcc.codego_card_id.startsWith('mock_cg_')) {
+        // ── Fetch real KripiCard transactions and merge into cardTransactions ──
+        try {
+          const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+          const kripiTxRes = await fetch(`${apiUrl}/api/public/card/${vcc.card_last4}?card_id=${vcc.codego_card_id}`);
+          if (kripiTxRes.ok) {
+            const kripiTxJson = await kripiTxRes.json();
+            const kripiTxs: CardTransaction[] = (kripiTxJson.transactions || []).map((tx: any) => ({
+              id: tx.id,
+              type: tx.type === 'topup' ? 'topup' as const : 'spend' as const,
+              amount: Number(tx.amount),
+              label: tx.merchant || (tx.type === 'topup' ? 'Top-up' : 'Card Spend'),
+              status: 'success' as const,
+              timestamp: tx.date || new Date().toISOString(),
+            }));
+            // Update balance from KripiCard live data
+            if (kripiTxJson.card?.balance !== undefined) {
+              const liveBalance = Number(kripiTxJson.card.balance);
+              setCardBalance(liveBalance);
+              await vccService.updateBalance(walletAddress, liveBalance).catch(() => {});
+              await AsyncStorage.multiSet([['cw_card_balance', String(liveBalance)]]).catch(() => {});
+            }
+            if (kripiTxs.length > 0) {
+              setCardTransactions(kripiTxs);
+              AsyncStorage.setItem('cw_card_transactions', JSON.stringify(kripiTxs)).catch(() => {});
+              return; // skip Supabase tx merge below — KripiCard is source of truth
+            }
+          }
+        } catch (_e) {}
+
         if (vcc.codego_card_id && (!dbCard || !dbCardService.decryptNumber(dbCard, walletAddress))) {
           try {
             const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
