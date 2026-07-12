@@ -37,14 +37,12 @@ export default function PublicCardPage() {
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
-  const cardId = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('card_id') || '' : '';
-
   const fetchCard = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     setError('');
     try {
-      const url = cardId ? `/api/public/card/${last4}?card_id=${cardId}` : `/api/public/card/${last4}`;
+      const url = `/api/public/card/${last4}`;
       const res = await fetch(url);
       const data = await res.json();
       if (!res.ok) { setError(data.error || 'Card not found'); return; }
@@ -95,7 +93,7 @@ export default function PublicCardPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-black uppercase font-display text-[#1a1a1a] leading-none">CryptoWallet</h1>
+            <h1 className="text-2xl font-black uppercase font-display text-[#1a1a1a] leading-none">JJWallet</h1>
             <p className="text-xs font-mono text-gray-500 mt-1 uppercase tracking-wider">Virtual Card View</p>
           </div>
           <button onClick={() => fetchCard(true)} disabled={refreshing}
@@ -111,7 +109,7 @@ export default function PublicCardPage() {
 
           <div className="flex justify-between items-start z-10">
             <div>
-              <p className="text-[10px] font-mono text-gray-400 uppercase tracking-widest">CryptoWallet</p>
+              <p className="text-[10px] font-mono text-gray-400 uppercase tracking-widest">JJWallet</p>
               <p className="text-xs font-bold text-white uppercase mt-0.5">{card.variant}</p>
             </div>
             <span className={`px-2 py-0.5 text-[9px] font-black uppercase border border-white/20 ${statusColor}`}>
@@ -192,7 +190,7 @@ export default function PublicCardPage() {
         </div>
 
         <p className="text-center text-[10px] font-mono text-gray-400 uppercase tracking-wider">
-          CryptoWallet · Virtual Card
+          JJWallet · Virtual Card
         </p>
       </div>
     </div>

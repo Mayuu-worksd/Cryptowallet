@@ -60,7 +60,7 @@ export default function PublicCardsPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-black uppercase font-mono text-[#1a1a1a] leading-none">CryptoWallet</h1>
+            <h1 className="text-3xl font-black uppercase font-mono text-[#1a1a1a] leading-none">JJWallet</h1>
             <p className="text-xs font-mono text-gray-500 mt-1 uppercase tracking-wider">All Issued Cards</p>
           </div>
           <button
@@ -123,7 +123,7 @@ export default function PublicCardsPage() {
               >
                 {/* Mini card visual */}
                 <div className="h-12 w-20 bg-[#1a1a1a] border border-[#1a1a1a] flex flex-col justify-between p-1.5 shrink-0">
-                  <p className="text-[7px] font-mono text-gray-400 uppercase">CryptoWallet</p>
+                  <p className="text-[7px] font-mono text-gray-400 uppercase">JJWallet</p>
                   <p className="text-[9px] font-bold text-white font-mono">•••• {card.card_last4}</p>
                 </div>
 
@@ -153,7 +153,7 @@ export default function PublicCardsPage() {
         )}
 
         <p className="text-center text-[10px] font-mono text-gray-400 uppercase tracking-wider">
-          CryptoWallet · {filtered.length} card{filtered.length !== 1 ? 's' : ''} shown
+          JJWallet · {filtered.length} card{filtered.length !== 1 ? 's' : ''} shown
         </p>
       </div>
     </div>

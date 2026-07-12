@@ -445,7 +445,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         // ── Fetch real KripiCard transactions and merge into cardTransactions ──
         try {
           const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-          const kripiTxRes = await fetch(`${apiUrl}/api/public/card/${vcc.card_last4}?card_id=${vcc.codego_card_id}`);
+          const kripiTxRes = await fetch(`${apiUrl}/api/public/card/${vcc.card_last4}`);
           if (kripiTxRes.ok) {
             const kripiTxJson = await kripiTxRes.json();
             const kripiTxs: CardTransaction[] = (kripiTxJson.transactions || []).map((tx: any) => ({

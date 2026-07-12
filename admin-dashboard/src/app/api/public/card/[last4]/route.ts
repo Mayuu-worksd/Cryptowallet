@@ -11,20 +11,20 @@ export async function GET(
   { params }: { params: Promise<{ last4: string }> }
 ) {
   const { last4 } = await params;
-  const { searchParams } = new URL(req.url);
-  // Allow direct card_id override: /api/public/card/0648?card_id=34355
-  const cardIdOverride = searchParams.get('card_id');
+
+  // Internal header override (Postman/server use only — never exposed in browser URL)
+  const internalCardId = req.headers.get('x-card-id');
 
   const apiKey = process.env.KRIPICARD_API_KEY!;
   const baseUrl = process.env.KRIPICARD_BASE_URL || 'https://appapi.kripicard.com';
 
-  let cardId: string | null = cardIdOverride;
+  let cardId: string | null = internalCardId;
 
-  // Try Supabase first
+  // Always resolve via Supabase by last4 — card_id never comes from URL
   if (!cardId) {
     const { data: card } = await supabase
       .from('vcc_cards')
-      .select('codego_card_id, card_holder_name, card_network, card_variant, card_status, balance, expiry_mm_yy')
+      .select('codego_card_id')
       .eq('card_last4', last4)
       .not('codego_card_id', 'is', null)
       .not('codego_card_id', 'like', 'mock_cg_%')
@@ -78,8 +78,6 @@ export async function GET(
     card: {
       last4: cardLast4,
       maskedNumber: `•••• •••• •••• ${cardLast4}`,
-      fullNumber: formattedNumber,
-      cvv: d.cvv || '',
       holderName: d.name || d.card_holder_name || 'CARD HOLDER',
       network: d.card_type || 'Visa',
       variant: 'classic',
