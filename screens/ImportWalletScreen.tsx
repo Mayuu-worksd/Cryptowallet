@@ -10,6 +10,7 @@ import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useWallet } from '../store/WalletContext';
 import Toast from '../components/Toast';
+import EmailOTPModal from '../components/EmailOTPModal';
 
 // Two-step overlay: loading → success
 const STEPS = [
@@ -109,6 +110,8 @@ export default function ImportWalletScreen({ navigation }: any) {
   const [mnemonic, setMnemonic] = useState('');
   const [loading, setLoading]   = useState(false);
   const [importDone, setImportDone] = useState(false);
+  const [showOTP, setShowOTP] = useState(false);
+  const [verifiedEmail, setVerifiedEmail] = useState('');
   const [invalidWords, setInvalidWords] = useState<string[]>([]);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'error' as 'success' | 'error' | 'info' });
   const { importWallet, isDarkMode, hasWallet } = useWallet();
@@ -167,6 +170,24 @@ export default function ImportWalletScreen({ navigation }: any) {
       showToast(`Seed phrase must be 12, 15, 18, 21, or 24 words. (You have ${words.length})`, 'error');
       return;
     }
+
+    // Require email OTP before importing
+    if (!verifiedEmail) {
+      setShowOTP(true);
+      return;
+    }
+
+    doImport(trimmed);
+  };
+
+  const handleOTPVerified = (email: string) => {
+    setVerifiedEmail(email);
+    setShowOTP(false);
+    const trimmed = mnemonic.trim().toLowerCase().replace(/\s+/g, ' ');
+    doImport(trimmed);
+  };
+
+  const doImport = (trimmed: string) => {
     setLoading(true);
     setImportDone(false);
 
@@ -195,7 +216,12 @@ export default function ImportWalletScreen({ navigation }: any) {
   return (
     <View style={[styles.container, { backgroundColor: T.background }]}>
       <ImportingOverlay visible={loading} isDarkMode={isDarkMode} done={importDone} />
-
+      <EmailOTPModal
+        visible={showOTP}
+        isDarkMode={isDarkMode}
+        onVerified={handleOTPVerified}
+        onCancel={() => setShowOTP(false)}
+      />
       <Toast
         visible={toast.visible}
         message={toast.message}

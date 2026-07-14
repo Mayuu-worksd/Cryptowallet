@@ -11,6 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useWallet } from '../store/WalletContext';
 import Toast from '../components/Toast';
 import { usePreventScreenCapture } from 'expo-screen-capture';
+import EmailOTPModal from '../components/EmailOTPModal';
 
 const SAVING_STEPS = [
   { icon: 'lock',         label: 'Encrypting keys...' },
@@ -76,7 +77,7 @@ function SavingOverlay({ visible, done, isDarkMode }: { visible: boolean; done: 
   );
 }
 
-type Step = 'info' | 'phrase' | 'verify' | 'done';
+type Step = 'info' | 'otp' | 'phrase' | 'verify' | 'done';
 
 export default function CreateWalletScreen({ navigation }: any) {
   usePreventScreenCapture();
@@ -89,6 +90,7 @@ export default function CreateWalletScreen({ navigation }: any) {
   const [shuffledWords, setShuffled] = useState<string[]>([]);
   const [selectedWords, setSelected] = useState<string[]>([]);
   const [toast, setToast] = useState<{ visible: boolean; message: string; type: 'success' | 'error' | 'info' }>({ visible: false, message: '', type: 'success' });
+  const [verifiedEmail, setVerifiedEmail] = useState('');
 
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const insets = useSafeAreaInsets();
@@ -97,8 +99,14 @@ export default function CreateWalletScreen({ navigation }: any) {
     setToast({ visible: true, message, type });
 
   const handleCreate = () => {
+    // Show OTP modal first — wallet generation happens after email verified
+    setStep('otp');
+  };
+
+  const handleOTPVerified = (email: string) => {
+    setVerifiedEmail(email);
+    setStep('info'); // briefly back to info while generating
     setLoading(true);
-    // Allow UI to render the loading state before blocking the JS thread
     setTimeout(async () => {
       try {
         const data = await createWallet();
@@ -106,6 +114,7 @@ export default function CreateWalletScreen({ navigation }: any) {
         setStep('phrase');
       } catch (e: any) {
         showToast(e?.message ?? 'Failed to create wallet. Please try again.', 'error');
+        setStep('info');
       } finally {
         setLoading(false);
       }
@@ -185,6 +194,12 @@ export default function CreateWalletScreen({ navigation }: any) {
   return (
     <View style={[styles.container, { backgroundColor: T.background }]}>
       <SavingOverlay visible={loading && step === 'done'} done={savingDone} isDarkMode={isDarkMode} />
+      <EmailOTPModal
+        visible={step === 'otp'}
+        isDarkMode={isDarkMode}
+        onVerified={handleOTPVerified}
+        onCancel={() => setStep('info')}
+      />
       <Toast
         visible={toast.visible}
         message={toast.message}
