@@ -167,6 +167,7 @@ import BusinessKYCResultScreen from "./screens/BusinessKYCResultScreen";
 import VCCCardDetailScreen from "./screens/VCCCardDetailScreen";
 import MerchantDashboardScreen from "./screens/MerchantDashboardScreen";
 import MerchantQRScreen from "./screens/MerchantQRScreen";
+import BridgeScreen from "./screens/BridgeScreen";
 import MessagesScreen from "./screens/MessagesScreen";
 import P2PMarketplaceScreen from "./screens/P2PMarketplaceScreen";
 import P2POrderDetailScreen from "./screens/P2POrderDetailScreen";
@@ -431,6 +432,12 @@ function CenterQRButton({ TC }: { TC: any }) {
 
   const personalItems = [
     {
+      icon: "shuffle",
+      label: "Bridge Tokens",
+      sub: "Transfer INRX cross-chain",
+      screen: "Bridge",
+    },
+    {
       icon: "arrow-down-left",
       label: "Receive",
       sub: "Receive assets from other wallets",
@@ -457,6 +464,12 @@ function CenterQRButton({ TC }: { TC: any }) {
   ];
 
   const merchantItems = [
+    {
+      icon: "shuffle",
+      label: "Bridge Tokens",
+      sub: "Transfer INRX cross-chain",
+      screen: "Bridge",
+    },
     {
       icon: "grid",
       label: "QR Generator",
@@ -1068,6 +1081,7 @@ function MobileNavigator() {
             <Stack.Screen name="Send" component={SendScreen} />
             <Stack.Screen name="Receive" component={ReceiveScreen} />
             <Stack.Screen name="Swap" component={SwapScreen} />
+            <Stack.Screen name="Bridge" component={BridgeScreen} />
             <Stack.Screen name="History" component={HistoryScreen} />
             <Stack.Screen name="Assets" component={PortfolioScreen} />
             <Stack.Screen name="FiatDeposit" component={FiatDepositScreen} />
