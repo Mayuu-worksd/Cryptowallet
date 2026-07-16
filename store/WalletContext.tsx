@@ -145,6 +145,7 @@ type WalletContextType = {
   kycEmail: string;
   kycFullName: string;
   adminNetworks: any[];
+  bridgeINRX: (amount: string, destChainId: number, recipientAddress: string) => Promise<{ success: boolean; error?: string; hash?: string }>;
 };
 
 const WalletContext = createContext<WalletContextType>({} as WalletContextType);
@@ -2203,6 +2204,63 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return result;
   }, [network, prices, walletAddress, addTx, refreshBalance]);
 
+  const bridgeINRX = useCallback(async (
+    amount: string,
+    destChainId: number,
+    recipientAddress: string
+  ): Promise<{ success: boolean; error?: string; hash?: string }> => {
+    const privateKey = await storageService.getPrivateKey();
+    if (!privateKey) return { success: false, error: 'Private key not found' };
+    
+    const usdValue = amount;
+    const pendingId = Date.now().toString();
+
+    const newTx = {
+      id: pendingId,
+      type: 'sent' as const,
+      coin: 'INRX',
+      amount,
+      usdValue,
+      address: `Bridge to Chain #${destChainId}`,
+      status: 'pending' as const,
+      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    };
+    addTx({ type: 'sent', coin: 'INRX', amount, usdValue, address: `Bridge to Chain #${destChainId}`, status: 'pending' });
+
+    let dbTxId: string | undefined;
+    txService.log({
+      wallet_address: walletAddress,
+      type: 'send',
+      token: 'INRX',
+      amount: parseFloat(amount),
+      usd_value: parseFloat(usdValue),
+      status: 'pending',
+      to_address: recipientAddress,
+    }).then(r => { dbTxId = r.id; }).catch(() => {});
+
+    const { bridgeService } = await import('../services/bridgeService');
+    const result = await bridgeService.lockTokens(
+      privateKey,
+      amount,
+      destChainId,
+      recipientAddress,
+      network
+    );
+    const finalStatus = result.success ? 'success' : 'failed';
+
+    setTransactions(prev => prev.map(tx =>
+      tx.id === pendingId ? { ...tx, status: finalStatus, txHash: result.hash } : tx
+    ));
+
+    if (dbTxId) txService.updateStatus(dbTxId, finalStatus, result.hash).catch(() => {});
+
+    if (result.success) {
+      refreshBalance();
+      notificationService.notifySendComplete('INRX', amount, recipientAddress).catch(() => {});
+    }
+    return result;
+  }, [network, walletAddress, addTx, refreshBalance]);
+
   const sendCrypto = useCallback((coin: string, amount: number, label: string) => {
     const coinPrice = prices[coin]?.usd ?? 1;
     const usdValue  = (amount * coinPrice).toFixed(2);
@@ -2529,6 +2587,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     generateMnemonic: () => walletService.generateMnemonic(),
     createWallet, importWallet, deleteWallet, enterReadOnlyMode, refreshBalance, refreshCardData, fetchBalance,
     sendETH, sendCrypto, topupCard, spendCard, toggleFreezeCard, reportLostCard, applySwapBalances, switchNetwork,
+    bridgeINRX,
     fiatCurrency, setFiatCurrency, formatFiat, convertFiat, fiatSymbol, formatOrderFiat,
     isGlobalLoading,
     setGlobalLoading: (loading: boolean, msg?: string) => {
@@ -2552,6 +2611,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     enabledCardCurrencies, setEnabledCardCurrencies,
     createWallet, importWallet, deleteWallet, enterReadOnlyMode, refreshBalance, refreshCardData, fetchBalance,
     sendETH, sendCrypto, topupCard, spendCard, toggleFreezeCard, reportLostCard, applySwapBalances, switchNetwork,
+    bridgeINRX,
     fiatCurrency, setFiatCurrency, formatFiat, convertFiat, fiatSymbol, formatOrderFiat,
     isGlobalLoading,
     globalLoadingMessage,
