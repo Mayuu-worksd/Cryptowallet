@@ -173,6 +173,10 @@ export const TRON_TOKENS: Record<string, Record<string, string>> = {
     TRON:        'TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8',  // mainnet TRC20 USDC
     'TRON Nile': '',
   },
+  INRX: {
+    TRON:        'TBykZRRzGm1M9QC7DWcC4QALLTSJF8mRAo',  // mainnet TRC20 INRX
+    'TRON Nile': 'TBykZRRzGm1M9QC7DWcC4QALLTSJF8mRAo',  // Nile testnet TRC20 INRX
+  },
 };
 
 export const TRON_EXPLORER: Record<string, string> = {
@@ -244,7 +248,7 @@ export const tronService = {
   },
 
   async getAllBalances(tronAddress: string, network: string): Promise<{
-    TRX: number; USDT: number; USDC: number;
+    TRX: number; USDT: number; USDC: number; INRX: number;
   }> {
     const base = this.getBaseUrl(network);
     try {
@@ -254,14 +258,16 @@ export const tronService = {
       const json = await res.json();
       const account = json?.data?.[0];
 
-      if (!account) return { TRX: 0, USDT: 0, USDC: 0 };
+      if (!account) return { TRX: 0, USDT: 0, USDC: 0, INRX: 0 };
 
       const trx = (account.balance ?? 0) / 1_000_000;
 
       const usdtContract = TRON_TOKENS.USDT[network] ?? '';
       const usdcContract = TRON_TOKENS.USDC[network] ?? '';
+      const inrxContract = TRON_TOKENS.INRX[network] ?? '';
       let usdt = 0;
       let usdc = 0;
+      let inrx = 0;
 
       const trc20: any[] = account.trc20 ?? [];
       for (const t of trc20) {
@@ -272,12 +278,15 @@ export const tronService = {
           if (usdcContract && addr === usdcContract) {
             usdc = parseInt(String(bal), 10) / 1_000_000;
           }
+          if (inrxContract && addr === inrxContract) {
+            inrx = parseInt(String(bal), 10) / 1_000_000;
+          }
         }
       }
 
-      return { TRX: trx, USDT: usdt, USDC: usdc };
+      return { TRX: trx, USDT: usdt, USDC: usdc, INRX: inrx };
     } catch {
-      return { TRX: 0, USDT: 0, USDC: 0 };
+      return { TRX: 0, USDT: 0, USDC: 0, INRX: 0 };
     }
   },
 

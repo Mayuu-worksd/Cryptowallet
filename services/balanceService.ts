@@ -30,6 +30,12 @@ const TOKEN_CONTRACTS: Record<string, Record<string, string>> = {
     Polygon:  '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
     Arbitrum: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
   },
+  INRX: {
+    Ethereum: '0x51A5F24560547f587999c331788aC495D40d95ba',
+    Sepolia:  '0x51A5F24560547f587999c331788aC495D40d95ba',
+    Polygon:  '0xd52280A15b30e5EdfFF858E7EC22266604358F26',
+    'Polygon Amoy': '0xd52280A15b30e5EdfFF858E7EC22266604358F26',
+  },
 };
 
 const TOKEN_DECIMALS: Record<string, number> = {
@@ -43,6 +49,7 @@ const TOKEN_DECIMALS: Record<string, number> = {
   TON: 9,
   TRX: 6,
   SUI: 9,
+  INRX: 6,
 };
 
 const NETWORK_CONFIG: Record<string, { chainId: number; name: string }> = {
@@ -63,6 +70,7 @@ export type WalletBalances = {
   TON: number;
   TRX: number;
   SUI: number;
+  INRX: number;
   [key: string]: number;
 };
 
@@ -134,6 +142,7 @@ export async function getWalletBalances(
         XRP: local.XRP ?? 0,
         TON: local.TON ?? 0,
         SUI: local.SUI ?? 0,
+        INRX: local.INRX ?? 0,
       };
       await AsyncStorage.setItem('cw_token_balances', JSON.stringify(balances)).catch(() => {});
       return balances;
@@ -165,6 +174,7 @@ export async function getWalletBalances(
       const resolvedTRX = tronBals.TRX !== undefined ? tronBals.TRX : (local.TRX ?? 0);
       const resolvedUSDT = tronBals.USDT !== undefined ? tronBals.USDT : (local.USDT ?? local.USDT_TRC20 ?? 0);
       const resolvedUSDC = tronBals.USDC !== undefined ? tronBals.USDC : (local.USDC ?? local.USDC_TRC20 ?? 0);
+      const resolvedINRX = (tronBals as any).INRX !== undefined ? (tronBals as any).INRX : (local.INRX ?? 0);
       const balances: WalletBalances = {
         USDT_TRC20: resolvedUSDT,
         USDC_TRC20: resolvedUSDC,
@@ -180,6 +190,7 @@ export async function getWalletBalances(
         XRP: local.XRP ?? 0,
         TON: local.TON ?? 0,
         SUI: local.SUI ?? 0,
+        INRX: resolvedINRX,
       };
       await AsyncStorage.setItem('cw_token_balances', JSON.stringify(balances)).catch(() => {});
       return balances;
@@ -205,19 +216,22 @@ export async function getWalletBalances(
 
   const provider  = makeProvider(network);
 
-  const [ethRaw, usdcRaw, usdtRaw] = await Promise.allSettled([
+  const [ethRaw, usdcRaw, usdtRaw, inrxRaw] = await Promise.allSettled([
     provider.getBalance(walletAddress),
     fetchERC20(provider, walletAddress, TOKEN_CONTRACTS.USDC[network], TOKEN_DECIMALS.USDC),
     fetchERC20(provider, walletAddress, TOKEN_CONTRACTS.USDT[network], TOKEN_DECIMALS.USDT),
+    fetchERC20(provider, walletAddress, TOKEN_CONTRACTS.INRX[network], TOKEN_DECIMALS.INRX),
   ]);
 
   const chainETH  = ethRaw.status  === 'fulfilled' ? parseFloat(formatEther(ethRaw.value)) : null;
   const chainUSDC   = usdcRaw.status   === 'fulfilled' ? usdcRaw.value : null;
   const chainUSDT   = usdtRaw.status   === 'fulfilled' ? usdtRaw.value : null;
+  const chainINRX   = inrxRaw.status   === 'fulfilled' ? inrxRaw.value : null;
 
   // Use live chain value directly — fall back to cache only if RPC call failed
   const resolvedUSDT = chainUSDT !== null ? chainUSDT : (local.USDT_ERC20 ?? local.USDT ?? 0);
   const resolvedUSDC = chainUSDC !== null ? chainUSDC : (local.USDC_ERC20 ?? local.USDC ?? 0);
+  const resolvedINRX = chainINRX !== null ? chainINRX : (local.INRX ?? 0);
   const resolvedETH  = chainETH  !== null ? chainETH  : (local.ETH ?? 0);
 
   const balances: WalletBalances = {
@@ -235,6 +249,7 @@ export async function getWalletBalances(
     XRP: local.XRP ?? 0,
     TON: local.TON ?? 0,
     SUI: local.SUI ?? 0,
+    INRX: resolvedINRX,
   };
 
   const hasAnyBalance = Object.values(balances).some(v => v > 0);
