@@ -385,30 +385,108 @@ export default function SendScreen({ navigation, route }: any) {
     } else if (selectedAsset === 'SOL') {
       const mockHash = 'sol_mock_' + Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
       result = { success: true, hash: mockHash };
-      addTx({
-        type:     'sent',
-        coin:     'SOL',
-        amount:   parsedAmount.toFixed(6),
-        usdValue: (parsedAmount * coinPrice).toFixed(2),
-        address,
-        status:   'success',
-        txHash:   mockHash,
-      });
+      addTx({ type: 'sent', coin: 'SOL', amount: parsedAmount.toFixed(6), usdValue: (parsedAmount * coinPrice).toFixed(2), address, status: 'success', txHash: mockHash });
       applySwapBalances('SOL', parsedAmount, 'SOL', 0);
       refreshBalance();
+    } else if (['USDT', 'USDC', 'INRX'].includes(selectedAsset)) {
+      const privateKey = await storageService.getPrivateKey();
+      if (!privateKey) {
+        result = { success: false, error: 'Wallet not found' };
+      } else {
+        const netName = selectedNetworkObj?.network_name || '';
+        const isTronNet = netName.toUpperCase().includes('TRON') || selectedNetworkObj?.symbol === 'TRX';
+
+        // ERC20 contract addresses per network
+        const ERC20_CONTRACTS: Record<string, Record<string, string>> = {
+          USDT: {
+            'Ethereum (ERC20)': '0xdAC17F958D2ee523a2206206994597C13D831ec7',
+            Ethereum:           '0xdAC17F958D2ee523a2206206994597C13D831ec7',
+            Polygon:            '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
+            'Polygon Network':  '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
+            Arbitrum:           '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
+            'Arbitrum One':     '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
+            Sepolia:            '0x7169D38820dfd117C3FA1f22a697dBA58d90BA06',
+            'Sepolia Testnet':  '0x7169D38820dfd117C3FA1f22a697dBA58d90BA06',
+          },
+          USDC: {
+            'Ethereum (ERC20)': '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+            Ethereum:           '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+            Polygon:            '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174',
+            'Polygon Network':  '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174',
+            Arbitrum:           '0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8',
+            'Arbitrum One':     '0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8',
+            Sepolia:            '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
+            'Sepolia Testnet':  '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
+          },
+          INRX: {
+            'Ethereum (ERC20)': '0x51A5F24560547f587999c331788aC495D40d95ba',
+            Ethereum:           '0x51A5F24560547f587999c331788aC495D40d95ba',
+            Polygon:            '0xd52280A15b30e5EdfFF858E7EC22266604358F26',
+            'Polygon Network':  '0xd52280A15b30e5EdfFF858E7EC22266604358F26',
+            Sepolia:            '0x51A5F24560547f587999c331788aC495D40d95ba',
+            'Sepolia Testnet':  '0x51A5F24560547f587999c331788aC495D40d95ba',
+          },
+        };
+
+        // TRC20 contract addresses
+        const TRC20_CONTRACTS: Record<string, string> = {
+          USDT: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+          USDC: 'TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8',
+          INRX: 'TBykZRRzGm1M9QC7DWcC4QALLTSJF8mRAo',
+        };
+
+        if (isTronNet) {
+          const contractAddr = TRC20_CONTRACTS[selectedAsset];
+          if (!contractAddr) {
+            result = { success: false, error: `${selectedAsset} not supported on TRON` };
+          } else {
+            const mnemonic = await storageService.getMnemonic();
+            if (!mnemonic) { result = { success: false, error: 'Wallet not found' }; }
+            else {
+              const { deriveTronAddress } = await import('../services/tronService');
+              const tron = await deriveTronAddress(mnemonic);
+              const tronResult = await tronService.sendTRC20({
+                privateKey:      tron.privateKey,
+                toAddress:       address,
+                amount:          parsedAmount,
+                contractAddress: contractAddr,
+                decimals:        6,
+                network:         netName.includes('Nile') ? 'TRON Nile' : 'TRON',
+              });
+              result = { success: tronResult.success, error: tronResult.error, hash: tronResult.txHash };
+              if (tronResult.success) {
+                addTx({ type: 'sent', coin: selectedAsset, amount: parsedAmount.toFixed(6), usdValue: (parsedAmount * coinPrice).toFixed(2), address, status: 'success', txHash: tronResult.txHash });
+                refreshBalance();
+              }
+            }
+          }
+        } else {
+          // Map network display name to RPC key
+          const NET_KEY_MAP: Record<string, string> = {
+            'Ethereum (ERC20)': 'Ethereum',
+            'Polygon Network':  'Polygon',
+            'Arbitrum One':     'Arbitrum',
+            'Sepolia Testnet':  'Sepolia',
+          };
+          const rpcKey = NET_KEY_MAP[netName] ?? netName;
+          const contractAddr = ERC20_CONTRACTS[selectedAsset]?.[netName] ?? ERC20_CONTRACTS[selectedAsset]?.[rpcKey];
+          if (!contractAddr) {
+            result = { success: false, error: `${selectedAsset} not supported on ${netName}` };
+          } else {
+            const erc20Result = await ethereumService.sendERC20(privateKey, address, amount, contractAddr, 6, rpcKey);
+            result = erc20Result;
+            if (erc20Result.success) {
+              addTx({ type: 'sent', coin: selectedAsset, amount: parsedAmount.toFixed(6), usdValue: (parsedAmount * coinPrice).toFixed(2), address, status: 'success', txHash: erc20Result.hash });
+              refreshBalance();
+            }
+          }
+        }
+      }
     } else {
-      // Mock other assets send since they are simulated
+      // BTC, BNB, XRP, TON, SUI — different blockchains, not yet supported for real sends
       const mockHash = `${selectedAsset.toLowerCase()}_mock_` + Math.random().toString(36).substring(2, 11);
       result = { success: true, hash: mockHash };
-      addTx({
-        type:     'sent',
-        coin:     selectedAsset,
-        amount:   parsedAmount.toFixed(6),
-        usdValue: (parsedAmount * coinPrice).toFixed(2),
-        address,
-        status:   'success',
-        txHash:   mockHash,
-      });
+      addTx({ type: 'sent', coin: selectedAsset, amount: parsedAmount.toFixed(6), usdValue: (parsedAmount * coinPrice).toFixed(2), address, status: 'success', txHash: mockHash });
       applySwapBalances(selectedAsset, parsedAmount, selectedAsset, 0);
       refreshBalance();
     }

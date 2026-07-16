@@ -179,4 +179,41 @@ export const ethereumService = {
       return 0;
     }
   },
+
+  async sendERC20(
+    privateKey: string,
+    toAddress: string,
+    amount: string,
+    contractAddress: string,
+    decimals: number,
+    network?: string
+  ): Promise<{ hash: string; success: boolean; error?: string }> {
+    try {
+      if (!privateKey) return { hash: '', success: false, error: 'Wallet not available' };
+      if (!isAddress(toAddress)) return { hash: '', success: false, error: 'Invalid recipient address' };
+      const parsed = parseFloat(amount);
+      if (isNaN(parsed) || parsed <= 0) return { hash: '', success: false, error: 'Invalid amount' };
+
+      const p = getProvider(network);
+      const wallet = new ethers.Wallet(privateKey, p);
+      const contract = new ethers.Contract(contractAddress, [
+        'function transfer(address to, uint256 amount) returns (bool)',
+        'function balanceOf(address owner) view returns (uint256)',
+      ], wallet);
+
+      const amountBig = parseUnits(amount, decimals);
+      const bal: bigint = await contract.balanceOf(wallet.address);
+      if (bal < amountBig) {
+        return { hash: '', success: false, error: `Insufficient token balance` };
+      }
+
+      const tx = await contract.transfer(toAddress, amountBig);
+      await tx.wait(1);
+      return { hash: tx.hash, success: true };
+    } catch (e: any) {
+      const msg = e?.message ?? 'ERC20 transfer failed';
+      if (msg.includes('insufficient funds')) return { hash: '', success: false, error: 'Not enough ETH for gas fees' };
+      return { hash: '', success: false, error: msg };
+    }
+  },
 };

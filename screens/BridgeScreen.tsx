@@ -206,7 +206,7 @@ export default function BridgeScreen({ navigation }: any) {
 
     setLoading(true);
     try {
-      const netKey = sourceChain.id === 11155111 ? 'Sepolia' : sourceChain.id === 80002 ? 'Amoy' : 'Nile';
+      const netKey = sourceChain.id === 11155111 ? 'Sepolia' : sourceChain.id === 80002 ? 'Polygon Amoy' : 'TRON Nile';
       const res = await bridgeINRX(netKey, destChain.id, amount, destAddress);
       if (res.success) {
         haptics.notification('success');

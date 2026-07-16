@@ -420,6 +420,72 @@ export const tronService = {
   isValidTronAddress(address: string): boolean {
     return /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(address);
   },
+
+  // ─── Send TRC20 token (USDT, USDC, INRX) ───────────────────────────────────
+  async sendTRC20(params: {
+    privateKey: string;
+    toAddress:  string;
+    amount:     number;
+    contractAddress: string;
+    decimals:   number;
+    network:    string;
+  }): Promise<{ txHash: string; success: boolean; error?: string }> {
+    const base = this.getBaseUrl(params.network);
+    try {
+      const ownerTronAddr = await tronAddressFromPrivateKey(params.privateKey);
+      const ownerHex      = tronAddressToHex(ownerTronAddr);
+      const toHex         = tronAddressToHex(params.toAddress);
+      const contractHex   = tronAddressToHex(params.contractAddress);
+
+      if (!ownerHex || !toHex || !contractHex) {
+        throw new Error('Invalid address encoding');
+      }
+
+      // Amount in smallest unit
+      const amountSun = Math.floor(params.amount * Math.pow(10, params.decimals));
+
+      // TRC20 transfer function selector: a9059cbb
+      // Pad toHex (20 bytes → 32 bytes) and amount (32 bytes)
+      const toHexPadded     = toHex.slice(2).padStart(64, '0');  // remove 0x41 prefix byte, use last 20 bytes
+      // toHex is 21 bytes (42 hex chars) with 0x41 prefix — we need the last 40 hex chars (20 bytes)
+      const toAddr20        = toHex.slice(-40).padStart(64, '0');
+      const amountHex       = amountSun.toString(16).padStart(64, '0');
+      const data            = 'a9059cbb' + toAddr20 + amountHex;
+
+      // 1. Trigger smart contract
+      const triggerRes = await fetch(`${base}/wallet/triggersmartcontract`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          owner_address:     ownerHex,
+          contract_address:  contractHex,
+          function_selector: 'transfer(address,uint256)',
+          parameter:         toAddr20 + amountHex,
+          fee_limit:         100_000_000, // 100 TRX max fee
+          call_value:        0,
+        }),
+      });
+      const triggerJson = await triggerRes.json();
+      const tx = triggerJson?.transaction;
+      if (!tx?.txID) throw new Error(triggerJson?.Error ?? triggerJson?.message ?? 'Failed to build TRC20 transaction');
+
+      // 2. Sign
+      const signed = signTronTx(tx, params.privateKey);
+
+      // 3. Broadcast
+      const broadcastRes = await fetch(`${base}/wallet/broadcasttransaction`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(signed),
+      });
+      const result = await broadcastRes.json();
+      if (!result.result) throw new Error(result.message ?? 'Broadcast failed');
+
+      return { txHash: tx.txID, success: true };
+    } catch (e: any) {
+      return { txHash: '', success: false, error: e?.message ?? 'TRC20 send failed' };
+    }
+  },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
