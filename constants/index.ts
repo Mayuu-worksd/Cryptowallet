@@ -24,6 +24,8 @@ export const NETWORK_INFO: Record<string, { name: string; type: string; color: s
   'Arbitrum Sepolia': { name: 'Arbitrum Sepolia',  type: 'Testnet', color: '#60A5FA', symbol: 'ETH', iconUrl: 'https://cryptologos.cc/logos/arbitrum-arb-logo.png?v=032' },
   'Base Sepolia':     { name: 'Base Sepolia',      type: 'Testnet', color: '#0052FF', symbol: 'ETH', iconUrl: 'https://avatars.githubusercontent.com/u/108554348?v=4' },
   'Optimism Sepolia': { name: 'Optimism Sepolia',  type: 'Testnet', color: '#FF0420', symbol: 'ETH', iconUrl: 'https://cryptologos.cc/logos/optimism-ethereum-op-logo.png?v=032' },
+  BSC:                { name: 'BNB Smart Chain',   type: 'Mainnet', color: '#F0B90B', symbol: 'BNB', iconUrl: 'https://cryptologos.cc/logos/bnb-bnb-logo.png?v=032' },
+  'BSC Testnet':      { name: 'BSC Testnet',       type: 'Testnet', color: '#F0B90B', symbol: 'BNB', iconUrl: 'https://cryptologos.cc/logos/bnb-bnb-logo.png?v=032' },
   TRON:               { name: 'TRON',              type: 'Mainnet', color: '#EF0027', symbol: 'TRX', iconUrl: 'https://cryptologos.cc/logos/tron-trx-logo.png?v=032' },
   'TRON Nile':        { name: 'TRON Nile',         type: 'Testnet', color: '#FF6B6B', symbol: 'TRX', iconUrl: 'https://cryptologos.cc/logos/tron-trx-logo.png?v=032' },
   Solana:             { name: 'Solana',            type: 'Mainnet', color: '#9945FF', symbol: 'SOL', iconUrl: 'https://cryptologos.cc/logos/solana-sol-logo.png?v=032' },

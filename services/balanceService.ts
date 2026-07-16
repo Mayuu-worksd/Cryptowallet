@@ -23,12 +23,14 @@ const TOKEN_CONTRACTS: Record<string, Record<string, string>> = {
     Sepolia:  '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
     Polygon:  '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174',
     Arbitrum: '0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8',
+    BSC:      '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d', // USDC on BSC (18 decimals)
   },
   USDT: {
     Ethereum: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
     Sepolia:  '0x7169D38820dfd117C3FA1f22a697dBA58d90BA06',
     Polygon:  '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
     Arbitrum: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
+    BSC:      '0x55d398326f99059fF775485246999027B3197955', // BSC-Peg USDT (18 decimals)
   },
   INRX: {
     Ethereum: '0x51A5F24560547f587999c331788aC495D40d95ba',
@@ -53,10 +55,12 @@ const TOKEN_DECIMALS: Record<string, number> = {
 };
 
 const NETWORK_CONFIG: Record<string, { chainId: number; name: string }> = {
-  Sepolia:  { chainId: 11155111, name: 'sepolia'   },
-  Ethereum: { chainId: 1,        name: 'homestead' },
-  Polygon:  { chainId: 137,      name: 'matic'     },
-  Arbitrum: { chainId: 42161,    name: 'arbitrum'  },
+  Sepolia:       { chainId: 11155111, name: 'sepolia'   },
+  Ethereum:      { chainId: 1,        name: 'homestead' },
+  Polygon:       { chainId: 137,      name: 'matic'     },
+  Arbitrum:      { chainId: 42161,    name: 'arbitrum'  },
+  BSC:           { chainId: 56,       name: 'bnb'       },
+  'BSC Testnet': { chainId: 97,       name: 'bnbt'      },
 };
 
 export type WalletBalances = {
@@ -106,6 +110,33 @@ export async function getWalletBalances(
       local = { ...cached, ...local };
     }
   } catch {}
+
+  const isBSC = network === 'BSC' || network === 'BSC Testnet';
+
+  // BSC: fetch BNB + BEP20 tokens (same EVM logic as Ethereum)
+  if (isBSC) {
+    const provider = makeProvider(network);
+    const [bnbRaw, usdcRaw, usdtRaw] = await Promise.allSettled([
+      provider.getBalance(walletAddress),
+      fetchERC20(provider, walletAddress, TOKEN_CONTRACTS.USDC[network], 18), // BSC USDC is 18 decimals
+      fetchERC20(provider, walletAddress, TOKEN_CONTRACTS.USDT[network], 18), // BSC USDT is 18 decimals
+    ]);
+    const chainBNB  = bnbRaw.status  === 'fulfilled' ? parseFloat(formatEther(bnbRaw.value)) : (local.BNB ?? 0);
+    const chainUSDC = usdcRaw.status === 'fulfilled' ? usdcRaw.value : (local.USDC ?? 0);
+    const chainUSDT = usdtRaw.status === 'fulfilled' ? usdtRaw.value : (local.USDT ?? 0);
+    const balances: WalletBalances = {
+      USDT_TRC20: local.USDT_TRC20 ?? 0, USDC_TRC20: local.USDC_TRC20 ?? 0,
+      USDT_ERC20: local.USDT_ERC20 ?? 0, USDC_ERC20: local.USDC_ERC20 ?? 0,
+      USDT: chainUSDT, USDC: chainUSDC,
+      ETH: local.ETH ?? 0, TRX: local.TRX ?? 0,
+      BTC: local.BTC ?? 0, SOL: local.SOL ?? 0,
+      BNB: chainBNB,
+      XRP: local.XRP ?? 0, TON: local.TON ?? 0, SUI: local.SUI ?? 0,
+      INRX: local.INRX ?? 0,
+    };
+    await AsyncStorage.setItem('cw_token_balances', JSON.stringify(balances)).catch(() => {});
+    return balances;
+  }
 
   const isTronNet = network === 'TRON' || network === 'TRON Nile';
 

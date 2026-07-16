@@ -36,10 +36,12 @@ const TOKEN_CONTRACTS: Record<string, Record<string, string>> = {
 };
 
 const NETWORK_CONFIG: Record<string, { chainId: number; name: string }> = {
-  Sepolia:  { chainId: 11155111, name: 'sepolia'   },
-  Ethereum: { chainId: 1,        name: 'homestead' },
-  Polygon:  { chainId: 137,      name: 'matic'     },
-  Arbitrum: { chainId: 42161,    name: 'arbitrum'  },
+  Sepolia:        { chainId: 11155111, name: 'sepolia'   },
+  Ethereum:       { chainId: 1,        name: 'homestead' },
+  Polygon:        { chainId: 137,      name: 'matic'     },
+  Arbitrum:       { chainId: 42161,    name: 'arbitrum'  },
+  BSC:            { chainId: 56,       name: 'bnb'       },
+  'BSC Testnet':  { chainId: 97,       name: 'bnbt'      },
 };
 
 const providers: Record<string, any> = {};
