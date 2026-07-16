@@ -114,4 +114,12 @@ export const SUPPORTED_TOKENS: Record<string, TokenConfig> = {
     iconUrl: 'https://assets.coingecko.com/coins/images/26375/large/sui_asset.jpeg?v=2',
     decimals: 9,
   },
+  INRX: {
+    symbol: 'INRX',
+    name: 'e-Rupee Stablecoin',
+    coingeckoId: 'e-rupee',
+    color: '#008080',
+    iconUrl: 'https://assets.coingecko.com/coins/images/325/large/Tether.png?v=2', // Using Tether/stablecoin color theme style
+    decimals: 6,
+  },
 };
