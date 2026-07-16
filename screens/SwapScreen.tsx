@@ -55,12 +55,12 @@ const TokenSelector = memo(({ sym, url, onPress, styles, T }: any) => (
 ));
 
 const NETWORK_TOKENS: Record<string, string[]> = {
-  Ethereum:           ['ETH', 'USDT', 'USDC'],
-  Polygon:            ['ETH', 'USDT', 'USDC'],
+  Ethereum:           ['ETH', 'USDT', 'USDC', 'INRX'],
+  Polygon:            ['ETH', 'USDT', 'USDC', 'INRX'],
   Arbitrum:           ['ETH', 'USDT', 'USDC'],
-  Sepolia:            ['ETH', 'USDT', 'USDC'],
-  TRON:               ['TRX', 'USDT', 'USDC'],
-  'TRON Nile':        ['TRX', 'USDT', 'USDC'],
+  Sepolia:            ['ETH', 'USDT', 'USDC', 'INRX'],
+  TRON:               ['TRX', 'USDT', 'USDC', 'INRX'],
+  'TRON Nile':        ['TRX', 'USDT', 'USDC', 'INRX'],
   Solana:             ['SOL', 'USDT', 'USDC'],
   'Solana Devnet':    ['SOL', 'USDT', 'USDC'],
 };
