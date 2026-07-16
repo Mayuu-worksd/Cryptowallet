@@ -47,7 +47,7 @@ const SEPOLIA_TOKENS: Record<string, string> = {
 };
 
 const UNISWAP_ROUTER_SEPOLIA = '0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48e';
-const UNISWAP_QUOTER_SEPOLIA = '0xEd1f6473345F45b75833fd55D191EaA8D2C54Dd';
+const UNISWAP_QUOTER_SEPOLIA = '0xEd1f6473345F45b75833fd55D191EaA8D2C54Dd9';
 const POOL_FEE = 3000;
 
 const ZRX_APIS: Record<string, string> = {
@@ -302,8 +302,12 @@ async function tryUniswapSepoliaQuote(
     const tokenOut  = to   === 'ETH' ? SEPOLIA_TOKENS.WETH : SEPOLIA_TOKENS[to];
     const amtIn     = ethers.utils.parseUnits(amount, TOKEN_DECIMALS[from] ?? 18);
     // Hard 6s timeout — Sepolia RPC can be slow
+    const quoteMethod = quoter.quoteExactInputSingle.staticCall 
+      ? quoter.quoteExactInputSingle.staticCall(tokenIn, tokenOut, POOL_FEE, amtIn, 0)
+      : quoter.callStatic.quoteExactInputSingle(tokenIn, tokenOut, POOL_FEE, amtIn, 0);
+
     const amtOut: bigint = await Promise.race([
-      quoter.quoteExactInputSingle.staticCall(tokenIn, tokenOut, POOL_FEE, amtIn, 0),
+      quoteMethod,
       new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 6000)),
     ]);
     const buyAmt = parseFloat(ethers.utils.formatUnits(amtOut, TOKEN_DECIMALS[to] ?? 18));
