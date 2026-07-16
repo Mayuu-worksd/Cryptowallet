@@ -126,10 +126,8 @@ export default function BridgeScreen({ navigation }: any) {
 
   const getChainBalance = useCallback((chain: BridgeChain) => {
     if (!balances) return '0.00';
-    if (chain.id === 11155111) return balances.Sepolia?.inrxBalance || '0.00';
-    if (chain.id === 80002) return balances.Amoy?.inrxBalance || '0.00';
-    if (chain.id === 2494104990) return balances.Nile?.inrxBalance || '0.00';
-    return '0.00';
+    const inrx = balances.INRX ?? 0;
+    return inrx > 0 ? inrx.toFixed(6) : '0.00';
   }, [balances]);
 
   const sourceBalance = useMemo(() => getChainBalance(sourceChain), [getChainBalance, sourceChain]);

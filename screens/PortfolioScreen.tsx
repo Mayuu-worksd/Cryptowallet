@@ -83,6 +83,7 @@ const STABLE_FALLBACK: Record<string, number> = {
   BTC: 65000, 
   USDT: 1, 
   USDC: 1, 
+  INRX: 0.012,
   SOL: 150, 
   BNB: 600, 
   XRP: 0.50, 

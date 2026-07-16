@@ -175,7 +175,7 @@ export const TRON_TOKENS: Record<string, Record<string, string>> = {
   },
   INRX: {
     TRON:        'TBykZRRzGm1M9QC7DWcC4QALLTSJF8mRAo',  // mainnet TRC20 INRX
-    'TRON Nile': 'TBykZRRzGm1M9QC7DWcC4QALLTSJF8mRAo',  // Nile testnet TRC20 INRX
+    'TRON Nile': '',  // No verified Nile testnet deployment — confirm contract with INRX team
   },
 };
 

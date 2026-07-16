@@ -117,9 +117,9 @@ export const SUPPORTED_TOKENS: Record<string, TokenConfig> = {
   INRX: {
     symbol: 'INRX',
     name: 'e-Rupee Stablecoin',
-    coingeckoId: 'e-rupee',
+    coingeckoId: '',  // Not listed on CoinGecko — pegged to ₹1 (1 INRX = 1 INR)
     color: '#008080',
-    iconUrl: 'https://assets.coingecko.com/coins/images/325/large/Tether.png?v=2', // Using Tether/stablecoin color theme style
+    iconUrl: 'https://assets.coingecko.com/coins/images/325/large/Tether.png?v=2',
     decimals: 6,
   },
 };

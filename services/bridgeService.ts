@@ -10,6 +10,17 @@ const BRIDGE_CONTRACTS: Record<string, string> = {
 const TOKEN_CONTRACTS: Record<string, string> = {
   Sepolia:        '0x51A5F24560547f587999c331788aC495D40d95ba',
   'Polygon Amoy': '0xd52280A15b30e5EdfFF858E7EC22266604358F26',
+  // NOTE: BSC INRX contract address — confirm with INRX team before mainnet use
+  BSC:            '0x51A5F24560547f587999c331788aC495D40d95ba',
+};
+
+// ethers v5/v6 compatible id (keccak256 of UTF-8 string)
+const keccakId = (str: string): string => {
+  const idFn = (ethers as any).id ?? ethers.utils?.id;
+  if (idFn) return idFn(str);
+  const toUtf8 = (ethers as any).toUtf8Bytes ?? ethers.utils?.toUtf8Bytes;
+  const keccak = (ethers as any).keccak256 ?? ethers.utils?.keccak256;
+  return keccak(toUtf8(str));
 };
 
 const ERC20_ABI = [
@@ -104,7 +115,7 @@ export const bridgeService = {
         }
       }
 
-      const tokenId = ethers.utils.id('INRX');
+      const tokenId = keccakId('INRX');
       const nonce = Date.now();
       const deadline = Math.floor(Date.now() / 1000) + 3600; // 1 hour deadline
       

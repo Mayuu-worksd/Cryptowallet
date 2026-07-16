@@ -736,6 +736,7 @@ const STABLE_FALLBACK: Record<string, number> = {
   BTC: 65000,
   USDT: 1,
   USDC: 1,
+  INRX: 0.012,
   SOL: 150,
   BNB: 600,
   XRP: 0.5,
@@ -879,6 +880,9 @@ export default function HomeScreen({ navigation }: any) {
       USDT: isTron
         ? (balances.USDT_TRC20 ?? balances.USDT ?? 0)
         : (balances.USDT_ERC20 ?? balances.USDT ?? 0),
+      INRX: isTron
+        ? parseFloat((balances.Nile as any)?.inrxBalance || (balances as any).INRX || '0') || 0
+        : parseFloat((balances.Sepolia as any)?.inrxBalance || (balances.Amoy as any)?.inrxBalance || (balances as any).INRX || '0') || 0,
       BTC: balances.BTC ?? 0,
       SOL: balances.SOL ?? 0,
       BNB: balances.BNB ?? 0,
@@ -908,8 +912,8 @@ export default function HomeScreen({ navigation }: any) {
         };
       })
       .filter((a) => {
-        // Always show native token (ETH/TRX) even if balance is 0
-        if (a.symbol === nativeSymbol) return true;
+        // Always show native token (ETH/TRX) and INRX even if balance is 0
+        if (a.symbol === nativeSymbol || a.symbol === "INRX") return true;
         // Hide ETH on TRON networks
         if (a.symbol === "ETH" && isTron) return false;
         // Hide TRX on EVM networks

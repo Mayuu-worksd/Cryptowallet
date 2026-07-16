@@ -134,7 +134,7 @@ export default function CardScreen({ navigation, route }: any) {
   }, []);
 
   const STABLE_FALLBACK: Record<string, number> = {
-    ETH: 3500, BTC: 65000, USDT: 1, USDC: 1, SOL: 150, BNB: 600, XRP: 0.5, TON: 7.5, TRX: 0.12, SUI: 1.8,
+    ETH: 3500, BTC: 65000, USDT: 1, USDC: 1, INRX: 0.012, SOL: 150, BNB: 600, XRP: 0.5, TON: 7.5, TRX: 0.12, SUI: 1.8,
   };
 
   const realBalances = useMemo(() => {
@@ -148,6 +148,9 @@ export default function CardScreen({ navigation, route }: any) {
       USDT: isTron
         ? (balances.USDT_TRC20 ?? balances.USDT ?? 0)
         : (balances.USDT_ERC20 ?? balances.USDT ?? 0),
+      INRX: isTron
+        ? parseFloat((balances.Nile as any)?.inrxBalance || (balances as any).INRX || '0') || 0
+        : parseFloat((balances.Sepolia as any)?.inrxBalance || (balances.Amoy as any)?.inrxBalance || (balances as any).INRX || '0') || 0,
       BTC: balances.BTC ?? 0,
       SOL: balances.SOL ?? 0,
       BNB: balances.BNB ?? 0,

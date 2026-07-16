@@ -115,7 +115,7 @@ export default function SwapScreen({ navigation, route }: any) {
   const isSupported = swapService.isNetworkSupported(network);
   const isTronNetwork = network === 'TRON' || network === 'TRON Nile';
   
-  const STABLE_FALLBACK: Record<string, number> = { USDT: 1, USDC: 1, ETH: 3500, BTC: 65000, SOL: 150, BNB: 600, XRP: 0.50, TON: 7.5, TRX: 0.12, SUI: 1.80 };
+  const STABLE_FALLBACK: Record<string, number> = { USDT: 1, USDC: 1, INRX: 0.012, ETH: 3500, BTC: 65000, SOL: 150, BNB: 600, XRP: 0.50, TON: 7.5, TRX: 0.12, SUI: 1.80 };
   const sellPrice    = prices[sellToken]?.usd ?? STABLE_FALLBACK[sellToken] ?? customTokens[sellToken]?.price ?? 1;
   const buyPrice     = prices[buyToken]?.usd  ?? STABLE_FALLBACK[buyToken]  ?? customTokens[buyToken]?.price ?? 1;
   const sellBalance  = sellToken === 'ETH' ? parseFloat(ethBalance) || 0 : (balances[sellToken] ?? 0);

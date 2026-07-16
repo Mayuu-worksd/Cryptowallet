@@ -145,16 +145,17 @@ type WalletContextType = {
   kycEmail: string;
   kycFullName: string;
   adminNetworks: any[];
-  bridgeINRX: (amount: string, destChainId: number, recipientAddress: string) => Promise<{ success: boolean; error?: string; hash?: string }>;
+  bridgeINRX: (sourceNetwork: string, destChainId: number, amount: string, recipientAddress: string) => Promise<{ success: boolean; error?: string; txHash?: string; error?: string }>;
 };
 
 const WalletContext = createContext<WalletContextType>({} as WalletContextType);
 
 // Zero fallback — real prices always come from CoinGecko via marketService.
 // Using 0 ensures the UI shows a loading state rather than stale hardcoded values.
-const FALLBACK_PRICES: Record<string, CoinPrice> = Object.fromEntries(
-  Object.keys(SUPPORTED_TOKENS).map(k => [k, { usd: 0, change24h: 0 }])
-);
+const FALLBACK_PRICES: Record<string, CoinPrice> = {
+  ...Object.fromEntries(Object.keys(SUPPORTED_TOKENS).map(k => [k, { usd: 0, change24h: 0 }])),
+  INRX: { usd: 0.012, change24h: 0.15 }
+};
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [isDarkMode,       setIsDarkMode]       = useState(true);
@@ -2205,10 +2206,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, [network, prices, walletAddress, addTx, refreshBalance]);
 
   const bridgeINRX = useCallback(async (
-    amount: string,
+    sourceNetwork: string,
     destChainId: number,
+    amount: string,
     recipientAddress: string
-  ): Promise<{ success: boolean; error?: string; hash?: string }> => {
+  ): Promise<{ success: boolean; error?: string; txHash?: string }> => {
     const privateKey = await storageService.getPrivateKey();
     if (!privateKey) return { success: false, error: 'Private key not found' };
     
@@ -2239,12 +2241,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }).then(r => { dbTxId = r.id; }).catch(() => {});
 
     const { bridgeService } = await import('../services/bridgeService');
+    const bridgeNetwork = sourceNetwork || network;
     const result = await bridgeService.lockTokens(
       privateKey,
       amount,
       destChainId,
       recipientAddress,
-      network
+      bridgeNetwork
     );
     const finalStatus = result.success ? 'success' : 'failed';
 
@@ -2258,7 +2261,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       refreshBalance();
       notificationService.notifySendComplete('INRX', amount, recipientAddress).catch(() => {});
     }
-    return result;
+    return { success: result.success, error: result.error, txHash: result.hash };
   }, [network, walletAddress, addTx, refreshBalance]);
 
   const sendCrypto = useCallback((coin: string, amount: number, label: string) => {
