@@ -22,6 +22,7 @@ import * as Clipboard from 'expo-clipboard';
 // ── Fallback Network Configurations ──
 const FALLBACK_NETWORKS = [
   { network_name: 'Ethereum (ERC20)', symbol: 'ETH', is_active: true, is_mainnet: true, min_deposit: '0.005 ETH', estimated_arrival: '3 minutes', warning_text: 'Only send ETH/USDT/USDC/INRX via ERC20.', supported_assets: ['ETH', 'USDT', 'USDC', 'INRX'] },
+  { network_name: 'BNB Smart Chain', symbol: 'BNB', is_active: true, is_mainnet: true, min_deposit: '0.01 BNB', estimated_arrival: '3 seconds', warning_text: 'Only send BNB/USDT/USDC via BSC.', supported_assets: ['BNB', 'USDT', 'USDC'] },
   { network_name: 'TRON (TRC20)', symbol: 'TRX', is_active: true, is_mainnet: true, min_deposit: '10 TRX', estimated_arrival: '1 minute', warning_text: 'Only send TRX/USDT/USDC/INRX via TRC20.', supported_assets: ['TRX', 'USDT', 'USDC', 'INRX'] },
   { network_name: 'Polygon Network', symbol: 'MATIC', is_active: true, is_mainnet: true, min_deposit: '5 MATIC', estimated_arrival: '2 minutes', warning_text: 'Only send MATIC/USDT/USDC/INRX via Polygon.', supported_assets: ['MATIC', 'USDT', 'USDC', 'INRX'] },
   { network_name: 'Arbitrum One', symbol: 'ETH', is_active: true, is_mainnet: true, min_deposit: '0.002 ETH', estimated_arrival: '30 seconds', warning_text: 'Only send ETH/USDT/USDC via Arbitrum.', supported_assets: ['ETH', 'USDT', 'USDC'] },
@@ -407,6 +408,8 @@ export default function SendScreen({ navigation, route }: any) {
             'Arbitrum One':     '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
             Sepolia:            '0x7169D38820dfd117C3FA1f22a697dBA58d90BA06',
             'Sepolia Testnet':  '0x7169D38820dfd117C3FA1f22a697dBA58d90BA06',
+            BSC:                '0x55d398326f99059fF775485246999027B3197955',
+            'BNB Smart Chain':  '0x55d398326f99059fF775485246999027B3197955',
           },
           USDC: {
             'Ethereum (ERC20)': '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
@@ -417,6 +420,8 @@ export default function SendScreen({ navigation, route }: any) {
             'Arbitrum One':     '0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8',
             Sepolia:            '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
             'Sepolia Testnet':  '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
+            BSC:                '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
+            'BNB Smart Chain':  '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
           },
           INRX: {
             'Ethereum (ERC20)': '0x51A5F24560547f587999c331788aC495D40d95ba',
@@ -467,6 +472,7 @@ export default function SendScreen({ navigation, route }: any) {
             'Polygon Network':  'Polygon',
             'Arbitrum One':     'Arbitrum',
             'Sepolia Testnet':  'Sepolia',
+            'BNB Smart Chain':  'BSC',
           };
           const rpcKey = NET_KEY_MAP[netName] ?? netName;
           const contractAddr = ERC20_CONTRACTS[selectedAsset]?.[netName] ?? ERC20_CONTRACTS[selectedAsset]?.[rpcKey];
@@ -482,8 +488,26 @@ export default function SendScreen({ navigation, route }: any) {
           }
         }
       }
+    } else if (selectedAsset === 'BNB') {
+      // BNB on BSC — same EVM logic as ETH, just different network
+      const privateKey = await storageService.getPrivateKey();
+      if (!privateKey) {
+        result = { success: false, error: 'Wallet not found' };
+      } else {
+        const NET_KEY_MAP: Record<string, string> = {
+          'BNB Smart Chain': 'BSC',
+          BSC:               'BSC',
+          'BSC Testnet':     'BSC Testnet',
+        };
+        const rpcKey = NET_KEY_MAP[netName] ?? 'BSC';
+        result = await ethereumService.sendETH(privateKey, address, amount, rpcKey);
+        if (result.success) {
+          addTx({ type: 'sent', coin: 'BNB', amount: parsedAmount.toFixed(6), usdValue: (parsedAmount * coinPrice).toFixed(2), address, status: 'success', txHash: result.hash });
+          refreshBalance();
+        }
+      }
     } else {
-      // BTC, BNB, XRP, TON, SUI — different blockchains, not yet supported for real sends
+      // BTC, XRP, TON, SUI — different blockchains, not yet integrated
       const mockHash = `${selectedAsset.toLowerCase()}_mock_` + Math.random().toString(36).substring(2, 11);
       result = { success: true, hash: mockHash };
       addTx({ type: 'sent', coin: selectedAsset, amount: parsedAmount.toFixed(6), usdValue: (parsedAmount * coinPrice).toFixed(2), address, status: 'success', txHash: mockHash });

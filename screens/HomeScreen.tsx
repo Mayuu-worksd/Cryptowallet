@@ -229,6 +229,7 @@ const TokenRow = memo(
     symbol,
     amount,
     usd,
+    price,
     change24h,
     T,
     hideBalance,
@@ -239,6 +240,7 @@ const TokenRow = memo(
     symbol: string;
     amount: number;
     usd: number;
+    price: number;
     change24h: number;
     T: any;
     hideBalance: boolean;
@@ -249,7 +251,9 @@ const TokenRow = memo(
     const scale = useRef(new Animated.Value(1)).current;
     const safeChange =
       typeof change24h === "number" && isFinite(change24h) ? change24h : 0;
-    const safeUsd = typeof usd === "number" && isFinite(usd) ? usd : 0;
+    // If balance is 0, show the token price instead of $0.00
+    const displayUsd = amount > 0 ? usd : price;
+    const safeUsd = typeof displayUsd === "number" && isFinite(displayUsd) ? displayUsd : 0;
     const safeAmt = typeof amount === "number" && isFinite(amount) ? amount : 0;
     const isUp = safeChange >= 0;
     return (
@@ -300,7 +304,7 @@ const TokenRow = memo(
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
             <View style={{ alignItems: "flex-end" }}>
-              <CurrencyText amount={safeUsd} code={fiatCurrency} hideBalance={hideBalance} style={[styles.tokenUsd, { color: T.text }]} />
+              <CurrencyText amount={safeUsd} code={fiatCurrency} hideBalance={hideBalance && amount > 0} style={[styles.tokenUsd, { color: T.text }]} />
               <Text
                 style={{
                   fontSize: 12,
@@ -871,9 +875,11 @@ export default function HomeScreen({ navigation }: any) {
 
   const realBalances: Record<string, number> = useMemo(() => {
     const isTron = network === "TRON" || network === "TRON Nile";
+    const isBSC = network === "BSC" || network === "BSC Testnet";
     return {
-      ETH: isTron ? 0 : parseFloat(ethBalance) || 0,
+      ETH: isTron || isBSC ? 0 : parseFloat(ethBalance) || 0,
       TRX: isTron ? (balances.TRX ?? 0) : 0,
+      BNB: isBSC ? parseFloat(ethBalance) || 0 : (balances.BNB ?? 0),
       USDC: isTron
         ? (balances.USDC_TRC20 ?? balances.USDC ?? 0)
         : (balances.USDC_ERC20 ?? balances.USDC ?? 0),
@@ -894,7 +900,8 @@ export default function HomeScreen({ navigation }: any) {
 
   const assetsList = useMemo(() => {
     const isTron = network === "TRON" || network === "TRON Nile";
-    const nativeSymbol = isTron ? "TRX" : "ETH";
+    const isBSC = network === "BSC" || network === "BSC Testnet";
+    const nativeSymbol = isTron ? "TRX" : isBSC ? "BNB" : "ETH";
 
     const list = (Object.keys(realBalances) as string[])
       .map((symbol) => {
@@ -907,6 +914,7 @@ export default function HomeScreen({ navigation }: any) {
         return {
           symbol,
           amount: realBalances[symbol],
+          price,
           usd: realBalances[symbol] * price,
           change24h,
         };
@@ -914,10 +922,12 @@ export default function HomeScreen({ navigation }: any) {
       .filter((a) => {
         // Always show native token (ETH/TRX) and INRX even if balance is 0
         if (a.symbol === nativeSymbol || a.symbol === "INRX") return true;
-        // Hide ETH on TRON networks
-        if (a.symbol === "ETH" && isTron) return false;
-        // Hide TRX on EVM networks
+        // Hide ETH on TRON/BSC networks
+        if (a.symbol === "ETH" && (isTron || isBSC)) return false;
+        // Hide TRX on non-TRON networks
         if (a.symbol === "TRX" && !isTron) return false;
+        // Hide BNB on non-BSC networks (if balance is 0)
+        if (a.symbol === "BNB" && !isBSC && a.amount === 0) return false;
         // Only show other coins if user actually has a balance > 0
         return a.amount > 0;
       })
@@ -939,13 +949,16 @@ export default function HomeScreen({ navigation }: any) {
   const fmtBalance = (usdVal: number) => formatFiat(usdVal);
 
   const isTron = network === "TRON" || network === "TRON Nile";
+  const isBSC = network === "BSC" || network === "BSC Testnet";
   // Show skeleton only on very first load before we have ANY balance data
   const isInitialLoad =
     isPricesLoading &&
     (isTron
       ? (balances.TRX ?? 0) === 0 && (balances.USDT ?? 0) === 0
-      : parseFloat(ethBalance) === 0 &&
-        Object.values(balances).every((v) => v === 0));
+      : isBSC
+        ? parseFloat(ethBalance) === 0 && (balances.BNB ?? 0) === 0
+        : parseFloat(ethBalance) === 0 &&
+          Object.values(balances).every((v) => v === 0));
 
   const onRefresh = useCallback(() => {
     refreshBalance();
@@ -1584,6 +1597,7 @@ export default function HomeScreen({ navigation }: any) {
                   symbol={a.symbol}
                   amount={a.amount}
                   usd={a.usd}
+                  price={a.price}
                   change24h={a.change24h}
                   T={T}
                   hideBalance={!balanceVisible}

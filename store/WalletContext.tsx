@@ -1519,7 +1519,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (transactions.length > 0 && !supabaseCardRestoredRef.current) {
       
       const recoveredTokenBals: Record<string, number> = { 
-        USDT: 0, USDC: 0, ETH: 0, BTC: 0, SOL: 0, BNB: 0, XRP: 0, TON: 0, TRX: 0, SUI: 0
+        USDT: 0, USDC: 0, ETH: 0, BTC: 0, SOL: 0, BNB: 0, XRP: 0, TON: 0, TRX: 0, SUI: 0, INRX: 0
       };
       let recoveredCardBal = 0;
       let hasCardActivity = false;
@@ -1688,7 +1688,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     // Reset chain-specific balances so stale values from previous network don't show
     const resetBalances = { 
       ...balancesRef.current, // preserve cross-chain (SOL, BTC, BNB, XRP, TON, SUI)
-      ETH: 0, USDT: 0, USDC: 0, USDT_ERC20: 0, USDC_ERC20: 0, TRX: 0, USDT_TRC20: 0, USDC_TRC20: 0 
+      ETH: 0, USDT: 0, USDC: 0, USDT_ERC20: 0, USDC_ERC20: 0, TRX: 0, USDT_TRC20: 0, USDC_TRC20: 0, INRX: 0 
     };
     setBalances(resetBalances);
     setEthBalance('0.0');
