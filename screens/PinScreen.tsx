@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
 import { savePin, verifyPin, getLockoutState } from '../services/pinService';
-import { usePreventScreenCapture } from 'expo-screen-capture';
+import { screenSecurityManager } from '../utils/screenSecurityManager';
 
 const PIN_LENGTH = 6;
 
@@ -21,7 +21,12 @@ interface Props {
 }
 
 export default function PinScreen({ mode, onSuccess, onCancel }: Props) {
-  usePreventScreenCapture();
+  useEffect(() => {
+    screenSecurityManager.acquire('pin-screen');
+    return () => {
+      screenSecurityManager.release('pin-screen');
+    };
+  }, []);
   const { isDarkMode, walletName } = useWallet();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const insets = useSafeAreaInsets();

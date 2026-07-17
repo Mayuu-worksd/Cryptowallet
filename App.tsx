@@ -40,6 +40,7 @@ const { useMemo, useCallback } = React;
 import { Theme, Fonts } from "./constants";
 
 const navigationRef = createNavigationContainerRef<any>();
+registerNavigationRef(navigationRef);
 
 // ─── Error Boundary ───────────────────────────────────────────────────────────
 class ErrorBoundary extends React.Component<
@@ -187,6 +188,7 @@ import NotificationsScreen from "./screens/NotificationsScreen";
 import EarnScreen from "./screens/EarnScreen";
 import CreditScreen from "./screens/CreditScreen";
 import MoreScreen from "./screens/MoreScreen";
+import { registerNavigationRef, updateScreenSecurity } from "./utils/screenSecurityManager";
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -927,6 +929,10 @@ function MobileNavigator() {
   const triggerPinSetup = React.useCallback(() => setPinState("setup"), []);
 
   React.useEffect(() => {
+    updateScreenSecurity(pinState === "verify" || pinState === "setup");
+  }, [pinState]);
+
+  React.useEffect(() => {
     // Check AsyncStorage directly so we don't flash AccountTypeScreen on reload
     AsyncStorage.getItem("cw_account_type")
       .then((saved) => {
@@ -1571,6 +1577,9 @@ export default function App() {
                       notification: Theme.colors.primary,
                     },
                   }}
+                  onReady={() => {
+                    updateScreenSecurity();
+                  }}
                   onStateChange={async (state) => {
                     if (state) {
                       await AsyncStorage.setItem(
@@ -1578,6 +1587,7 @@ export default function App() {
                         JSON.stringify(state),
                       ).catch(() => {});
                     }
+                    updateScreenSecurity();
                   }}
                 >
                   <MobileNavigator />

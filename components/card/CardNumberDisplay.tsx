@@ -6,13 +6,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { haptics } from '../../utils/haptics';
 
-let preventScreenCapture: (() => void) | null = null;
-let allowScreenCapture: (() => void) | null = null;
-try {
-  const sc = require('expo-screen-capture');
-  preventScreenCapture = sc.preventScreenCaptureAsync ?? sc.preventScreenCapture ?? null;
-  allowScreenCapture   = sc.allowScreenCaptureAsync   ?? sc.allowScreenCapture   ?? null;
-} catch {}
+import { screenSecurityManager } from '../../utils/screenSecurityManager';
 
 interface Props {
   cardNumber: string;
@@ -79,8 +73,14 @@ export function CardCredentialsWidget({
   }, [revealed]);
 
   useEffect(() => {
-    if (revealed) { try { preventScreenCapture?.(); } catch {} }
-    else          { try { allowScreenCapture?.();   } catch {} }
+    if (revealed) {
+      screenSecurityManager.acquire('card-reveal');
+    } else {
+      screenSecurityManager.release('card-reveal');
+    }
+    return () => {
+      screenSecurityManager.release('card-reveal');
+    };
   }, [revealed]);
 
   const handleToggle = useCallback(() => {

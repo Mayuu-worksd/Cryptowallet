@@ -66,12 +66,32 @@ const TradingChart = React.memo(({ prices, color, isDark, formatPrice }: Trading
   const tooltipBg  = isDark ? '#2A2B31' : '#ffffff';
   const tooltipTxt = isDark ? '#ffffff' : '#131313';
 
+  const prevPricesRef = useRef<number[]>([]);
+  const shiftAnim = useRef(new Animated.Value(0)).current;
+
   // Downsample to max 120 pts
   const sample = useMemo(() => {
     if (prices.length <= 120) return prices;
     const step = Math.ceil(prices.length / 120);
     return prices.filter((_, i) => i % step === 0);
   }, [prices]);
+
+  useEffect(() => {
+    const prev = prevPricesRef.current;
+    if (prev.length > 0 && sample.length > 0) {
+      const hasShifted = prev.length === sample.length && Math.abs(prev[1] - sample[0]) < 0.00001;
+      if (hasShifted) {
+        const dx = PLOT_W / (sample.length - 1);
+        shiftAnim.setValue(dx);
+        Animated.timing(shiftAnim, {
+          toValue: 0,
+          duration: 400,
+          useNativeDriver: true,
+        }).start();
+      }
+    }
+    prevPricesRef.current = sample;
+  }, [sample, prices]);
 
   const min   = useMemo(() => Math.min(...sample), [sample]);
   const max   = useMemo(() => Math.max(...sample), [sample]);
@@ -84,6 +104,12 @@ const TradingChart = React.memo(({ prices, color, isDark, formatPrice }: Trading
   const ys = useMemo(() => sample.map(p => toY(p)), [sample, min, range]);
 
   const linePath = useMemo(() => buildBezierPath(xs, ys), [xs, ys]);
+
+  const areaPath = useMemo(() => {
+    if (xs.length < 2 || !linePath) return '';
+    const bottomY = PLOT_H + PAD_T;
+    return `${linePath} L ${xs[xs.length - 1].toFixed(1)} ${bottomY.toFixed(1)} L ${xs[0].toFixed(1)} ${bottomY.toFixed(1)} Z`;
+  }, [xs, ys, linePath]);
 
   const fmtTooltip = useCallback((p: number): string => {
     return formatPrice(p);
@@ -116,39 +142,109 @@ const TradingChart = React.memo(({ prices, color, isDark, formatPrice }: Trading
     onPanResponderTerminate: () => setCrosshair(null),
   }), []);
 
+  // Grid coordinates
+  const gridY1 = PAD_T;
+  const gridY2 = PAD_T + PLOT_H / 2;
+  const gridY3 = PAD_T + PLOT_H;
+  const gridColor = isDark ? 'rgba(42, 43, 49, 0.4)' : 'rgba(229, 231, 235, 0.6)';
+  const labelColor = isDark ? '#7F848E' : '#9CA3AF';
+
+  // Live price guide & badge details
+  const lastPrice = sample[sample.length - 1] ?? 0;
+  const lastPriceStr = formatPrice(lastPrice);
+  const lastY = ys[ys.length - 1] ?? PAD_T + PLOT_H / 2;
+  const badgeW = 68;
+  const badgeH = 18;
+  const badgeX = PLOT_W - badgeW - 2;
+  const badgeY = lastY - 9;
+
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginVertical: 10 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginVertical: 10, overflow: 'hidden', width: PLOT_W }}>
       {/* ── Plot area (touch-enabled) ── */}
-      <View {...panResponder.panHandlers} style={{ width: PLOT_W, height: CHART_H }}>
-        <Svg width={PLOT_W} height={CHART_H}>
-          {/* Price line */}
-          <Path d={linePath} stroke={color} strokeWidth={2.5}
-            fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <View {...panResponder.panHandlers} style={{ width: PLOT_W, height: CHART_H, overflow: 'hidden' }}>
+        <Animated.View style={{ width: PLOT_W, height: CHART_H, transform: [{ translateX: shiftAnim }] }}>
+          <Svg width={PLOT_W} height={CHART_H}>
+            <Defs>
+              <LinearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0%" stopColor={color} stopOpacity={0.25} />
+                <Stop offset="100%" stopColor={color} stopOpacity={0.0} />
+              </LinearGradient>
+            </Defs>
 
-          {/* Last-price dot */}
-          <Circle cx={xs[xs.length - 1]} cy={ys[ys.length - 1]} r={5} fill={color} />
+            {/* Grid lines */}
+            <Line x1={0} y1={gridY1} x2={PLOT_W} y2={gridY1} stroke={gridColor} strokeWidth={1} strokeDasharray="3 4" />
+            <Line x1={0} y1={gridY2} x2={PLOT_W} y2={gridY2} stroke={gridColor} strokeWidth={1} strokeDasharray="3 4" />
+            <Line x1={0} y1={gridY3} x2={PLOT_W} y2={gridY3} stroke={gridColor} strokeWidth={1} strokeDasharray="3 4" />
 
-          {/* Crosshair */}
-          {cx != null && cy != null && cPrice != null && (
-            <>
-              {/* Vertical line */}
-              <Line x1={cx} y1={PAD_T} x2={cx} y2={CHART_H - PAD_B}
-                stroke={color} strokeWidth={1.2} strokeDasharray="3 4" strokeOpacity={0.7} />
-              {/* Dot */}
-              <Circle cx={cx} cy={cy} r={5} fill={color} />
-              <Circle cx={cx} cy={cy} r={10} fill={color} fillOpacity={0.15} />
-              {/* Tooltip */}
-              <Rect x={tooltipX} y={PAD_T - 2} width={TOOLTIP_W} height={22} rx={7}
-                fill={tooltipBg} stroke={color} strokeWidth={1} />
-              <SvgText
-                x={tooltipX + TOOLTIP_W / 2} y={PAD_T + 14}
-                textAnchor="middle" fontSize={11} fontWeight="700" fill={tooltipTxt}
-              >
-                {fmtTooltip(cPrice)}
-              </SvgText>
-            </>
-          )}
-        </Svg>
+            {/* Grid labels */}
+            <SvgText x={PLOT_W - 5} y={gridY1 - 4} fontSize={8} fill={labelColor} fontWeight="600" textAnchor="end">{formatPrice(max)}</SvgText>
+            <SvgText x={PLOT_W - 5} y={gridY2 - 4} fontSize={8} fill={labelColor} fontWeight="600" textAnchor="end">{formatPrice((max + min) / 2)}</SvgText>
+            <SvgText x={PLOT_W - 5} y={gridY3 - 4} fontSize={8} fill={labelColor} fontWeight="600" textAnchor="end">{formatPrice(min)}</SvgText>
+
+            {/* Gradient Area Fill */}
+            {areaPath ? <Path d={areaPath} fill="url(#chartGradient)" /> : null}
+
+            {/* Price line */}
+            <Path d={linePath} stroke={color} strokeWidth={2.5}
+              fill="none" strokeLinecap="round" strokeLinejoin="round" />
+
+            {/* Last-price dot */}
+            <Circle cx={xs[xs.length - 1]} cy={ys[ys.length - 1]} r={5} fill={color} />
+
+            {/* Horizontal guide line pointing to current price */}
+            <Line 
+              x1={0} 
+              y1={lastY} 
+              x2={PLOT_W - badgeW - 6} 
+              y2={lastY} 
+              stroke={color} 
+              strokeWidth={1} 
+              strokeDasharray="2 3" 
+              strokeOpacity={0.6} 
+            />
+
+            {/* Live price badge on Y axis */}
+            <Rect 
+              x={badgeX} 
+              y={badgeY} 
+              width={badgeW} 
+              height={badgeH} 
+              rx={4} 
+              fill={color} 
+            />
+            <SvgText
+              x={badgeX + badgeW / 2}
+              y={badgeY + 12}
+              textAnchor="middle"
+              fontSize={9}
+              fontWeight="800"
+              fill="#ffffff"
+            >
+              {lastPriceStr}
+            </SvgText>
+
+            {/* Crosshair */}
+            {cx != null && cy != null && cPrice != null && (
+              <>
+                {/* Vertical line */}
+                <Line x1={cx} y1={PAD_T} x2={cx} y2={CHART_H - PAD_B}
+                  stroke={color} strokeWidth={1.2} strokeDasharray="3 4" strokeOpacity={0.7} />
+                {/* Dot */}
+                <Circle cx={cx} cy={cy} r={5} fill={color} />
+                <Circle cx={cx} cy={cy} r={10} fill={color} fillOpacity={0.15} />
+                {/* Tooltip */}
+                <Rect x={tooltipX} y={PAD_T - 2} width={TOOLTIP_W} height={22} rx={7}
+                  fill={tooltipBg} stroke={color} strokeWidth={1} />
+                <SvgText
+                  x={tooltipX + TOOLTIP_W / 2} y={PAD_T + 14}
+                  textAnchor="middle" fontSize={11} fontWeight="700" fill={tooltipTxt}
+                >
+                  {fmtTooltip(cPrice)}
+                </SvgText>
+              </>
+            )}
+          </Svg>
+        </Animated.View>
       </View>
     </View>
   );
@@ -176,12 +272,53 @@ export default function CoinChartScreen({ route, navigation }: any) {
   const isFocused = useIsFocused();
   const [appState, setAppState] = useState(AppState.currentState);
 
+  const [high24h, setHigh24h] = useState<number | null>(null);
+  const [low24h, setLow24h] = useState<number | null>(null);
+  const [volume24h, setVolume24h] = useState<number | null>(null);
+
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const restFallbackTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastMsgTimeRef = useRef<number>(0);
+  const chartCandlesRef = useRef<{ time: number; close: number }[]>([]);
+  const activeSymbolRef = useRef(symbol);
+  const isWsConnectedRef = useRef(false);
+
+  // Keep ref in sync
+  useEffect(() => {
+    activeSymbolRef.current = symbol;
+  }, [symbol]);
+
   // Always reflect live context price; chart fetch may override with latest candle
   const contextPrice = prices[symbol]?.usd ?? 0;
   const [priceNow, setPriceNow]   = useState(contextPrice);
+  const priceTransitionRef = useRef<any>(null);
+  const currentPriceRef = useRef<number>(contextPrice);
+
+  useEffect(() => {
+    currentPriceRef.current = priceNow;
+  }, [priceNow]);
+
   useEffect(() => {
     if (contextPrice > 0) setPriceNow(contextPrice);
   }, [contextPrice]);
+
+  const transitionLastPrice = useCallback((targetPrice: number) => {
+    if (priceTransitionRef.current) {
+      cancelAnimationFrame(priceTransitionRef.current);
+      priceTransitionRef.current = null;
+    }
+    
+    setPriceNow(targetPrice);
+    
+    setChartData(prev => {
+      if (prev.length === 0) return prev;
+      if (prev[prev.length - 1] === targetPrice) return prev;
+      const next = [...prev];
+      next[next.length - 1] = targetPrice;
+      return next;
+    });
+  }, []);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -192,6 +329,34 @@ export default function CoinChartScreen({ route, navigation }: any) {
 
   const change24h = prices[symbol]?.change24h ?? 0;
   const isUp      = change24h >= 0;
+
+  const fetchTickerStats = async (sym: string) => {
+    const binanceSymbols: Record<string, string> = {
+      BTC: 'BTCUSDT', ETH: 'ETHUSDT', SOL: 'SOLUSDT', BNB: 'BNBUSDT',
+      XRP: 'XRPUSDT', TON: 'TONUSDT', TRX: 'TRXUSDT', SUI: 'SUIUSDT',
+      USDC: 'USDCUSDT', USDT: 'USDCUSDT',
+    };
+    const binanceSym = binanceSymbols[sym];
+    if (!binanceSym) {
+      // INRX or local currency mock
+      setHigh24h(sym === 'INRX' ? 0.0121 : 1.01);
+      setLow24h(sym === 'INRX' ? 0.0119 : 0.99);
+      setVolume24h(sym === 'INRX' ? 150000 : 2500000);
+      return;
+    }
+
+    try {
+      const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${binanceSym}`);
+      if (res.ok) {
+        const data = await res.json();
+        setHigh24h(parseFloat(data.highPrice));
+        setLow24h(parseFloat(data.lowPrice));
+        setVolume24h(parseFloat(data.quoteVolume));
+      }
+    } catch (e) {
+      console.warn('Error fetching ticker stats:', e);
+    }
+  };
 
   const fetchChart = async (timeframe: string, showLoading = true) => {
     if (showLoading) {
@@ -204,6 +369,17 @@ export default function CoinChartScreen({ route, navigation }: any) {
       if (pts && pts.length >= 2) {
         setChartData(pts);
         setPriceNow(pts[pts.length - 1]);
+        
+        if (timeframe === 'LIVE') {
+          const nowMs = Date.now();
+          chartCandlesRef.current = pts.map((p, index) => {
+            const time = nowMs - (pts.length - 1 - index) * 60 * 1000;
+            return {
+              time: Math.floor(time / 60000) * 60000,
+              close: p
+            };
+          });
+        }
       } else {
         setChartData([]);
       }
@@ -218,9 +394,132 @@ export default function CoinChartScreen({ route, navigation }: any) {
     }
   };
 
+  const startRestFallback = useCallback(() => {
+    if (restFallbackTimerRef.current) return;
+    console.log('[WebSocket] Starting REST fallback polling...');
+    restFallbackTimerRef.current = setInterval(() => {
+      fetchChart(range, false);
+      fetchTickerStats(symbol);
+    }, 10000);
+  }, [symbol, range]);
+
+  const stopRestFallback = useCallback(() => {
+    if (restFallbackTimerRef.current) {
+      clearInterval(restFallbackTimerRef.current);
+      restFallbackTimerRef.current = null;
+      console.log('[WebSocket] Stopped REST fallback polling.');
+    }
+  }, []);
+
+  const connectWebSocket = useCallback(() => {
+    if (wsRef.current) {
+      try { wsRef.current.close(); } catch {}
+      wsRef.current = null;
+    }
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+
+    const binanceSymbols: Record<string, string> = {
+      BTC: 'BTCUSDT', ETH: 'ETHUSDT', SOL: 'SOLUSDT', BNB: 'BNBUSDT',
+      XRP: 'XRPUSDT', TON: 'TONUSDT', TRX: 'TRXUSDT', SUI: 'SUIUSDT',
+      USDC: 'USDCUSDT', USDT: 'USDCUSDT',
+    };
+
+    const binanceSym = binanceSymbols[symbol];
+    if (!binanceSym) {
+      isWsConnectedRef.current = false;
+      startRestFallback();
+      return;
+    }
+
+    const symbolLower = binanceSym.toLowerCase();
+    const wsUrl = `wss://stream.binance.com:9443/stream?streams=${symbolLower}@ticker/${symbolLower}@kline_1m`;
+
+    console.log(`[WebSocket] Connecting to ${wsUrl}...`);
+    const socket = new WebSocket(wsUrl);
+    wsRef.current = socket;
+
+    socket.onopen = () => {
+      console.log(`[WebSocket] Connected for ${symbol}`);
+      isWsConnectedRef.current = true;
+      lastMsgTimeRef.current = Date.now();
+      stopRestFallback();
+    };
+
+    socket.onmessage = (event) => {
+      lastMsgTimeRef.current = Date.now();
+      try {
+        const msg = JSON.parse(event.data);
+        const { stream, data } = msg;
+
+        if (activeSymbolRef.current !== symbol) return;
+
+        if (stream.endsWith('@ticker')) {
+          const livePrice = parseFloat(data.c);
+          setHigh24h(parseFloat(data.h));
+          setLow24h(parseFloat(data.l));
+          setVolume24h(parseFloat(data.q));
+
+          if (range !== 'LIVE') {
+            transitionLastPrice(livePrice);
+          } else {
+            setPriceNow(livePrice);
+          }
+        } else if (stream.endsWith('@kline_1m')) {
+          const kline = data.k;
+          const klineTime = kline.t;
+          const klineClose = parseFloat(kline.c);
+
+          if (range === 'LIVE') {
+            setHigh24h(parseFloat(kline.h));
+            setLow24h(parseFloat(kline.l));
+            setVolume24h(parseFloat(kline.v) * klineClose);
+
+            const candles = chartCandlesRef.current;
+            if (candles.length > 0) {
+              const lastCandle = candles[candles.length - 1];
+              if (lastCandle.time === klineTime) {
+                lastCandle.close = klineClose;
+                chartCandlesRef.current = [...candles];
+                transitionLastPrice(klineClose);
+              } else if (klineTime > lastCandle.time) {
+                chartCandlesRef.current = [...candles.slice(1), { time: klineTime, close: klineClose }];
+                setChartData(chartCandlesRef.current.map(c => c.close));
+                setPriceNow(klineClose);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[WebSocket] Error parsing message:', err);
+      }
+    };
+
+    socket.onerror = (err) => {
+      console.warn(`[WebSocket] Error for ${symbol}:`, err);
+      isWsConnectedRef.current = false;
+      startRestFallback();
+    };
+
+    socket.onclose = (event) => {
+      console.log(`[WebSocket] Closed for ${symbol}. Code: ${event.code}`);
+      isWsConnectedRef.current = false;
+      startRestFallback();
+
+      if (activeSymbolRef.current === symbol) {
+        reconnectTimerRef.current = setTimeout(() => {
+          connectWebSocket();
+        }, 5000);
+      }
+    };
+  }, [symbol, range, startRestFallback, stopRestFallback]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await fetchChart(range, false);
+    await fetchTickerStats(symbol);
     setRefreshing(false);
   }, [range, symbol]);
 
@@ -229,18 +528,59 @@ export default function CoinChartScreen({ route, navigation }: any) {
     return () => sub.remove();
   }, []);
 
+  // Main loader & socket manager
   useEffect(() => {
     fetchChart(range, true);
-  }, [range, symbol]);
+    fetchTickerStats(symbol);
 
-  // LIVE auto refresh effect
+    if (isFocused && appState === 'active') {
+      connectWebSocket();
+    } else {
+      if (wsRef.current) {
+        try { wsRef.current.close(); } catch {}
+        wsRef.current = null;
+      }
+      stopRestFallback();
+    }
+
+    return () => {
+      if (wsRef.current) {
+        try { wsRef.current.close(); } catch {}
+        wsRef.current = null;
+      }
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+      if (priceTransitionRef.current) {
+        cancelAnimationFrame(priceTransitionRef.current);
+        priceTransitionRef.current = null;
+      }
+      stopRestFallback();
+    };
+  }, [symbol, range, isFocused, appState, connectWebSocket, startRestFallback, stopRestFallback]);
+
+  // Watchdog effect to detect stale connections
   useEffect(() => {
     if (range !== 'LIVE' || !isFocused || appState !== 'active') return;
-    const timer = setInterval(() => {
-      fetchChart('LIVE', false);
-    }, 10000);
-    return () => clearInterval(timer);
-  }, [range, symbol, isFocused, appState]);
+
+    const watchdog = setInterval(() => {
+      const binanceSymbols: Record<string, string> = {
+        BTC: 'BTCUSDT', ETH: 'ETHUSDT', SOL: 'SOLUSDT', BNB: 'BNBUSDT',
+        XRP: 'XRPUSDT', TON: 'TONUSDT', TRX: 'TRXUSDT', SUI: 'SUIUSDT',
+        USDC: 'USDCUSDT', USDT: 'USDCUSDT'
+      };
+      if (!binanceSymbols[symbol]) return;
+
+      const timeSinceLastMsg = Date.now() - lastMsgTimeRef.current;
+      if (isWsConnectedRef.current && timeSinceLastMsg > 8000) {
+        console.log('[WebSocket] Watchdog detected stalled socket, reconnecting...');
+        connectWebSocket();
+      }
+    }, 4000);
+
+    return () => clearInterval(watchdog);
+  }, [symbol, range, isFocused, appState, connectWebSocket]);
 
   const chartMin = useMemo(() =>
     chartData.length >= 2 ? Math.min(...chartData) : 0, [chartData]);
@@ -491,24 +831,52 @@ export default function CoinChartScreen({ route, navigation }: any) {
            <Text style={[styles.sectionTitle, { color: T.text, marginBottom: 20 }]}>Stats</Text>
            <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 24 }}>
               <View style={{ width: '50%' }}>
-                 <Text style={[styles.statLabel, { color: T.textMuted }]}>Market Cap</Text>
+                 <Text style={[styles.statLabel, { color: T.textMuted }]}>24h High</Text>
                  <Text style={[styles.statValue, { color: T.text }]}>
-                   <CurrencyText amount={45.68 * fiatInfo.rate} code={fiatCurrency} skipConversion={true} />B
+                   {high24h !== null ? (
+                     <CurrencyText amount={high24h} code={fiatCurrency} decimals={high24h * fiatInfo.rate < 1 ? 6 : high24h * fiatInfo.rate < 1000 ? 4 : 2} />
+                   ) : (
+                     '-'
+                   )}
+                 </Text>
+              </View>
+              <View style={{ width: '50%' }}>
+                 <Text style={[styles.statLabel, { color: T.textMuted }]}>24h Low</Text>
+                 <Text style={[styles.statValue, { color: T.text }]}>
+                   {low24h !== null ? (
+                     <CurrencyText amount={low24h} code={fiatCurrency} decimals={low24h * fiatInfo.rate < 1 ? 6 : low24h * fiatInfo.rate < 1000 ? 4 : 2} />
+                   ) : (
+                     '-'
+                   )}
                  </Text>
               </View>
               <View style={{ width: '50%' }}>
                  <Text style={[styles.statLabel, { color: T.textMuted }]}>24h Volume</Text>
                  <Text style={[styles.statValue, { color: T.text }]}>
-                   <CurrencyText amount={3.65 * fiatInfo.rate} code={fiatCurrency} skipConversion={true} />B
+                   {volume24h !== null ? (
+                     volume24h >= 1e9 ? `${(volume24h / 1e9).toFixed(2)}B` :
+                     volume24h >= 1e6 ? `${(volume24h / 1e6).toFixed(2)}M` :
+                     volume24h.toLocaleString(undefined, { maximumFractionDigits: 0 })
+                   ) : (
+                     '-'
+                   )}
                  </Text>
               </View>
               <View style={{ width: '50%' }}>
-                 <Text style={[styles.statLabel, { color: T.textMuted }]}>Holders</Text>
-                 <Text style={[styles.statValue, { color: T.text }]}>-</Text>
-              </View>
-              <View style={{ width: '50%' }}>
-                 <Text style={[styles.statLabel, { color: T.textMuted }]}>Created</Text>
-                 <Text style={[styles.statValue, { color: T.text }]}>14 Jan 2024</Text>
+                 <Text style={[styles.statLabel, { color: T.textMuted }]}>Market Cap</Text>
+                 <Text style={[styles.statValue, { color: T.text }]}>
+                   {symbol === 'BTC' ? '$1.86T' :
+                    symbol === 'ETH' ? '$395.2B' :
+                    symbol === 'SOL' ? '$74.1B' :
+                    symbol === 'BNB' ? '$85.6B' :
+                    symbol === 'XRP' ? '$29.4B' :
+                    symbol === 'TON' ? '$18.2B' :
+                    symbol === 'TRX' ? '$16.5B' :
+                    symbol === 'SUI' ? '$9.8B' :
+                    symbol === 'USDC' ? '$34.2B' :
+                    symbol === 'USDT' ? '$112.5B' :
+                    '-'}
+                 </Text>
               </View>
            </View>
         </View>

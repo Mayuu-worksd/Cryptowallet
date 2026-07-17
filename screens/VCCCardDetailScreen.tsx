@@ -24,7 +24,7 @@ import { Theme } from '../constants';
 import { vccService, dbCardService, cardVariantService, VCCCard, DBCard } from '../services/supabaseService';
 import { haptics } from '../utils/haptics';
 import Toast from '../components/Toast';
-import { usePreventScreenCapture } from 'expo-screen-capture';
+import { screenSecurityManager } from '../utils/screenSecurityManager';
 import { CurrencyText } from '../components/CurrencyText';
 type CardData = {
   cardNumber: string;   // full 16-digit (shown masked by default)
@@ -40,7 +40,12 @@ type CardData = {
 };
 
 export default function VCCCardDetailScreen({ navigation }: any) {
-  usePreventScreenCapture();
+  useEffect(() => {
+    screenSecurityManager.acquire('card-details');
+    return () => {
+      screenSecurityManager.release('card-details');
+    };
+  }, []);
   const { walletAddress, isDarkMode, cardDetails, cardCreated, formatFiat, fiatCurrency, cardBalance, fundVirtualCard } = useWallet() as any;
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const insets = useSafeAreaInsets();

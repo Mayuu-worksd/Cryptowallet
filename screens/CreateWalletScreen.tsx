@@ -10,7 +10,7 @@ import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useWallet } from '../store/WalletContext';
 import Toast from '../components/Toast';
-import { usePreventScreenCapture } from 'expo-screen-capture';
+import { screenSecurityManager } from '../utils/screenSecurityManager';
 import EmailOTPModal from '../components/EmailOTPModal';
 
 const SAVING_STEPS = [
@@ -80,7 +80,12 @@ function SavingOverlay({ visible, done, isDarkMode }: { visible: boolean; done: 
 type Step = 'info' | 'otp' | 'phrase' | 'verify' | 'done';
 
 export default function CreateWalletScreen({ navigation }: any) {
-  usePreventScreenCapture();
+  useEffect(() => {
+    screenSecurityManager.acquire('create-wallet');
+    return () => {
+      screenSecurityManager.release('create-wallet');
+    };
+  }, []);
   const { createWallet, importWallet, isDarkMode } = useWallet();
   const [loading, setLoading]       = useState(false);
   const [savingDone, setSavingDone] = useState(false);
