@@ -1,4 +1,5 @@
 import { SUPPORTED_TOKENS } from '../constants/currencyConfig';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Single source of truth — symbol ↔ CoinGecko ID mapping
 export const SYMBOL_TO_COINGECKO_ID: Record<string, string> = Object.fromEntries(
@@ -155,4 +156,146 @@ export const marketService = {
       return STATIC_NEWS;
     }
   },
+
+  async fetchChartData(symbol: string, timeframe: string): Promise<number[]> {
+    // 1. Check Stablecoin Cases
+    if (symbol === 'INRX') {
+      let prev = 0.012;
+      const pts = Array.from({ length: 60 }, (_, i) => {
+        prev = prev * (1 + (Math.random() * 0.002 - 0.001));
+        return Number(prev.toFixed(6));
+      });
+      return pts;
+    }
+
+    if (symbol === 'USDT' && timeframe === 'LIVE') {
+      let prev = 1.0;
+      const pts = Array.from({ length: 60 }, (_, i) => {
+        prev = prev * (1 + (Math.random() * 0.0006 - 0.0003));
+        return Number(prev.toFixed(5));
+      });
+      return pts;
+    }
+
+    const binanceSymbols: Record<string, string> = {
+      BTC: 'BTCUSDT',
+      ETH: 'ETHUSDT',
+      SOL: 'SOLUSDT',
+      BNB: 'BNBUSDT',
+      XRP: 'XRPUSDT',
+      TON: 'TONUSDT',
+      TRX: 'TRXUSDT',
+      SUI: 'SUIUSDT',
+      USDC: 'USDCUSDT',
+      USDT: 'USDCUSDT',
+    };
+
+    const timeframeMapBinance: Record<string, { interval: string; limit: number }> = {
+      LIVE: { interval: '1m', limit: 60 },
+      '1H': { interval: '1m', limit: 60 },
+      '1D': { interval: '15m', limit: 96 },
+      '1W': { interval: '1h', limit: 168 },
+      '1M': { interval: '4h', limit: 180 },
+      '1Y': { interval: '1d', limit: 365 },
+    };
+
+    // 2. Try Binance (Primary)
+    const binanceSym = binanceSymbols[symbol];
+    if (binanceSym) {
+      const cfg = timeframeMapBinance[timeframe] || timeframeMapBinance['1D'];
+      const url = `https://api.binance.com/api/v3/klines?symbol=${binanceSym}&interval=${cfg.interval}&limit=${cfg.limit}`;
+
+      try {
+        const res = await fetchWithRetry(url, 3, 1000);
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          let prices = data.map(item => parseFloat(item[4])); // index 4 is Close price
+          if (symbol === 'USDT') {
+            prices = prices.map(p => (p > 0 ? Number((1 / p).toFixed(5)) : 1.0));
+          }
+          await saveChartToCache(symbol, timeframe, prices);
+          return prices;
+        }
+      } catch (err) {
+        console.warn(`Binance fetch failed for ${symbol} ${timeframe}:`, err);
+      }
+    }
+
+    // 3. Try CoinGecko (Secondary/Fallback)
+    const coingeckoId = SYMBOL_TO_COINGECKO_ID[symbol];
+    if (coingeckoId) {
+      let days = '1';
+      if (timeframe === '1W') days = '7';
+      else if (timeframe === '1M') days = '30';
+      else if (timeframe === '1Y') days = '365';
+
+      const url = `https://api.coingecko.com/api/v3/coins/${coingeckoId}/market_chart?vs_currency=usd&days=${days}`;
+      try {
+        const res = await fetchWithRetry(url, 3, 1500);
+        const data = await res.json();
+        if (data.prices && Array.isArray(data.prices) && data.prices.length > 0) {
+          let prices = data.prices.map((p: any) => p[1]) as number[];
+          if (timeframe === '1H') {
+            prices = prices.slice(-12);
+          } else if (timeframe === 'LIVE') {
+            prices = prices.slice(-10);
+          }
+          await saveChartToCache(symbol, timeframe, prices);
+          return prices;
+        }
+      } catch (err) {
+        console.warn(`CoinGecko fetch failed for ${symbol} ${timeframe}:`, err);
+      }
+    }
+
+    // 4. Try Caching
+    const cached = await getChartFromCache(symbol, timeframe);
+    if (cached && cached.length > 0) {
+      return cached;
+    }
+
+    // 5. Hard Simulation Fallback (offline and no cache)
+    const basePrice = symbol === 'USDT' ? 1.0 : symbol === 'USDC' ? 1.0 : 0.5;
+    const ptsCount = timeframe === '1Y' ? 365 : 60;
+    let prev = basePrice;
+    const fallbackData = Array.from({ length: ptsCount }, () => {
+      prev = prev * (1 + (Math.random() * 0.02 - 0.01));
+      return prev;
+    });
+    return fallbackData;
+  },
 };
+
+const CHART_CACHE_PREFIX = 'market_chart_cache_';
+
+async function getChartFromCache(symbol: string, timeframe: string): Promise<number[] | null> {
+  try {
+    const data = await AsyncStorage.getItem(`${CHART_CACHE_PREFIX}${symbol}_${timeframe}`);
+    return data ? JSON.parse(data) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function saveChartToCache(symbol: string, timeframe: string, prices: number[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(`${CHART_CACHE_PREFIX}${symbol}_${timeframe}`, JSON.stringify(prices));
+  } catch {}
+}
+
+async function fetchWithRetry(url: string, retries = 3, delay = 1000): Promise<Response> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const res = await fetch(url, { headers: { Accept: 'application/json' } });
+      if (res.ok) return res;
+      if (res.status === 429) {
+        await new Promise(r => setTimeout(r, delay * 2 * (i + 1)));
+        continue;
+      }
+    } catch (e) {
+      if (i === retries - 1) throw e;
+    }
+    await new Promise(r => setTimeout(r, delay * (i + 1)));
+  }
+  throw new Error(`Failed to fetch ${url} after ${retries} retries`);
+}

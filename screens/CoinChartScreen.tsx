@@ -4,8 +4,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   ActivityIndicator, Image, Platform, Animated, Dimensions, PanResponder,
-  Modal, Pressable
+  Modal, Pressable, RefreshControl, AppState
 } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import {
   Svg, Path, Defs, LinearGradient, Stop,
@@ -13,7 +14,8 @@ import {
 } from 'react-native-svg';
 import { useWallet, useMarket } from '../store/WalletContext';
 import { COIN_META, COIN_COLORS } from '../constants';
-import { SYMBOL_TO_COINGECKO_ID } from '../services/marketService';
+import { marketService, SYMBOL_TO_COINGECKO_ID } from '../services/marketService';
+import SkeletonLoader from '../components/ui/SkeletonLoader';
 import { SUPPORTED_FIAT_CURRENCIES } from '../constants/currencyConfig';
 import { CurrencyText } from '../components/CurrencyText';
 import { parseDateSafe, formatDateShort } from '../utils/date';
@@ -31,12 +33,12 @@ const PAD_B    = 18;
 const PLOT_H   = CHART_H - PAD_T - PAD_B;
 
 const RANGES = [
-  { label: 'LIVE', days: 1   }, // placeholder for 1d
-  { label: '1H', days: 1     }, 
-  { label: '1D', days: 1     },
-  { label: '1W', days: 7     },
-  { label: '1M', days: 30    },
-  { label: '1Y', days: 365   },
+  { label: 'LIVE', value: 'LIVE' },
+  { label: '1H', value: '1H' },
+  { label: '1D', value: '1D' },
+  { label: '1W', value: '1W' },
+  { label: '1M', value: '1M' },
+  { label: '1Y', value: '1Y' },
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -167,8 +169,12 @@ export default function CoinChartScreen({ route, navigation }: any) {
 
   const [chartData, setChartData] = useState<number[]>([]);
   const [loading, setLoading]     = useState(true);
-  const [range, setRange]         = useState(1);
+  const [refreshing, setRefreshing] = useState(false);
+  const [range, setRange]         = useState<string>('1D');
   const [tradeModalVisible, setTradeModalVisible] = useState(false);
+
+  const isFocused = useIsFocused();
+  const [appState, setAppState] = useState(AppState.currentState);
 
   // Always reflect live context price; chart fetch may override with latest candle
   const contextPrice = prices[symbol]?.usd ?? 0;
@@ -187,69 +193,54 @@ export default function CoinChartScreen({ route, navigation }: any) {
   const change24h = prices[symbol]?.change24h ?? 0;
   const isUp      = change24h >= 0;
 
-  const fetchChart = async (days: number) => {
-    setLoading(true);
-    fadeAnim.setValue(0);
-    const id = SYMBOL_TO_COINGECKO_ID[symbol];
-    if (symbol === 'INRX') {
-      // Generate live e-Rupee stablecoin reserve curve hovering around $0.0120 (₹1.00 parity)
-      let prev = 0.012;
-      const pts = Array.from({ length: 60 }, (_, i) => {
-        if (i === 59) return 0.012;
-        prev = prev * (1 + (Math.random() * 0.003 - 0.0015));
-        return Number(prev.toFixed(6));
-      });
-      setChartData(pts);
-      setPriceNow(0.012);
-      setLoading(false);
-      Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
-      return;
+  const fetchChart = async (timeframe: string, showLoading = true) => {
+    if (showLoading) {
+      setLoading(true);
+      fadeAnim.setValue(0);
     }
-    if (!id) { setLoading(false); return; }
 
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        if (attempt > 0) await new Promise(r => setTimeout(r, 1500));
-        const res = await fetch(
-          `https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=${days}`,
-          { headers: { Accept: 'application/json' } }
-        );
-        if (res.status === 429) continue;
-        if (!res.ok) break;
-        const data = await res.json();
-        const pts  = (data.prices ?? []).map((p: [number, number]) => p[1]) as number[];
-        if (pts.length > 1) {
-          setChartData(pts);
-          setPriceNow(pts[pts.length - 1]);
-          setLoading(false);
-          Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
-          return;
-        }
-        break;
-      } catch {
-        if (attempt === 1) break;
+    try {
+      const pts = await marketService.fetchChartData(symbol, timeframe);
+      if (pts && pts.length >= 2) {
+        setChartData(pts);
+        setPriceNow(pts[pts.length - 1]);
+      } else {
+        setChartData([]);
+      }
+    } catch (e) {
+      console.warn('Error fetching chart data:', e);
+      setChartData([]);
+    } finally {
+      if (showLoading) {
+        setLoading(false);
+        Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
       }
     }
-
-    // Fallback simulated data
-    const fallback = prices[symbol]?.usd ?? 0;
-    if (fallback > 0) {
-      let prev = fallback;
-      const pts = Array.from({ length: 60 }, (_, i) => {
-        if (i === 59) return fallback;
-        prev = prev * (1 + (Math.random() * 0.012 - 0.006));
-        return prev;
-      });
-      setChartData(pts);
-      setPriceNow(fallback);
-    } else {
-      setChartData([]);
-    }
-    setLoading(false);
-    Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
   };
 
-  useEffect(() => { fetchChart(range); }, [range, symbol]);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchChart(range, false);
+    setRefreshing(false);
+  }, [range, symbol]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', nextState => setAppState(nextState));
+    return () => sub.remove();
+  }, []);
+
+  useEffect(() => {
+    fetchChart(range, true);
+  }, [range, symbol]);
+
+  // LIVE auto refresh effect
+  useEffect(() => {
+    if (range !== 'LIVE' || !isFocused || appState !== 'active') return;
+    const timer = setInterval(() => {
+      fetchChart('LIVE', false);
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [range, symbol, isFocused, appState]);
 
   const chartMin = useMemo(() =>
     chartData.length >= 2 ? Math.min(...chartData) : 0, [chartData]);
@@ -322,18 +313,53 @@ export default function CoinChartScreen({ route, navigation }: any) {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[color]}
+            tintColor={color}
+          />
+        }
+      >
 
         {/* Chart */}
         <View style={styles.chartBox}>
           {loading ? (
-            <View style={{ height: CHART_H, alignItems: 'center', justifyContent: 'center' }}>
-              <ActivityIndicator color={color} size="large" />
+            <View style={{ height: CHART_H, paddingVertical: 20, justifyContent: 'space-between' }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', opacity: 0.6 }}>
+                <SkeletonLoader width={80} height={14} isDark={isDarkMode} />
+                <SkeletonLoader width={60} height={14} isDark={isDarkMode} />
+              </View>
+              <View style={{ height: PLOT_H - 20, justifyContent: 'center', opacity: 0.4 }}>
+                <SkeletonLoader width="100%" height={2} isDark={isDarkMode} style={{ marginVertical: 8 }} />
+                <SkeletonLoader width="90%" height={2} isDark={isDarkMode} style={{ alignSelf: 'center', marginVertical: 8 }} />
+                <SkeletonLoader width="80%" height={2} isDark={isDarkMode} style={{ alignSelf: 'flex-end', marginVertical: 8 }} />
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', opacity: 0.6 }}>
+                <SkeletonLoader width={40} height={10} isDark={isDarkMode} />
+                <SkeletonLoader width={40} height={10} isDark={isDarkMode} />
+                <SkeletonLoader width={40} height={10} isDark={isDarkMode} />
+              </View>
             </View>
           ) : chartData.length < 2 ? (
-            <View style={{ height: CHART_H, alignItems: 'center', justifyContent: 'center' }}>
-              <Feather name="wifi-off" size={24} color={T.textMuted} />
-              <Text style={{ color: T.textMuted, marginTop: 8, fontSize: 13 }}>Chart unavailable</Text>
+            <View style={{ height: CHART_H, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+              <Feather name="wifi-off" size={32} color={T.textMuted} style={{ marginBottom: 12 }} />
+              <Text style={{ color: T.text, fontSize: 15, fontFamily: Fonts.bold, marginBottom: 4 }}>
+                Chart Data Unavailable
+              </Text>
+              <Text style={{ color: T.textMuted, fontSize: 13, fontFamily: Fonts.medium, textAlign: 'center', marginBottom: 16 }}>
+                We couldn't load historical prices. Please check your network connection.
+              </Text>
+              <TouchableOpacity
+                style={{ paddingVertical: 8, paddingHorizontal: 16, backgroundColor: T.surfaceLow, borderRadius: 12, borderWidth: 1, borderColor: T.border }}
+                onPress={() => fetchChart(range, true)}
+              >
+                <Text style={{ color: T.primary, fontSize: 13, fontFamily: Fonts.bold }}>Retry</Text>
+              </TouchableOpacity>
             </View>
           ) : (
             <Animated.View style={{ opacity: fadeAnim }}>
@@ -351,13 +377,13 @@ export default function CoinChartScreen({ route, navigation }: any) {
             {RANGES.map(r => (
               <TouchableOpacity
                 key={r.label}
-                style={[styles.rangeBtn, range === r.days && { backgroundColor: T.surfaceLow }]}
-                onPress={() => setRange(r.days)}
+                style={[styles.rangeBtn, range === r.value && { backgroundColor: T.surfaceLow }]}
+                onPress={() => setRange(r.value)}
                 activeOpacity={0.7}
               >
                 <Text style={[styles.rangeBtnText, {
-                  color: range === r.days ? T.text : T.textMuted,
-                  fontWeight: range === r.days ? '800' : '600',
+                  color: range === r.value ? T.text : T.textMuted,
+                  fontWeight: range === r.value ? '800' : '600',
                 }]}>{r.label}</Text>
               </TouchableOpacity>
             ))}
