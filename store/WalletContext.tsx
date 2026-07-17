@@ -145,7 +145,7 @@ type WalletContextType = {
   kycEmail: string;
   kycFullName: string;
   adminNetworks: any[];
-  bridgeINRX: (sourceNetwork: string, destChainId: number, amount: string, recipientAddress: string) => Promise<{ success: boolean; error?: string; txHash?: string; error?: string }>;
+  bridgeINRX: (sourceNetwork: string, destChainId: number, amount: string, recipientAddress: string) => Promise<{ success: boolean; error?: string; txHash?: string }>;
 };
 
 const WalletContext = createContext<WalletContextType>({} as WalletContextType);
@@ -545,8 +545,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         });
         AsyncStorage.multiSet([['cw_card_balance', String(vcc.balance)]]).catch(() => {});
       } else if (vcc && (!vcc.codego_card_id || vcc.codego_card_id.startsWith('mock_cg_'))) {
-        // Mock card — delete it so user can create a real KripiCard
-        await supabase.from('vcc_cards').delete().eq('wallet_address', walletAddress.toLowerCase()).catch(() => {});
+        try {
+          await supabase.from('vcc_cards').delete().eq('wallet_address', walletAddress.toLowerCase());
+        } catch {}
         await AsyncStorage.multiRemove(['cw_card_created', 'cw_card_balance', 'cw_card_transactions']);
         storageService.clearCardDetails().catch(() => {});
         setCardCreated(false);
@@ -1144,7 +1145,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
               storageService.saveCardDetails(restoredDetails).catch(() => {});
             } else if (vcc && (!vcc.codego_card_id || vcc.codego_card_id.startsWith('mock_cg_'))) {
               // Mock card (no real KripiCard id or mock_cg_ prefix) — reset so user can create a real card
-              await supabase.from('vcc_cards').delete().eq('wallet_address', address.toLowerCase()).catch(() => {});
+              try {
+                await supabase.from('vcc_cards').delete().eq('wallet_address', address.toLowerCase());
+              } catch {}
               await AsyncStorage.multiRemove(['cw_card_created', 'cw_card_balance', 'cw_card_transactions']);
               storageService.clearCardDetails().catch(() => {});
               setCardCreated(false);

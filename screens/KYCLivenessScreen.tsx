@@ -1,8 +1,8 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Theme } from '../constants';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  Platform, Image, Animated, Alert,
+  Platform, Image, Animated, Alert, AppState
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Feather } from '@expo/vector-icons';
@@ -29,8 +29,16 @@ export default function KYCLivenessScreen({ navigation, route }: any) {
   const [phase, setPhase]         = useState<Phase>('face_align');
   const [selfieUri, setSelfieUri] = useState<string | null>(null);
   const [capturing, setCapturing] = useState(false);
+  const [isAppActive, setIsAppActive] = useState(AppState.currentState === 'active');
   const shutterAnim = useRef(new Animated.Value(0)).current;
   const cameraRef   = useRef<CameraView>(null);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', nextState => {
+      setIsAppActive(nextState === 'active');
+    });
+    return () => sub.remove();
+  }, []);
 
   const handleCaptureSelfie = async () => {
     if (capturing) return;
@@ -134,7 +142,13 @@ export default function KYCLivenessScreen({ navigation, route }: any) {
           </View>
         ) : (
           <>
-            <CameraView ref={cameraRef} style={s.camera} facing="front" />
+            {isAppActive ? (
+              <CameraView ref={cameraRef} style={s.camera} facing="front" />
+            ) : (
+              <View style={[s.camera, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
+                <Feather name="video-off" size={48} color={Theme.colors.textDim} />
+              </View>
+            )}
             <Animated.View style={[s.shutter, { opacity: shutterAnim }]} />
 
             <View style={s.overlayWrap}>

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Theme } from '../constants';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  Platform, Animated, Alert, Dimensions, StatusBar, Easing, Image
+  Platform, Animated, Alert, Dimensions, StatusBar, Easing, Image, AppState
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Feather } from '@expo/vector-icons';
@@ -34,6 +34,14 @@ export default function KYCCodeSelfieScreen({ navigation, route }: any) {
   
   const cameraRef   = useRef<CameraView>(null);
   const timerRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [isAppActive, setIsAppActive] = useState(AppState.currentState === 'active');
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', nextState => {
+      setIsAppActive(nextState === 'active');
+    });
+    return () => sub.remove();
+  }, []);
   
   // Animations
   const shimmerAnim = useRef(new Animated.Value(0)).current;
@@ -206,7 +214,13 @@ export default function KYCCodeSelfieScreen({ navigation, route }: any) {
           <Image source={{ uri: selfieUri! }} style={StyleSheet.absoluteFill} resizeMode="cover" />
         ) : (
           <>
-            <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="front" />
+            {isAppActive ? (
+              <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="front" />
+            ) : (
+              <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
+                <Feather name="video-off" size={48} color={T.textDim} />
+              </View>
+            )}
             <View style={s.cameraOverlay}>
                <View style={[s.ovalHole, { borderColor: T.surfaceHigh }]} />
                <Animated.View style={[s.paperGuide, { transform: [{ translateY: arrowAnim }] }]}>

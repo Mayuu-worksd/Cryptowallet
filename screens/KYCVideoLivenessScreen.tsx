@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Theme } from '../constants';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  Platform, Animated, Alert, Dimensions, StatusBar, Easing
+  Platform, Animated, Alert, Dimensions, StatusBar, Easing, AppState
 } from 'react-native';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { Feather } from '@expo/vector-icons';
@@ -35,6 +35,7 @@ export default function KYCVideoLivenessScreen({ navigation, route }: any) {
   const [instrIdx, setInstrIdx]   = useState(0);
   const [videoUri, setVideoUri]   = useState<string | null>(null);
   const [recordingStarted, setRecordingStarted] = useState(false);
+  const [isAppActive, setIsAppActive] = useState(true);
   
   const cameraRef = useRef<CameraView>(null);
   const timerRef  = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -75,13 +76,36 @@ export default function KYCVideoLivenessScreen({ navigation, route }: any) {
      ]).start();
   }, [instrIdx]);
 
-  // Cleanup on unmount
+  // AppState change handling to release camera and mic mid-call
   useEffect(() => {
+    const handleStateChange = (nextAppState: string) => {
+      if (nextAppState !== 'active') {
+        if (recordingStarted) {
+          try {
+            cameraRef.current?.stopRecording();
+          } catch (e) {
+            console.warn('Failed to stop recording on background:', e);
+          }
+        }
+        if (timerRef.current) clearInterval(timerRef.current);
+        if (stopTimerRef.current) clearTimeout(stopTimerRef.current);
+        setPhase('ready');
+        setRecordingStarted(false);
+        setCountdown(RECORD_SECONDS);
+        setInstrIdx(0);
+        setIsAppActive(false);
+      } else {
+        setIsAppActive(true);
+      }
+    };
+
+    const sub = AppState.addEventListener('change', handleStateChange);
     return () => {
+      sub.remove();
       if (timerRef.current) clearInterval(timerRef.current);
       if (stopTimerRef.current) clearTimeout(stopTimerRef.current);
     };
-  }, []);
+  }, [recordingStarted]);
 
   const startRecording = async () => {
     if (!cameraRef.current || recordingStarted) return;
@@ -110,7 +134,7 @@ export default function KYCVideoLivenessScreen({ navigation, route }: any) {
       const video = await cameraRef.current.recordAsync({ maxDuration: RECORD_SECONDS });
       if (timerRef.current) clearInterval(timerRef.current);
       if (stopTimerRef.current) clearTimeout(stopTimerRef.current);
-      if (video?.uri) {
+      if (video?.uri && AppState.currentState === 'active') {
         setVideoUri(video.uri);
         setPhase('done');
         Animated.timing(successFade, { toValue: 1, duration: 600, useNativeDriver: true }).start();
@@ -121,11 +145,8 @@ export default function KYCVideoLivenessScreen({ navigation, route }: any) {
     } catch (e: any) {
       if (timerRef.current) clearInterval(timerRef.current);
       if (stopTimerRef.current) clearTimeout(stopTimerRef.current);
-      // If stopped normally, video may still be valid — check videoUri
-      if (!videoUri) {
-        setPhase('ready');
-        setRecordingStarted(false);
-      }
+      setPhase('ready');
+      setRecordingStarted(false);
     }
   };
 
@@ -187,32 +208,42 @@ export default function KYCVideoLivenessScreen({ navigation, route }: any) {
 
       {/* Main Area */}
       <View style={s.cameraContainer}>
-        {/* Always keep CameraView mounted — unmounting mid-record crashes */}
-        <CameraView
-          ref={cameraRef}
-          style={[s.camera, phase === 'done' && { opacity: 0 }]}
-          facing="front"
-          mode="video"
-        />
+        {isAppActive && phase !== 'done' ? (
+          <CameraView
+            ref={cameraRef}
+            style={s.camera}
+            facing="front"
+            mode="video"
+          />
+        ) : (
+          <View style={[s.camera, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
+            <Feather name="video-off" size={48} color={T.textDim} />
+            <Text style={{ color: T.textMuted, fontSize: 15, marginTop: 12, fontWeight: '700' }}>
+              Camera suspended
+            </Text>
+          </View>
+        )}
         
         {/* Overlay Layers */}
-        <View style={s.overlayLayer}>
-           <View style={s.edge} />
-           <View style={s.centerRow}>
-              <View style={s.edge} />
-              <View style={s.ovalFrame}>
-                 <Animated.View style={[s.spinContainer, { transform: [{ rotate: spin }] }]}>
-                    <LinearGradient 
-                      colors={phase === 'recording' ? [T.primary, 'transparent', T.primary] : ['#FFF', 'transparent']} 
-                      style={s.gradientBorder} 
-                    />
-                 </Animated.View>
-                 <View style={s.ovalHole} />
-              </View>
-              <View style={s.edge} />
-           </View>
-           <View style={s.edge} />
-        </View>
+        {phase !== 'done' && (
+          <View style={s.overlayLayer}>
+             <View style={s.edge} />
+             <View style={s.centerRow}>
+                <View style={s.edge} />
+                <View style={s.ovalFrame}>
+                   <Animated.View style={[s.spinContainer, { transform: [{ rotate: spin }] }]}>
+                      <LinearGradient 
+                        colors={phase === 'recording' ? [T.primary, 'transparent', T.primary] : ['#FFF', 'transparent']} 
+                        style={s.gradientBorder} 
+                      />
+                   </Animated.View>
+                   <View style={s.ovalHole} />
+                </View>
+                <View style={s.edge} />
+             </View>
+             <View style={s.edge} />
+          </View>
+        )}
 
         {/* Success Overlay */}
         {phase === 'done' && (

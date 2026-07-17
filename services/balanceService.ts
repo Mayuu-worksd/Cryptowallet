@@ -193,6 +193,7 @@ export async function getWalletBalances(
         XRP: local.XRP ?? 0,
         TON: local.TON ?? 0,
         SUI: local.SUI ?? 0,
+        INRX: local.INRX ?? 0,
       };
     }
   }
@@ -241,6 +242,7 @@ export async function getWalletBalances(
         XRP: local.XRP ?? 0,
         TON: local.TON ?? 0,
         SUI: local.SUI ?? 0,
+        INRX: local.INRX ?? 0,
       };
     }
   }

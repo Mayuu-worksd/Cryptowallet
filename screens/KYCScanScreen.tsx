@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Theme } from '../constants';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  Platform, Image, Animated, Alert, Dimensions, StatusBar
+  Platform, Image, Animated, Alert, Dimensions, StatusBar, AppState
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -39,6 +39,14 @@ export default function KYCScanScreen({ navigation, route }: any) {
   const [frontUri, setFrontUri]   = useState<string | null>(null);
   const [capturing, setCapturing] = useState(false);
   const [feedback, setFeedback]   = useState('Position document');
+  const [isAppActive, setIsAppActive] = useState(AppState.currentState === 'active');
+  
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', nextState => {
+      setIsAppActive(nextState === 'active');
+    });
+    return () => sub.remove();
+  }, []);
   
   const cameraRef   = useRef<CameraView>(null);
   const shutterAnim = useRef(new Animated.Value(0)).current;
@@ -175,7 +183,13 @@ export default function KYCScanScreen({ navigation, route }: any) {
           </View>
         ) : (
           <>
-            <CameraView ref={cameraRef} style={s.camera} facing="back" />
+            {isAppActive ? (
+              <CameraView ref={cameraRef} style={s.camera} facing="back" />
+            ) : (
+              <View style={[s.camera, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
+                <Feather name="video-off" size={48} color={T.textDim} />
+              </View>
+            )}
             
             {/* Overlay */}
             <View style={s.overlayLayer}>

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Theme, Fonts } from '../constants';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  Platform, Vibration, Animated, StatusBar, ActivityIndicator,
+  Platform, Vibration, Animated, StatusBar, ActivityIndicator, AppState
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -28,6 +28,14 @@ export default function ScanScreen({ navigation }: any) {
   const [showCam, setShowCam]     = useState(false);
   // Track what type was detected for the hint badge
   const [detectedType, setDetectedType] = useState<'wallet' | 'payment' | null>(null);
+  const [isAppActive, setIsAppActive] = useState(AppState.currentState === 'active');
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', nextState => {
+      setIsAppActive(nextState === 'active');
+    });
+    return () => sub.remove();
+  }, []);
 
   // useFocusEffect: mount camera only when screen focused, destroy on leave
   useFocusEffect(
@@ -269,7 +277,7 @@ export default function ScanScreen({ navigation }: any) {
       <View style={StyleSheet.absoluteFillObject} />
 
       {/* Camera */}
-      {showCam && (
+      {showCam && isAppActive && permission?.granted && (
         <CameraView
           style={StyleSheet.absoluteFillObject}
           facing="back"

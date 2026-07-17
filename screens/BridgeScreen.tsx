@@ -110,6 +110,15 @@ export default function BridgeScreen({ navigation }: any) {
   const [amount, setAmount] = useState('');
   const [destAddress, setDestAddress] = useState('');
   const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState<{ visible: boolean; message: string; type: 'success' | 'error' | 'info' }>({
+    visible: false,
+    message: '',
+    type: 'success'
+  });
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToast({ visible: true, message, type });
+  };
 
   // Network Selection Modal State
   const [modalVisible, setModalVisible] = useState(false);
@@ -173,7 +182,7 @@ export default function BridgeScreen({ navigation }: any) {
       const text = await Clipboard.getStringAsync();
       if (text) {
         setDestAddress(text.trim());
-        Toast.show({ type: 'success', text1: 'Pasted Address', text2: 'Copied from clipboard.' });
+        showToast('Address pasted from clipboard.');
       }
     } catch (e) {
       // ignore
@@ -189,18 +198,18 @@ export default function BridgeScreen({ navigation }: any) {
   };
 
   const handleBridge = async () => {
-    haptics.impact('medium');
+    haptics.heavy();
     const amtNum = parseFloat(amount);
     if (!amount || isNaN(amtNum) || amtNum <= 0) {
-      Toast.show({ type: 'error', text1: 'Invalid Amount', text2: 'Please enter a valid INRX amount.' });
+      showToast('Please enter a valid INRX amount.', 'error');
       return;
     }
     if (amtNum > parseFloat(sourceBalance)) {
-      Toast.show({ type: 'error', text1: 'Insufficient Balance', text2: `You have ${sourceBalance} INRX on ${sourceChain.shortName}.` });
+      showToast(`You have ${sourceBalance} INRX on ${sourceChain.shortName}.`, 'error');
       return;
     }
     if (!destAddress) {
-      Toast.show({ type: 'error', text1: 'Destination Address Required', text2: 'Please enter the receiving address.' });
+      showToast('Please enter the receiving address.', 'error');
       return;
     }
 
@@ -209,19 +218,19 @@ export default function BridgeScreen({ navigation }: any) {
       const netKey = sourceChain.id === 11155111 ? 'Sepolia' : sourceChain.id === 80002 ? 'Polygon Amoy' : 'TRON Nile';
       const res = await bridgeINRX(netKey, destChain.id, amount, destAddress);
       if (res.success) {
-        haptics.notification('success');
+        haptics.success();
         Alert.alert(
           'Bridge Initiated 🎉',
-          `Successfully initiated transfer of ${amount} INRX from ${sourceChain.shortName} to ${destChain.shortName}.\n\nTx Hash: ${res.txHash.slice(0, 16)}...`,
+          `Successfully initiated transfer of ${amount} INRX from ${sourceChain.shortName} to ${destChain.shortName}.\n\nTx Hash: ${res.txHash ? res.txHash.slice(0, 16) + '...' : 'N/A'}`,
           [{ text: 'Done', onPress: () => { refreshBalance(); navigation.goBack(); } }]
         );
       } else {
-        haptics.notification('error');
-        Toast.show({ type: 'error', text1: 'Bridge Failed', text2: res.error || 'Transaction reverted.' });
+        haptics.error();
+        showToast(res.error || 'Transaction reverted.', 'error');
       }
     } catch (err: any) {
-      haptics.notification('error');
-      Toast.show({ type: 'error', text1: 'Bridge Error', text2: err.message || 'An unexpected error occurred.' });
+      haptics.error();
+      showToast(err.message || 'An unexpected error occurred.', 'error');
     } finally {
       setLoading(false);
     }
@@ -450,6 +459,13 @@ export default function BridgeScreen({ navigation }: any) {
           </View>
         </Pressable>
       </Modal>
+      <Toast
+        visible={toast.visible}
+        message={toast.message}
+        type={toast.type}
+        onHide={() => setToast(prev => ({ ...prev, visible: false }))}
+        isDarkMode={isDarkMode}
+      />
     </KeyboardAvoidingView>
   );
 }
