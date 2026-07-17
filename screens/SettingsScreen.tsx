@@ -17,6 +17,7 @@ import { storageService } from '../services/storageService';
 import { useNotifications } from '../store/NotificationContext';
 import { COIN_META, COIN_COLORS } from '../constants';
 import Toast from '../components/Toast';
+import CopyableAddress from '../components/CopyableAddress';
 import { haptics } from '../utils/haptics';
 import PinScreen from './PinScreen';
 import { clearPin as removePin } from '../services/pinService';
@@ -234,26 +235,7 @@ export default function SettingsScreen({ navigation }: any) {
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') =>
     setToast({ visible: true, message, type });
 
-  const copyAddress = async () => {
-    if (!primaryAddress) return;
-    await Clipboard.setStringAsync(primaryAddress);
-    haptics.success();
-    showToast(isTronNetwork ? 'TRON address copied!' : 'EVM address copied!', 'success');
-  };
 
-  const copyTronAddress = async () => {
-    if (!secondaryAddress) return;
-    await Clipboard.setStringAsync(secondaryAddress);
-    haptics.success();
-    showToast(isTronNetwork ? 'EVM address copied!' : 'TRON address copied!', 'success');
-  };
-
-  const copyUid = async () => {
-    if (!userUid) return;
-    await Clipboard.setStringAsync(userUid);
-    haptics.success();
-    showToast('User ID copied!', 'success');
-  };
 
   const maskEmail = (email: string) => {
     if (!email) return '';
@@ -661,18 +643,22 @@ export default function SettingsScreen({ navigation }: any) {
 
               {/* Compact Address & UID Pills */}
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                <TouchableOpacity onPress={copyAddress} style={[styles.compactPill, { backgroundColor: isTronNetwork ? '#EF002715' : '#627EEA15' }]}>
-                  <Feather name="link" size={10} color={isTronNetwork ? '#EF0027' : '#627EEA'} />
-                  <Text style={[styles.compactPillText, { color: isTronNetwork ? '#EF0027' : '#627EEA' }]}>
-                    {primaryAddress ? `${primaryAddress.slice(0, 5)}...${primaryAddress.slice(-4)}` : 'No wallet'}
-                  </Text>
-                </TouchableOpacity>
+                {primaryAddress && (
+                  <CopyableAddress
+                    address={primaryAddress}
+                    type={isTronNetwork ? 'tron' : 'evm'}
+                    variant="compact-pill"
+                    pillColor={isTronNetwork ? '#EF0027' : '#627EEA'}
+                  />
+                )}
 
                 {userUid && (
-                  <TouchableOpacity onPress={copyUid} style={[styles.compactPill, { backgroundColor: '#F59E0B15' }]}>
-                    <Feather name="hash" size={10} color="#F59E0B" />
-                    <Text style={[styles.compactPillText, { color: '#F59E0B' }]}>UID: {userUid}</Text>
-                  </TouchableOpacity>
+                  <CopyableAddress
+                    address={userUid}
+                    type="uid"
+                    variant="compact-pill"
+                    pillColor="#F59E0B"
+                  />
                 )}
               </View>
             </View>

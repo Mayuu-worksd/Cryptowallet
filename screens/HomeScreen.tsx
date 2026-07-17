@@ -29,13 +29,14 @@ import {
 import * as Clipboard from "expo-clipboard";
 import { Feather, MaterialIcons } from "@expo/vector-icons";
 import { useWallet, useMarket } from "../store/WalletContext";
+import CopyableAddress from "../components/CopyableAddress";
+import { haptics } from "../utils/haptics";
 import { COIN_META, COIN_COLORS } from "../constants";
 import { SUPPORTED_FIAT_CURRENCIES } from "../constants/currencyConfig";
 import { NewsItem } from "../services/marketService";
 import { NetworkSelector } from "../components/NetworkSelector";
 import { CurrencySelector } from "../components/CurrencySelector";
 import { CurrencyText } from "../components/CurrencyText";
-import { haptics } from "../utils/haptics";
 
 
 const { width } = Dimensions.get("window");
@@ -891,7 +892,6 @@ export default function HomeScreen({ navigation }: any) {
         : parseFloat((balances.Sepolia as any)?.inrxBalance || (balances.Amoy as any)?.inrxBalance || (balances as any).INRX || '0') || 0,
       BTC: balances.BTC ?? 0,
       SOL: balances.SOL ?? 0,
-      BNB: balances.BNB ?? 0,
       XRP: balances.XRP ?? 0,
       TON: balances.TON ?? 0,
       SUI: balances.SUI ?? 0,
@@ -1219,27 +1219,26 @@ export default function HomeScreen({ navigation }: any) {
                 <Feather name="chevron-down" size={10} color={networkColor} />
               </View>
             </View>
-            <Text
-              style={[styles.addressText, { color: T.textMuted }]}
-              onLongPress={() => {
-                const addr = isTron ? tronAddress : walletAddress;
-                if (!addr) return;
-                haptics.heavy();
-                Clipboard.setStringAsync(addr);
-                setAddrCopied(isTron ? "TRON" : "ETH");
-                setTimeout(() => setAddrCopied(null), 2000);
-              }}
-            >
-              {addrCopied
-                ? "✓ Copied!"
-                : isTron
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
+              <Text style={[styles.addressText, { color: T.textMuted }]}>
+                {isTron
                   ? tronAddress
                     ? `${tronAddress.slice(0, 6)}...${tronAddress.slice(-4)}`
                     : "Deriving..."
                   : walletAddress
                     ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
                     : ""}
-            </Text>
+              </Text>
+              {(isTron ? tronAddress : walletAddress) && (
+                <CopyableAddress
+                  address={isTron ? tronAddress : walletAddress}
+                  type={isTron ? "tron" : "evm"}
+                  showAddress={false}
+                  iconSize={13}
+                  style={{ opacity: 0.6 }}
+                />
+              )}
+            </View>
           </View>
         </TouchableOpacity>
 

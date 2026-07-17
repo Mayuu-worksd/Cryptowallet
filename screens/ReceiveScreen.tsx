@@ -10,6 +10,8 @@ import QRCode from 'react-native-qrcode-svg';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
 import Toast from '../components/Toast';
+import CopyableAddress from '../components/CopyableAddress';
+import { haptics } from '../utils/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { storageService } from '../services/storageService';
 
@@ -239,16 +241,19 @@ export default function ReceiveScreen({ navigation, route }: any) {
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') =>
     setToast({ visible: true, message, type });
 
+  // Handlers
   const handleCopy = async () => {
     if (activeTab === 'payment') {
       if (userUid) {
         await Clipboard.setStringAsync(userUid);
-        showToast('UID copied to clipboard!', 'success');
+        haptics.success();
+        showToast('User ID copied!', 'success');
       }
     } else {
       if (displayAddress) {
         await Clipboard.setStringAsync(displayAddress);
-        showToast('Address copied to clipboard!', 'success');
+        haptics.success();
+        showToast('Wallet address copied!', 'success');
       }
     }
   };
@@ -405,17 +410,11 @@ export default function ReceiveScreen({ navigation, route }: any) {
             {userUid && (
               <View style={styles.addressContainer}>
                 <Text style={[styles.sectionLabel, { color: T.textDim }]}>YOUR UNIQUE ID (UID)</Text>
-                <TouchableOpacity style={[styles.addressBox, { backgroundColor: T.surface, borderColor: T.border }]} onPress={handleCopy} activeOpacity={0.9}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.uidDisplayValue, { color: T.text }]}>{userUid}</Text>
-                    <Text style={[styles.addressMeta, { color: T.textDim }]}>
-                      Share this UID to receive payments
-                    </Text>
-                  </View>
-                  <TouchableOpacity style={[styles.copyIconButton, { backgroundColor: T.surfaceLow }]} onPress={handleCopy}>
-                    <Feather name="copy" size={18} color={T.primary} />
-                  </TouchableOpacity>
-                </TouchableOpacity>
+                <CopyableAddress
+                  address={userUid}
+                  type="uid"
+                  variant="box"
+                />
               </View>
             )}
 
@@ -609,19 +608,12 @@ export default function ReceiveScreen({ navigation, route }: any) {
                 {/* Address Card */}
                 <View style={styles.addressContainer}>
                   <Text style={[styles.sectionLabel, { color: T.textDim }]}>DEPOSIT WALLET ADDRESS</Text>
-                  <TouchableOpacity style={[styles.addressBox, { backgroundColor: T.surface, borderColor: T.border }]} onPress={handleCopy} activeOpacity={0.9}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.addressValue, { color: T.text }]} numberOfLines={1}>
-                        {displayAddress || '0x...'}
-                      </Text>
-                      <Text style={[styles.addressMeta, { color: T.textDim }]}>
-                        {selectedAsset} Receiver Address
-                      </Text>
-                    </View>
-                    <TouchableOpacity style={[styles.copyIconButton, { backgroundColor: T.surfaceLow }]} onPress={handleCopy}>
-                      <Feather name="copy" size={18} color={T.primary} />
-                    </TouchableOpacity>
-                  </TouchableOpacity>
+                  <CopyableAddress
+                    address={displayAddress || ''}
+                    type={selectedNetworkObj.network_name.toLowerCase().includes('tron') ? 'tron' : 'evm'}
+                    variant="box"
+                    label={`${selectedAsset} Receiver Address`}
+                  />
                 </View>
 
                 {/* Network parameters table */}
