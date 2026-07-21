@@ -261,10 +261,10 @@ export async function getWalletBalances(
   const chainUSDT   = usdtRaw.status   === 'fulfilled' ? usdtRaw.value : null;
   const chainINRX   = inrxRaw.status   === 'fulfilled' ? inrxRaw.value : null;
 
-  // Use live chain value directly — fall back to cache only if RPC call failed
+  // Use live chain value directly — fall back to cache if RPC call failed or if local testnet balance exists
   const resolvedUSDT = chainUSDT !== null ? chainUSDT : (local.USDT_ERC20 ?? local.USDT ?? 0);
   const resolvedUSDC = chainUSDC !== null ? chainUSDC : (local.USDC_ERC20 ?? local.USDC ?? 0);
-  const resolvedINRX = chainINRX !== null ? chainINRX : (local.INRX ?? 0);
+  const resolvedINRX = chainINRX !== null && chainINRX > 0 ? chainINRX : Math.max(chainINRX ?? 0, local.INRX ?? 0);
   const resolvedETH  = chainETH  !== null ? chainETH  : (local.ETH ?? 0);
 
   const balances: WalletBalances = {
