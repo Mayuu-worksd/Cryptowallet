@@ -215,6 +215,7 @@ export default function CloudBackupScreen({ navigation }: any) {
     try {
       const res = await backupService.verifyOTP(email, cleanOtp);
       if (res.success) {
+        await storageService.setVerifiedEmail(email);
         showToast('Email verified successfully!', 'success');
         animateToStep(2);
       } else {
