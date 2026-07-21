@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from './supabaseClient';
 
 const KEYS = {
   PRIVATE_KEY:    'wallet_private_key',
@@ -9,6 +10,7 @@ const KEYS = {
   TRON_ADDRESS:   'wallet_tron_address',
   TRON_PRIV_KEY:  'wallet_tron_private_key',
   WALLET_NAME:    'wallet_name',
+  VERIFIED_EMAIL: 'cw_verified_email',
 };
 
 // Web fallback logic
@@ -141,6 +143,39 @@ export const storageService = {
   async clearCardDetails(): Promise<void> {
     if (Platform.OS === 'web') localStorage.removeItem('cw_card_details');
     else await SecureStore.deleteItemAsync('cw_card_details');
+  },
+
+  async getVerifiedEmail(): Promise<string | null> {
+    try {
+      if (Platform.OS === 'web') {
+        const local = localStorage.getItem(KEYS.VERIFIED_EMAIL) || localStorage.getItem('cw_user_email') || localStorage.getItem('cw_email');
+        if (local) return local.trim().toLowerCase();
+      } else {
+        const as = await AsyncStorage.getItem(KEYS.VERIFIED_EMAIL) || await AsyncStorage.getItem('cw_user_email') || await AsyncStorage.getItem('cw_email');
+        if (as) return as.trim().toLowerCase();
+      }
+
+      const { data: userData } = await supabase.auth.getUser();
+      if (userData?.user?.email) {
+        const email = userData.user.email.trim().toLowerCase();
+        await this.setVerifiedEmail(email);
+        return email;
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData?.session?.user?.email) {
+        const email = sessionData.session.user.email.trim().toLowerCase();
+        await this.setVerifiedEmail(email);
+        return email;
+      }
+    } catch (_e) {}
+    return null;
+  },
+
+  async setVerifiedEmail(email: string): Promise<void> {
+    const clean = email.trim().toLowerCase();
+    if (Platform.OS === 'web') localStorage.setItem(KEYS.VERIFIED_EMAIL, clean);
+    else await AsyncStorage.setItem(KEYS.VERIFIED_EMAIL, clean);
   },
 
   async clearWallet(): Promise<void> {
