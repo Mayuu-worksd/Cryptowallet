@@ -9,6 +9,7 @@ import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { useWallet } from '../store/WalletContext';
 import Toast from '../components/Toast';
 import { backupService } from '../services/backupService';
+import { storageService } from '../services/storageService';
 import { haptics } from '../utils/haptics';
 
 const RECOVERY_STEPS = [
@@ -154,6 +155,7 @@ export default function RecoverWalletScreen({ navigation }: any) {
       const res = await backupService.verifyOTP(email, cleanOtp);
       if (res.success) {
         setOtpVerified(true);
+        await storageService.setVerifiedEmail(email);
         showToast('Email verified successfully!', 'success');
         animateToStep(2);
       } else {

@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Theme } from '../constants';
+import { Theme, Fonts } from '../constants';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Platform, ActivityIndicator, Alert, Animated, Modal,
+  Platform, ActivityIndicator, Alert, Animated, Modal, Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons, Feather } from '@expo/vector-icons';
@@ -12,6 +12,8 @@ import { useWallet } from '../store/WalletContext';
 import Toast from '../components/Toast';
 import { screenSecurityManager } from '../utils/screenSecurityManager';
 import EmailOTPModal from '../components/EmailOTPModal';
+import { storageService } from '../services/storageService';
+import { haptics } from '../utils/haptics';
 
 const SAVING_STEPS = [
   { icon: 'lock',         label: 'Encrypting keys...' },
@@ -54,7 +56,7 @@ function SavingOverlay({ visible, done, isDarkMode }: { visible: boolean; done: 
 
   return (
     <Modal visible={visible} transparent animationType="none" statusBarTranslucent>
-      <Animated.View style={[ovStyles.overlay, { opacity: fadeAnim, backgroundColor: isDarkMode ? 'rgba(10,10,10,0.96)' : 'rgba(240,242,245,0.97)' }]}>
+      <Animated.View style={[ovStyles.overlay, { opacity: fadeAnim, backgroundColor: isDarkMode ? 'rgba(10,11,14,0.96)' : 'rgba(240,242,245,0.97)' }]}>
         <Animated.View style={[ovStyles.card, { backgroundColor: T.surface, borderColor: T.border, transform: [{ scale: scaleAnim }] }]}>
           <View style={ovStyles.iconWrap}>
             {!isDone && <Animated.View style={[ovStyles.spinRing, { borderColor: T.primary, transform: [{ rotate: spin }] }]} />}
@@ -100,17 +102,53 @@ export default function CreateWalletScreen({ navigation }: any) {
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const insets = useSafeAreaInsets();
 
+  useEffect(() => {
+    (async () => {
+      const email = await storageService.getVerifiedEmail() || await AsyncStorage.getItem('cw_user_email') || await AsyncStorage.getItem('cw_email');
+      if (email) setVerifiedEmail(email);
+    })();
+  }, []);
+
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') =>
     setToast({ visible: true, message, type });
 
-  const handleCreate = () => {
-    // Show OTP modal first — wallet generation happens after email verified
-    setStep('otp');
+  const handleCreate = async () => {
+    haptics.selection();
+    let email = verifiedEmail;
+    if (!email) {
+      const stored = await storageService.getVerifiedEmail() || await AsyncStorage.getItem('cw_user_email') || await AsyncStorage.getItem('cw_email');
+      if (stored) {
+        email = stored;
+        setVerifiedEmail(stored);
+      }
+    }
+
+    if (email) {
+      setStep('info');
+      setLoading(true);
+      setTimeout(async () => {
+        try {
+          const data = await createWallet();
+          setMnemonic(data.mnemonic);
+          setStep('phrase');
+        } catch (e: any) {
+          showToast(e?.message ?? 'Failed to create wallet. Please try again.', 'error');
+          setStep('info');
+        } finally {
+          setLoading(false);
+        }
+      }, 150);
+    } else {
+      setStep('otp');
+    }
   };
 
-  const handleOTPVerified = (email: string) => {
+  const handleOTPVerified = async (email: string) => {
+    haptics.success();
     setVerifiedEmail(email);
-    setStep('info'); // briefly back to info while generating
+    await storageService.setVerifiedEmail(email);
+    await AsyncStorage.setItem('cw_user_email', email);
+    setStep('info');
     setLoading(true);
     setTimeout(async () => {
       try {
@@ -127,15 +165,18 @@ export default function CreateWalletScreen({ navigation }: any) {
   };
 
   const handleCopyPhrase = async () => {
+    haptics.selection();
     await Clipboard.setStringAsync(mnemonic);
     showToast('Seed phrase copied. Store it somewhere safe!', 'info');
   };
 
   const handleConfirm = () => {
     if (!confirmed) {
+      haptics.error();
       Alert.alert('Backup Required', 'Please confirm you have saved your seed phrase before continuing.');
       return;
     }
+    haptics.success();
     const w = mnemonic.split(' ');
     setShuffled([...w].sort(() => Math.random() - 0.5));
     setSelected([]);
@@ -143,6 +184,7 @@ export default function CreateWalletScreen({ navigation }: any) {
   };
 
   const handleVerifyWord = (word: string) => {
+    haptics.selection();
     setSelected(prev => [...prev, word]);
     setShuffled(prev => {
       const next = [...prev];
@@ -152,37 +194,24 @@ export default function CreateWalletScreen({ navigation }: any) {
   };
 
   const handleRemoveWord = (word: string, idx: number) => {
+    haptics.selection();
     setSelected(prev => prev.filter((_, i) => i !== idx));
     setShuffled(prev => [...prev, word].sort(() => Math.random() - 0.5));
   };
 
   const handleGoToWallet = () => {
     if (loading) return;
+    haptics.success();
     setStep('done');
     setLoading(true);
     setSavingDone(false);
     
-    // Step-by-step execution to keep UI responsive
     setTimeout(async () => {
       try {
-        // Get preferred network from AsyncStorage (set during AccountTypeScreen flow)
         const preferredNetwork = await AsyncStorage.getItem('cw_network').catch(() => null);
-        
-        // The heavy part: Deriving the wallet from mnemonic
-        // This is the "Encrypting keys..." part
         await importWallet(mnemonic, true, preferredNetwork || undefined);
-        
-        // If we reach here, it means it's done (but hasWallet is already true)
-        // However, we want to show the "success" state before unmounting.
-        // NOTE: Since hasWallet is true, App.tsx might trigger navigation.
-        // To prevent instant unmount, we could have delayed setHasWallet(true) 
-        // in WalletContext, but instead we'll just ensure setSavingDone(true) 
-        // is set so if the screen stays for a split second, it shows success.
         setSavingDone(true);
-        
-        // Wait for the "Wallet ready!" animation to finish
         await new Promise(r => setTimeout(r, 500));
-        
         setLoading(false);
       } catch (e) {
         setLoading(false);
@@ -190,7 +219,7 @@ export default function CreateWalletScreen({ navigation }: any) {
         setStep('verify');
         showToast('Failed to save wallet.', 'error');
       }
-    }, 300); // Give a bit more time for the modal to mount
+    }, 300);
   };
 
   const isVerificationCorrect = selectedWords.join(' ') === mnemonic;
@@ -216,7 +245,7 @@ export default function CreateWalletScreen({ navigation }: any) {
       {/* Header */}
       <View style={[styles.header, { backgroundColor: isDarkMode ? 'rgba(19,19,19,0.95)' : 'rgba(247,249,251,0.95)', paddingTop: insets.top + 12 }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => step === 'phrase' ? setStep('info') : navigation.goBack()} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => { haptics.selection(); step === 'phrase' ? setStep('info') : navigation.goBack(); }} activeOpacity={0.7}>
             <MaterialIcons name="arrow-back" size={24} color={T.text} />
           </TouchableOpacity>
           <Text style={[styles.logoText, { color: T.primary }]}>CryptoWallet</Text>
@@ -231,21 +260,21 @@ export default function CreateWalletScreen({ navigation }: any) {
       {/* STEP 1: Info */}
       {step === 'info' && (
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          <View style={{ marginBottom: 40 }}>
+          <View style={{ marginBottom: 36 }}>
             <Text style={[styles.title, { color: T.text }]}>Create Wallet</Text>
             <Text style={[styles.subtitle, { color: T.textMuted }]}>
               Generate a completely new, secure private key on your device. Fully decentralized and{' '}
-              <Text style={{ color: T.primary, fontWeight: '700' }}>anonymous.</Text>
+              <Text style={{ color: T.primary, fontFamily: Fonts.bold }}>anonymous.</Text>
             </Text>
           </View>
-          <View style={[styles.infoContainer, { backgroundColor: T.surfaceLow }]}>
+          <View style={[styles.infoContainer, { backgroundColor: T.surface, borderColor: T.border, borderWidth: 1 }]}>
             {[
               'Securely generated strictly locally.',
               'No KYC or personal information required.',
               'Full access to global decentralized networks.',
             ].map((desc, i) => (
               <View key={i} style={[styles.stepBox, i < 2 && { marginBottom: 20 }]}>
-                <View style={[styles.stepNum, { backgroundColor: T.primaryLight + '20' }]}>
+                <View style={[styles.stepNum, { backgroundColor: T.primary + '15' }]}>
                   <Text style={[styles.stepNumTxt, { color: T.primary }]}>{i + 1}</Text>
                 </View>
                 <Text style={[styles.stepDesc, { color: T.text }]}>{desc}</Text>
@@ -253,7 +282,7 @@ export default function CreateWalletScreen({ navigation }: any) {
             ))}
           </View>
           <View style={[styles.warningBox, { backgroundColor: T.surface, borderColor: T.border }]}>
-            <MaterialIcons name="security" size={24} color="#ff544e" style={{ marginTop: 2 }} />
+            <MaterialIcons name="security" size={24} color={T.primary} style={{ marginTop: 2 }} />
             <View style={{ flex: 1 }}>
               <Text style={[styles.warningTitle, { color: T.text }]}>Self Custody</Text>
               <Text style={[styles.warningText, { color: T.textMuted }]}>
@@ -270,11 +299,11 @@ export default function CreateWalletScreen({ navigation }: any) {
           <Text style={[styles.title, { color: T.text }]}>Your Seed Phrase</Text>
           <Text style={[styles.subtitle, { color: T.textMuted }]}>
             Write these 12 words on paper and keep them somewhere safe offline.{' '}
-            <Text style={{ color: T.error, fontWeight: '700' }}>If you lose your phone, these words are the only way to recover your money.</Text>
+            <Text style={{ color: T.error, fontFamily: Fonts.bold }}>If you lose your phone, these words are the only way to recover your money.</Text>
           </Text>
-          <View style={[styles.screenshotWarning, { backgroundColor: '#F59E0B18', borderColor: '#F59E0B50' }]}>
+          <View style={[styles.screenshotWarning, { backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.12)' : '#F59E0B15', borderColor: '#F59E0B40' }]}>
             <Text style={{ fontSize: 16 }}>⚠️</Text>
-            <Text style={{ color: '#F59E0B', fontSize: 13, fontWeight: '700', flex: 1 }}>
+            <Text style={{ color: '#F59E0B', fontSize: 13, fontFamily: Fonts.bold, flex: 1 }}>
               Never screenshot this. Hackers can access your photos and steal your funds.
             </Text>
           </View>
@@ -290,7 +319,7 @@ export default function CreateWalletScreen({ navigation }: any) {
             <Feather name="copy" size={16} color={T.primary} />
             <Text style={[styles.copyBtnText, { color: T.primary }]}>Copy to Clipboard</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.checkRow} onPress={() => setConfirmed(p => !p)} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.checkRow} onPress={() => { haptics.selection(); setConfirmed(p => !p); }} activeOpacity={0.7}>
             <View style={[styles.checkbox, { borderColor: confirmed ? T.primary : T.border, backgroundColor: confirmed ? T.primary : 'transparent' }]}>
               {confirmed && <Feather name="check" size={14} color="#FFF" />}
             </View>
@@ -308,16 +337,16 @@ export default function CreateWalletScreen({ navigation }: any) {
           <Text style={[styles.subtitle, { color: T.textMuted }]}>
             Tap the words in the correct order to prove you have securely backed up your phrase.
           </Text>
-          <View style={[styles.phraseGrid, { backgroundColor: T.surface, borderColor: T.border, minHeight: 120, marginBottom: 32 }]}>
+          <View style={[styles.phraseGrid, { backgroundColor: T.surface, borderColor: T.border, minHeight: 120, marginBottom: 28 }]}>
             {selectedWords.length === 0 && (
-              <Text style={{ color: T.textDim, fontSize: 13, textAlign: 'center', width: '100%', marginTop: 20 }}>
+              <Text style={{ color: T.textDim, fontSize: 13, fontFamily: Fonts.medium, textAlign: 'center', width: '100%', marginTop: 20 }}>
                 Selected words will appear here...
               </Text>
             )}
             {selectedWords.map((word, i) => (
               <TouchableOpacity
                 key={i}
-                style={[styles.wordBox, { backgroundColor: T.primary + '10', borderColor: T.primary + '40' }]}
+                style={[styles.wordBox, { backgroundColor: T.primary + '12', borderColor: T.primary + '40' }]}
                 onPress={() => handleRemoveWord(word, i)}
               >
                 <Text style={[styles.wordNum, { color: T.primary }]}>{i + 1}</Text>
@@ -339,7 +368,7 @@ export default function CreateWalletScreen({ navigation }: any) {
           {!isVerificationCorrect && selectedWords.length === words.length && (
             <View style={[styles.errorRow, { marginTop: 24, justifyContent: 'center' }]}>
               <Feather name="alert-circle" size={14} color={T.error} />
-              <Text style={{ color: T.error, fontSize: 13, fontWeight: '700', marginLeft: 6 }}>
+              <Text style={{ color: T.error, fontSize: 13, fontFamily: Fonts.bold, marginLeft: 6 }}>
                 Order is incorrect. Please try again.
               </Text>
             </View>
@@ -361,11 +390,11 @@ export default function CreateWalletScreen({ navigation }: any) {
       )}
 
       {/* Footer */}
-      <View style={[styles.footer, { backgroundColor: T.background }]}>
+      <View style={[styles.footer, { backgroundColor: T.background, borderTopColor: T.border, borderTopWidth: 1 }]}>
         {step === 'info' && (
           <>
             <TouchableOpacity
-              style={[styles.primaryBtn, { backgroundColor: T.primaryDark, opacity: loading ? 0.7 : 1 }]}
+              style={[styles.primaryBtn, { backgroundColor: T.primary, opacity: loading ? 0.7 : 1 }]}
               onPress={handleCreate}
               disabled={loading}
               activeOpacity={0.8}
@@ -377,10 +406,10 @@ export default function CreateWalletScreen({ navigation }: any) {
                 </>
               )}
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => navigation.navigate('ImportWallet')} activeOpacity={0.7}>
+            <TouchableOpacity onPress={() => { haptics.selection(); navigation.navigate('ImportWallet'); }} activeOpacity={0.7}>
               <Text style={[styles.footerLink, { color: T.textMuted }]}>
                 Already have a wallet?{' '}
-                <Text style={{ textDecorationLine: 'underline', color: T.text }}>Import instead.</Text>
+                <Text style={{ textDecorationLine: 'underline', color: T.text, fontFamily: Fonts.bold }}>Import instead.</Text>
               </Text>
             </TouchableOpacity>
           </>
@@ -388,7 +417,7 @@ export default function CreateWalletScreen({ navigation }: any) {
 
         {step === 'phrase' && (
           <TouchableOpacity
-            style={[styles.primaryBtn, { backgroundColor: confirmed ? T.primaryDark : T.surfaceLow }]}
+            style={[styles.primaryBtn, { backgroundColor: confirmed ? T.primary : T.surfaceLow }]}
             onPress={handleConfirm}
             activeOpacity={0.8}
           >
@@ -429,48 +458,47 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24, paddingBottom: 16,
   },
   iconBtn:  { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20 },
-  logoText: { fontSize: 20, fontWeight: '800', letterSpacing: -0.5 },
+  logoText: { fontSize: 20, fontFamily: Fonts.extraBold, letterSpacing: -0.5 },
   stepDot:  { width: 8, height: 8, borderRadius: 4 },
-  scroll:   { paddingTop: 130, paddingHorizontal: 24, paddingBottom: 160 },
+  scroll:   { paddingTop: 120, paddingHorizontal: 24, paddingBottom: 160 },
 
-  title:    { fontSize: 36, fontWeight: '800', marginBottom: 12, lineHeight: 44, letterSpacing: -1 },
-  subtitle: { fontSize: 15, lineHeight: 24, marginBottom: 32 },
+  title:    { fontSize: 32, fontFamily: Fonts.extraBold, marginBottom: 12, lineHeight: 40, letterSpacing: -0.8 },
+  subtitle: { fontSize: 15, fontFamily: Fonts.medium, lineHeight: 24, marginBottom: 28 },
 
-  infoContainer: { borderRadius: 16, padding: 20, marginBottom: 24 },
+  infoContainer: { borderRadius: 20, padding: 20, marginBottom: 24 },
   stepBox:   { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  stepNum:   { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  stepNumTxt:{ fontSize: 13, fontWeight: '800' },
-  stepDesc:  { flex: 1, fontSize: 15, fontWeight: '500', lineHeight: 22 },
+  stepNum:   { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  stepNumTxt:{ fontSize: 14, fontFamily: Fonts.bold },
+  stepDesc:  { flex: 1, fontSize: 15, fontFamily: Fonts.medium, lineHeight: 22 },
 
-  warningBox:   { flexDirection: 'row', gap: 16, padding: 20, borderRadius: 16, borderWidth: 1 },
-  warningTitle: { fontSize: 15, fontWeight: '800', marginBottom: 4 },
-  warningText:  { fontSize: 13, lineHeight: 20 },
+  warningBox:   { flexDirection: 'row', gap: 16, padding: 20, borderRadius: 20, borderWidth: 1 },
+  warningTitle: { fontSize: 16, fontFamily: Fonts.bold, marginBottom: 4 },
+  warningText:  { fontSize: 13, fontFamily: Fonts.medium, lineHeight: 20 },
 
-  phraseGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, padding: 20, borderRadius: 20, borderWidth: 1, marginBottom: 20 },
+  phraseGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, padding: 18, borderRadius: 20, borderWidth: 1, marginBottom: 20 },
   wordBox:    { width: '30%', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 10, borderRadius: 12, borderWidth: 1 },
-  wordNum:    { fontSize: 11, fontWeight: '700', minWidth: 16 },
-  wordText:   { fontSize: 14, fontWeight: '700', flex: 1 },
+  wordNum:    { fontSize: 11, fontFamily: Fonts.bold, minWidth: 16 },
+  wordText:   { fontSize: 14, fontFamily: Fonts.bold, flex: 1 },
 
-  screenshotWarning: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 14, borderRadius: 14, borderWidth: 1, marginBottom: 20 },
-  copyBtn:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 14, borderWidth: 1, marginBottom: 24 },
-  copyBtnText: { fontSize: 14, fontWeight: '700' },
+  screenshotWarning: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 14, borderRadius: 16, borderWidth: 1, marginBottom: 20 },
+  copyBtn:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 16, borderWidth: 1, marginBottom: 24 },
+  copyBtnText: { fontSize: 14, fontFamily: Fonts.bold },
 
   checkRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
   checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
-  checkText: { flex: 1, fontSize: 14, lineHeight: 22 },
+  checkText: { flex: 1, fontSize: 14, fontFamily: Fonts.medium, lineHeight: 22 },
 
   successIcon: { width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center' },
 
-  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, paddingTop: 16, gap: 16 },
+  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, paddingTop: 16, gap: 14 },
   primaryBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    height: 64, borderRadius: 16, gap: 8,
-    shadowColor: '#FF544E', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 16, elevation: 6,
+    height: 58, borderRadius: 16, gap: 8,
   },
-  primaryBtnText: { fontSize: 17, fontWeight: '800', color: '#FFF' },
-  footerLink:     { textAlign: 'center', fontSize: 13, fontWeight: '600' },
-  verifyWordChip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, borderWidth: 1 },
-  verifyWordText: { fontSize: 14, fontWeight: '700' },
+  primaryBtnText: { fontSize: 16, fontFamily: Fonts.bold, color: '#FFF' },
+  footerLink:     { textAlign: 'center', fontSize: 14, fontFamily: Fonts.medium },
+  verifyWordChip: { paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14, borderWidth: 1 },
+  verifyWordText: { fontSize: 14, fontFamily: Fonts.bold },
   errorRow:       { flexDirection: 'row', alignItems: 'center' },
 });
 
@@ -480,9 +508,9 @@ const ovStyles = StyleSheet.create({
   iconWrap:   { width: 96, height: 96, alignItems: 'center', justifyContent: 'center', marginBottom: 28 },
   spinRing:   { position: 'absolute', width: 96, height: 96, borderRadius: 48, borderWidth: 3, borderTopColor: 'transparent', borderRightColor: 'transparent' },
   iconCircle: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' },
-  title:      { fontSize: 20, fontWeight: '800', marginBottom: 20, letterSpacing: -0.3 },
+  title:      { fontSize: 20, fontFamily: Fonts.bold, marginBottom: 20, letterSpacing: -0.3 },
   dotsRow:    { flexDirection: 'row', gap: 6, alignItems: 'center', marginBottom: 16 },
   dot:        { height: 8, borderRadius: 4 },
-  subtitle:   { fontSize: 13, fontWeight: '500', textAlign: 'center' },
+  subtitle:   { fontSize: 13, fontFamily: Fonts.medium, textAlign: 'center' },
 });
 
