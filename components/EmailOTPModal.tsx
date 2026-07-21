@@ -63,7 +63,7 @@ export default function EmailOTPModal({ visible, isDarkMode, onVerified, onCance
   };
 
   const handleVerifyOTP = async () => {
-    if (otp.trim().length < 6) { setError('Enter the 6-digit code'); return; }
+    if (otp.trim().length < 6) { setError('Enter the verification code'); return; }
     setLoading(true);
     setError('');
     const res = await backupService.verifyOTP(email.trim().toLowerCase(), otp.trim());
@@ -93,7 +93,7 @@ export default function EmailOTPModal({ visible, isDarkMode, onVerified, onCance
             <Text style={[s.subtitle, { color: T.textMuted }]}>
               {step === 'email'
                 ? 'A one-time code will be sent to your email to secure your wallet.'
-                : `We sent a 6-digit code to\n${email}`}
+                : `We sent a verification code to\n${email}`}
             </Text>
 
             {/* Input */}
@@ -110,16 +110,37 @@ export default function EmailOTPModal({ visible, isDarkMode, onVerified, onCance
                 autoFocus
               />
             ) : (
-              <TextInput
-                style={[s.input, s.otpInput, { color: T.text, borderColor: error ? T.primary : T.border, backgroundColor: T.surfaceLow }]}
-                placeholder="000000"
-                placeholderTextColor={T.textDim}
-                value={otp}
-                onChangeText={v => { setOtp(v.replace(/\D/g, '').slice(0, 6)); setError(''); }}
-                keyboardType="number-pad"
-                maxLength={6}
-                autoFocus
-              />
+              <View style={s.otpContainer}>
+                <View style={s.slotsRow}>
+                  {[0, 1, 2, 3, 4, 5, 6, 7].map((idx) => {
+                    const char = otp[idx] || '';
+                    const isFocused = otp.length === idx;
+                    return (
+                      <View
+                        key={idx}
+                        style={[
+                          s.slotBox,
+                          {
+                            backgroundColor: T.surfaceLow,
+                            borderColor: error ? T.primary : isFocused ? T.primary : T.border,
+                            borderWidth: isFocused || error ? 2 : 1,
+                          },
+                        ]}
+                      >
+                        <Text style={[s.slotText, { color: T.text }]}>{char}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+                <TextInput
+                  style={s.hiddenOtpInput}
+                  value={otp}
+                  onChangeText={v => { setOtp(v.replace(/\D/g, '').slice(0, 8)); setError(''); }}
+                  keyboardType="number-pad"
+                  maxLength={8}
+                  autoFocus
+                />
+              </View>
             )}
 
             {!!error && (
@@ -192,7 +213,34 @@ const s = StyleSheet.create({
     width: '100%', height: 54, borderWidth: 1.5, borderRadius: 14,
     paddingHorizontal: 16, fontSize: 16, fontWeight: '600', marginBottom: 4,
   },
-  otpInput: { fontSize: 28, fontWeight: '800', letterSpacing: 12, textAlign: 'center' },
+  otpContainer: {
+    width: '100%',
+    marginVertical: 6,
+  },
+  slotsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 4,
+    width: '100%',
+  },
+  slotBox: {
+    flex: 1,
+    height: 52,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  slotText: {
+    fontSize: 20,
+    fontFamily: Fonts.extraBold,
+    textAlign: 'center',
+  },
+  hiddenOtpInput: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0,
+    color: 'transparent',
+    fontSize: 1,
+  },
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, marginBottom: 4 },
   errorText: { fontSize: 13, fontWeight: '600' },
   btn: { width: '100%', height: 54, borderRadius: 27, overflow: 'hidden', marginTop: 20 },
