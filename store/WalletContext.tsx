@@ -356,7 +356,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       } else {
         if ((balancesRef.current?.TRX ?? 0) > 0 && merged.TRX === 0) merged.TRX = balancesRef.current.TRX;
         if (((balancesRef.current as any)?.USDT_TRC20 ?? 0) > 0 && (merged as any).USDT_TRC20 === 0) (merged as any).USDT_TRC20 = (balancesRef.current as any).USDT_TRC20;
-        if (((balancesRef.current as any)?.USDC_TRC20 ?? 0) > 0 && (merged as any).USDC_TRC20 === 0) (merged as any).USDC_TRC20 = (merged as any).USDC_TRC20;
+        if (((balancesRef.current as any)?.USDC_TRC20 ?? 0) > 0 && (merged as any).USDC_TRC20 === 0) (merged as any).USDC_TRC20 = (balancesRef.current as any).USDC_TRC20;
       }
       setEthBalance(Number(merged.ETH || 0).toFixed(6));
       ethBalanceRef.current = Number(merged.ETH || 0).toFixed(6);
@@ -1688,15 +1688,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.setItem('cw_network', n).catch(() => {});
     if (walletAddress) profileService.upsert(walletAddress, { network: n }).catch(() => {});
     if (!walletAddress) return;
-    // Reset chain-specific balances so stale values from previous network don't show
-    const resetBalances = { 
-      ...balancesRef.current, // preserve cross-chain (SOL, BTC, BNB, XRP, TON, SUI)
-      ETH: 0, USDT: 0, USDC: 0, USDT_ERC20: 0, USDC_ERC20: 0, TRX: 0, USDT_TRC20: 0, USDC_TRC20: 0, INRX: 0 
-    };
-    setBalances(resetBalances);
-    setEthBalance('0.0');
-    balancesRef.current = resetBalances;
-    ethBalanceRef.current = '0.0';
     const isTronNet = n === 'TRON' || n === 'TRON Nile';
     if (isTronNet) {
       let tronAddr = await storageService.getTronAddress();

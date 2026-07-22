@@ -23,20 +23,31 @@ const TOKEN_CONTRACTS: Record<string, Record<string, string>> = {
     Sepolia:  '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
     Polygon:  '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174',
     Arbitrum: '0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8',
-    BSC:      '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d', // USDC on BSC (18 decimals)
+    BSC:      '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
+    'Base Sepolia':     '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
+    'Polygon Amoy':     '0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582',
+    'Arbitrum Sepolia': '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d',
+    'Optimism Sepolia': '0x5fd84259d66Cd46123540766Be93DFE6D43130D7',
   },
   USDT: {
     Ethereum: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
     Sepolia:  '0x7169D38820dfd117C3FA1f22a697dBA58d90BA06',
     Polygon:  '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
     Arbitrum: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
-    BSC:      '0x55d398326f99059fF775485246999027B3197955', // BSC-Peg USDT (18 decimals)
+    BSC:      '0x55d398326f99059fF775485246999027B3197955',
+    'Base Sepolia':     '0x7169D38820dfd117C3FA1f22a697dBA58d90BA06',
+    'Polygon Amoy':     '0x7169D38820dfd117C3FA1f22a697dBA58d90BA06',
+    'Arbitrum Sepolia': '0x7169D38820dfd117C3FA1f22a697dBA58d90BA06',
+    'Optimism Sepolia': '0x7169D38820dfd117C3FA1f22a697dBA58d90BA06',
   },
   INRX: {
     Ethereum: '0x51A5F24560547f587999c331788aC495D40d95ba',
     Sepolia:  '0x51A5F24560547f587999c331788aC495D40d95ba',
     Polygon:  '0xd52280A15b30e5EdfFF858E7EC22266604358F26',
-    'Polygon Amoy': '0xd52280A15b30e5EdfFF858E7EC22266604358F26',
+    'Polygon Amoy':     '0xd52280A15b30e5EdfFF858E7EC22266604358F26',
+    'Base Sepolia':     '0x51A5F24560547f587999c331788aC495D40d95ba',
+    'Arbitrum Sepolia': '0x51A5F24560547f587999c331788aC495D40d95ba',
+    'Optimism Sepolia': '0x51A5F24560547f587999c331788aC495D40d95ba',
   },
 };
 
@@ -55,12 +66,16 @@ const TOKEN_DECIMALS: Record<string, number> = {
 };
 
 const NETWORK_CONFIG: Record<string, { chainId: number; name: string }> = {
-  Sepolia:       { chainId: 11155111, name: 'sepolia'   },
-  Ethereum:      { chainId: 1,        name: 'homestead' },
-  Polygon:       { chainId: 137,      name: 'matic'     },
-  Arbitrum:      { chainId: 42161,    name: 'arbitrum'  },
-  BSC:           { chainId: 56,       name: 'bnb'       },
-  'BSC Testnet': { chainId: 97,       name: 'bnbt'      },
+  Sepolia:            { chainId: 11155111, name: 'sepolia'          },
+  Ethereum:           { chainId: 1,        name: 'homestead'        },
+  Polygon:            { chainId: 137,      name: 'matic'            },
+  Arbitrum:           { chainId: 42161,    name: 'arbitrum'         },
+  'Polygon Amoy':     { chainId: 80002,    name: 'amoy'             },
+  'Arbitrum Sepolia': { chainId: 421614,   name: 'arbitrum-sepolia' },
+  'Base Sepolia':     { chainId: 84532,    name: 'base-sepolia'     },
+  'Optimism Sepolia': { chainId: 11155420, name: 'optimism-sepolia' },
+  BSC:                { chainId: 56,       name: 'bnb'              },
+  'BSC Testnet':      { chainId: 97,       name: 'bnbt'             },
 };
 
 export type WalletBalances = {
@@ -102,11 +117,17 @@ export async function getWalletBalances(
   localBalances?: Partial<WalletBalances>
 ): Promise<WalletBalances> {
   // 1. Always load from AsyncStorage first to make sure we don't lose cross-chain cache
-  let local: Partial<WalletBalances> = localBalances ?? {};
+  let local: Partial<WalletBalances> = { ...(localBalances ?? {}) };
   try {
     const cachedStr = await AsyncStorage.getItem('cw_token_balances');
     if (cachedStr) {
       const cached = JSON.parse(cachedStr);
+      // If local has 0 or undefined for any key, but cached has a non-zero value, preserve the non-zero value
+      for (const [key, val] of Object.entries(cached)) {
+        if ((local[key as keyof WalletBalances] === undefined || local[key as keyof WalletBalances] === 0) && typeof val === 'number' && val > 0) {
+          (local as any)[key] = val;
+        }
+      }
       local = { ...cached, ...local };
     }
   } catch {}
@@ -262,10 +283,11 @@ export async function getWalletBalances(
   const chainINRX   = inrxRaw.status   === 'fulfilled' ? inrxRaw.value : null;
 
   // Use live chain value directly — fall back to cache if RPC call failed or if local testnet balance exists
-  const resolvedUSDT = chainUSDT !== null ? chainUSDT : (local.USDT_ERC20 ?? local.USDT ?? 0);
-  const resolvedUSDC = chainUSDC !== null ? chainUSDC : (local.USDC_ERC20 ?? local.USDC ?? 0);
+  const isTestnet = network.includes('Sepolia') || network.includes('Testnet') || network.includes('Amoy') || network.includes('Nile');
+  const resolvedUSDT = (chainUSDT !== null && chainUSDT > 0) ? chainUSDT : (isTestnet ? Math.max(chainUSDT ?? 0, local.USDT_ERC20 ?? local.USDT ?? 0) : (chainUSDT !== null ? chainUSDT : (local.USDT_ERC20 ?? local.USDT ?? 0)));
+  const resolvedUSDC = (chainUSDC !== null && chainUSDC > 0) ? chainUSDC : (isTestnet ? Math.max(chainUSDC ?? 0, local.USDC_ERC20 ?? local.USDC ?? 0) : (chainUSDC !== null ? chainUSDC : (local.USDC_ERC20 ?? local.USDC ?? 0)));
   const resolvedINRX = chainINRX !== null && chainINRX > 0 ? chainINRX : Math.max(chainINRX ?? 0, local.INRX ?? 0);
-  const resolvedETH  = chainETH  !== null ? chainETH  : (local.ETH ?? 0);
+  const resolvedETH  = (chainETH !== null && chainETH > 0) ? chainETH : (isTestnet ? Math.max(chainETH ?? 0, local.ETH ?? 0) : (chainETH !== null ? chainETH : (local.ETH ?? 0)));
 
   const balances: WalletBalances = {
     USDT_ERC20: resolvedUSDT,
