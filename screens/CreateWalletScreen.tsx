@@ -123,7 +123,10 @@ export default function CreateWalletScreen({ navigation }: any) {
       }
     }
 
-    if (email) {
+    const isDeviceVerified = (await AsyncStorage.getItem('cw_device_verified')) === 'true' || (await AsyncStorage.getItem('cw_has_ever_verified')) === 'true';
+
+    if (email || isDeviceVerified) {
+      await storageService.setVerifiedEmail(email || 'verified_user@device');
       setStep('info');
       setLoading(true);
       setTimeout(async () => {

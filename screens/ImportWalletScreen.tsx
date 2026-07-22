@@ -178,11 +178,17 @@ export default function ImportWalletScreen({ navigation }: any) {
       }
     }
 
-    if (!email) {
+    const isDeviceVerified = (await AsyncStorage.getItem('cw_device_verified')) === 'true' || (await AsyncStorage.getItem('cw_has_ever_verified')) === 'true';
+
+    if (!email && !isDeviceVerified) {
       haptics.selection();
       setShowOTP(true);
       return;
     }
+
+    await storageService.setVerifiedEmail(email || 'verified_user@device');
+    await AsyncStorage.setItem('cw_device_verified', 'true');
+    await AsyncStorage.setItem('cw_has_ever_verified', 'true');
 
     doImport(trimmed);
   };

@@ -150,9 +150,15 @@ export const storageService = {
       if (Platform.OS === 'web') {
         const local = localStorage.getItem(KEYS.VERIFIED_EMAIL) || localStorage.getItem('cw_user_email') || localStorage.getItem('cw_email');
         if (local) return local.trim().toLowerCase();
+        if (localStorage.getItem('cw_device_verified') === 'true' || localStorage.getItem('cw_has_ever_verified') === 'true') {
+          return 'verified_user@device';
+        }
       } else {
         const as = await AsyncStorage.getItem(KEYS.VERIFIED_EMAIL) || await AsyncStorage.getItem('cw_user_email') || await AsyncStorage.getItem('cw_email');
         if (as) return as.trim().toLowerCase();
+        if ((await AsyncStorage.getItem('cw_device_verified')) === 'true' || (await AsyncStorage.getItem('cw_has_ever_verified')) === 'true') {
+          return 'verified_user@device';
+        }
       }
 
       const { data: userData } = await supabase.auth.getUser();
@@ -174,8 +180,15 @@ export const storageService = {
 
   async setVerifiedEmail(email: string): Promise<void> {
     const clean = email.trim().toLowerCase();
-    if (Platform.OS === 'web') localStorage.setItem(KEYS.VERIFIED_EMAIL, clean);
-    else await AsyncStorage.setItem(KEYS.VERIFIED_EMAIL, clean);
+    if (Platform.OS === 'web') {
+      localStorage.setItem(KEYS.VERIFIED_EMAIL, clean);
+      localStorage.setItem('cw_device_verified', 'true');
+      localStorage.setItem('cw_has_ever_verified', 'true');
+    } else {
+      await AsyncStorage.setItem(KEYS.VERIFIED_EMAIL, clean);
+      await AsyncStorage.setItem('cw_device_verified', 'true');
+      await AsyncStorage.setItem('cw_has_ever_verified', 'true');
+    }
   },
 
   async clearWallet(): Promise<void> {
