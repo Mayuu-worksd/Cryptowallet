@@ -111,6 +111,40 @@ function deriveSolanaAddress(evmAddress: string): string {
   return (res + res).padEnd(44, 'x').slice(0, 44);
 }
 
+export async function saveTokenBalances(network: string, balances: Partial<WalletBalances>) {
+  try {
+    const cachedStr = await AsyncStorage.getItem('cw_token_balances');
+    let toSave = cachedStr ? JSON.parse(cachedStr) : {};
+
+    const isBSC = network === 'BSC' || network === 'BSC Testnet';
+    const isTron = network === 'TRON' || network === 'TRON Nile';
+    const isSolana = network === 'Solana' || network === 'Solana Devnet';
+    const isEVM = !isBSC && !isTron && !isSolana && network !== 'Bitcoin';
+
+    // 1. Always save cross-chain tokens (BTC, SOL, XRP, TON, SUI, TRX) globally
+    const crossChainKeys = ['BTC', 'SOL', 'XRP', 'TON', 'SUI', 'TRX', 'USDT_TRC20', 'USDC_TRC20'];
+    crossChainKeys.forEach(k => {
+      if ((balances as any)[k] !== undefined) toSave[k] = (balances as any)[k];
+    });
+
+    // 2. Save network-specific prefixed keys — NEVER overwrite flat ETH/USDT/USDC globally
+    if (isBSC) {
+      toSave[`BNB_${network}`] = balances.BNB;
+      toSave[`USDC_ERC20_${network}`] = (balances as any).USDC_ERC20 ?? balances.USDC;
+      toSave[`USDT_ERC20_${network}`] = (balances as any).USDT_ERC20 ?? balances.USDT;
+    } else if (isEVM) {
+      toSave[`ETH_${network}`] = balances.ETH;
+      toSave[`USDC_ERC20_${network}`] = (balances as any).USDC_ERC20 ?? balances.USDC;
+      toSave[`USDT_ERC20_${network}`] = (balances as any).USDT_ERC20 ?? balances.USDT;
+      toSave[`INRX_${network}`] = balances.INRX;
+    }
+
+    await AsyncStorage.setItem('cw_token_balances', JSON.stringify(toSave));
+  } catch (e) {
+    console.error('Error saving token balances:', e);
+  }
+}
+
 export async function getWalletBalances(
   walletAddress: string,
   network: string,
@@ -122,13 +156,17 @@ export async function getWalletBalances(
     const cachedStr = await AsyncStorage.getItem('cw_token_balances');
     if (cachedStr) {
       const cached = JSON.parse(cachedStr);
-      // If local has 0 or undefined for any key, but cached has a non-zero value, preserve the non-zero value
-      for (const [key, val] of Object.entries(cached)) {
-        if ((local[key as keyof WalletBalances] === undefined || local[key as keyof WalletBalances] === 0) && typeof val === 'number' && val > 0) {
-          (local as any)[key] = val;
+      // Preserve cross-chain tokens (BTC, SOL, XRP, TON, SUI, TRX) from global cache
+      const crossChainKeys = ['BTC', 'SOL', 'XRP', 'TON', 'SUI', 'TRX', 'USDT_TRC20', 'USDC_TRC20'];
+      crossChainKeys.forEach(k => {
+        if ((local as any)[k] === undefined || (local as any)[k] === 0) {
+          if (typeof cached[k] === 'number' && cached[k] > 0) (local as any)[k] = cached[k];
         }
-      }
-      local = { ...cached, ...local };
+      });
+      // Copy all network-prefixed keys into local so resolvedXxx can read them
+      Object.entries(cached).forEach(([k, v]) => {
+        if (k.includes('_')) (local as any)[k] = v;
+      });
     }
   } catch {}
 
@@ -155,7 +193,7 @@ export async function getWalletBalances(
       XRP: local.XRP ?? 0, TON: local.TON ?? 0, SUI: local.SUI ?? 0,
       INRX: local.INRX ?? 0,
     };
-    await AsyncStorage.setItem('cw_token_balances', JSON.stringify(balances)).catch(() => {});
+    await saveTokenBalances(network, balances);
     return balances;
   }
 
@@ -196,7 +234,7 @@ export async function getWalletBalances(
         SUI: local.SUI ?? 0,
         INRX: local.INRX ?? 0,
       };
-      await AsyncStorage.setItem('cw_token_balances', JSON.stringify(balances)).catch(() => {});
+      await saveTokenBalances(network, balances);
       return balances;
     } catch {
       return {
@@ -245,7 +283,7 @@ export async function getWalletBalances(
         SUI: local.SUI ?? 0,
         INRX: resolvedINRX,
       };
-      await AsyncStorage.setItem('cw_token_balances', JSON.stringify(balances)).catch(() => {});
+      await saveTokenBalances(network, balances);
       return balances;
     } catch {
       return {
@@ -278,16 +316,21 @@ export async function getWalletBalances(
   ]);
 
   const chainETH  = ethRaw.status  === 'fulfilled' ? parseFloat(formatEther(ethRaw.value)) : null;
-  const chainUSDC   = usdcRaw.status   === 'fulfilled' ? usdcRaw.value : null;
-  const chainUSDT   = usdtRaw.status   === 'fulfilled' ? usdtRaw.value : null;
-  const chainINRX   = inrxRaw.status   === 'fulfilled' ? inrxRaw.value : null;
+  const chainUSDC = usdcRaw.status === 'fulfilled' ? usdcRaw.value : null;
+  const chainUSDT = usdtRaw.status === 'fulfilled' ? usdtRaw.value : null;
+  const chainINRX = inrxRaw.status === 'fulfilled' ? inrxRaw.value : null;
 
-  // Use live chain value directly — fall back to cache if RPC call failed or if local testnet balance exists
-  const isTestnet = network.includes('Sepolia') || network.includes('Testnet') || network.includes('Amoy') || network.includes('Nile');
-  const resolvedUSDT = (chainUSDT !== null && chainUSDT > 0) ? chainUSDT : (isTestnet ? Math.max(chainUSDT ?? 0, local.USDT_ERC20 ?? local.USDT ?? 0) : (chainUSDT !== null ? chainUSDT : (local.USDT_ERC20 ?? local.USDT ?? 0)));
-  const resolvedUSDC = (chainUSDC !== null && chainUSDC > 0) ? chainUSDC : (isTestnet ? Math.max(chainUSDC ?? 0, local.USDC_ERC20 ?? local.USDC ?? 0) : (chainUSDC !== null ? chainUSDC : (local.USDC_ERC20 ?? local.USDC ?? 0)));
-  const resolvedINRX = chainINRX !== null && chainINRX > 0 ? chainINRX : Math.max(chainINRX ?? 0, local.INRX ?? 0);
-  const resolvedETH  = (chainETH !== null && chainETH > 0) ? chainETH : (isTestnet ? Math.max(chainETH ?? 0, local.ETH ?? 0) : (chainETH !== null ? chainETH : (local.ETH ?? 0)));
+  // Load network-specific cached values (never bleed across networks)
+  const cachedETH  = local[`ETH_${network}` as keyof WalletBalances] as number | undefined;
+  const cachedUSDT = local[`USDT_ERC20_${network}` as keyof WalletBalances] as number | undefined;
+  const cachedUSDC = local[`USDC_ERC20_${network}` as keyof WalletBalances] as number | undefined;
+  const cachedINRX = local[`INRX_${network}` as keyof WalletBalances] as number | undefined;
+
+  // Use live chain value; fall back ONLY to this network's own cache if RPC failed
+  const resolvedETH  = chainETH  !== null ? chainETH  : (cachedETH  ?? 0);
+  const resolvedUSDT = chainUSDT !== null ? chainUSDT : (cachedUSDT ?? 0);
+  const resolvedUSDC = chainUSDC !== null ? chainUSDC : (cachedUSDC ?? 0);
+  const resolvedINRX = chainINRX !== null ? chainINRX : (cachedINRX ?? 0);
 
   const balances: WalletBalances = {
     USDT_ERC20: resolvedUSDT,
@@ -307,10 +350,7 @@ export async function getWalletBalances(
     INRX: resolvedINRX,
   };
 
-  const hasAnyBalance = Object.values(balances).some(v => v > 0);
-  if (hasAnyBalance || network !== 'Sepolia') {
-    await AsyncStorage.setItem('cw_token_balances', JSON.stringify(balances)).catch(() => {});
-  }
+  await saveTokenBalances(network, balances);
 
   return balances;
 }

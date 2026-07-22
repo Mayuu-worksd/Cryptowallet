@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { walletService } from '../services/walletService';
 import { ethereumService } from '../services/ethereumService';
-import { getWalletBalances } from '../services/balanceService';
+import { getWalletBalances, saveTokenBalances } from '../services/balanceService';
 import { storageService } from '../services/storageService';
 import getSymbolFromCurrency from 'currency-symbol-map';
 import { marketService, NewsItem } from '../services/marketService';
@@ -362,7 +362,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       ethBalanceRef.current = Number(merged.ETH || 0).toFixed(6);
       setBalances(merged);
       balancesRef.current = merged;
-      await AsyncStorage.setItem('cw_token_balances', JSON.stringify(merged));
+      await saveTokenBalances(net, merged);
       // Persist balances to Supabase
       if (walletAddress) profileService.upsert(walletAddress, { token_balances: merged }).catch(() => {});
     } catch (e) {
@@ -404,7 +404,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setBalances(b => {
           const nb = { ...b, ETH: parseFloat(next) };
           balancesRef.current = nb;
-          AsyncStorage.setItem('cw_token_balances', JSON.stringify(nb)).catch(() => {});
+          saveTokenBalances(network, nb).catch(() => {});
           return nb;
         });
         return next;
@@ -413,7 +413,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setBalances(prev => {
         const next = { ...prev, [token]: Math.max(0, (prev[token] || 0) + amount) };
         balancesRef.current = next;
-        AsyncStorage.setItem('cw_token_balances', JSON.stringify(next)).catch(() => {});
+        saveTokenBalances(network, next).catch(() => {});
         return next;
       });
     }
@@ -1688,6 +1688,50 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.setItem('cw_network', n).catch(() => {});
     if (walletAddress) profileService.upsert(walletAddress, { network: n }).catch(() => {});
     if (!walletAddress) return;
+
+    // Load cached balances for the new network and update flat keys immediately so the UI updates instantly
+    try {
+      const cachedStr = await AsyncStorage.getItem('cw_token_balances');
+      if (cachedStr) {
+        const cached = JSON.parse(cachedStr);
+        const isBSC = n === 'BSC' || n === 'BSC Testnet';
+        const isTron = n === 'TRON' || n === 'TRON Nile';
+        const isSol = n === 'Solana' || n === 'Solana Devnet';
+        const isBTC = n === 'Bitcoin';
+        
+        const nextBalances = { ...balancesRef.current };
+        
+        if (isBSC) {
+          nextBalances.BNB = cached[`BNB_${n}`] ?? 0;
+          nextBalances.USDC_ERC20 = cached[`USDC_ERC20_${n}`] ?? 0;
+          nextBalances.USDT_ERC20 = cached[`USDT_ERC20_${n}`] ?? 0;
+          nextBalances.USDC = nextBalances.USDC_ERC20;
+          nextBalances.USDT = nextBalances.USDT_ERC20;
+          setEthBalance(Number(nextBalances.BNB).toFixed(6));
+          ethBalanceRef.current = Number(nextBalances.BNB).toFixed(6);
+        } else if (isTron) {
+          nextBalances.TRX = cached.TRX ?? 0;
+          nextBalances.USDT_TRC20 = cached.USDT_TRC20 ?? 0;
+          nextBalances.USDC_TRC20 = cached.USDC_TRC20 ?? 0;
+          nextBalances.USDC = nextBalances.USDC_TRC20;
+          nextBalances.USDT = nextBalances.USDT_TRC20;
+        } else if (!isSol && !isBTC) {
+          // General EVM
+          nextBalances.ETH = cached[`ETH_${n}`] ?? 0;
+          nextBalances.USDC_ERC20 = cached[`USDC_ERC20_${n}`] ?? 0;
+          nextBalances.USDT_ERC20 = cached[`USDT_ERC20_${n}`] ?? 0;
+          nextBalances.INRX = cached[`INRX_${n}`] ?? 0;
+          nextBalances.USDC = nextBalances.USDC_ERC20;
+          nextBalances.USDT = nextBalances.USDT_ERC20;
+          setEthBalance(Number(nextBalances.ETH).toFixed(6));
+          ethBalanceRef.current = Number(nextBalances.ETH).toFixed(6);
+        }
+        
+        setBalances(nextBalances);
+        balancesRef.current = nextBalances;
+      }
+    } catch {}
+
     const isTronNet = n === 'TRON' || n === 'TRON Nile';
     if (isTronNet) {
       let tronAddr = await storageService.getTronAddress();
@@ -2408,7 +2452,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     // 6. Update local state
     setBalances(newBalances);
     balancesRef.current = newBalances;
-    AsyncStorage.setItem('cw_token_balances', JSON.stringify(newBalances)).catch(() => {});
+    saveTokenBalances(network, newBalances).catch(() => {});
     setEthBalance(newEthBalance.toFixed(6));
     
     setCardTransactions(prev => {
@@ -2509,7 +2553,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         [buyTok]: (prev[buyTok] || 0) + buyAmt
       };
       balancesRef.current = updated;
-      AsyncStorage.setItem('cw_token_balances', JSON.stringify(updated)).catch(() => {});
+      saveTokenBalances(network, updated).catch(() => {});
       return updated;
     });
   }, []);
