@@ -148,9 +148,7 @@ export default function CardScreen({ navigation, route }: any) {
       USDT: isTron
         ? (balances.USDT_TRC20 ?? balances.USDT ?? 0)
         : (balances.USDT_ERC20 ?? balances.USDT ?? 0),
-      INRX: isTron
-        ? parseFloat((balances.Nile as any)?.inrxBalance || (balances as any).INRX || '0') || 0
-        : parseFloat((balances.Sepolia as any)?.inrxBalance || (balances.Amoy as any)?.inrxBalance || (balances as any).INRX || '0') || 0,
+      INRX: balances.INRX ?? 0,
       BTC: balances.BTC ?? 0,
       SOL: balances.SOL ?? 0,
       BNB: balances.BNB ?? 0,

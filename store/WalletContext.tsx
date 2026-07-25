@@ -1586,6 +1586,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         let changed = false;
         const next = { ...prev };
         Object.entries(recoveredTokenBals).forEach(([coin, val]) => {
+          if (coin === 'INRX') return; // Real on-chain balance from RPC is source of truth for INRX
           if (Math.abs((next[coin] || 0) - val) > 0.0001) {
             next[coin] = val;
             changed = true;

@@ -887,9 +887,7 @@ export default function HomeScreen({ navigation }: any) {
       USDT: isTron
         ? (balances.USDT_TRC20 ?? balances.USDT ?? 0)
         : (balances.USDT_ERC20 ?? balances.USDT ?? 0),
-      INRX: isTron
-        ? parseFloat((balances.Nile as any)?.inrxBalance || (balances as any).INRX || '0') || 0
-        : parseFloat((balances.Sepolia as any)?.inrxBalance || (balances.Amoy as any)?.inrxBalance || (balances as any).INRX || '0') || 0,
+      INRX: balances.INRX ?? 0,
       BTC: balances.BTC ?? 0,
       SOL: balances.SOL ?? 0,
       XRP: balances.XRP ?? 0,
@@ -920,15 +918,15 @@ export default function HomeScreen({ navigation }: any) {
         };
       })
       .filter((a) => {
-        // Always show native token (ETH/TRX) and INRX even if balance is 0
-        if (a.symbol === nativeSymbol || a.symbol === "INRX") return true;
+        // Always show native token (ETH/TRX) even if balance is 0
+        if (a.symbol === nativeSymbol) return true;
         // Hide ETH on TRON/BSC networks
         if (a.symbol === "ETH" && (isTron || isBSC)) return false;
         // Hide TRX on non-TRON networks
         if (a.symbol === "TRX" && !isTron) return false;
         // Hide BNB on non-BSC networks (if balance is 0)
         if (a.symbol === "BNB" && !isBSC && a.amount === 0) return false;
-        // Only show other coins if user actually has a balance > 0
+        // Only show other coins (including INRX) if user actually has a balance > 0
         return a.amount > 0;
       })
       .sort((a, b) => b.usd - a.usd);
