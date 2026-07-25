@@ -133,8 +133,25 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+-- ─── wallet_profiles (if exists) ──────────────────────────
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'wallet_profiles') THEN
+    EXECUTE 'ALTER TABLE wallet_profiles ENABLE ROW LEVEL SECURITY';
+    EXECUTE 'GRANT ALL ON wallet_profiles TO anon, authenticated, service_role';
+    EXECUTE 'DROP POLICY IF EXISTS "profile_own" ON wallet_profiles';
+    EXECUTE 'DROP POLICY IF EXISTS "wallet_profiles_select" ON wallet_profiles';
+    EXECUTE 'DROP POLICY IF EXISTS "wallet_profiles_insert" ON wallet_profiles';
+    EXECUTE 'DROP POLICY IF EXISTS "wallet_profiles_update" ON wallet_profiles';
+    EXECUTE 'DROP POLICY IF EXISTS "wallet_profiles_delete" ON wallet_profiles';
+    EXECUTE 'CREATE POLICY "wallet_profiles_select" ON wallet_profiles FOR SELECT TO anon, authenticated USING (true)';
+    EXECUTE 'CREATE POLICY "wallet_profiles_insert" ON wallet_profiles FOR INSERT TO anon, authenticated WITH CHECK (true)';
+    EXECUTE 'CREATE POLICY "wallet_profiles_update" ON wallet_profiles FOR UPDATE TO anon, authenticated USING (true) WITH CHECK (true)';
+    EXECUTE 'CREATE POLICY "wallet_profiles_delete" ON wallet_profiles FOR DELETE TO anon, authenticated USING (true)';
+  END IF;
+END $$;
+
 -- ─── Verify final state ────────────────────────────────────
 SELECT tablename, policyname, cmd
 FROM pg_policies
-WHERE tablename IN ('p2p_orders','escrow_locks','p2p_chat','merchant_qr_codes','kyc_submissions','cards','vcc_cards','transactions','profiles')
+WHERE tablename IN ('p2p_orders','escrow_locks','p2p_chat','merchant_qr_codes','kyc_submissions','cards','vcc_cards','transactions','profiles','wallet_profiles')
 ORDER BY tablename, cmd;

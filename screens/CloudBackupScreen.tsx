@@ -491,7 +491,7 @@ export default function CloudBackupScreen({ navigation }: any) {
                         accessibilityLabel="Create Backup Password Input"
                       />
                       <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowPassword(!showPassword)} activeOpacity={0.7}>
-                        <Feather name={showPassword ? 'eye-off' : 'eye'} size={18} color={T.textMuted} />
+                        <Feather name={showPassword ? 'eye' : 'eye-off'} size={18} color={T.textMuted} />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -582,7 +582,7 @@ export default function CloudBackupScreen({ navigation }: any) {
                         accessibilityLabel="Confirm Backup Password Input"
                       />
                       <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowConfirmPassword(!showConfirmPassword)} activeOpacity={0.7}>
-                        <Feather name={showConfirmPassword ? 'eye-off' : 'eye'} size={18} color={T.textMuted} />
+                        <Feather name={showConfirmPassword ? 'eye' : 'eye-off'} size={18} color={T.textMuted} />
                       </TouchableOpacity>
                     </View>
 

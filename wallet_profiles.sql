@@ -35,12 +35,18 @@ CREATE TRIGGER wallet_profiles_updated_at
 
 -- ─── 2. RLS ───────────────────────────────────────────────────────────────────
 ALTER TABLE wallet_profiles ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON wallet_profiles TO anon, authenticated, service_role;
 
 DROP POLICY IF EXISTS "profile_own" ON wallet_profiles;
-CREATE POLICY "profile_own" ON wallet_profiles
-  FOR ALL TO anon
-  USING (wallet_address = current_wallet())
-  WITH CHECK (wallet_address = current_wallet());
+DROP POLICY IF EXISTS "wallet_profiles_select" ON wallet_profiles;
+DROP POLICY IF EXISTS "wallet_profiles_insert" ON wallet_profiles;
+DROP POLICY IF EXISTS "wallet_profiles_update" ON wallet_profiles;
+DROP POLICY IF EXISTS "wallet_profiles_delete" ON wallet_profiles;
+
+CREATE POLICY "wallet_profiles_select" ON wallet_profiles FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "wallet_profiles_insert" ON wallet_profiles FOR INSERT TO anon, authenticated WITH CHECK (true);
+CREATE POLICY "wallet_profiles_update" ON wallet_profiles FOR UPDATE TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "wallet_profiles_delete" ON wallet_profiles FOR DELETE TO anon, authenticated USING (true);
 
 -- ─── 3. get_wallet_profile ────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION get_wallet_profile(p_wallet TEXT)

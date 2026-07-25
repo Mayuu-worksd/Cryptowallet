@@ -160,21 +160,12 @@ export const marketService = {
   async fetchChartData(symbol: string, timeframe: string): Promise<number[]> {
     // 1. Check Stablecoin Cases
     if (symbol === 'INRX') {
-      let prev = 0.012;
-      const pts = Array.from({ length: 60 }, (_, i) => {
-        prev = prev * (1 + (Math.random() * 0.002 - 0.001));
-        return Number(prev.toFixed(6));
-      });
-      return pts;
+      const limit = timeframe === '1Y' ? 365 : timeframe === '1M' ? 180 : timeframe === '1W' ? 168 : timeframe === '1D' ? 96 : 60;
+      return getSeededChartData('INRX', timeframe, limit, 0.012, 0.002);
     }
 
     if (symbol === 'USDT' && timeframe === 'LIVE') {
-      let prev = 1.0;
-      const pts = Array.from({ length: 60 }, (_, i) => {
-        prev = prev * (1 + (Math.random() * 0.0006 - 0.0003));
-        return Number(prev.toFixed(5));
-      });
-      return pts;
+      return getSeededChartData('USDT', 'LIVE', 60, 1.0, 0.0006);
     }
 
     const binanceSymbols: Record<string, string> = {
@@ -256,15 +247,38 @@ export const marketService = {
 
     // 5. Hard Simulation Fallback (offline and no cache)
     const basePrice = symbol === 'USDT' ? 1.0 : symbol === 'USDC' ? 1.0 : 0.5;
-    const ptsCount = timeframe === '1Y' ? 365 : 60;
-    let prev = basePrice;
-    const fallbackData = Array.from({ length: ptsCount }, () => {
-      prev = prev * (1 + (Math.random() * 0.02 - 0.01));
-      return prev;
-    });
-    return fallbackData;
+    const ptsCount = timeframe === '1Y' ? 365 : timeframe === '1M' ? 180 : timeframe === '1W' ? 168 : timeframe === '1D' ? 96 : 60;
+    return getSeededChartData(symbol, timeframe, ptsCount, basePrice, 0.02);
   },
 };
+
+function getSeededChartData(symbol: string, timeframe: string, length: number, basePrice: number, volatility: number): number[] {
+  const now = new Date();
+  let timeSeed = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
+  if (timeframe === 'LIVE' || timeframe === '1H') {
+    timeSeed = timeSeed * 100 + now.getHours();
+  }
+
+  let nameHash = 0;
+  for (let i = 0; i < symbol.length; i++) {
+    nameHash = (nameHash << 5) - nameHash + symbol.charCodeAt(i);
+  }
+
+  let seed = Math.abs(timeSeed + nameHash);
+
+  const random = () => {
+    const x = Math.sin(seed++) * 10000;
+    return x - Math.floor(x);
+  };
+
+  let prev = basePrice;
+  const pts = Array.from({ length }, () => {
+    prev = prev * (1 + (random() * volatility - volatility / 2));
+    return Number(prev.toFixed(symbol === 'INRX' ? 6 : 5));
+  });
+
+  return pts;
+}
 
 const CHART_CACHE_PREFIX = 'market_chart_cache_';
 

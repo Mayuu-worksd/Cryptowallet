@@ -327,7 +327,7 @@ export default function RecoverWalletScreen({ navigation }: any) {
                       autoCorrect={false}
                     />
                     <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowPassword(!showPassword)} activeOpacity={0.7}>
-                      <Feather name={showPassword ? 'eye-off' : 'eye'} size={20} color={T.textMuted} />
+                      <Feather name={showPassword ? 'eye' : 'eye-off'} size={20} color={T.textMuted} />
                     </TouchableOpacity>
                   </View>
                 </View>

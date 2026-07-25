@@ -273,8 +273,9 @@ const DetailModal = memo(({ tx, T, cfg, network, onClose, formatFiat }: {
               style={[modal.explorerBtn, { backgroundColor: T.primary + '18', borderColor: T.primary + '40' }]}
               onPress={() => {
                 try {
-                  const u = new URL(explorerUrl);
-                  if (u.protocol === 'https:') Linking.openURL(u.href);
+                  if (explorerUrl.startsWith('https://') || explorerUrl.startsWith('http://')) {
+                    Linking.openURL(explorerUrl);
+                  }
                 } catch (_e) {}
               }}
               activeOpacity={0.8}

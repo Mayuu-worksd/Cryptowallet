@@ -691,19 +691,22 @@ const NewsCard = memo(({ item, T }: { item: NewsItem; T: any }) => {
       onPress={() => {
         if (!item.url) return;
         try {
-          const u = new URL(item.url);
-          if (u.protocol !== "https:" && u.protocol !== "http:") return;
-          const host = u.hostname.toLowerCase();
-          if (
-            host === "localhost" ||
-            host.startsWith("127.") ||
-            host.startsWith("192.168.") ||
-            host.startsWith("10.") ||
-            host === "0.0.0.0" ||
-            host === "169.254.169.254"
-          )
-            return;
-          Linking.openURL(u.href);
+          if (item.url.startsWith('https://') || item.url.startsWith('http://')) {
+            const match = item.url.match(/^https?:\/\/([^/?#]+)/i);
+            if (match) {
+              const host = match[1].toLowerCase();
+              if (
+                host === "localhost" ||
+                host.startsWith("127.") ||
+                host.startsWith("192.168.") ||
+                host.startsWith("10.") ||
+                host === "0.0.0.0" ||
+                host === "169.254.169.254"
+              )
+                return;
+            }
+            Linking.openURL(item.url);
+          }
         } catch (_e) {}
       }}
       activeOpacity={0.75}
