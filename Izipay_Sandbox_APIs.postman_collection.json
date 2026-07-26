@@ -1,0 +1,211 @@
+{
+  "info": {
+    "_postman_id": "8f86dfb8-c309-4ee2-bb72-8888b17a1234",
+    "name": "IZIPAY Sandbox APIs",
+    "description": "Pre-configured Postman Collection to test the entire virtual card lifecycle on the IZIPAY Sandbox environment.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Get Account Balance",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/balance",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "balance"
+          ]
+        },
+        "description": "Retrieve prepaid statistics of your account, cards count, and active balance."
+      },
+      "response": []
+    },
+    {
+      "name": "2. Issue Virtual Card",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-Idempotency-Key",
+            "value": "{{$guid}}",
+            "type": "text",
+            "description": "Unique request key to avoid duplicates"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"cardholder_email\": \"alice@example.com\",\n  \"cardholder_alias\": \"Alice\",\n  \"client_card_ref\": \"user_42\",\n  \"pay_currency\": \"usdttrc20\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/cards/issue",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "cards",
+            "issue"
+          ]
+        },
+        "description": "Initiates card creation and returns the payment invoice (deposit address and amount)."
+      },
+      "response": []
+    },
+    {
+      "name": "3. Simulate Payment (Confirm Invoice)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"payment_id\": \"{{paymentId}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/sandbox/confirm",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "sandbox",
+            "confirm"
+          ]
+        },
+        "description": "Call this endpoint to instantly simulate the on-chain payment of the card creation fee or top-up invoice in the Sandbox."
+      },
+      "response": []
+    },
+    {
+      "name": "4. Get Card Details",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/cards/{{cardId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "cards",
+            "{{cardId}}"
+          ]
+        },
+        "description": "Retrieve current state of a card. Returns masked PAN and balance details."
+      },
+      "response": []
+    },
+    {
+      "name": "5. Top Up Card",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"amount_usd\": 100,\n  \"pay_currency\": \"usdttrc20\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/cards/{{cardId}}/topup",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "cards",
+            "{{cardId}}",
+            "topup"
+          ]
+        },
+        "description": "Generates a reload crypto invoice for the card."
+      },
+      "response": []
+    },
+    {
+      "name": "6. Get Card Transactions",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/cards/{{cardId}}/transactions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "cards",
+            "{{cardId}}",
+            "transactions"
+          ]
+        },
+        "description": "Get transactions logs (purchases and topups) for this card."
+      },
+      "response": []
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{apiKey}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://izipay.me/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "apiKey",
+      "value": "izpk_test_YOUR_ACTUAL_KEY",
+      "type": "string"
+    },
+    {
+      "key": "cardId",
+      "value": "card_test_xyz123",
+      "type": "string"
+    },
+    {
+      "key": "paymentId",
+      "value": "gwtest_abc123",
+      "type": "string"
+    }
+  ]
+}
