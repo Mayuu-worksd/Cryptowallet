@@ -880,7 +880,7 @@ export default function HomeScreen({ navigation }: any) {
   const realBalances: Record<string, number> = useMemo(() => {
     const isTron = network === "TRON" || network === "TRON Nile";
     const isBSC = network === "BSC" || network === "BSC Testnet";
-    return {
+    const res = {
       ETH: isTron || isBSC ? 0 : parseFloat(ethBalance) || 0,
       TRX: isTron ? (balances.TRX ?? 0) : 0,
       BNB: isBSC ? parseFloat(ethBalance) || 0 : (balances.BNB ?? 0),
@@ -897,6 +897,13 @@ export default function HomeScreen({ navigation }: any) {
       TON: balances.TON ?? 0,
       SUI: balances.SUI ?? 0,
     };
+    console.log('[HomeScreen] Debug Balances:', {
+      network,
+      balances,
+      ethBalance,
+      realBalances: res
+    });
+    return res;
   }, [ethBalance, balances, network]);
 
   const assetsList = useMemo(() => {
