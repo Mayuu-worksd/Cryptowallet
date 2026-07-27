@@ -259,7 +259,7 @@ export default function PortfolioScreen({ navigation }: any) {
   }), [ethBalance, balances]);
 
   const assetsList = useMemo(() => {
-    const priority = ['USDT', 'USDC', 'ETH', 'BTC', 'SOL', 'BNB', 'XRP', 'TON', 'TRX', 'SUI'];
+    const priority = ['INRX', 'USDT', 'USDC', 'ETH', 'BTC', 'SOL', 'BNB', 'XRP', 'TON', 'TRX', 'SUI'];
     return priority.map(symbol => {
       const balanceVal = realBalances[symbol] ?? 0;
       const price = prices[symbol]?.usd ?? STABLE_FALLBACK[symbol] ?? 0;
