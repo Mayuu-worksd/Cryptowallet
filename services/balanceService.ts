@@ -6,7 +6,7 @@ import { RPC_URLS } from '../config';
 // ethers v5/v6 compatibility shims
 const formatEther = (ethers as any).formatEther ?? ethers.utils.formatEther;
 const formatUnits = (ethers as any).formatUnits ?? ethers.utils.formatUnits;
-const JsonRpcProvider = (ethers as any).JsonRpcProvider ?? ethers.providers.JsonRpcProvider;
+const StaticJsonRpcProvider = (ethers as any).StaticJsonRpcProvider ?? ethers.providers.StaticJsonRpcProvider;
 
 const AsyncStorage = Platform.OS === 'web'
   ? {
@@ -96,7 +96,7 @@ export type WalletBalances = {
 function makeProvider(network: string) {
   const rpcUrl = RPC_URLS[network] ?? RPC_URLS['Sepolia'];
   const netCfg = NETWORK_CONFIG[network] ?? NETWORK_CONFIG['Sepolia'];
-  return new JsonRpcProvider(rpcUrl, { chainId: netCfg.chainId, name: netCfg.name }, { staticNetwork: true });
+  return new StaticJsonRpcProvider(rpcUrl, { chainId: netCfg.chainId, name: netCfg.name });
 }
 
 function deriveSolanaAddress(evmAddress: string): string {
