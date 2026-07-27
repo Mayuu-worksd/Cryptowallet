@@ -276,7 +276,15 @@ export default function PortfolioScreen({ navigation }: any) {
     });
   }, [realBalances, prices, lockedBalance]);
 
-  const totalUsd = useMemo(() => assetsList.reduce((acc, a) => acc + a.usd, 0), [assetsList]);
+  const totalUsd = useMemo(() => {
+    const total = assetsList.reduce((acc, a) => acc + (a.usd || 0), 0);
+    console.log('[PortfolioScreen] Debug Info:', {
+      realBalances,
+      totalUsd: total,
+      assetsList: assetsList.map(a => ({ symbol: a.symbol, amount: a.amount, usd: a.usd }))
+    });
+    return total;
+  }, [assetsList, realBalances]);
 
   const fiatWalletsList = useMemo(() => {
     return Object.values(SUPPORTED_FIAT_CURRENCIES).map(f => ({

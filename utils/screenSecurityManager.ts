@@ -49,7 +49,8 @@ class ScreenSecurityManager {
     if (Platform.OS === 'web') return;
     try {
       if (this.activeLocks.size > 0) {
-        await ScreenCapture.preventScreenCaptureAsync();
+        // Temporarily bypassed for testing and screenshots
+        await ScreenCapture.allowScreenCaptureAsync();
       } else {
         await ScreenCapture.allowScreenCaptureAsync();
       }
