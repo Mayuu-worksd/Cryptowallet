@@ -4,7 +4,7 @@ if (!ALCHEMY_KEY) {
   console.warn('EXPO_PUBLIC_ALCHEMY_KEY is missing. Run: eas secret:create --scope project --name EXPO_PUBLIC_ALCHEMY_KEY --value <your_key>');
 }
 
-const sepoliaRpc         = ALCHEMY_KEY ? `https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`        : 'https://rpc.sepolia.org';
+const sepoliaRpc         = ALCHEMY_KEY ? `https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`        : 'https://ethereum-sepolia-rpc.publicnode.com';
 const ethRpc             = ALCHEMY_KEY ? `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`        : 'https://cloudflare-eth.com';
 const polygonRpc         = ALCHEMY_KEY ? `https://polygon-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`    : 'https://polygon-rpc.com';
 const arbitrumRpc        = ALCHEMY_KEY ? `https://arb-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`        : 'https://arb1.arbitrum.io/rpc';
