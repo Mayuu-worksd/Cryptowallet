@@ -127,7 +127,7 @@ export async function POST(req: NextRequest) {
           if (tx && parsedEvent.providerCardId) {
             const { data: vccCard } = await supabase
               .from('vcc_cards')
-              .select('wallet_address, id')
+              .select('wallet_address, id, card_last4')
               .eq('codego_card_id', parsedEvent.providerCardId)
               .maybeSingle();
 
@@ -138,6 +138,12 @@ export async function POST(req: NextRequest) {
               const spendAmountUSD = Math.abs(rawAmount);
               const txType = isTopup ? 'card_topup' : 'card_spend';
 
+              const txStatus = tx.status === 'approved' 
+                ? 'success' 
+                : (tx.status === 'declined' || tx.status === 'failed') 
+                  ? 'failed' 
+                  : 'pending';
+
               await supabase
                 .from('transactions')
                 .upsert({
@@ -147,12 +153,35 @@ export async function POST(req: NextRequest) {
                   token: tx.currency || 'USD',
                   amount: spendAmountUSD,
                   usd_value: spendAmountUSD,
-                  status: tx.status === 'approved' ? 'success' : tx.status === 'declined' ? 'failed' : 'pending',
+                  status: txStatus,
                   reference_id: tx.id,
                   label: tx.merchantName || 'Card Transaction',
                   description: tx.description || null,
                   created_at: tx.createdAt || new Date().toISOString(),
                 }, { onConflict: 'reference_id' });
+
+              // Automatically trigger transaction authorization if status is pending and is a spend
+              if (txStatus === 'pending' && isSpend && spendAmountUSD > 0) {
+                try {
+                  const host = req.headers.get('host') || 'localhost:3000';
+                  const protocol = req.headers.get('x-forwarded-proto') || 'http';
+                  // Fire-and-forget internal fetch to request authorization & send OTP
+                  void fetch(`${protocol}://${host}/api/authorization/request`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      transaction_id: tx.id,
+                      provider_card_id: parsedEvent.providerCardId,
+                      amount: spendAmountUSD,
+                      currency: tx.currency || 'USD',
+                      merchant: tx.merchantName || 'Card Transaction',
+                      card_last4: vccCard.card_last4 || '0000',
+                    }),
+                  }).catch(err => console.error('[Webhook Auth Fetch Error]:', err.message));
+                } catch (authErr: any) {
+                  console.error('[Webhook Auth Trigger Error]:', authErr.message);
+                }
+              }
 
               if (isSpend && spendAmountUSD > 0 && tx.status === 'approved') {
                 const { data: profile } = await supabase

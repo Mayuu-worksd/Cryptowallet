@@ -172,6 +172,7 @@ import BridgeScreen from "./screens/BridgeScreen";
 import MessagesScreen from "./screens/MessagesScreen";
 import P2PMarketplaceScreen from "./screens/P2PMarketplaceScreen";
 import P2POrderDetailScreen from "./screens/P2POrderDetailScreen";
+import TransactionAuthScreen from "./screens/TransactionAuthScreen";
 import SplashScreen from "./screens/SplashScreen";
 import PinScreen from "./screens/PinScreen";
 import { hasPinSetup } from "./services/pinService";
@@ -1199,6 +1200,7 @@ function MobileNavigator() {
             <Stack.Screen name="Earn" component={EarnScreen} />
             <Stack.Screen name="Credit" component={CreditScreen} />
             <Stack.Screen name="More" component={MoreScreen} />
+            <Stack.Screen name="TransactionAuth" component={TransactionAuthScreen} />
           </>
         )}
       </Stack.Navigator>
@@ -1239,6 +1241,33 @@ function WebApp() {
       setCurrentParams(null);
     }
   }, [isLoadingWallet, hasWallet]);
+
+  React.useEffect(() => {
+    if (!walletAddress) return;
+    const interval = setInterval(async () => {
+      try {
+        const { supabase } = await import("./services/supabaseClient");
+        const { data } = await supabase
+          .from("transaction_authorizations")
+          .select("authorization_id, expires_at")
+          .eq("wallet_address", walletAddress.toLowerCase())
+          .eq("status", "pending")
+          .gt("expires_at", new Date().toISOString())
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        if (data && data.length > 0) {
+          const pendingAuthId = data[0].authorization_id;
+          if (currentScreen !== "TransactionAuth" || currentParams?.authorization_id !== pendingAuthId) {
+            setCurrentScreen("TransactionAuth");
+            setCurrentParams({ authorization_id: pendingAuthId });
+          }
+        }
+      } catch (_e) {}
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [walletAddress, currentScreen, currentParams]);
 
   const nav = React.useMemo(
     () =>
@@ -1338,6 +1367,8 @@ function WebApp() {
         return <VCCCardDetailScreen navigation={nav} route={route} />;
       case "ApplyPhysicalCard":
         return <ApplyPhysicalCardScreen navigation={nav} route={route} />;
+      case "TransactionAuth":
+        return <TransactionAuthScreen navigation={nav} route={route} />;
       case "P2P":
       case "P2PMarketplace":
         return <P2PMarketplaceScreen navigation={nav} route={route} />;
