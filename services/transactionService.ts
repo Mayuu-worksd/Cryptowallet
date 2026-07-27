@@ -22,7 +22,7 @@ const AsyncStorage = Platform.OS === 'web'
     }
   : AsyncStorageNative;
 
-const CUSTOM_TOKEN_ADDRESS = (process.env.EXPO_PUBLIC_CUSTOM_TOKEN ?? '0x351028A22C876E0431b30921c0dD0a836a14899E').toLowerCase();
+const CUSTOM_TOKEN_ADDRESS = (process.env.EXPO_PUBLIC_CUSTOM_TOKEN ?? '0x51a5f24560547f587999c331788aC495D40d95ba').toLowerCase();
 const CACHE_KEY = 'tx_history_cache';
 
 // ─── Unified transaction shape ────────────────────────────────────────────────
