@@ -315,6 +315,18 @@ export async function getWalletBalances(
     fetchERC20(provider, walletAddress, TOKEN_CONTRACTS.INRX[network], TOKEN_DECIMALS.INRX),
   ]);
 
+  if (ethRaw.status === 'rejected') console.error('[balanceService] ethRaw rejected:', (ethRaw as any).reason);
+  if (usdcRaw.status === 'rejected') console.error('[balanceService] usdcRaw rejected:', (usdcRaw as any).reason);
+  if (usdtRaw.status === 'rejected') console.error('[balanceService] usdtRaw rejected:', (usdtRaw as any).reason);
+  if (inrxRaw.status === 'rejected') console.error('[balanceService] inrxRaw rejected:', (inrxRaw as any).reason);
+
+  console.log('[balanceService] Promise.allSettled results:', {
+    eth: ethRaw.status === 'fulfilled' ? ethRaw.value.toString() : 'rejected',
+    usdc: usdcRaw.status === 'fulfilled' ? usdcRaw.value : 'rejected',
+    usdt: usdtRaw.status === 'fulfilled' ? usdtRaw.value : 'rejected',
+    inrx: inrxRaw.status === 'fulfilled' ? inrxRaw.value : 'rejected',
+  });
+
   const chainETH  = ethRaw.status  === 'fulfilled' ? parseFloat(formatEther(ethRaw.value)) : null;
   const chainUSDC = usdcRaw.status === 'fulfilled' ? usdcRaw.value : null;
   const chainUSDT = usdtRaw.status === 'fulfilled' ? usdtRaw.value : null;
@@ -366,7 +378,8 @@ async function fetchERC20(
     const contract = new ethers.Contract(contractAddress, ERC20_ABI, provider);
     const raw: bigint = await contract.balanceOf(address);
     return parseFloat(formatUnits(raw, decimals));
-  } catch {
+  } catch (err: any) {
+    console.error(`[balanceService] fetchERC20 failed for contract ${contractAddress}:`, err.message || err);
     return 0;
   }
 }
