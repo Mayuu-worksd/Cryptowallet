@@ -147,25 +147,58 @@ function fromCardTx(tx: CardTx): UnifiedTx {
   };
 }
 
-function fromChainTx(tx: ChainTx, walletAddress: string, ethPriceUsd: number): UnifiedTx {
+function fromChainTx(tx: ChainTx | TokenTx, walletAddress: string, ethPriceUsd: number): UnifiedTx {
   const isSend  = tx.from.toLowerCase() === walletAddress.toLowerCase();
-  const ethAmt  = parseFloat(formatEther(tx.value || '0'));
-  const usd     = (ethAmt * ethPriceUsd).toFixed(2);
-  const date    = new Date(parseInt(tx.timeStamp, 10) * 1000).toISOString();
-  const status: UnifiedTx['status'] = tx.isError === '0' ? 'completed' : 'failed';
+  const tokenTx = tx as TokenTx;
+  const isToken = 'tokenSymbol' in tx || 'contractAddress' in tx;
+
+  let tokenName = 'ETH';
+  let amountStr = '0.000000';
+  let usd = '0.00';
+
+  if (isToken) {
+    const isCustom = tokenTx.contractAddress?.toLowerCase() === CUSTOM_TOKEN_ADDRESS;
+    tokenName = isCustom ? 'INRX' : (tokenTx.tokenSymbol || 'TOKEN');
+
+    const decimals = parseInt(tokenTx.tokenDecimal || '18', 10);
+    try {
+      const rawAmt = parseFloat(formatUnits(tokenTx.value || '0', decimals));
+      amountStr = rawAmt.toFixed(rawAmt < 1 ? 4 : 2);
+    } catch {
+      amountStr = '0.00';
+    }
+    usd = (parseFloat(amountStr) * (tokenName === 'INRX' ? 0.012 : 1.0)).toFixed(2);
+  } else {
+    const ethAmt = parseFloat(formatEther(tx.value || '0'));
+    amountStr = ethAmt.toFixed(6);
+    usd = (ethAmt * ethPriceUsd).toFixed(2);
+  }
+
+  const date = new Date(parseInt(tx.timeStamp, 10) * 1000).toISOString();
+
+  // Status check:
+  // For standard txs, tx.isError === '0' indicates success.
+  // For token txs (tokentx), isError is omitted by Etherscan on success.
+  // So a token tx is only failed if isError === '1' or txreceipt_status === '0'.
+  const isFailed = tx.isError === '1' || tx.txreceipt_status === '0';
+  const status: UnifiedTx['status'] = isFailed ? 'failed' : 'completed';
+
+  const label = isToken
+    ? (isSend ? `Sent ${tokenName}` : `Received ${tokenName}`)
+    : (isSend ? 'Sent ETH' : 'Received ETH');
 
   return {
     id:       tx.hash,
     type:     isSend ? 'send' : 'receive',
-    amount:   ethAmt.toFixed(6),
-    token:    'ETH',
+    amount:   amountStr,
+    token:    tokenName,
     usdValue: usd,
     date,
     status,
-    from:     tx.from,
-    to:       tx.to,
+    from:     isSend ? 'You' : tx.from,
+    to:       isSend ? tx.to : 'You',
     hash:     tx.hash,
-    label:    isSend ? 'Sent ETH' : 'Received ETH',
+    label,
   };
 }
 
@@ -452,28 +485,32 @@ export const transactionService = {
         knownHashes.add(tx.hash);
       }
 
-      // 2. Process Token Txs (Check for CUSTOM swap)
+      // 2. Process Token Txs (Check for CUSTOM / INRX)
       for (const tx of tokenTxs) {
         if (knownHashes.has(tx.hash)) continue;
         const isOut = tx.from.toLowerCase() === walletAddress.toLowerCase();
-        const isCustom = tx.contractAddress.toLowerCase() === CUSTOM_TOKEN_ADDRESS;
-        
-        const amt = parseFloat(formatUnits(tx.value, parseInt(tx.tokenDecimal, 10)));
+        const isCustom = tx.contractAddress?.toLowerCase() === CUSTOM_TOKEN_ADDRESS;
+
+        const decimals = parseInt(tx.tokenDecimal || '18', 10);
+        const amt = parseFloat(formatUnits(tx.value || '0', decimals));
         if (amt <= 0) continue;
 
+        const tokenSymbol = isCustom ? 'INRX' : (tx.tokenSymbol || 'TOKEN');
+
         newTxs.push({
-          id:      tx.hash + tx.nonce,
-          type:    isCustom ? 'swap' : (isOut ? 'sent' : 'received'),
-          coin:    isCustom ? 'CUSTOM' : tx.tokenSymbol,
-          amount:  amt.toFixed(6),
-          usdValue: '0.00',
+          id:      tx.hash + (tx.nonce || ''),
+          type:    isOut ? 'sent' : 'received',
+          coin:    tokenSymbol,
+          amount:  amt.toFixed(amt < 1 ? 4 : 2),
+          usdValue: (amt * (tokenSymbol === 'INRX' ? 0.012 : 1.0)).toFixed(2),
           address: isOut ? tx.to : tx.from,
-          status:  'success',
+          status:  (tx.isError === '1' || tx.txreceipt_status === '0') ? 'failed' : 'success',
           date:    new Date(parseInt(tx.timeStamp, 10) * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
           rawDate: parseInt(tx.timeStamp, 10) * 1000,
           txHash:  tx.hash,
           contractAddress: tx.contractAddress,
         });
+        knownHashes.add(tx.hash);
       }
 
       if (newTxs.length > 0) {
