@@ -99,6 +99,13 @@ const SERVICES = [
         route: "AccountStatement",
         color: "#FFFFFF",
       },
+      {
+        id: "ImportToken",
+        label: "Import Token",
+        icon: "download",
+        route: "ImportToken",
+        color: "#FFFFFF",
+      },
     ],
   },
   {
@@ -109,6 +116,25 @@ const SERVICES = [
         label: "Virtual Card",
         icon: "credit-card",
         route: "Card",
+        color: "#FFFFFF",
+      },
+    ],
+  },
+  {
+    category: "Security & Recovery",
+    items: [
+      {
+        id: "RecoveryCenter",
+        label: "Recovery Center",
+        icon: "shield",
+        route: "RecoveryCenter",
+        color: "#FFFFFF",
+      },
+      {
+        id: "RecoveryAssistant",
+        label: "Recovery Assistant",
+        icon: "info",
+        route: "RecoveryAssistant",
         color: "#FFFFFF",
       },
     ],

@@ -99,6 +99,20 @@ export const notificationService = {
     } catch (_e) {}
   },
 
+  async notifyRecoverableAsset(coin: string, network: string) {
+    const content = {
+      title: '🛡️ Recoverable Asset Detected',
+      body: `Incoming ${coin} detected on ${network}. Open Recovery Center to retrieve it.`,
+      data: { type: 'recovery' },
+      sound: true,
+    };
+    DeviceEventEmitter.emit('onNewNotification', { ...content, type: 'recovery' });
+    if (isExpoGo) return;
+    try {
+      await Notifications.scheduleNotificationAsync({ content, trigger: null });
+    } catch (_e) {}
+  },
+
   async notifyCardFrozen(last4: string) {
     const content = {
       title: '❄️ Card Frozen',

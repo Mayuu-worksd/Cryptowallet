@@ -4,7 +4,7 @@
  * Generic provider-independent route to update card status (freeze, unfreeze, block).
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { getCardProvider } from '@/lib/providers';
+import { getCardProviderForCard } from '@/lib/providers';
 import { supabase } from '@/lib/supabase';
 
 export async function PATCH(
@@ -27,7 +27,7 @@ export async function PATCH(
     );
   }
 
-  const provider = getCardProvider();
+  const provider = await getCardProviderForCard(providerCardId);
   let result;
 
   switch (status) {

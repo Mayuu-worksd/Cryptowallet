@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { getCardProvider } from '@/lib/providers';
+import { getCardProviderForCard } from '@/lib/providers';
 
 export async function PUT(
   req: NextRequest,
@@ -19,7 +19,7 @@ export async function PUT(
     return NextResponse.json({ error: 'Valid 4-digit PIN required' }, { status: 400 });
   }
 
-  const provider = getCardProvider();
+  const provider = await getCardProviderForCard(providerCardId);
   const result   = await provider.setPin(providerCardId, newPin);
 
   // Audit log

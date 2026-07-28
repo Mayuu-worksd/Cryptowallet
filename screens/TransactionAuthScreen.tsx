@@ -424,7 +424,7 @@ const s = StyleSheet.create({
     height: 64,
     borderRadius: 32,
     alignItems: 'center',
-    justify: 'center',
+    justifyContent: 'center',
     marginBottom: 14,
   },
   title: {
@@ -480,7 +480,7 @@ const s = StyleSheet.create({
   },
   alertText: {
     fontSize: 13,
-    fontFamily: Fonts.semibold,
+    fontFamily: Fonts.semiBold,
     flex: 1,
   },
   otpHint: {

@@ -12,6 +12,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import {
   getCardProvider,
+  getCardProviderByName,
+  getCardProviderForCard,
   ProviderLogger,
   normalizeProviderError,
   createSuccessResponse,
@@ -161,10 +163,11 @@ export async function POST(req: NextRequest) {
 
     const isRealCard = existingVccCard?.codego_card_id && !existingVccCard.codego_card_id.startsWith('mock_cg_');
     if (isRealCard) {
-      const liveCard = await provider.getCard(existingVccCard!.codego_card_id!);
+      const cardProvider = await getCardProviderForCard(existingVccCard!.codego_card_id!);
+      const liveCard = await cardProvider.getCard(existingVccCard!.codego_card_id!);
       if (liveCard) {
         return NextResponse.json(
-          _makeCardResponse(_toCardData(liveCard), provider.name, liveCard.isMock)
+          _makeCardResponse(_toCardData(liveCard), cardProvider.name, liveCard.isMock)
         );
       }
       return NextResponse.json(
@@ -274,12 +277,11 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  const provider = getCardProvider();
   const { searchParams } = new URL(req.url);
   const walletAddress = searchParams.get('walletAddress');
   if (!walletAddress) {
     return NextResponse.json(
-      createErrorResponse({ code: 'INVALID_INPUT', message: 'walletAddress query param required', statusCode: 400 }, provider.name),
+      createErrorResponse({ code: 'INVALID_INPUT', message: 'walletAddress query param required', statusCode: 400 }, 'system'),
       { status: 400 }
     );
   }
@@ -295,17 +297,40 @@ export async function GET(req: NextRequest) {
     .select('*')
     .eq('wallet_address', walletAddress.toLowerCase())
     .order('created_at', { ascending: false });
+    
+  const { data: providerCardsDb } = await supabase
+    .from('provider_cards')
+    .select('provider_name')
+    .eq('wallet_address', walletAddress.toLowerCase());
+
+  const uniqueProviders = Array.from(new Set([
+    ...(cards || []).map(c => c.provider_name).filter(Boolean),
+    ...(providerCardsDb || []).map(c => c.provider_name).filter(Boolean),
+  ]));
 
   let providerCards: any[] = [];
   if (kycData?.codego_cardholder_id) {
-    try {
-      providerCards = await provider.listCards(kycData.codego_cardholder_id);
-    } catch (err: any) {
-      ProviderLogger.warn(provider.name, 'GET /api/cards', `Failed to list provider cards: ${err.message}`);
+    if (uniqueProviders.length > 0) {
+      for (const pName of uniqueProviders) {
+        try {
+          const p = getCardProviderByName(pName);
+          const pCards = await p.listCards(kycData.codego_cardholder_id);
+          providerCards = providerCards.concat(pCards);
+        } catch (err: any) {
+          ProviderLogger.warn(pName, 'GET /api/cards', `Failed to list provider cards: ${err.message}`);
+        }
+      }
+    } else {
+      try {
+        const defaultProvider = getCardProvider();
+        providerCards = await defaultProvider.listCards(kycData.codego_cardholder_id);
+      } catch (err: any) {
+        ProviderLogger.warn('system', 'GET /api/cards', `Failed to list provider cards: ${err.message}`);
+      }
     }
   }
 
   return NextResponse.json(
-    createSuccessResponse({ cards: cards || [], providerCards, activeProvider: provider.name }, provider.name)
+    createSuccessResponse({ cards: cards || [], providerCards, activeProvider: 'multi' }, 'multi')
   );
 }

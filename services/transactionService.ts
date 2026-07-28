@@ -13,6 +13,7 @@ const formatEther = (ethers as any).formatEther ?? ethers.utils.formatEther;
 const formatUnits = (ethers as any).formatUnits ?? ethers.utils.formatUnits;
 import AsyncStorageNative from '@react-native-async-storage/async-storage';
 import { etherscanService, ChainTx, TokenTx } from './etherscanService';
+import { alchemyService, AlchemyTransfer } from './alchemyService';
 import { tronService, TronTx } from './tronService';
 
 const AsyncStorage = Platform.OS === 'web'
@@ -202,6 +203,43 @@ function fromChainTx(tx: ChainTx | TokenTx, walletAddress: string, ethPriceUsd: 
   };
 }
 
+function fromAlchemyTx(tx: AlchemyTransfer, walletAddress: string, ethPriceUsd: number): UnifiedTx {
+  const isSend = tx.from.toLowerCase() === walletAddress.toLowerCase();
+  let tokenName = tx.asset || 'ETH';
+  let amountStr = '0.00';
+  let usd = '0.00';
+
+  if (tx.value !== null) {
+    const rawAmt = tx.value;
+    amountStr = rawAmt.toFixed(rawAmt < 1 ? 4 : 2);
+    usd = (rawAmt * (tokenName === 'INRX' ? 0.012 : (tokenName === 'ETH' ? ethPriceUsd : 1.0))).toFixed(2);
+  } else if (tx.rawContract?.value && tx.rawContract?.decimal) {
+    const decimals = parseInt(tx.rawContract.decimal, 16) || 18;
+    const rawAmt = parseFloat(formatUnits(tx.rawContract.value, decimals));
+    amountStr = rawAmt.toFixed(rawAmt < 1 ? 4 : 2);
+    usd = (rawAmt * (tokenName === 'INRX' ? 0.012 : 1.0)).toFixed(2);
+  }
+
+  const date = tx.metadata?.blockTimestamp || new Date().toISOString();
+  const label = (tx.category === 'external' || tx.category === 'internal')
+    ? (isSend ? 'Sent ETH' : 'Received ETH')
+    : (isSend ? `Sent ${tokenName}` : `Received ${tokenName}`);
+
+  return {
+    id: tx.hash + (tx.category === 'internal' ? '_int' : ''),
+    type: isSend ? 'send' : 'receive',
+    amount: amountStr,
+    token: tokenName,
+    usdValue: usd,
+    date,
+    status: 'completed', // Alchemy only returns successful transfers
+    from: isSend ? 'You' : tx.from,
+    to: isSend ? tx.to : 'You',
+    hash: tx.hash,
+    label,
+  };
+}
+
 // ─── Main service ─────────────────────────────────────────────────────────────
 export const transactionService = {
   async fetchAll(
@@ -304,20 +342,32 @@ export const transactionService = {
       return { txs: merged, fromCache: tronFailed && fromTron.length === 0 };
     }
 
-    // 2. Try Etherscan (ETH + Tokens)
-    let chainTxs: ChainTx[] = [];
-    let tokenTxs: TokenTx[] = [];
-    let etherscanFailed = false;
+    // 2. Try Alchemy Transfers API
+    let alchemyTxs: AlchemyTransfer[] = [];
+    let fetchFailed = false;
+    let fromChain: UnifiedTx[] = [];
+
     try {
-      chainTxs = await etherscanService.fetchTransactions(walletAddress, network);
-      tokenTxs = await etherscanService.fetchTokenTransactions(walletAddress, network);
+      alchemyTxs = await alchemyService.fetchAllTransfers(walletAddress, network);
+      if (alchemyTxs.length > 0) {
+        fromChain = alchemyTxs.map(tx => fromAlchemyTx(tx, walletAddress, ethPriceUsd));
+      }
     } catch {
-      etherscanFailed = true;
+      fetchFailed = true;
     }
 
-    const fromChain = [...chainTxs, ...tokenTxs]
-      .filter(tx => tx.value !== '0')
-      .map(tx => fromChainTx(tx, walletAddress, ethPriceUsd));
+    // Fallback to Etherscan if Alchemy returned 0 or doesn't support the network (like BSC)
+    if (fromChain.length === 0 && !fetchFailed) {
+      try {
+        const chainTxs = await etherscanService.fetchTransactions(walletAddress, network);
+        const tokenTxs = await etherscanService.fetchTokenTransactions(walletAddress, network);
+        fromChain = [...chainTxs, ...tokenTxs]
+          .filter(tx => tx.value !== '0')
+          .map(tx => fromChainTx(tx, walletAddress, ethPriceUsd));
+      } catch {
+        fetchFailed = true;
+      }
+    }
 
     // 3. Merge — chain txs first (confirmed status), local fills the rest
     const seen   = new Set<string>();
@@ -332,8 +382,8 @@ export const transactionService = {
       if (!seen.has(key)) { seen.add(key); merged.push(tx); }
     }
 
-    // 4. If Etherscan failed, pull any previously cached chain txs and add them
-    if (etherscanFailed) {
+    // 4. If fetch failed, pull any previously cached chain txs and add them
+    if (fetchFailed) {
       try {
         const raw = await AsyncStorage.getItem(CACHE_KEY);
         if (raw) {
@@ -349,12 +399,12 @@ export const transactionService = {
     // 5. Sort descending
     merged.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-    // 6. Persist cache only when Etherscan succeeded
-    if (!etherscanFailed && merged.length > 0) {
+    // 6. Persist cache only when fetch succeeded
+    if (!fetchFailed && merged.length > 0) {
       AsyncStorage.setItem(CACHE_KEY, JSON.stringify(merged)).catch(() => {});
     }
 
-    const fromCache = etherscanFailed && fromChain.length === 0;
+    const fromCache = fetchFailed && fromChain.length === 0;
     return { txs: merged, fromCache };
   },
 
@@ -423,17 +473,42 @@ export const transactionService = {
     }
 
     try {
-      // Fetch all 3 Etherscan endpoints in parallel instead of sequentially
-      const [chainTxs, tokenTxs, internalTxs] = await Promise.all([
-        etherscanService.fetchTransactions(walletAddress, network),
-        etherscanService.fetchTokenTransactions(walletAddress, network),
-        etherscanService.fetchInternalTransactions(walletAddress, network),
-      ]);
+      let fromChainTxs: LocalTx[] = [];
+      const alchemyTxs = await alchemyService.fetchAllTransfers(walletAddress, network);
+      
+      if (alchemyTxs.length > 0) {
+        fromChainTxs = alchemyTxs.map(tx => {
+          const isOut = tx.from.toLowerCase() === walletAddress.toLowerCase();
+          let tokenName = tx.asset || 'ETH';
+          let amt = 0;
+          let amountStr = '0.00';
+          if (tx.value !== null) {
+             amt = tx.value;
+          } else if (tx.rawContract?.value && tx.rawContract?.decimal) {
+             const decimals = parseInt(tx.rawContract.decimal, 16) || 18;
+             amt = parseFloat(formatUnits(tx.rawContract.value, decimals));
+          }
+          amountStr = amt.toFixed(amt < 1 ? 4 : 2);
+          const usd = (amt * (tokenName === 'INRX' ? 0.012 : (tokenName === 'ETH' ? ethPriceUsd : 1.0))).toFixed(2);
+          const rawDate = tx.metadata?.blockTimestamp ? new Date(tx.metadata.blockTimestamp).getTime() : Date.now();
 
-      this.isLockedOut = false;
-      this.lockoutExpiry = 0;
-
-      // Load existing local txs
+          return {
+            id: tx.hash + (tx.category === 'internal' ? '_int' : ''),
+            type: isOut ? 'sent' : 'received',
+            coin: tokenName,
+            amount: amountStr,
+            usdValue: usd,
+            address: isOut ? tx.to : tx.from,
+            status: 'success',
+            date: new Date(rawDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            rawDate,
+            txHash: tx.hash,
+            isInternal: tx.category === 'internal',
+            contractAddress: tx.rawContract?.address || undefined,
+          };
+        });
+      }
+      // Load existing local txs if we haven't already
       const raw = await AsyncStorage.getItem('cw_transactions').catch(() => null);
       let localTxs: LocalTx[] = [];
       try { const p = raw ? JSON.parse(String(raw)) : []; localTxs = Array.isArray(p) ? p : []; } catch (_e) {}
@@ -442,75 +517,95 @@ export const transactionService = {
       const knownHashes = new Set(localTxs.map(t => t.txHash).filter(Boolean));
       const newTxs: LocalTx[] = [];
 
-      // 1. Process ETH Txs (Incoming & Outgoing)
-      for (const tx of chainTxs) {
-        if (tx.isError !== '0' || knownHashes.has(tx.hash)) continue;
-        const isOut  = tx.from.toLowerCase() === walletAddress.toLowerCase();
-        const ethAmt = parseFloat(formatEther(tx.value || '0'));
-        if (ethAmt <= 0) continue;
-        newTxs.push({
-          id:       tx.hash,
-          type:     isOut ? 'sent' : 'received',
-          coin:     'ETH',
-          amount:   ethAmt.toFixed(6),
-          usdValue: (ethAmt * ethPriceUsd).toFixed(2),
-          address:  isOut ? tx.to : tx.from,
-          status:   'success',
-          date:     new Date(parseInt(tx.timeStamp, 10) * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-          rawDate:  parseInt(tx.timeStamp, 10) * 1000,
-          txHash:   tx.hash,
-        });
-        knownHashes.add(tx.hash);
-      }
+      // If Alchemy provided fromChainTxs, add those
+      if (fromChainTxs.length > 0) {
+        for (const tx of fromChainTxs) {
+           if (knownHashes.has(tx.txHash!)) continue;
+           if (parseFloat(tx.amount) <= 0) continue;
+           newTxs.push(tx);
+           knownHashes.add(tx.txHash!);
+        }
+      } else {
+        // Fallback to Etherscan
+        const [chainTxs, tokenTxs, internalTxs] = await Promise.all([
+          etherscanService.fetchTransactions(walletAddress, network),
+          etherscanService.fetchTokenTransactions(walletAddress, network),
+          etherscanService.fetchInternalTransactions(walletAddress, network),
+        ]);
 
-      // 1.5 Process Internal ETH Txs (Swaps/Contract Income)
-      for (const tx of internalTxs) {
-        if (tx.isError !== '0' || knownHashes.has(tx.hash)) continue;
-        const isOut   = tx.from.toLowerCase() === walletAddress.toLowerCase();
-        const ethAmt2 = parseFloat(formatEther(tx.value || '0'));
-        if (ethAmt2 <= 0) continue;
-        newTxs.push({
-          id:         tx.hash + '_int',
-          type:       isOut ? 'sent' : 'received',
-          coin:       'ETH',
-          amount:     ethAmt2.toFixed(6),
-          usdValue:   (ethAmt2 * ethPriceUsd).toFixed(2),
-          address:    isOut ? tx.to : tx.from,
-          status:     'success',
-          date:       new Date(parseInt(tx.timeStamp, 10) * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-          rawDate:    parseInt(tx.timeStamp, 10) * 1000,
-          txHash:     tx.hash,
-          isInternal: true,
-        });
-        knownHashes.add(tx.hash);
-      }
+        this.isLockedOut = false;
+        this.lockoutExpiry = 0;
 
-      // 2. Process Token Txs (Check for CUSTOM / INRX)
-      for (const tx of tokenTxs) {
-        if (knownHashes.has(tx.hash)) continue;
-        const isOut = tx.from.toLowerCase() === walletAddress.toLowerCase();
-        const isCustom = tx.contractAddress?.toLowerCase() === CUSTOM_TOKEN_ADDRESS;
+        // 1. Process ETH Txs (Incoming & Outgoing)
+        for (const tx of chainTxs) {
+          if (tx.isError !== '0' || knownHashes.has(tx.hash)) continue;
+          const isOut  = tx.from.toLowerCase() === walletAddress.toLowerCase();
+          const ethAmt = parseFloat(formatEther(tx.value || '0'));
+          if (ethAmt <= 0) continue;
+          newTxs.push({
+            id:       tx.hash,
+            type:     isOut ? 'sent' : 'received',
+            coin:     'ETH',
+            amount:   ethAmt.toFixed(6),
+            usdValue: (ethAmt * ethPriceUsd).toFixed(2),
+            address:  isOut ? tx.to : tx.from,
+            status:   'success',
+            date:     new Date(parseInt(tx.timeStamp, 10) * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            rawDate:  parseInt(tx.timeStamp, 10) * 1000,
+            txHash:   tx.hash,
+          });
+          knownHashes.add(tx.hash);
+        }
 
-        const decimals = parseInt(tx.tokenDecimal || '18', 10);
-        const amt = parseFloat(formatUnits(tx.value || '0', decimals));
-        if (amt <= 0) continue;
+        // 1.5 Process Internal ETH Txs (Swaps/Contract Income)
+        for (const tx of internalTxs) {
+          if (tx.isError !== '0' || knownHashes.has(tx.hash)) continue;
+          const isOut   = tx.from.toLowerCase() === walletAddress.toLowerCase();
+          const ethAmt2 = parseFloat(formatEther(tx.value || '0'));
+          if (ethAmt2 <= 0) continue;
+          newTxs.push({
+            id:         tx.hash + '_int',
+            type:       isOut ? 'sent' : 'received',
+            coin:       'ETH',
+            amount:     ethAmt2.toFixed(6),
+            usdValue:   (ethAmt2 * ethPriceUsd).toFixed(2),
+            address:    isOut ? tx.to : tx.from,
+            status:     'success',
+            date:       new Date(parseInt(tx.timeStamp, 10) * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            rawDate:    parseInt(tx.timeStamp, 10) * 1000,
+            txHash:     tx.hash,
+            isInternal: true,
+          });
+          knownHashes.add(tx.hash);
+        }
 
-        const tokenSymbol = isCustom ? 'INRX' : (tx.tokenSymbol || 'TOKEN');
+        // 2. Process Token Txs (Check for CUSTOM / INRX)
+        for (const tx of tokenTxs) {
+          if (knownHashes.has(tx.hash)) continue;
+          const isOut = tx.from.toLowerCase() === walletAddress.toLowerCase();
+          const isCustom = tx.contractAddress?.toLowerCase() === CUSTOM_TOKEN_ADDRESS;
 
-        newTxs.push({
-          id:      tx.hash + (tx.nonce || ''),
-          type:    isOut ? 'sent' : 'received',
-          coin:    tokenSymbol,
-          amount:  amt.toFixed(amt < 1 ? 4 : 2),
-          usdValue: (amt * (tokenSymbol === 'INRX' ? 0.012 : 1.0)).toFixed(2),
-          address: isOut ? tx.to : tx.from,
-          status:  (tx.isError === '1' || tx.txreceipt_status === '0') ? 'failed' : 'success',
-          date:    new Date(parseInt(tx.timeStamp, 10) * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-          rawDate: parseInt(tx.timeStamp, 10) * 1000,
-          txHash:  tx.hash,
-          contractAddress: tx.contractAddress,
-        });
-        knownHashes.add(tx.hash);
+          const decimals = parseInt(tx.tokenDecimal || '18', 10);
+          const amt = parseFloat(formatUnits(tx.value || '0', decimals));
+          if (amt <= 0) continue;
+
+          const tokenSymbol = isCustom ? 'INRX' : (tx.tokenSymbol || 'TOKEN');
+
+          newTxs.push({
+            id:      tx.hash + (tx.nonce || ''),
+            type:    isOut ? 'sent' : 'received',
+            coin:    tokenSymbol,
+            amount:  amt.toFixed(amt < 1 ? 4 : 2),
+            usdValue: (amt * (tokenSymbol === 'INRX' ? 0.012 : 1.0)).toFixed(2),
+            address: isOut ? tx.to : tx.from,
+            status:  (tx.isError === '1' || tx.txreceipt_status === '0') ? 'failed' : 'success',
+            date:    new Date(parseInt(tx.timeStamp, 10) * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            rawDate: parseInt(tx.timeStamp, 10) * 1000,
+            txHash:  tx.hash,
+            contractAddress: tx.contractAddress,
+          });
+          knownHashes.add(tx.hash);
+        }
       }
 
       if (newTxs.length > 0) {

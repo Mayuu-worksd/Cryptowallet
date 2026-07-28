@@ -4,9 +4,15 @@ if (!ALCHEMY_KEY) {
   console.warn('EXPO_PUBLIC_ALCHEMY_KEY is missing. Run: eas secret:create --scope project --name EXPO_PUBLIC_ALCHEMY_KEY --value <your_key>');
 }
 
-const sepoliaRpc         = 'https://ethereum-sepolia-rpc.publicnode.com';
-const ethRpc             = ALCHEMY_KEY ? `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`        : 'https://cloudflare-eth.com';
-const polygonRpc         = ALCHEMY_KEY ? `https://polygon-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`    : 'https://polygon-rpc.com';
+const sepoliaRpc         = ALCHEMY_KEY
+  ? `https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`
+  : 'https://ethereum-sepolia-rpc.publicnode.com';
+const ethRpc             = ALCHEMY_KEY
+  ? `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`
+  : 'https://ethereum.publicnode.com';
+const polygonRpc         = ALCHEMY_KEY
+  ? `https://polygon-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`
+  : 'https://polygon-bor-rpc.publicnode.com';
 const arbitrumRpc        = ALCHEMY_KEY ? `https://arb-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`        : 'https://arb1.arbitrum.io/rpc';
 const polygonAmoyRpc     = ALCHEMY_KEY ? `https://polygon-amoy.g.alchemy.com/v2/${ALCHEMY_KEY}`       : 'https://rpc-amoy.polygon.technology';
 const arbitrumSepoliaRpc = ALCHEMY_KEY ? `https://arb-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`        : 'https://sepolia-rollup.arbitrum.io/rpc';

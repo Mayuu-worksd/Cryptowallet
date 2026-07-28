@@ -6,6 +6,7 @@ import { walletService } from '../services/walletService';
 import { ethereumService } from '../services/ethereumService';
 import { getWalletBalances, saveTokenBalances } from '../services/balanceService';
 import { storageService } from '../services/storageService';
+import { assetDiscoveryService, DiscoveredAsset } from '../services/assetDiscoveryService';
 import getSymbolFromCurrency from 'currency-symbol-map';
 import { marketService, NewsItem } from '../services/marketService';
 import { hasPinSetup, clearPin } from '../services/pinService';
@@ -146,6 +147,14 @@ type WalletContextType = {
   kycFullName: string;
   adminNetworks: any[];
   bridgeINRX: (sourceNetwork: string, destChainId: number, amount: string, recipientAddress: string) => Promise<{ success: boolean; error?: string; txHash?: string }>;
+  customTokens: any[];
+  addCustomToken: (token: any) => Promise<void>;
+  recoverableAssets: DiscoveredAsset[];
+  isScanningRecovery: boolean;
+  triggerRecoveryScan: (force?: boolean) => Promise<void>;
+  importRecoveredAsset: (asset: DiscoveredAsset) => Promise<void>;
+  ignoreRecoveredAsset: (asset: DiscoveredAsset) => Promise<void>;
+  recoverAsset: (asset: DiscoveredAsset, targetAddress: string) => Promise<boolean>;
 };
 
 const WalletContext = createContext<WalletContextType>({} as WalletContextType);
@@ -154,7 +163,7 @@ const WalletContext = createContext<WalletContextType>({} as WalletContextType);
 // Using 0 ensures the UI shows a loading state rather than stale hardcoded values.
 const FALLBACK_PRICES: Record<string, CoinPrice> = {
   ...Object.fromEntries(Object.keys(SUPPORTED_TOKENS).map(k => [k, { usd: 0, change24h: 0 }])),
-  INRX: { usd: 0.012, change24h: 0.15 }
+  INRX: { usd: 0.012, change24h: 0.15 },  // 1 INRX = 1 INR ≈ $0.012, not on CoinGecko
 };
 
 export function WalletProvider({ children }: { children: ReactNode }) {
@@ -186,7 +195,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [enabledCardCurrencies, setEnabledCardCurrenciesState] = useState<Record<string, boolean>>(() => {
     // Build a fully explicit default — every token and fiat currency enabled
     const defaults: Record<string, boolean> = {};
-    ['USDT','USDC','ETH','BTC','BNB','TRX','SOL','XRP','TON','SUI'].forEach(t => { defaults[t] = true; });
+    ['USDT','USDC','ETH','BTC','BNB','TRX','SOL','XRP','TON','SUI','INRX'].forEach(t => { defaults[t] = true; });
     ['USD','EUR','GBP','INR','AED','AUD','SGD','RUB','BHD','VND','SAR','KWD','THB','HKD','JPY'].forEach(f => { defaults[f] = true; });
     return defaults;
   });
@@ -218,6 +227,120 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [isNewsLoading,   setIsNewsLoading] = useState(true);
   const [isGlobalLoading, setIsGlobalLoading] = useState(false);
   const [globalLoadingMessage, setGlobalLoadingMessage] = useState('LOADING');
+  const [customTokens, setCustomTokens] = useState<any[]>([]);
+
+  useEffect(() => {
+    storageService.getCustomTokens().then(tokens => {
+      if (tokens && tokens.length > 0) setCustomTokens(tokens);
+    }).catch(() => {});
+  }, []);
+
+  const addCustomToken = useCallback(async (token: any) => {
+    setCustomTokens(prev => {
+      // Avoid duplicates based on contract address and network
+      if (prev.some(t => t.contractAddress.toLowerCase() === token.contractAddress.toLowerCase() && t.network === token.network)) {
+        return prev;
+      }
+      const updated = [...prev, token];
+      storageService.saveCustomTokens(updated).catch(() => {});
+      return updated;
+    });
+  }, []);
+
+  const [recoverableAssets, setRecoverableAssets] = useState<DiscoveredAsset[]>([]);
+  const [isScanningRecovery, setIsScanningRecovery] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem('cw_recoverable_assets').then(val => {
+      if (val) setRecoverableAssets(JSON.parse(val));
+    }).catch(() => {});
+  }, []);
+
+  const triggerRecoveryScan = useCallback(async (force = false) => {
+    if (!walletAddress || isScanningRecovery) return;
+    setIsScanningRecovery(true);
+    try {
+      const discovered = await assetDiscoveryService.autoScanAddress(walletAddress, network);
+      
+      const currentIds = new Set(recoverableAssets.map(a => a.id));
+      const newAssets = discovered.filter(a => !currentIds.has(a.id));
+
+      if (newAssets.length > 0) {
+        newAssets.forEach(a => {
+          notificationService.notifyRecoverableAsset(a.symbol, a.network);
+        });
+      }
+
+      setRecoverableAssets(discovered);
+      await AsyncStorage.setItem('cw_recoverable_assets', JSON.stringify(discovered));
+    } catch (e) {
+      console.warn('Recovery scan failed:', e);
+    } finally {
+      setIsScanningRecovery(false);
+    }
+  }, [walletAddress, network, recoverableAssets, isScanningRecovery]);
+
+  useEffect(() => {
+    if (!walletAddress) return;
+    triggerRecoveryScan();
+    const timer = setInterval(() => {
+      triggerRecoveryScan();
+    }, 300000);
+    return () => clearInterval(timer);
+  }, [walletAddress]);
+
+  const importRecoveredAsset = useCallback(async (asset: DiscoveredAsset) => {
+    await addCustomToken({
+      contractAddress: asset.contractAddress,
+      symbol: asset.symbol,
+      decimals: asset.decimals,
+      network: asset.network,
+      isCustom: true
+    });
+    setRecoverableAssets(prev => {
+      const updated = prev.filter(a => a.id !== asset.id);
+      AsyncStorage.setItem('cw_recoverable_assets', JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+    refreshBalance();
+  }, [addCustomToken, refreshBalance]);
+
+  const ignoreRecoveredAsset = useCallback(async (asset: DiscoveredAsset) => {
+    setRecoverableAssets(prev => {
+      const updated = prev.filter(a => a.id !== asset.id);
+      AsyncStorage.setItem('cw_recoverable_assets', JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+  }, []);
+
+  const recoverAsset = useCallback(async (asset: DiscoveredAsset, targetAddress: string): Promise<boolean> => {
+    const privateKey = await storageService.getPrivateKey();
+    if (!privateKey) return false;
+    
+    setIsGlobalLoading(true);
+    setGlobalLoadingMessage(`Recovering ${asset.symbol}...`);
+    try {
+      const tx = await ethereumService.sendERC20(
+        privateKey,
+        targetAddress,
+        asset.balance.toString(),
+        asset.contractAddress,
+        asset.decimals,
+        asset.network
+      );
+      if (tx.success) {
+        setRecoverableAssets(prev => {
+          const updated = prev.filter(a => a.id !== asset.id);
+          AsyncStorage.setItem('cw_recoverable_assets', JSON.stringify(updated)).catch(() => {});
+          return updated;
+        });
+        setIsGlobalLoading(false);
+        return true;
+      }
+    } catch {}
+    setIsGlobalLoading(false);
+    return false;
+  }, []);
 
   const [dataLoaded,     setDataLoaded]     = useState(false);
   const [isSyncing,      setIsSyncing]      = useState(false);
@@ -358,6 +481,22 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         if (((balancesRef.current as any)?.USDT_TRC20 ?? 0) > 0 && (merged as any).USDT_TRC20 === 0) (merged as any).USDT_TRC20 = (balancesRef.current as any).USDT_TRC20;
         if (((balancesRef.current as any)?.USDC_TRC20 ?? 0) > 0 && (merged as any).USDC_TRC20 === 0) (merged as any).USDC_TRC20 = (balancesRef.current as any).USDC_TRC20;
       }
+
+      // Fetch custom token balances dynamically
+      try {
+        const customT = await storageService.getCustomTokens();
+        const customPromises = customT.filter((t: any) => t.network === net).map(async (t: any) => {
+          const bal = await ethereumService.getCustomTokenBalance(fetchAddr, t.contractAddress, net);
+          return { symbol: t.symbol, bal };
+        });
+        const customResults = await Promise.all(customPromises);
+        customResults.forEach((r: any) => {
+          merged[r.symbol] = r.bal;
+        });
+      } catch (e) {
+        console.warn('Failed to fetch custom token balances:', e);
+      }
+
       setEthBalance(Number(merged.ETH || 0).toFixed(6));
       ethBalanceRef.current = Number(merged.ETH || 0).toFixed(6);
       setBalances(merged);
@@ -436,7 +575,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       // Re-apply admin currency config on every refresh — Supabase only, no AsyncStorage
       {
         const base: Record<string, boolean> = {};
-        ['USDT','USDC','ETH','BTC','BNB','TRX','SOL','XRP','TON','SUI'].forEach(t => { base[t] = true; });
+        ['USDT','USDC','ETH','BTC','BNB','TRX','SOL','XRP','TON','SUI','INRX'].forEach(t => { base[t] = true; });
         ['USD','EUR','GBP','INR','AED','AUD','SGD','RUB','BHD','VND','SAR','KWD','THB','HKD','JPY'].forEach(f => { base[f] = true; });
         if (platformCurrencies && Object.keys(platformCurrencies).length > 0) {
           Object.entries(platformCurrencies).forEach(([k, v]) => { base[k] = v; });
@@ -996,7 +1135,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             // No AsyncStorage involved — Supabase is the only source of truth.
             {
               const base: Record<string, boolean> = {};
-              ['USDT','USDC','ETH','BTC','BNB','TRX','SOL','XRP','TON','SUI'].forEach(t => { base[t] = true; });
+              ['USDT','USDC','ETH','BTC','BNB','TRX','SOL','XRP','TON','SUI','INRX'].forEach(t => { base[t] = true; });
               ['USD','EUR','GBP','INR','AED','AUD','SGD','RUB','BHD','VND','SAR','KWD','THB','HKD','JPY'].forEach(f => { base[f] = true; });
               if (platformCurrencies && Object.keys(platformCurrencies).length > 0) {
                 Object.entries(platformCurrencies).forEach(([k, v]) => { base[k] = v; });
@@ -1366,7 +1505,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           adminSettingsService.invalidate(key);
           if (key === 'card_currencies_config') {
             const base: Record<string, boolean> = {};
-            ['USDT','USDC','ETH','BTC','BNB','TRX','SOL','XRP','TON','SUI'].forEach(t => { base[t] = true; });
+            ['USDT','USDC','ETH','BTC','BNB','TRX','SOL','XRP','TON','SUI','INRX'].forEach(t => { base[t] = true; });
             ['USD','EUR','GBP','INR','AED','AUD','SGD','RUB','BHD','VND','SAR','KWD','THB','HKD','JPY'].forEach(f => { base[f] = true; });
             if (value && typeof value === 'object') {
               Object.entries(value).forEach(([k, v]) => { base[k] = v as boolean; });
@@ -1793,7 +1932,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       await storageService.clearCardDetails();
 
       if (isNew || isSwitching) {
-        setBalances({ USDT: 0, USDC: 0, ETH: 0, BTC: 0, SOL: 0, BNB: 0, XRP: 0, TON: 0, TRX: 0, SUI: 0 });
+        setBalances({ USDT: 0, USDC: 0, ETH: 0, BTC: 0, SOL: 0, BNB: 0, XRP: 0, TON: 0, TRX: 0, SUI: 0, INRX: 0 });
         setEthBalance('0.0');
         setLockedBalance({});
         setCardCreated(false);
@@ -1912,7 +2051,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           {
             const importPlatformCurrencies = await adminSettingsService.getSetting<Record<string, boolean>>('card_currencies_config', {});
             const base: Record<string, boolean> = {};
-            ['USDT','USDC','ETH','BTC','BNB','TRX','SOL','XRP','TON','SUI'].forEach(t => { base[t] = true; });
+            ['USDT','USDC','ETH','BTC','BNB','TRX','SOL','XRP','TON','SUI','INRX'].forEach(t => { base[t] = true; });
             ['USD','EUR','GBP','INR','AED','AUD','SGD','RUB','BHD','VND','SAR','KWD','THB','HKD','JPY'].forEach(f => { base[f] = true; });
             if (importPlatformCurrencies && Object.keys(importPlatformCurrencies).length > 0) {
               Object.entries(importPlatformCurrencies).forEach(([k, v]) => { base[k] = v; });
@@ -2641,7 +2780,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     userUid,
     kycEmail,
     kycFullName,
-    adminNetworks
+    adminNetworks,
+    customTokens,
+    addCustomToken,
+    recoverableAssets,
+    isScanningRecovery,
+    triggerRecoveryScan,
+    importRecoveredAsset,
+    ignoreRecoveredAsset,
+    recoverAsset
   }), [
     isDarkMode, toggleTheme, accountType, accountTypeSet, setAccountType,
     p2pCountry, p2pCurrency, setP2PPreferences, lockedBalance, lockBalance, unlockBalance, resetLockedBalances, creditP2PBalance,
@@ -2661,7 +2808,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     userUid,
     kycEmail,
     kycFullName,
-    adminNetworks
+    adminNetworks,
+    customTokens,
+    addCustomToken,
+    recoverableAssets,
+    isScanningRecovery,
+    triggerRecoveryScan,
+    importRecoveredAsset,
+    ignoreRecoveredAsset,
+    recoverAsset
   ]);
 
   return (

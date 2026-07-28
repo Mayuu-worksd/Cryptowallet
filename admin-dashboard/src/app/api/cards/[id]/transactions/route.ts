@@ -4,7 +4,7 @@
  * Generic provider-independent route to get card transactions.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { getCardProvider } from '@/lib/providers';
+import { getCardProviderForCard } from '@/lib/providers';
 
 export async function GET(
   req: NextRequest,
@@ -17,7 +17,7 @@ export async function GET(
     return NextResponse.json({ error: 'Card ID is required' }, { status: 400 });
   }
 
-  const provider = getCardProvider();
+  const provider = await getCardProviderForCard(providerCardId);
   const result   = await provider.getTransactions(providerCardId, {
     limit: 50,
   });

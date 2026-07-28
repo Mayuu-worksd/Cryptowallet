@@ -4,7 +4,7 @@
  * Generic provider-independent route to get card statement.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { getCardProvider } from '@/lib/providers';
+import { getCardProviderForCard } from '@/lib/providers';
 
 export async function GET(
   request: Request,
@@ -19,7 +19,7 @@ export async function GET(
   const startDate = searchParams.get('start_date') ?? undefined;
   const endDate   = searchParams.get('end_date')   ?? undefined;
 
-  const provider = getCardProvider();
+  const provider = await getCardProviderForCard(providerCardId);
   const result   = await provider.getStatement(providerCardId, { startDate, endDate });
 
   if (result.source === 'provider') {

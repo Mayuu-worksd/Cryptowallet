@@ -12,6 +12,8 @@ const JsonRpcProvider = (ethers as any).JsonRpcProvider ?? ethers.providers.Json
 const ERC20_ABI = [
   'function balanceOf(address owner) view returns (uint256)',
   'function decimals() view returns (uint8)',
+  'function symbol() view returns (string)',
+  'function name() view returns (string)',
 ];
 
 const TOKEN_CONTRACTS: Record<string, Record<string, string>> = {
@@ -34,6 +36,12 @@ const TOKEN_CONTRACTS: Record<string, Record<string, string>> = {
     'Polygon Amoy': '0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582',
     'Arbitrum Sepolia': '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d',
     'Optimism Sepolia': '0x5fd84259d66Cd46123540766Be93DFE6D43130D7',
+  },
+  INRX: {
+    Ethereum: '0x51a5f24560547f587999c331788aC495D40d95ba',
+    Sepolia:  '0x51a5f24560547f587999c331788aC495D40d95ba',
+    Polygon:  '0xd52280A15b30e5EdfFF858E7EC22266604358F26',
+    'Polygon Amoy': '0xd52280A15b30e5EdfFF858E7EC22266604358F26',
   },
   DAI: {
     Ethereum: '0x6B175474E89094C44Da98b954EedeAC495271d0F',
@@ -84,6 +92,10 @@ export const ethereumService = {
   async getTokenBalance(address: string, tokenSymbol: string, network: string = currentNetwork): Promise<number> {
     const contractAddress = TOKEN_CONTRACTS[tokenSymbol]?.[network];
     if (!contractAddress) return 0;
+    return this.getCustomTokenBalance(address, contractAddress, network);
+  },
+
+  async getCustomTokenBalance(address: string, contractAddress: string, network: string = currentNetwork): Promise<number> {
     try {
       const p        = getProvider(network);
       const contract = new ethers.Contract(contractAddress, ERC20_ABI, p);
@@ -94,6 +106,22 @@ export const ethereumService = {
       return parseFloat(formatUnits(raw, Number(decimals)));
     } catch {
       return 0;
+    }
+  },
+
+  async getCustomTokenMetadata(contractAddress: string, network: string = currentNetwork): Promise<{ symbol: string; name: string; decimals: number } | null> {
+    try {
+      const p = getProvider(network);
+      const contract = new ethers.Contract(contractAddress, ERC20_ABI, p);
+      const [symbol, name, decimals] = await Promise.all([
+        contract.symbol().catch(() => 'TOKEN'),
+        contract.name().catch(() => 'Unknown Token'),
+        contract.decimals().catch(() => 18),
+      ]);
+      return { symbol, name, decimals: Number(decimals) };
+    } catch (e) {
+      console.error('Failed to fetch token metadata:', e);
+      return null;
     }
   },
 
@@ -232,6 +260,36 @@ export const ethereumService = {
       const msg = e?.message ?? 'ERC20 transfer failed';
       if (msg.includes('insufficient funds')) return { hash: '', success: false, error: 'Not enough ETH for gas fees' };
       return { hash: '', success: false, error: msg };
+    }
+  },
+
+  async getCustomTokenMetadata(contractAddress: string, network?: string): Promise<{ symbol: string; decimals: number } | null> {
+    try {
+      const p = getProvider(network);
+      const contract = new ethers.Contract(contractAddress, ERC20_ABI, p);
+      const [symbol, decimals] = await Promise.all([
+        contract.symbol(),
+        contract.decimals(),
+      ]);
+      return { symbol, decimals: Number(decimals) };
+    } catch (e) {
+      console.warn('Failed to fetch custom token metadata:', e);
+      return null;
+    }
+  },
+
+  async getCustomTokenBalance(address: string, contractAddress: string, network?: string): Promise<number> {
+    try {
+      const p = getProvider(network);
+      const contract = new ethers.Contract(contractAddress, ERC20_ABI, p);
+      const [bal, decimals] = await Promise.all([
+        contract.balanceOf(address),
+        contract.decimals(),
+      ]);
+      return Number(formatUnits(bal, decimals));
+    } catch (e) {
+      console.warn('Failed to fetch custom token balance:', e);
+      return 0;
     }
   },
 };

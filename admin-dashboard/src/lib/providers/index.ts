@@ -78,5 +78,8 @@ export { KulipaProvider } from './KulipaProvider';
 export { FutureProvider } from './FutureProvider';
 
 // Provider Manager & Factory (primary entry point for route handlers)
-export { ProviderManager, getCardProvider, resetCardProvider } from './ProviderManager';
+export { ProviderManager, getCardProvider, getCardProviderByName, resetCardProvider } from './ProviderManager';
 export type { UnifiedProvider } from './ProviderManager';
+
+// Router
+export { getCardProviderForCard } from './cardRouter';

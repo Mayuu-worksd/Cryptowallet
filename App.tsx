@@ -177,6 +177,9 @@ import SplashScreen from "./screens/SplashScreen";
 import PinScreen from "./screens/PinScreen";
 import { hasPinSetup } from "./services/pinService";
 import CoinChartScreen from "./screens/CoinChartScreen";
+import ImportTokenScreen from "./screens/ImportTokenScreen";
+import RecoveryCenterScreen from "./screens/RecoveryCenterScreen";
+import RecoveryAssistantScreen from "./screens/RecoveryAssistantScreen";
 import OnboardingScreen, {
   shouldShowOnboarding,
 } from "./screens/OnboardingScreen";
@@ -1098,6 +1101,9 @@ function MobileNavigator() {
             <Stack.Screen name="Settings" component={SettingsScreen} />
             <Stack.Screen name="Profile" component={SettingsScreen} />
             <Stack.Screen name="Support" component={SupportScreen} />
+            <Stack.Screen name="ImportToken" component={ImportTokenScreen} />
+            <Stack.Screen name="RecoveryCenter" component={RecoveryCenterScreen} />
+            <Stack.Screen name="RecoveryAssistant" component={RecoveryAssistantScreen} />
             <Stack.Screen
               name="Scan"
               component={ScanScreen}

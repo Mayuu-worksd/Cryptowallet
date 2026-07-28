@@ -41,13 +41,10 @@ const TOKEN_CONTRACTS: Record<string, Record<string, string>> = {
     'Optimism Sepolia': '0x7169D38820dfd117C3FA1f22a697dBA58d90BA06',
   },
   INRX: {
-    Ethereum: '0x51A5F24560547f587999c331788aC495D40d95ba',
-    Sepolia:  '0x51A5F24560547f587999c331788aC495D40d95ba',
+    Sepolia:  '0x51a5f24560547f587999c331788ac495d40d95ba',
+    Ethereum: '0x51a5f24560547f587999c331788ac495d40d95ba',
     Polygon:  '0xd52280A15b30e5EdfFF858E7EC22266604358F26',
-    'Polygon Amoy':     '0xd52280A15b30e5EdfFF858E7EC22266604358F26',
-    'Base Sepolia':     '0x51A5F24560547f587999c331788aC495D40d95ba',
-    'Arbitrum Sepolia': '0x51A5F24560547f587999c331788aC495D40d95ba',
-    'Optimism Sepolia': '0x51A5F24560547f587999c331788aC495D40d95ba',
+    'Polygon Amoy': '0xd52280A15b30e5EdfFF858E7EC22266604358F26',
   },
 };
 
@@ -93,9 +90,22 @@ export type WalletBalances = {
   [key: string]: number;
 };
 
+// Hardcoded reliable public RPCs — used as primary when no Alchemy key, always as fallback
+const RELIABLE_RPCS: Record<string, { url: string; chainId: number; name: string }> = {
+  Sepolia:  { url: 'https://ethereum-sepolia-rpc.publicnode.com', chainId: 11155111, name: 'sepolia' },
+  Ethereum: { url: 'https://ethereum.publicnode.com',             chainId: 1,        name: 'homestead' },
+  Polygon:  { url: 'https://polygon-bor-rpc.publicnode.com',      chainId: 137,      name: 'matic' },
+};
+
 function makeProvider(network: string) {
-  const rpcUrl = RPC_URLS[network] ?? RPC_URLS['Sepolia'];
   const netCfg = NETWORK_CONFIG[network] ?? NETWORK_CONFIG['Sepolia'];
+  const reliable = RELIABLE_RPCS[network];
+  // Always prefer the configured RPC_URL, but if it's missing or matches a known-dead URL, use publicnode
+  const configuredUrl = RPC_URLS[network];
+  const DEAD_URLS = ['https://rpc.sepolia.org', 'https://cloudflare-eth.com'];
+  const rpcUrl = (!configuredUrl || DEAD_URLS.includes(configuredUrl))
+    ? (reliable?.url ?? 'https://ethereum-sepolia-rpc.publicnode.com')
+    : configuredUrl;
   return new StaticJsonRpcProvider(rpcUrl, { chainId: netCfg.chainId, name: netCfg.name });
 }
 
@@ -310,9 +320,15 @@ export async function getWalletBalances(
 
   const [ethRaw, usdcRaw, usdtRaw, inrxRaw] = await Promise.allSettled([
     provider.getBalance(walletAddress),
-    fetchERC20(provider, walletAddress, TOKEN_CONTRACTS.USDC[network], TOKEN_DECIMALS.USDC),
-    fetchERC20(provider, walletAddress, TOKEN_CONTRACTS.USDT[network], TOKEN_DECIMALS.USDT),
-    fetchERC20(provider, walletAddress, TOKEN_CONTRACTS.INRX[network], TOKEN_DECIMALS.INRX),
+    TOKEN_CONTRACTS.USDC[network]
+      ? fetchERC20(provider, walletAddress, TOKEN_CONTRACTS.USDC[network], TOKEN_DECIMALS.USDC)
+      : Promise.resolve(0),
+    TOKEN_CONTRACTS.USDT[network]
+      ? fetchERC20(provider, walletAddress, TOKEN_CONTRACTS.USDT[network], TOKEN_DECIMALS.USDT)
+      : Promise.resolve(0),
+    TOKEN_CONTRACTS.INRX[network]
+      ? fetchERC20(provider, walletAddress, TOKEN_CONTRACTS.INRX[network], TOKEN_DECIMALS.INRX)
+      : Promise.resolve(0),
   ]);
 
   if (ethRaw.status === 'rejected') console.error('[balanceService] ethRaw rejected:', (ethRaw as any).reason);

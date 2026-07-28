@@ -11,6 +11,7 @@ const KEYS = {
   TRON_PRIV_KEY:  'wallet_tron_private_key',
   WALLET_NAME:    'wallet_name',
   VERIFIED_EMAIL: 'cw_verified_email',
+  CUSTOM_TOKENS:  'cw_custom_tokens',
 };
 
 // Web fallback logic
@@ -120,6 +121,26 @@ export const storageService = {
   async hasWallet(): Promise<boolean> {
     const address = await this.getWalletAddress();
     return !!address;
+  },
+
+  async saveCustomTokens(tokens: any[]): Promise<void> {
+    const data = JSON.stringify(tokens);
+    if (Platform.OS === 'web') {
+      localStorage.setItem(KEYS.CUSTOM_TOKENS, data);
+    } else {
+      await AsyncStorage.setItem(KEYS.CUSTOM_TOKENS, data);
+    }
+  },
+
+  async getCustomTokens(): Promise<any[]> {
+    try {
+      const data = Platform.OS === 'web' 
+        ? localStorage.getItem(KEYS.CUSTOM_TOKENS) 
+        : await AsyncStorage.getItem(KEYS.CUSTOM_TOKENS);
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
   },
 
   async saveCardDetails(details: any): Promise<void> {
@@ -243,6 +264,25 @@ export const storageService = {
         SecureStore.deleteItemAsync(KEYS.PRIVATE_KEY),
         SecureStore.deleteItemAsync(KEYS.MNEMONIC),
       ]);
+    }
+  },
+
+  async saveCustomTokens(tokens: any[]): Promise<void> {
+    if (Platform.OS === 'web') {
+      localStorage.setItem(KEYS.CUSTOM_TOKENS, JSON.stringify(tokens));
+    } else {
+      await AsyncStorage.setItem(KEYS.CUSTOM_TOKENS, JSON.stringify(tokens));
+    }
+  },
+
+  async getCustomTokens(): Promise<any[]> {
+    try {
+      const val = Platform.OS === 'web'
+        ? localStorage.getItem(KEYS.CUSTOM_TOKENS)
+        : await AsyncStorage.getItem(KEYS.CUSTOM_TOKENS);
+      return val ? JSON.parse(val) : [];
+    } catch {
+      return [];
     }
   },
 };

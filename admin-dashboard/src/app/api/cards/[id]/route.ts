@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import {
-  getCardProvider,
+  getCardProviderForCard,
   ProviderLogger,
   normalizeProviderError,
   createSuccessResponse,
@@ -18,8 +18,8 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const provider = getCardProvider();
   const { id: cardId } = await params;
+  const provider = await getCardProviderForCard(cardId);
 
   try {
     ProviderLogger.info(provider.name, `GET /api/cards/${cardId}`, 'Fetching live card details');
@@ -51,8 +51,8 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const provider = getCardProvider();
   const { id: cardId } = await params;
+  const provider = await getCardProviderForCard(cardId);
 
   try {
     ProviderLogger.info(provider.name, `DELETE /api/cards/${cardId}`, 'Soft-terminating card');

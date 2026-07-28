@@ -84,7 +84,8 @@ export default function SendScreen({ navigation, route }: any) {
   const { 
     ethBalance, sendETH, isDarkMode, walletAddress, tronAddress, 
     balances, addTx, refreshBalance,
-    applySwapBalances, formatFiat, fiatCurrency, fiatSymbol, adminNetworks
+    applySwapBalances, formatFiat, fiatCurrency, fiatSymbol, adminNetworks,
+    customTokens
   } = useWallet();
   const { prices } = useMarket();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
@@ -160,7 +161,33 @@ export default function SendScreen({ navigation, route }: any) {
   }, [scannedUid, step]);
 
   const activeNets = adminNetworks && adminNetworks.length > 0 ? adminNetworks : FALLBACK_NETWORKS;
-  const compatibleNets = activeNets.filter((n: any) => n.is_active && n.supported_assets && n.supported_assets.includes(selectedAsset));
+  
+  // Create an extended ASSET_LIST that includes custom tokens
+  const extendedAssetList = React.useMemo(() => {
+    const list = [...ASSET_LIST];
+    if (customTokens && customTokens.length > 0) {
+      customTokens.forEach((t: any) => {
+        if (!list.find(a => a.symbol === t.symbol)) {
+          list.push({ symbol: t.symbol, name: t.symbol + ' (Custom)' });
+        }
+      });
+    }
+    return list;
+  }, [customTokens]);
+
+  const compatibleNets = React.useMemo(() => {
+    const standardNets = activeNets.filter((n: any) => n.is_active && n.supported_assets && n.supported_assets.includes(selectedAsset));
+    
+    // If the selected asset is a custom token, add its specific network
+    const isCustomToken = customTokens?.find((t: any) => t.symbol === selectedAsset);
+    if (isCustomToken) {
+      const customNet = activeNets.find((n: any) => n.network_name === isCustomToken.network);
+      if (customNet && !standardNets.find((n: any) => n.network_name === customNet.network_name)) {
+        standardNets.push(customNet);
+      }
+    }
+    return standardNets;
+  }, [activeNets, selectedAsset, customTokens]);
 
   const coinPrice    = prices[selectedAsset]?.usd ?? (selectedAsset === 'ETH' ? 3500 : (selectedAsset === 'BTC' ? 65000 : 1));
   const parsedAmount = parseFloat(amount) || 0;
@@ -389,7 +416,7 @@ export default function SendScreen({ navigation, route }: any) {
       addTx({ type: 'sent', coin: 'SOL', amount: parsedAmount.toFixed(6), usdValue: (parsedAmount * coinPrice).toFixed(2), address, status: 'success', txHash: mockHash });
       applySwapBalances('SOL', parsedAmount, 'SOL', 0);
       refreshBalance();
-    } else if (['USDT', 'USDC', 'INRX'].includes(selectedAsset)) {
+    } else if (['USDT', 'USDC', 'INRX'].includes(selectedAsset) || customTokens?.some((t: any) => t.symbol === selectedAsset)) {
       const privateKey = await storageService.getPrivateKey();
       if (!privateKey) {
         result = { success: false, error: 'Wallet not found' };
@@ -475,11 +502,14 @@ export default function SendScreen({ navigation, route }: any) {
             'BNB Smart Chain':  'BSC',
           };
           const rpcKey = NET_KEY_MAP[netName] ?? netName;
-          const contractAddr = ERC20_CONTRACTS[selectedAsset]?.[netName] ?? ERC20_CONTRACTS[selectedAsset]?.[rpcKey];
+          const customToken = customTokens?.find((t: any) => t.symbol === selectedAsset);
+          const contractAddr = customToken?.contractAddress ?? (ERC20_CONTRACTS[selectedAsset]?.[netName] ?? ERC20_CONTRACTS[selectedAsset]?.[rpcKey]);
+          const decimals = customToken?.decimals ?? (selectedAsset === 'INRX' ? 18 : 6);
+          
           if (!contractAddr) {
             result = { success: false, error: `${selectedAsset} not supported on ${netName}` };
           } else {
-            const erc20Result = await ethereumService.sendERC20(privateKey, address, amount, contractAddr, 6, rpcKey);
+            const erc20Result = await ethereumService.sendERC20(privateKey, address, amount, contractAddr, decimals, rpcKey);
             result = erc20Result;
             if (erc20Result.success) {
               addTx({ type: 'sent', coin: selectedAsset, amount: parsedAmount.toFixed(6), usdValue: (parsedAmount * coinPrice).toFixed(2), address, status: 'success', txHash: erc20Result.hash });
@@ -637,7 +667,7 @@ export default function SendScreen({ navigation, route }: any) {
           </View>
 
           <View style={styles.assetsContainer}>
-            {ASSET_LIST.map(asset => {
+            {extendedAssetList.map(asset => {
               const tokenBal = asset.symbol === 'ETH' ? (parseFloat(ethBalance) || 0) : (balances[asset.symbol] ?? 0);
               const priceVal = prices[asset.symbol]?.usd ?? (asset.symbol === 'ETH' ? 3500 : (asset.symbol === 'BTC' ? 65000 : 1));
               return (

@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import {
-  getCardProvider,
+  getCardProviderForCard,
   ProviderLogger,
   normalizeProviderError,
   createSuccessResponse,
@@ -17,8 +17,8 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const provider = getCardProvider();
   const { id: cardId } = await params;
+  const provider = await getCardProviderForCard(cardId);
 
   try {
     const body = await req.json();

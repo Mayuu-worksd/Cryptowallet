@@ -26,7 +26,7 @@ import { FutureProvider } from './FutureProvider';
 export type UnifiedProvider = CardProvider & FinancialProvider;
 
 class ProviderManagerRegistry {
-  private activeProviderInstance: UnifiedProvider | null = null;
+  private providerInstances: Map<string, UnifiedProvider> = new Map();
 
   /**
    * Helper to check environment variables for a provider.
@@ -55,17 +55,18 @@ class ProviderManagerRegistry {
   }
 
   /**
-   * Resolves and validates credentials, instantiating the requested provider.
+   * Resolves and validates credentials, instantiating the requested provider by name.
    */
-  public loadProvider(): UnifiedProvider {
-    if (this.activeProviderInstance) {
-      return this.activeProviderInstance;
+  public getProviderByName(providerName: string): UnifiedProvider {
+    const normalizedName = (providerName || 'kripicard').toLowerCase();
+
+    if (this.providerInstances.has(normalizedName)) {
+      return this.providerInstances.get(normalizedName)!;
     }
 
-    const providerName = (process.env.CARD_PROVIDER || 'kripicard').toLowerCase();
     let instance: UnifiedProvider;
 
-    switch (providerName) {
+    switch (normalizedName) {
       case 'codego': {
         this.checkCredentials(
           'codego',
@@ -137,26 +138,40 @@ class ProviderManagerRegistry {
       }
 
       default: {
-        ProviderLogger.warn('System', 'loadProvider', `Unknown CARD_PROVIDER="${providerName}". Falling back to KripiCard.`);
+        ProviderLogger.warn('System', 'getProviderByName', `Unknown provider="${normalizedName}". Falling back to KripiCard.`);
         instance = new KripiCardProvider();
       }
     }
 
     ProviderLogger.info(
       instance.name,
-      'loadProvider',
-      `Active provider initialized successfully: ${instance.name}`
+      'getProviderByName',
+      `Provider initialized successfully: ${instance.name}`
     );
 
-    this.activeProviderInstance = instance;
+    this.providerInstances.set(normalizedName, instance);
     return instance;
   }
 
   /**
-   * Returns the currently configured provider name from environment variable.
+   * Returns the primary issuance provider for new cards.
+   */
+  public getIssuanceProvider(): UnifiedProvider {
+    return this.getProviderByName(this.getActiveProviderName());
+  }
+
+  /**
+   * Legacy method maintained for backward compatibility.
+   */
+  public loadProvider(): UnifiedProvider {
+    return this.getIssuanceProvider();
+  }
+
+  /**
+   * Returns the currently configured default issuance provider name.
    */
   public getActiveProviderName(): string {
-    return (process.env.CARD_PROVIDER || 'kripicard').toLowerCase();
+    return (process.env.DEFAULT_ISSUANCE_PROVIDER || process.env.CARD_PROVIDER || 'kripicard').toLowerCase();
   }
 
   /**
@@ -175,7 +190,7 @@ class ProviderManagerRegistry {
   }
 
   /**
-   * Validates if the active provider configuration and credentials are ready for use.
+   * Validates if the default issuance provider is correctly configured.
    */
   public async validateConfiguration(): Promise<{
     provider: string;
@@ -185,7 +200,7 @@ class ProviderManagerRegistry {
   }> {
     const providerName = this.getActiveProviderName();
     try {
-      const provider = this.loadProvider();
+      const provider = this.getIssuanceProvider();
       const health = await provider.healthCheck().catch((err) => ({
         status: 'unhealthy' as const,
         error: err.message || String(err),
@@ -207,22 +222,28 @@ class ProviderManagerRegistry {
   }
 
   /**
-   * Reset the active provider singleton (mostly for testing / provider switching).
+   * Reset all instantiated providers.
    */
   public reset(): void {
-    ProviderLogger.info('System', 'reset', 'Active provider singleton reset.');
-    this.activeProviderInstance = null;
+    ProviderLogger.info('System', 'reset', 'Provider instances cleared.');
+    this.providerInstances.clear();
   }
 }
 
 export const ProviderManager = new ProviderManagerRegistry();
 
 /**
- * Primary helper mapping to ProviderManager for backward compatibility.
- * Route handlers call getCardProvider() without needing to know which provider is active.
+ * Gets the default provider for new issuances.
  */
 export function getCardProvider(): UnifiedProvider {
-  return ProviderManager.loadProvider();
+  return ProviderManager.getIssuanceProvider();
+}
+
+/**
+ * Gets a specific provider instance by name.
+ */
+export function getCardProviderByName(name: string): UnifiedProvider {
+  return ProviderManager.getProviderByName(name);
 }
 
 /**

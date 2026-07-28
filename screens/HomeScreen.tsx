@@ -744,7 +744,7 @@ const STABLE_FALLBACK: Record<string, number> = {
   BTC: 65000,
   USDT: 1,
   USDC: 1,
-  INRX: 0.012,
+  INRX: 0.012,  // 1 INRX = 1 INR ≈ $0.012
   SOL: 150,
   BNB: 600,
   XRP: 0.5,
@@ -824,6 +824,7 @@ export default function HomeScreen({ navigation }: any) {
     formatFiat,
     convertFiat,
     fiatSymbol,
+    customTokens,
   } = useWallet() as any;
   const {
     prices,
@@ -895,8 +896,17 @@ export default function HomeScreen({ navigation }: any) {
       SOL: balances.SOL ?? 0,
       XRP: balances.XRP ?? 0,
       TON: balances.TON ?? 0,
-      SUI: balances.SUI ?? 0,
     };
+    
+    // Inject custom tokens for the current network
+    if (customTokens && customTokens.length > 0) {
+      customTokens.forEach((t: any) => {
+        if (t.network === network) {
+          res[t.symbol] = balances[t.symbol] ?? 0;
+        }
+      });
+    }
+
     console.log('[HomeScreen] Debug Balances:', {
       network,
       balances,
@@ -904,7 +914,7 @@ export default function HomeScreen({ navigation }: any) {
       realBalances: res
     });
     return res;
-  }, [ethBalance, balances, network]);
+  }, [ethBalance, balances, network, customTokens]);
 
   const assetsList = useMemo(() => {
     const isTron = network === "TRON" || network === "TRON Nile";
@@ -930,6 +940,8 @@ export default function HomeScreen({ navigation }: any) {
       .filter((a) => {
         // Always show native token (ETH/TRX) even if balance is 0
         if (a.symbol === nativeSymbol) return true;
+        // Show imported custom tokens even if balance is 0
+        if (customTokens?.some((t: any) => t.symbol === a.symbol && t.network === network)) return true;
         // Hide ETH on TRON/BSC networks
         if (a.symbol === "ETH" && (isTron || isBSC)) return false;
         // Hide TRX on non-TRON networks
@@ -942,7 +954,7 @@ export default function HomeScreen({ navigation }: any) {
       .sort((a, b) => b.usd - a.usd);
 
     return list;
-  }, [realBalances, prices, network]);
+  }, [realBalances, prices, network, customTokens]);
 
   const totalUsd = useMemo(() => {
     const sum = assetsList.reduce(
@@ -1598,29 +1610,53 @@ export default function HomeScreen({ navigation }: any) {
               </Text>
             </View>
           ) : (
-            assetsList.map((a, idx) => (
-              <React.Fragment key={a.symbol}>
-                <TokenRow
-                  symbol={a.symbol}
-                  amount={a.amount}
-                  usd={a.usd}
-                  price={a.price}
-                  change24h={a.change24h}
-                  T={T}
-                  hideBalance={!balanceVisible}
-                  formatFiat={formatFiat}
-                  fiatCurrency={fiatCurrency}
-                  onPress={() =>
-                    navigation.navigate("CoinChart", { symbol: a.symbol })
-                  }
-                />
-                {idx < assetsList.length - 1 && (
+            <>
+              {assetsList.map((a, idx) => (
+                <React.Fragment key={a.symbol}>
+                  <TokenRow
+                    symbol={a.symbol}
+                    amount={a.amount}
+                    usd={a.usd}
+                    price={a.price}
+                    change24h={a.change24h}
+                    T={T}
+                    hideBalance={!balanceVisible}
+                    formatFiat={formatFiat}
+                    fiatCurrency={fiatCurrency}
+                    onPress={() =>
+                      navigation.navigate("CoinChart", { symbol: a.symbol })
+                    }
+                  />
+                  {idx < assetsList.length - 1 && (
+                    <View
+                      style={[styles.divider, { backgroundColor: T.border }]}
+                    />
+                  )}
+                </React.Fragment>
+              ))}
+              {!isInitialLoad && (
+                <>
                   <View
                     style={[styles.divider, { backgroundColor: T.border }]}
                   />
-                )}
-              </React.Fragment>
-            ))
+                  <TouchableOpacity 
+                    style={{ 
+                      flexDirection: "row", 
+                      alignItems: "center", 
+                      justifyContent: "center", 
+                      paddingVertical: 16, 
+                      gap: 8 
+                    }}
+                    onPress={() => navigation.navigate("ImportToken")}
+                  >
+                    <Feather name="plus" size={16} color={T.primary} />
+                    <Text style={{ color: T.primary, fontFamily: Fonts.bold, fontSize: 14 }}>
+                      Import Tokens
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </>
           )}
         </View>
 
