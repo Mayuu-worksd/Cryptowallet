@@ -30,15 +30,31 @@ async function runTests() {
   console.log('  KRIPICARD TRANSACTION AUTHORIZATION TEST SUITE');
   console.log('===========================================================\n');
 
+  // Helper to query with retries
+  const queryWithRetry = async (queryFn, retries = 5, delay = 2000) => {
+    for (let i = 0; i < retries; i++) {
+      try {
+        const { data, error } = await queryFn();
+        if (!error && data) return data;
+        if (error) console.warn(`[Supabase Query Warning] Attempt ${i+1}/${retries} failed:`, error.message || error);
+      } catch (e) {
+        console.warn(`[Supabase Query Warning] Exception on attempt ${i+1}/${retries}:`, e.message || e);
+      }
+      if (i < retries - 1) await new Promise(r => setTimeout(r, delay));
+    }
+    return null;
+  };
+
   // Verify there is at least one active card in the system for testing
-  const { data: activeCards, error: cardErr } = await supabase
+  const activeCards = await queryWithRetry(() => supabase
     .from('vcc_cards')
     .select('*')
     .eq('card_status', 'active')
-    .limit(1);
+    .limit(1)
+  );
 
-  if (cardErr) {
-    console.error('❌ Failed to query active cards:', cardErr.message);
+  if (!activeCards) {
+    console.error('❌ Failed to query active cards (returned null/failed)');
     process.exit(1);
   }
 
@@ -108,11 +124,16 @@ async function runTests() {
     console.log(`✔ [1/6] Simulation success! auth_id: ${authId1}, url: ${simRes.redirect_url}`);
 
     // Verify DB entry
-    const { data: dbRow1 } = await supabase
+    const dbRow1 = await queryWithRetry(() => supabase
       .from('transaction_authorizations')
       .select('*')
       .eq('authorization_id', authId1)
-      .single();
+      .single()
+    );
+
+    if (!dbRow1) {
+      throw new Error(`dbRow1 is null.`);
+    }
 
     if (dbRow1.status !== 'pending' || Number(dbRow1.amount) !== 45.99) {
       throw new Error('Database insertion validation failed');
@@ -161,22 +182,28 @@ async function runTests() {
     }
 
     // Verify DB status is rejected
-    const { data: dbRowLocked } = await supabase
+    const dbRowLocked = await queryWithRetry(() => supabase
       .from('transaction_authorizations')
       .select('*')
       .eq('authorization_id', authId1)
-      .single();
+      .single()
+    );
+
+    if (!dbRowLocked) {
+      throw new Error('Lockout verification failed: dbRowLocked is null');
+    }
 
     if (dbRowLocked.status !== 'rejected' || dbRowLocked.attempts !== 3) {
       throw new Error(`Lockout verification failed. DB status: ${dbRowLocked.status}, attempts: ${dbRowLocked.attempts}`);
     }
 
     // Check transactions table has failed transaction
-    const { data: txRowLocked } = await supabase
+    const txRowLocked = await queryWithRetry(() => supabase
       .from('transactions')
       .select('status')
       .eq('reference_id', simTxId)
-      .maybeSingle();
+      .maybeSingle()
+    );
 
     if (txRowLocked && txRowLocked.status !== 'failed') {
       throw new Error(`Transaction table status expected 'failed', got: ${txRowLocked.status}`);
@@ -204,22 +231,28 @@ async function runTests() {
     }
 
     // Verify DB row
-    const { data: dbRowApproved } = await supabase
+    const dbRowApproved = await queryWithRetry(() => supabase
       .from('transaction_authorizations')
       .select('*')
       .eq('authorization_id', authId2)
-      .single();
+      .single()
+    );
+
+    if (!dbRowApproved) {
+      throw new Error(`dbRowApproved is null.`);
+    }
 
     if (dbRowApproved.status !== 'authorized' || !dbRowApproved.authorized_at) {
       throw new Error(`Approved DB row check failed. Status: ${dbRowApproved.status}`);
     }
 
     // Verify transactions table has success transaction
-    const { data: txRowApproved } = await supabase
+    const txRowApproved = await queryWithRetry(() => supabase
       .from('transactions')
       .select('status, description')
       .eq('reference_id', simTxId2)
-      .maybeSingle();
+      .maybeSingle()
+    );
 
     if (txRowApproved && txRowApproved.status !== 'success') {
       throw new Error(`Transaction table status expected 'success', got: ${txRowApproved.status}`);

@@ -242,4 +242,8 @@ export interface CardProvider {
   // ── Webhooks ─────────────────────────────────────────────────────────────────
   parseWebhook(payload: unknown): ParsedWebhookEvent;
   simulateWebhook(input: SimulateWebhookInput): Promise<unknown>;
+
+  // ── Outbound Transaction Decision callbacks ──────────────────────────────────
+  approveTransaction?(transactionId: string): Promise<boolean>;
+  rejectTransaction?(transactionId: string): Promise<boolean>;
 }

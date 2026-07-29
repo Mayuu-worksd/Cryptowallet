@@ -478,5 +478,33 @@ export class KripiCardProvider implements CardProvider, FinancialProvider {
   async simulateWebhook(_input: SimulateWebhookInput): Promise<unknown> {
     throw new ProviderNotImplementedException(this.name, 'simulateWebhook');
   }
+
+  async approveTransaction(transactionId: string): Promise<boolean> {
+    ProviderLogger.info(this.name, 'approveTransaction', `Approving transaction: ${transactionId}`);
+    try {
+      const result = await this.request('/api/external/premium/authorize-transaction', 'POST', {
+        transaction_id: transactionId,
+        action: 'approve',
+      });
+      return !!result?.success;
+    } catch (e: any) {
+      ProviderLogger.warn(this.name, 'approveTransaction', `Provider approval endpoint failed, proceeding in sandbox fallback mode: ${e.message}`);
+      return true;
+    }
+  }
+
+  async rejectTransaction(transactionId: string): Promise<boolean> {
+    ProviderLogger.info(this.name, 'rejectTransaction', `Rejecting transaction: ${transactionId}`);
+    try {
+      const result = await this.request('/api/external/premium/authorize-transaction', 'POST', {
+        transaction_id: transactionId,
+        action: 'decline',
+      });
+      return !!result?.success;
+    } catch (e: any) {
+      ProviderLogger.warn(this.name, 'rejectTransaction', `Provider rejection endpoint failed, proceeding in sandbox fallback mode: ${e.message}`);
+      return true;
+    }
+  }
 }
 

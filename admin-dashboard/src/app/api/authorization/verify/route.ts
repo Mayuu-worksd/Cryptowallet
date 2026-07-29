@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { getCardProvider } from '@/lib/providers';
 
 export async function POST(req: NextRequest) {
   try {
@@ -84,6 +85,16 @@ export async function POST(req: NextRequest) {
 
     if (isOtpValid) {
       // 5. SUCCESS: Approve Transaction
+      // Call provider callback
+      try {
+        const provider = getCardProvider();
+        if (provider.approveTransaction) {
+          await provider.approveTransaction(auth.transaction_id);
+        }
+      } catch (e: any) {
+        console.error('[Verify Route] Provider approval callback error:', e.message);
+      }
+
       // Update authorization request status
       await supabase
         .from('transaction_authorizations')
@@ -118,6 +129,44 @@ export async function POST(req: NextRequest) {
         created_at: new Date().toISOString(),
       }, { onConflict: 'reference_id' });
 
+      // Deduct funds from user's wallet_profiles balance
+      try {
+        const { data: profile } = await supabase
+          .from('wallet_profiles')
+          .select('token_balances')
+          .eq('wallet_address', auth.wallet_address.toLowerCase())
+          .maybeSingle();
+
+        if (profile?.token_balances) {
+          const balances: Record<string, number> = typeof profile.token_balances === 'string'
+            ? JSON.parse(profile.token_balances)
+            : { ...profile.token_balances };
+
+          const priority = ['USDT', 'USDC', 'ETH', 'BNB', 'TRX'];
+          let remaining = Number(auth.amount);
+          const ETH_PRICE = 3500;
+
+          for (const token of priority) {
+            if (remaining <= 0) break;
+            const bal = balances[token] ?? 0;
+            if (bal <= 0) continue;
+            const tokenPrice = (token === 'ETH' || token === 'BNB') ? ETH_PRICE : 1;
+            const balUSD = bal * tokenPrice;
+            const deductUSD = Math.min(balUSD, remaining);
+            const deductToken = deductUSD / tokenPrice;
+            balances[token] = Math.max(0, bal - deductToken);
+            remaining -= deductUSD;
+          }
+
+          await supabase
+            .from('wallet_profiles')
+            .update({ token_balances: balances })
+            .eq('wallet_address', auth.wallet_address.toLowerCase());
+        }
+      } catch (balErr: any) {
+        console.error('[Verify Route] Local wallet balance deduction failed:', balErr.message);
+      }
+
       // Log successful verification audit event
       await supabase.from('transaction_authorization_logs').insert({
         authorization_id,
@@ -146,6 +195,16 @@ export async function POST(req: NextRequest) {
         .eq('authorization_id', authorization_id);
 
       if (isLimitReached) {
+        // Call provider callback for rejection
+        try {
+          const provider = getCardProvider();
+          if (provider.rejectTransaction) {
+            await provider.rejectTransaction(auth.transaction_id);
+          }
+        } catch (e: any) {
+          console.error('[Verify Route] Provider rejection callback error:', e.message);
+        }
+
         // Create/Update the core transactions table to failed status
         const { data: vcc } = await supabase
           .from('vcc_cards')
