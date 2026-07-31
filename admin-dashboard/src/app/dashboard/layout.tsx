@@ -165,6 +165,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'Merchant Hub', href: '/dashboard/merchants', icon: Store },
     { name: 'P2P & Escrow', href: '/dashboard/p2p', icon: RefreshCw },
     { name: 'Transactions', href: '/dashboard/transactions', icon: ArrowLeftRight },
+    { name: 'INRX Monitor', href: '/dashboard/inrx', icon: Shield },
     { name: 'Card Requests', href: '/dashboard/cards', icon: CreditCard },
     { name: 'Fiat Requests', href: '/dashboard/fiat-requests', icon: Landmark },
     { name: 'Alerts Log', href: '/dashboard/alerts', icon: AlertTriangle },
