@@ -25,6 +25,7 @@ import {
   Modal,
   Pressable,
   Share,
+  TextInput,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { Feather, MaterialIcons } from "@expo/vector-icons";
@@ -825,6 +826,7 @@ export default function HomeScreen({ navigation }: any) {
     convertFiat,
     fiatSymbol,
     customTokens,
+    fiatRates,
   } = useWallet() as any;
   const {
     prices,
@@ -843,6 +845,8 @@ export default function HomeScreen({ navigation }: any) {
   const [showNetworkPicker, setShowNetworkPicker] = useState(false);
   const [showAddrSheet, setShowAddrSheet] = useState(false);
   const [addrCopied, setAddrCopied] = useState<string | null>(null);
+
+
 
   // ── Double-tap balance to hide/show ──
   const lastBalanceTap = useRef(0);
@@ -1416,6 +1420,7 @@ export default function HomeScreen({ navigation }: any) {
                   <Feather name="chevron-down" size={12} color={T.textMuted} />
                 </TouchableOpacity>
               </Animated.View>
+
             </TouchableOpacity>
           )}
           {!isInitialLoad && balanceVisible && assetsList.length > 0 && (

@@ -169,6 +169,47 @@ const FALLBACK_PRICES: Record<string, CoinPrice> = {
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [isDarkMode,       setIsDarkMode]       = useState(true);
   const [fiatCurrency,     setFiatCurrencyState] = useState('USD');
+  const [fiatRates,        setFiatRates]        = useState<Record<string, any>>(SUPPORTED_FIAT_CURRENCIES);
+
+  const loadDynamicRates = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('fiat_currencies')
+        .select('*')
+        .order('code', { ascending: true });
+      
+      if (error) {
+        console.warn('Failed to load dynamic fiat rates:', error.message);
+        return;
+      }
+      
+      if (data && data.length > 0) {
+        const merged = { ...SUPPORTED_FIAT_CURRENCIES };
+        data.forEach((c: any) => {
+          if (c.is_enabled !== false) {
+            merged[c.code] = {
+              code: c.code,
+              symbol: c.symbol || c.code,
+              name: c.name || c.code,
+              rate: Number(c.rate),
+              locale: c.locale || 'en-US',
+              format: c.format || 'en-US',
+              flag: (SUPPORTED_FIAT_CURRENCIES as any)[c.code]?.flag || '🌐'
+            };
+          } else {
+            delete merged[c.code];
+          }
+        });
+        setFiatRates(merged);
+      }
+    } catch (e) {
+      console.warn('[WalletContext] failed to load dynamic fiat rates:', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadDynamicRates();
+  }, [loadDynamicRates]);
   const [accountType,      setAccountTypeState] = useState<'personal' | 'business'>('personal');
   const [accountTypeSet,   setAccountTypeSet]   = useState(false);
   const [p2pCountry,       setP2PCountryState]  = useState('India');
@@ -503,12 +544,24 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       balancesRef.current = merged;
       await saveTokenBalances(net, merged);
       // Persist balances to Supabase
-      if (walletAddress) profileService.upsert(walletAddress, { token_balances: merged }).catch(() => {});
+      if (walletAddress) {
+        profileService.upsert(walletAddress, { token_balances: merged }).catch(() => {});
+        // Sync INRX balance and current selection to wallet_currency_settings table
+        const inrxBalance = merged.INRX ?? 0;
+        supabase.from('wallet_currency_settings').upsert({
+          wallet_address: walletAddress.toLowerCase(),
+          base_token: 'INRX',
+          display_currency: fiatCurrency,
+          balance: inrxBalance
+        }, { onConflict: 'wallet_address' }).catch((e: any) => {
+          console.warn('[WalletContext] failed to sync wallet_currency_settings balance:', e.message);
+        });
+      }
     } catch (e) {
     } finally {
       setIsLoadingBalance(false);
     }
-  }, [tronAddress, walletAddress]);
+  }, [tronAddress, walletAddress, fiatCurrency]);
 
   const creditP2PBalance = useCallback((token: string, amount: number) => {
     const isTestnet = NETWORK_INFO[network]?.type === 'Testnet';
@@ -2699,27 +2752,37 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setFiatCurrency = useCallback(async (currency: string) => {
-    if (SUPPORTED_FIAT_CURRENCIES[currency]) {
+    if (fiatRates[currency] || SUPPORTED_FIAT_CURRENCIES[currency]) {
       setFiatCurrencyState(currency);
       await AsyncStorage.setItem('cw_fiat_currency', currency);
       if (walletAddress) {
         profileService.upsert(walletAddress, { p2p_currency: currency }).catch(() => {});
+        // Sync setting preference to wallet_currency_settings table
+        const inrxBalance = balancesRef.current.INRX ?? 0;
+        supabase.from('wallet_currency_settings').upsert({
+          wallet_address: walletAddress.toLowerCase(),
+          base_token: 'INRX',
+          display_currency: currency,
+          balance: inrxBalance
+        }, { onConflict: 'wallet_address' }).catch((e: any) => {
+          console.warn('[WalletContext] failed to sync settings on change:', e.message);
+        });
       }
     }
-  }, [walletAddress]);
+  }, [walletAddress, fiatRates]);
 
   const fiatSymbol = useMemo(() => {
     if (fiatCurrency === 'AED') return 'AED'; // The UI will render the SVG
-    return getSymbolFromCurrency(fiatCurrency) || '$';
-  }, [fiatCurrency]);
+    return fiatRates[fiatCurrency]?.symbol || getSymbolFromCurrency(fiatCurrency) || '$';
+  }, [fiatCurrency, fiatRates]);
 
   const convertFiat = useCallback((amountUSD: number) => {
-    const rate = SUPPORTED_FIAT_CURRENCIES[fiatCurrency]?.rate ?? 1.0;
+    const rate = fiatRates[fiatCurrency]?.rate ?? 1.0;
     return amountUSD * rate;
-  }, [fiatCurrency]);
+  }, [fiatCurrency, fiatRates]);
 
   const formatFiat = useCallback((amountUSD: number) => {
-    const fiat = SUPPORTED_FIAT_CURRENCIES[fiatCurrency];
+    const fiat = fiatRates[fiatCurrency];
     if (!fiat) return amountUSD.toFixed(2);
     const converted = amountUSD * fiat.rate;
     
@@ -2731,10 +2794,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     });
-  }, [fiatCurrency]);
+  }, [fiatCurrency, fiatRates]);
 
   const formatOrderFiat = useCallback((amountLocal: number, currencyCode: string) => {
-    const fiat = SUPPORTED_FIAT_CURRENCIES[currencyCode] || SUPPORTED_FIAT_CURRENCIES['USD'];
+    const fiat = fiatRates[currencyCode] || SUPPORTED_FIAT_CURRENCIES[currencyCode] || SUPPORTED_FIAT_CURRENCIES['USD'];
     if (fiat.code === 'JPY' || fiat.code === 'VND') {
       return Math.round(amountLocal).toLocaleString(fiat.locale);
     }
@@ -2742,7 +2805,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     });
-  }, []);
+  }, [fiatRates]);
 
   const marketValue = useMemo(() => ({
     prices, isPricesLoading, priceError, news, isNewsLoading,
@@ -2769,7 +2832,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     createWallet, importWallet, deleteWallet, enterReadOnlyMode, refreshBalance, refreshCardData, fetchBalance,
     sendETH, sendCrypto, topupCard, spendCard, toggleFreezeCard, reportLostCard, applySwapBalances, switchNetwork,
     bridgeINRX,
-    fiatCurrency, setFiatCurrency, formatFiat, convertFiat, fiatSymbol, formatOrderFiat,
+    fiatCurrency, setFiatCurrency, formatFiat, convertFiat, fiatSymbol, formatOrderFiat, fiatRates,
     isGlobalLoading,
     setGlobalLoading: (loading: boolean, msg?: string) => {
       if (msg) setGlobalLoadingMessage(msg);
@@ -2801,7 +2864,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     createWallet, importWallet, deleteWallet, enterReadOnlyMode, refreshBalance, refreshCardData, fetchBalance,
     sendETH, sendCrypto, topupCard, spendCard, toggleFreezeCard, reportLostCard, applySwapBalances, switchNetwork,
     bridgeINRX,
-    fiatCurrency, setFiatCurrency, formatFiat, convertFiat, fiatSymbol, formatOrderFiat,
+    fiatCurrency, setFiatCurrency, formatFiat, convertFiat, fiatSymbol, formatOrderFiat, fiatRates,
     isGlobalLoading,
     globalLoadingMessage,
     userUuid,
