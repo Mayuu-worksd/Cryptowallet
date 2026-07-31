@@ -132,6 +132,7 @@ import HomeScreen from "./screens/HomeScreen";
 import SendScreen from "./screens/SendScreen";
 import ReceiveScreen from "./screens/ReceiveScreen";
 import SwapScreen from "./screens/SwapScreen";
+import CurrencyConverterScreen from "./screens/CurrencyConverterScreen";
 import CardScreen from "./screens/CardScreen";
 import PortfolioScreen from "./screens/PortfolioScreen";
 import HistoryScreen from "./screens/HistoryScreen";
@@ -1091,6 +1092,7 @@ function MobileNavigator() {
             <Stack.Screen name="Send" component={SendScreen} />
             <Stack.Screen name="Receive" component={ReceiveScreen} />
             <Stack.Screen name="Swap" component={SwapScreen} />
+            <Stack.Screen name="CurrencyConverter" component={CurrencyConverterScreen} />
             <Stack.Screen name="Bridge" component={BridgeScreen} />
             <Stack.Screen name="History" component={HistoryScreen} />
             <Stack.Screen name="Assets" component={PortfolioScreen} />

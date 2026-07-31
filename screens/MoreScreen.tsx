@@ -72,6 +72,13 @@ const SERVICES = [
         color: "#FFFFFF",
       },
       {
+        id: "CurrencyConverter",
+        label: "Convert",
+        icon: "refresh-cw",
+        route: "CurrencyConverter",
+        color: "#FFFFFF",
+      },
+      {
         id: "Send",
         label: "Send",
         icon: "arrow-right",

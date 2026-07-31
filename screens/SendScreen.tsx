@@ -504,7 +504,7 @@ export default function SendScreen({ navigation, route }: any) {
           const rpcKey = NET_KEY_MAP[netName] ?? netName;
           const customToken = customTokens?.find((t: any) => t.symbol === selectedAsset);
           const contractAddr = customToken?.contractAddress ?? (ERC20_CONTRACTS[selectedAsset]?.[netName] ?? ERC20_CONTRACTS[selectedAsset]?.[rpcKey]);
-          const decimals = customToken?.decimals ?? (selectedAsset === 'INRX' ? 18 : 6);
+          const decimals = customToken?.decimals ?? (selectedAsset === 'INRX' ? 6 : 6);
           
           if (!contractAddr) {
             result = { success: false, error: `${selectedAsset} not supported on ${netName}` };
