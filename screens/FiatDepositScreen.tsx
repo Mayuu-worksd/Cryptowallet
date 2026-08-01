@@ -16,49 +16,31 @@ import { BankAccountService } from '../services/bankAccountService';
 import { haptics } from '../utils/haptics';
 
 const FIAT_FLAGS: Record<string, string> = {
-  USD: 'us',
-  INR: 'in',
-  EUR: 'eu',
-  GBP: 'gb',
-  AED: 'ae',
-  AUD: 'au',
-  SGD: 'sg',
-  RUB: 'ru',
-  BHD: 'bh',
-  VND: 'vn',
-  SAR: 'sa',
-  KWD: 'kw',
-  THB: 'th'
+  USD: 'us', INR: 'in', EUR: 'eu', GBP: 'gb', AED: 'ae',
+  AUD: 'au', SGD: 'sg', RUB: 'ru', BHD: 'bh', VND: 'vn',
+  SAR: 'sa', KWD: 'kw', THB: 'th', PKR: 'pk', IDR: 'id',
+  PHP: 'ph', JPY: 'jp', HKD: 'hk', CNY: 'cn',
 };
 
 const FiatIcon = ({ currency, size = 24 }: { currency: string; size?: number }) => {
   const code = FIAT_FLAGS[currency.toUpperCase()] || 'us';
   return (
-    <Image 
-      source={{ uri: `https://flagcdn.com/w80/${code}.png` }} 
+    <Image
+      source={{ uri: `https://flagcdn.com/w80/${code}.png` }}
       style={{ width: size, height: size, borderRadius: size / 2 }}
       resizeMode="cover"
     />
   );
 };
 
-
 const { width } = Dimensions.get('window');
 
 const CRYPTO_ASSETS = ['USDT', 'USDC', 'BTC', 'ETH'];
-const FIAT_CURRENCIES = ['USD', 'AED', 'EUR', 'GBP', 'INR'];
-
-const FIAT_RATES: Record<string, number> = {
-  USD: 1.0,
-  AED: 3.6725,
-  EUR: 0.92,
-  GBP: 0.78,
-  INR: 83.50
-};
+const FIAT_CURRENCIES = ['USD', 'AED', 'EUR', 'GBP', 'INR', 'PKR', 'VND'];
 
 export default function FiatDepositScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
-  const { isDarkMode, walletAddress, userUid, network } = useWallet();
+  const { isDarkMode, walletAddress, userUid, network, fiatRates } = useWallet();
   const { prices } = useMarket();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
 
@@ -139,21 +121,16 @@ export default function FiatDepositScreen({ navigation }: any) {
     return `DEP-${cleanUid}`;
   }, [userUid]);
 
-  // Calculate estimated crypto amount
+  // Calculate estimated crypto amount using live rates from WalletContext (forexService)
   const cryptoEstimate = useMemo(() => {
     const amtNum = parseFloat(amount);
     if (isNaN(amtNum) || amtNum <= 0) return '0.00';
-
     const coinPriceUsd = prices?.[cryptoAsset]?.usd || 1.0;
-    const rate = FIAT_RATES[fiatCurrency] || 1.0;
+    const rate = fiatRates[fiatCurrency]?.rate ?? 1.0;
     const valueUsd = amtNum / rate;
     const cryptoAmt = valueUsd / coinPriceUsd;
-
-    if (cryptoAsset === 'BTC' || cryptoAsset === 'ETH') {
-      return cryptoAmt.toFixed(6);
-    }
-    return cryptoAmt.toFixed(2);
-  }, [amount, cryptoAsset, fiatCurrency, prices]);
+    return (cryptoAsset === 'BTC' || cryptoAsset === 'ETH') ? cryptoAmt.toFixed(6) : cryptoAmt.toFixed(2);
+  }, [amount, cryptoAsset, fiatCurrency, prices, fiatRates]);
 
   const copyToClipboard = async (text: string, label: string) => {
     haptics.selection();

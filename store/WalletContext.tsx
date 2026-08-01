@@ -20,6 +20,7 @@ import { ESCROW_CONTRACTS } from '../services/escrowService';
 import { SUPPORTED_TOKENS } from '../constants/currencyConfig';
 import { commissionService } from '../services/commissionService';
 import { parseDateSafe } from '../utils/date';
+import { getLiveRates, invalidateForexCache } from '../services/forexService';
 
 export type Transaction = {
   id: string;
@@ -175,66 +176,22 @@ const FALLBACK_PRICES: Record<string, CoinPrice> = {
   INRX: { usd: 0.012, change24h: 0.15 },  // 1 INRX = 1 INR ≈ $0.012, not on CoinGecko
 };
 
-const getFlagByCode = (code: string): string => {
-  const flags: Record<string, string> = {
-    USD: '🇺🇸', CNY: '🇨🇳', RUB: '🇷🇺', UZS: '🇺🇿', PKR: '🇵🇰',
-    VND: '🇻🇳', IDR: '🇮🇩', PHP: '🇵🇭', AED: '🇦🇪', THB: '🇹🇭',
-    EUR: '🇪🇺', GBP: '🇬🇧', INR: '🇮🇳', AUD: '🇦🇺', SGD: '🇸🇬',
-    BHD: '🇧🇭', SAR: '🇸🇦', KWD: '🇰🇼', JPY: '🇯🇵', HKD: '🇭🇰'
-  };
-  return flags[code.toUpperCase()] || '🌐';
-};
-
-const OFFLINE_FIAT_CURRENCIES: Record<string, any> = {
-  USD: { code: 'USD', symbol: '$', name: 'US Dollar', rate: 1.0, locale: 'en-US', format: 'en-US', flag: '🇺🇸' },
-  CNY: { code: 'CNY', symbol: '¥', name: 'Chinese Yuan', rate: 7.23, locale: 'zh-CN', format: 'zh-CN', flag: '🇨🇳' },
-  RUB: { code: 'RUB', symbol: '₽', name: 'Russian Ruble', rate: 89.5, locale: 'ru-RU', format: 'ru-RU', flag: '🇷🇺' },
-  UZS: { code: 'UZS', symbol: 'UZS', name: 'Uzbekistan Som', rate: 12600.0, locale: 'uz-UZ', format: 'uz-UZ', flag: '🇺🇿' },
-  PKR: { code: 'PKR', symbol: '₨', name: 'Pakistani Rupee', rate: 278.5, locale: 'ur-PK', format: 'ur-PK', flag: '🇵🇰' },
-  VND: { code: 'VND', symbol: '₫', name: 'Vietnamese Dong', rate: 25400.0, locale: 'vi-VN', format: 'vi-VN', flag: '🇻🇳' },
-  IDR: { code: 'IDR', symbol: 'Rp', name: 'Indonesian Rupiah', rate: 16300.0, locale: 'id-ID', format: 'id-ID', flag: '🇮🇩' },
-  PHP: { code: 'PHP', symbol: '₱', name: 'Philippine Peso', rate: 58.5, locale: 'fil-PH', format: 'fil-PH', flag: '🇵🇭' },
-  AED: { code: 'AED', symbol: 'د.إ', name: 'UAE Dirham', rate: 3.67, locale: 'en-US', format: 'en-US', flag: '🇦🇪' },
-  THB: { code: 'THB', symbol: '฿', name: 'Thai Baht', rate: 36.5, locale: 'th-TH', format: 'th-TH', flag: '🇹🇭' }
-};
+// No hardcoded offline rates — forexService handles all fallback tiers internally.
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [isDarkMode,       setIsDarkMode]       = useState(true);
   const [fiatCurrency,     setFiatCurrencyState] = useState('USD');
-  const [fiatRates,        setFiatRates]        = useState<Record<string, any>>(OFFLINE_FIAT_CURRENCIES);
+  const [fiatRates,        setFiatRates]        = useState<Record<string, any>>({});
   const [tokenContracts,   setTokenContracts]   = useState<any[]>([]);
 
-  const loadDynamicRates = useCallback(async () => {
+  const loadDynamicRates = useCallback(async (forceRefresh = false) => {
     try {
-      const { data, error } = await supabase
-        .from('fiat_currencies')
-        .select('*')
-        .order('code', { ascending: true });
-      
-      if (error) {
-        console.warn('Failed to load dynamic fiat rates:', error.message);
-        return;
-      }
-      
-      if (data && data.length > 0) {
-        const merged: Record<string, any> = {};
-        data.forEach((c: any) => {
-          if (c.is_enabled !== false) {
-            merged[c.code] = {
-              code: c.code,
-              symbol: c.symbol || c.code,
-              name: c.name || c.code,
-              rate: Number(c.rate),
-              locale: c.locale || 'en-US',
-              format: c.format || 'en-US',
-              flag: getFlagByCode(c.code)
-            };
-          }
-        });
-        setFiatRates(merged);
+      const rates = await getLiveRates(forceRefresh);
+      if (rates && Object.keys(rates).length > 0) {
+        setFiatRates(rates);
       }
     } catch (e) {
-      console.warn('[WalletContext] failed to load dynamic fiat rates:', e);
+      console.warn('[WalletContext] failed to load live fiat rates:', e);
     }
   }, []);
 
@@ -260,7 +217,27 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     loadDynamicRates();
     loadDynamicContracts();
+    // Refresh forex rates every 30 minutes
+    const forexInterval = setInterval(() => loadDynamicRates(true), 30 * 60 * 1000);
+    return () => clearInterval(forexInterval);
   }, [loadDynamicRates, loadDynamicContracts]);
+
+  // Supabase Realtime: push fiat_currencies table changes to state immediately
+  useEffect(() => {
+    const channel = supabase
+      .channel('fiat_currencies_live')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'fiat_currencies' },
+        () => {
+          // Invalidate cache so next loadDynamicRates() re-fetches from Supabase
+          invalidateForexCache();
+          loadDynamicRates(true);
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [loadDynamicRates]);
   const [accountType,      setAccountTypeState] = useState<'personal' | 'business'>('personal');
   const [accountTypeSet,   setAccountTypeSet]   = useState(false);
   const [p2pCountry,       setP2PCountryState]  = useState('India');

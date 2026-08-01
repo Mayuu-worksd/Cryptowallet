@@ -67,29 +67,6 @@ export const CurrencySelector = memo(({ visible, onClose, currentCurrency, onSel
   );
 });
 
-const OFFLINE_SEED: Record<string, any> = {
-  USD: { code: 'USD', symbol: '$', name: 'US Dollar', rate: 1.0, locale: 'en-US', format: 'en-US', flag: '🇺🇸' },
-  CNY: { code: 'CNY', symbol: '¥', name: 'Chinese Yuan', rate: 7.23, locale: 'zh-CN', format: 'zh-CN', flag: '🇨🇳' },
-  RUB: { code: 'RUB', symbol: '₽', name: 'Russian Ruble', rate: 89.5, locale: 'ru-RU', format: 'ru-RU', flag: '🇷🇺' },
-  UZS: { code: 'UZS', symbol: 'UZS', name: 'Uzbekistan Som', rate: 12600.0, locale: 'uz-UZ', format: 'uz-UZ', flag: '🇺🇿' },
-  PKR: { code: 'PKR', symbol: '₨', name: 'Pakistani Rupee', rate: 278.5, locale: 'ur-PK', format: 'ur-PK', flag: '🇵🇰' },
-  VND: { code: 'VND', symbol: '₫', name: 'Vietnamese Dong', rate: 25400.0, locale: 'vi-VN', format: 'vi-VN', flag: '🇻🇳' },
-  IDR: { code: 'IDR', symbol: 'Rp', name: 'Indonesian Rupiah', rate: 16300.0, locale: 'id-ID', format: 'id-ID', flag: '🇮🇩' },
-  PHP: { code: 'PHP', symbol: '₱', name: 'Philippine Peso', rate: 58.5, locale: 'fil-PH', format: 'fil-PH', flag: '🇵🇭' },
-  AED: { code: 'AED', symbol: 'د.إ', name: 'UAE Dirham', rate: 3.67, locale: 'en-US', format: 'en-US', flag: '🇦🇪' },
-  THB: { code: 'THB', symbol: '฿', name: 'Thai Baht', rate: 36.5, locale: 'th-TH', format: 'th-TH', flag: '🇹🇭' }
-};
-
-export const getCurrencyMeta = (code: CurrencyCode) =>
-  OFFLINE_SEED[code] || OFFLINE_SEED['USD'];
-
-export const formatCurrency = (amount: number, currency: CurrencyCode) => {
-  const meta = getCurrencyMeta(currency);
-  const converted = amount * meta.rate;
-  if (currency === 'JPY' || currency === 'VND') return `${meta.symbol} ${Math.round(converted).toLocaleString()}`;
-  return `${meta.symbol} ${converted.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-};
-
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
