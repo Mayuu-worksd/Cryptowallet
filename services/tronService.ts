@@ -9,6 +9,7 @@
  */
 
 import { ethers } from 'ethers';
+import { supabase } from './supabaseClient';
 
 // ethers v5/v6 compatibility shims
 const keccak256 = (ethers as any).keccak256 ?? ethers.utils.keccak256;
@@ -262,9 +263,30 @@ export const tronService = {
 
       const trx = (account.balance ?? 0) / 1_000_000;
 
-      const usdtContract = TRON_TOKENS.USDT[network] ?? '';
-      const usdcContract = TRON_TOKENS.USDC[network] ?? '';
-      const inrxContract = TRON_TOKENS.INRX[network] ?? '';
+      // Resolve dynamic contract addresses for current TRON network
+      let dynamicInrx = '';
+      let dynamicUsdt = '';
+      let dynamicUsdc = '';
+      try {
+        const { data } = await supabase
+          .from('token_contracts')
+          .select('currency_code, contract_address')
+          .eq('network_name', network)
+          .eq('is_enabled', true);
+        if (data) {
+          data.forEach((c: any) => {
+            if (c.currency_code === 'INRX') dynamicInrx = c.contract_address;
+            if (c.currency_code === 'USDT') dynamicUsdt = c.contract_address;
+            if (c.currency_code === 'USDC') dynamicUsdc = c.contract_address;
+          });
+        }
+      } catch (err) {
+        console.warn('[tronService] failed to load dynamic TRC20 contracts:', err);
+      }
+
+      const usdtContract = dynamicUsdt || (TRON_TOKENS.USDT[network] ?? '');
+      const usdcContract = dynamicUsdc || (TRON_TOKENS.USDC[network] ?? '');
+      const inrxContract = dynamicInrx || (TRON_TOKENS.INRX[network] ?? '');
       let usdt = 0;
       let usdc = 0;
       let inrx = 0;
@@ -272,13 +294,13 @@ export const tronService = {
       const trc20: any[] = account.trc20 ?? [];
       for (const t of trc20) {
         for (const [addr, bal] of Object.entries(t)) {
-          if (usdtContract && addr === usdtContract) {
+          if (usdtContract && addr.toLowerCase() === usdtContract.toLowerCase()) {
             usdt = parseInt(String(bal), 10) / 1_000_000;
           }
-          if (usdcContract && addr === usdcContract) {
+          if (usdcContract && addr.toLowerCase() === usdcContract.toLowerCase()) {
             usdc = parseInt(String(bal), 10) / 1_000_000;
           }
-          if (inrxContract && addr === inrxContract) {
+          if (inrxContract && addr.toLowerCase() === inrxContract.toLowerCase()) {
             inrx = parseInt(String(bal), 10) / 1_000_000;
           }
         }

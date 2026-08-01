@@ -93,9 +93,17 @@ const STABLE_FALLBACK: Record<string, number> = {
 };
 
 // Sleek redotpay styled crypto row
-const CryptoAssetRow = memo(({ a, T, isUp, prices, formatFiat, balanceVisible, onPress, fiatCurrency }: any) => {
+const CryptoAssetRow = memo(({ a, T, isUp, prices, formatFiat, balanceVisible, onPress, fiatCurrency, fiatRates }: any) => {
   const scale = useRef(new Animated.Value(1)).current;
-  const usdValue = a.available * (prices[a.symbol]?.usd ?? STABLE_FALLBACK[a.symbol] ?? 0);
+  
+  let price = prices[a.symbol]?.usd ?? STABLE_FALLBACK[a.symbol] ?? 0;
+  if (price === 0 && fiatRates && fiatRates[a.symbol]) {
+    const rate = Number(fiatRates[a.symbol].rate || 1);
+    if (rate > 0) {
+      price = 1 / rate;
+    }
+  }
+  const usdValue = a.available * price;
   const changePercent = prices[a.symbol]?.change24h ?? a.change24h ?? 0;
 
   return (
@@ -178,7 +186,7 @@ export default function PortfolioScreen({ navigation }: any) {
   const {
     ethBalance, balances, isDarkMode, walletAddress, lockedBalance,
     formatFiat, convertFiat, fiatSymbol, fiatCurrency, setFiatCurrency, formatOrderFiat,
-    balanceVisible, toggleBalanceVisible
+    balanceVisible, toggleBalanceVisible, fiatRates
   } = useWallet();
   const { prices } = useMarket();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
@@ -260,9 +268,26 @@ export default function PortfolioScreen({ navigation }: any) {
 
   const assetsList = useMemo(() => {
     const priority = ['INRX', 'USDT', 'USDC', 'ETH', 'BTC', 'SOL', 'BNB', 'XRP', 'TON', 'TRX', 'SUI'];
-    return priority.map(symbol => {
+    
+    // Append any dynamic custom/contract tokens from realBalances that are not in the priority list
+    const allSymbols = [...priority];
+    Object.keys(realBalances).forEach(k => {
+      if (!allSymbols.includes(k)) {
+        allSymbols.push(k);
+      }
+    });
+
+    return allSymbols.map(symbol => {
       const balanceVal = realBalances[symbol] ?? 0;
-      const price = prices[symbol]?.usd ?? STABLE_FALLBACK[symbol] ?? 0;
+      
+      let price = prices[symbol]?.usd ?? STABLE_FALLBACK[symbol] ?? 0;
+      if (price === 0 && fiatRates && fiatRates[symbol]) {
+        const rate = Number(fiatRates[symbol].rate || 1);
+        if (rate > 0) {
+          price = 1 / rate;
+        }
+      }
+
       const change24h = prices[symbol]?.change24h ?? 0;
       const available = balanceVal - (lockedBalance[symbol] ?? 0);
       return {
@@ -274,7 +299,7 @@ export default function PortfolioScreen({ navigation }: any) {
         change24h
       };
     });
-  }, [realBalances, prices, lockedBalance]);
+  }, [realBalances, prices, lockedBalance, fiatRates]);
 
   const totalUsd = useMemo(() => {
     const total = assetsList.reduce((acc, a) => acc + (a.usd || 0), 0);
@@ -285,8 +310,6 @@ export default function PortfolioScreen({ navigation }: any) {
     });
     return total;
   }, [assetsList, realBalances]);
-
-  const { fiatRates } = useWallet();
 
   const fiatWalletsList = useMemo(() => {
     return Object.values(fiatRates || {}).map((f: any) => ({
@@ -553,6 +576,7 @@ export default function PortfolioScreen({ navigation }: any) {
                   formatFiat={formatFiat}
                   fiatCurrency={fiatCurrency}
                   balanceVisible={balanceVisible}
+                  fiatRates={fiatRates}
                   onPress={() => { haptics.selection(); navigation.navigate('CoinChart', { symbol: a.symbol }); }}
                 />
               );

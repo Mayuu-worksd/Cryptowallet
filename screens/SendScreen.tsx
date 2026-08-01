@@ -487,8 +487,30 @@ export default function SendScreen({ navigation, route }: any) {
           INRX: 'TBykZRRzGm1M9QC7DWcC4QALLTSJF8mRAo',
         };
 
+        // Map network display name to RPC key/names
+        const NET_KEY_MAP: Record<string, string> = {
+          'Ethereum (ERC20)': 'Ethereum',
+          'Polygon Network':  'Polygon',
+          'Arbitrum One':     'Arbitrum',
+          'Sepolia Testnet':  'Sepolia',
+          'BNB Smart Chain':  'BSC',
+        };
+        const rpcKey = NET_KEY_MAP[netName] ?? netName;
+        const targetTronNetName = netName.includes('Nile') ? 'TRON Nile' : 'TRON';
+
+        // Resolve dynamic contract address from tokenContracts table
+        const dynamicContract = tokenContracts?.find((c: any) => 
+          c.currency_code === selectedAsset &&
+          (c.network_name === netName || c.network_name === rpcKey || c.network_name === targetTronNetName) &&
+          c.is_enabled !== false
+        );
+
+        const resolvedContractAddr = dynamicContract?.contract_address || dynamicContract?.contractAddress;
+        const resolvedDecimals = dynamicContract?.decimals;
+
         if (isTronNet) {
-          const contractAddr = TRC20_CONTRACTS[selectedAsset];
+          const contractAddr = resolvedContractAddr || TRC20_CONTRACTS[selectedAsset];
+          const decimals = resolvedDecimals ?? 6;
           if (!contractAddr) {
             result = { success: false, error: `${selectedAsset} not supported on TRON` };
           } else {
@@ -502,8 +524,8 @@ export default function SendScreen({ navigation, route }: any) {
                 toAddress:       address,
                 amount:          parsedAmount,
                 contractAddress: contractAddr,
-                decimals:        6,
-                network:         netName.includes('Nile') ? 'TRON Nile' : 'TRON',
+                decimals:        decimals,
+                network:         targetTronNetName,
               });
               result = { success: tronResult.success, error: tronResult.error, hash: tronResult.txHash };
               if (tronResult.success) {
@@ -513,18 +535,9 @@ export default function SendScreen({ navigation, route }: any) {
             }
           }
         } else {
-          // Map network display name to RPC key
-          const NET_KEY_MAP: Record<string, string> = {
-            'Ethereum (ERC20)': 'Ethereum',
-            'Polygon Network':  'Polygon',
-            'Arbitrum One':     'Arbitrum',
-            'Sepolia Testnet':  'Sepolia',
-            'BNB Smart Chain':  'BSC',
-          };
-          const rpcKey = NET_KEY_MAP[netName] ?? netName;
           const customToken = customTokens?.find((t: any) => t.symbol === selectedAsset);
-          const contractAddr = customToken?.contractAddress ?? (ERC20_CONTRACTS[selectedAsset]?.[netName] ?? ERC20_CONTRACTS[selectedAsset]?.[rpcKey]);
-          const decimals = customToken?.decimals ?? (selectedAsset === 'INRX' ? 6 : 6);
+          const contractAddr = customToken?.contractAddress ?? (resolvedContractAddr || ERC20_CONTRACTS[selectedAsset]?.[netName] || ERC20_CONTRACTS[selectedAsset]?.[rpcKey]);
+          const decimals = customToken?.decimals ?? (resolvedDecimals ?? (selectedAsset === 'INRX' ? 6 : 6));
           
           if (!contractAddr) {
             result = { success: false, error: `${selectedAsset} not supported on ${netName}` };

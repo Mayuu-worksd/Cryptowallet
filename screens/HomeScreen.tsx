@@ -827,6 +827,7 @@ export default function HomeScreen({ navigation }: any) {
     fiatSymbol,
     customTokens,
     fiatRates,
+    tokenContracts,
   } = useWallet() as any;
   const {
     prices,
@@ -911,6 +912,18 @@ export default function HomeScreen({ navigation }: any) {
       });
     }
 
+    // Inject dynamic database token contracts for the current network
+    if (tokenContracts && tokenContracts.length > 0) {
+      tokenContracts.forEach((tc: any) => {
+        const symbol = tc.currency_code;
+        const targetTronNetName = network.includes('Nile') ? 'TRON Nile' : 'TRON';
+        const matchesNetwork = tc.network_name === network || tc.network === network || (network.toUpperCase().includes('TRON') && tc.network_name === targetTronNetName);
+        if (symbol && matchesNetwork && tc.is_enabled !== false) {
+          res[symbol] = balances[symbol] ?? 0;
+        }
+      });
+    }
+
     console.log('[HomeScreen] Debug Balances:', {
       network,
       balances,
@@ -918,7 +931,7 @@ export default function HomeScreen({ navigation }: any) {
       realBalances: res
     });
     return res;
-  }, [ethBalance, balances, network, customTokens]);
+  }, [ethBalance, balances, network, customTokens, tokenContracts]);
 
   const assetsList = useMemo(() => {
     const isTron = network === "TRON" || network === "TRON Nile";
@@ -928,10 +941,19 @@ export default function HomeScreen({ navigation }: any) {
     const list = (Object.keys(realBalances) as string[])
       .map((symbol) => {
         const livePrice = prices[symbol]?.usd;
-        const price =
+        let price =
           livePrice !== undefined && livePrice > 0
             ? livePrice
             : (STABLE_FALLBACK[symbol] ?? 0);
+
+        // Dynamic fallback price calculation based on fiat rates relative to USD
+        if (price === 0 && fiatRates && fiatRates[symbol]) {
+          const rate = Number(fiatRates[symbol].rate || 1);
+          if (rate > 0) {
+            price = 1 / rate;
+          }
+        }
+
         const change24h = prices[symbol]?.change24h ?? 0;
         return {
           symbol,
@@ -960,7 +982,7 @@ export default function HomeScreen({ navigation }: any) {
       .sort((a, b) => b.usd - a.usd);
 
     return list;
-  }, [realBalances, prices, network, customTokens]);
+  }, [realBalances, prices, network, customTokens, fiatRates]);
 
   const totalUsd = useMemo(() => {
     const sum = assetsList.reduce(
