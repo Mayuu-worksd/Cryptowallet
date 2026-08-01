@@ -17,7 +17,7 @@ import { supabase, setWallet, clearWalletSession } from '../services/supabaseCli
 import { notificationService } from '../services/notificationService';
 import { DEFAULT_NETWORK, NETWORK_INFO } from '../constants';
 import { ESCROW_CONTRACTS } from '../services/escrowService';
-import { SUPPORTED_TOKENS, SUPPORTED_FIAT_CURRENCIES } from '../constants/currencyConfig';
+import { SUPPORTED_TOKENS } from '../constants/currencyConfig';
 import { commissionService } from '../services/commissionService';
 import { parseDateSafe } from '../utils/date';
 
@@ -155,6 +155,15 @@ type WalletContextType = {
   importRecoveredAsset: (asset: DiscoveredAsset) => Promise<void>;
   ignoreRecoveredAsset: (asset: DiscoveredAsset) => Promise<void>;
   recoverAsset: (asset: DiscoveredAsset, targetAddress: string) => Promise<boolean>;
+  fiatRates: Record<string, any>;
+  loadCurrencies: () => Promise<void>;
+  getEnabledCurrencies: () => any[];
+  getCurrencySymbol: (code: string) => string;
+  getExchangeRate: (code: string) => number;
+  tokenContracts: any[];
+  getTokenContracts: () => any[];
+  getContractsByNetwork: (network: string) => any[];
+  getContractsByCurrency: (currency: string) => any[];
 };
 
 const WalletContext = createContext<WalletContextType>({} as WalletContextType);
@@ -166,10 +175,34 @@ const FALLBACK_PRICES: Record<string, CoinPrice> = {
   INRX: { usd: 0.012, change24h: 0.15 },  // 1 INRX = 1 INR ≈ $0.012, not on CoinGecko
 };
 
+const getFlagByCode = (code: string): string => {
+  const flags: Record<string, string> = {
+    USD: '🇺🇸', CNY: '🇨🇳', RUB: '🇷🇺', UZS: '🇺🇿', PKR: '🇵🇰',
+    VND: '🇻🇳', IDR: '🇮🇩', PHP: '🇵🇭', AED: '🇦🇪', THB: '🇹🇭',
+    EUR: '🇪🇺', GBP: '🇬🇧', INR: '🇮🇳', AUD: '🇦🇺', SGD: '🇸🇬',
+    BHD: '🇧🇭', SAR: '🇸🇦', KWD: '🇰🇼', JPY: '🇯🇵', HKD: '🇭🇰'
+  };
+  return flags[code.toUpperCase()] || '🌐';
+};
+
+const OFFLINE_FIAT_CURRENCIES: Record<string, any> = {
+  USD: { code: 'USD', symbol: '$', name: 'US Dollar', rate: 1.0, locale: 'en-US', format: 'en-US', flag: '🇺🇸' },
+  CNY: { code: 'CNY', symbol: '¥', name: 'Chinese Yuan', rate: 7.23, locale: 'zh-CN', format: 'zh-CN', flag: '🇨🇳' },
+  RUB: { code: 'RUB', symbol: '₽', name: 'Russian Ruble', rate: 89.5, locale: 'ru-RU', format: 'ru-RU', flag: '🇷🇺' },
+  UZS: { code: 'UZS', symbol: 'UZS', name: 'Uzbekistan Som', rate: 12600.0, locale: 'uz-UZ', format: 'uz-UZ', flag: '🇺🇿' },
+  PKR: { code: 'PKR', symbol: '₨', name: 'Pakistani Rupee', rate: 278.5, locale: 'ur-PK', format: 'ur-PK', flag: '🇵🇰' },
+  VND: { code: 'VND', symbol: '₫', name: 'Vietnamese Dong', rate: 25400.0, locale: 'vi-VN', format: 'vi-VN', flag: '🇻🇳' },
+  IDR: { code: 'IDR', symbol: 'Rp', name: 'Indonesian Rupiah', rate: 16300.0, locale: 'id-ID', format: 'id-ID', flag: '🇮🇩' },
+  PHP: { code: 'PHP', symbol: '₱', name: 'Philippine Peso', rate: 58.5, locale: 'fil-PH', format: 'fil-PH', flag: '🇵🇭' },
+  AED: { code: 'AED', symbol: 'د.إ', name: 'UAE Dirham', rate: 3.67, locale: 'en-US', format: 'en-US', flag: '🇦🇪' },
+  THB: { code: 'THB', symbol: '฿', name: 'Thai Baht', rate: 36.5, locale: 'th-TH', format: 'th-TH', flag: '🇹🇭' }
+};
+
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [isDarkMode,       setIsDarkMode]       = useState(true);
   const [fiatCurrency,     setFiatCurrencyState] = useState('USD');
-  const [fiatRates,        setFiatRates]        = useState<Record<string, any>>(SUPPORTED_FIAT_CURRENCIES);
+  const [fiatRates,        setFiatRates]        = useState<Record<string, any>>(OFFLINE_FIAT_CURRENCIES);
+  const [tokenContracts,   setTokenContracts]   = useState<any[]>([]);
 
   const loadDynamicRates = useCallback(async () => {
     try {
@@ -184,7 +217,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       }
       
       if (data && data.length > 0) {
-        const merged = { ...SUPPORTED_FIAT_CURRENCIES };
+        const merged: Record<string, any> = {};
         data.forEach((c: any) => {
           if (c.is_enabled !== false) {
             merged[c.code] = {
@@ -194,10 +227,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
               rate: Number(c.rate),
               locale: c.locale || 'en-US',
               format: c.format || 'en-US',
-              flag: (SUPPORTED_FIAT_CURRENCIES as any)[c.code]?.flag || '🌐'
+              flag: getFlagByCode(c.code)
             };
-          } else {
-            delete merged[c.code];
           }
         });
         setFiatRates(merged);
@@ -207,9 +238,29 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const loadDynamicContracts = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('token_contracts')
+        .select('*')
+        .eq('is_enabled', true);
+      
+      if (error) {
+        console.warn('[WalletContext] Failed to load token contracts:', error.message);
+        return;
+      }
+      if (data) {
+        setTokenContracts(data);
+      }
+    } catch (e) {
+      console.warn('[WalletContext] loadDynamicContracts failed:', e);
+    }
+  }, []);
+
   useEffect(() => {
     loadDynamicRates();
-  }, [loadDynamicRates]);
+    loadDynamicContracts();
+  }, [loadDynamicRates, loadDynamicContracts]);
   const [accountType,      setAccountTypeState] = useState<'personal' | 'business'>('personal');
   const [accountTypeSet,   setAccountTypeSet]   = useState(false);
   const [p2pCountry,       setP2PCountryState]  = useState('India');
@@ -330,58 +381,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(timer);
   }, [walletAddress]);
 
-  const importRecoveredAsset = useCallback(async (asset: DiscoveredAsset) => {
-    await addCustomToken({
-      contractAddress: asset.contractAddress,
-      symbol: asset.symbol,
-      decimals: asset.decimals,
-      network: asset.network,
-      isCustom: true
-    });
-    setRecoverableAssets(prev => {
-      const updated = prev.filter(a => a.id !== asset.id);
-      AsyncStorage.setItem('cw_recoverable_assets', JSON.stringify(updated)).catch(() => {});
-      return updated;
-    });
-    refreshBalance();
-  }, [addCustomToken, refreshBalance]);
 
-  const ignoreRecoveredAsset = useCallback(async (asset: DiscoveredAsset) => {
-    setRecoverableAssets(prev => {
-      const updated = prev.filter(a => a.id !== asset.id);
-      AsyncStorage.setItem('cw_recoverable_assets', JSON.stringify(updated)).catch(() => {});
-      return updated;
-    });
-  }, []);
-
-  const recoverAsset = useCallback(async (asset: DiscoveredAsset, targetAddress: string): Promise<boolean> => {
-    const privateKey = await storageService.getPrivateKey();
-    if (!privateKey) return false;
-    
-    setIsGlobalLoading(true);
-    setGlobalLoadingMessage(`Recovering ${asset.symbol}...`);
-    try {
-      const tx = await ethereumService.sendERC20(
-        privateKey,
-        targetAddress,
-        asset.balance.toString(),
-        asset.contractAddress,
-        asset.decimals,
-        asset.network
-      );
-      if (tx.success) {
-        setRecoverableAssets(prev => {
-          const updated = prev.filter(a => a.id !== asset.id);
-          AsyncStorage.setItem('cw_recoverable_assets', JSON.stringify(updated)).catch(() => {});
-          return updated;
-        });
-        setIsGlobalLoading(false);
-        return true;
-      }
-    } catch {}
-    setIsGlobalLoading(false);
-    return false;
-  }, []);
 
   const [dataLoaded,     setDataLoaded]     = useState(false);
   const [isSyncing,      setIsSyncing]      = useState(false);
@@ -532,7 +532,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         });
         const customResults = await Promise.all(customPromises);
         customResults.forEach((r: any) => {
-          merged[r.symbol] = r.bal;
+          (merged as any)[r.symbol] = r.bal;
         });
       } catch (e) {
         console.warn('Failed to fetch custom token balances:', e);
@@ -548,14 +548,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         profileService.upsert(walletAddress, { token_balances: merged }).catch(() => {});
         // Sync INRX balance and current selection to wallet_currency_settings table
         const inrxBalance = merged.INRX ?? 0;
-        supabase.from('wallet_currency_settings').upsert({
-          wallet_address: walletAddress.toLowerCase(),
-          base_token: 'INRX',
-          display_currency: fiatCurrency,
-          balance: inrxBalance
-        }, { onConflict: 'wallet_address' }).catch((e: any) => {
-          console.warn('[WalletContext] failed to sync wallet_currency_settings balance:', e.message);
-        });
+        (async () => {
+          try {
+            await supabase.from('wallet_currency_settings').upsert({
+              wallet_address: walletAddress.toLowerCase(),
+              base_token: 'INRX',
+              display_currency: fiatCurrency,
+              balance: inrxBalance
+            }, { onConflict: 'wallet_address' });
+          } catch (e: any) {
+            console.warn('[WalletContext] failed to sync wallet_currency_settings balance:', e?.message || e);
+          }
+        })();
       }
     } catch (e) {
     } finally {
@@ -572,7 +576,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       // Real on-chain transfer happened — poll RPC every 3s until balance reflects it
       const expectedMin = token === 'ETH'
         ? parseFloat(ethBalanceRef.current) + amount * 0.99 // allow for gas
-        : (balancesRef.current[token] || 0) + amount * 0.99;
+        : ((balancesRef.current as any)[token] || 0) + amount * 0.99;
 
       let attempts = 0;
       const poll = async () => {
@@ -580,7 +584,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         await fetchBalance(walletAddress, network);
         const current = token === 'ETH'
           ? parseFloat(ethBalanceRef.current)
-          : (balancesRef.current[token] || 0);
+          : ((balancesRef.current as any)[token] || 0);
         if (current >= expectedMin || attempts >= 20) return; // stop after 60s
         setTimeout(poll, 3000);
       };
@@ -1677,7 +1681,60 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setIsSyncing(false);
       syncInProgressRef.current = false;
     }
-  }, [walletAddress, tronAddress, network, prices, fetchBalance]);
+  }, [walletAddress, network, tronAddress, prices.ETH]);
+
+  const importRecoveredAsset = useCallback(async (asset: DiscoveredAsset) => {
+    await addCustomToken({
+      contractAddress: asset.contractAddress,
+      symbol: asset.symbol,
+      decimals: asset.decimals,
+      network: asset.network,
+      isCustom: true
+    });
+    setRecoverableAssets(prev => {
+      const updated = prev.filter(a => a.id !== asset.id);
+      AsyncStorage.setItem('cw_recoverable_assets', JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+    refreshBalance();
+  }, [addCustomToken, refreshBalance]);
+
+  const ignoreRecoveredAsset = useCallback(async (asset: DiscoveredAsset) => {
+    setRecoverableAssets(prev => {
+      const updated = prev.filter(a => a.id !== asset.id);
+      AsyncStorage.setItem('cw_recoverable_assets', JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+  }, []);
+
+  const recoverAsset = useCallback(async (asset: DiscoveredAsset, targetAddress: string): Promise<boolean> => {
+    const privateKey = await storageService.getPrivateKey();
+    if (!privateKey) return false;
+    
+    setIsGlobalLoading(true);
+    setGlobalLoadingMessage(`Recovering ${asset.symbol}...`);
+    try {
+      const tx = await ethereumService.sendERC20(
+        privateKey,
+        targetAddress,
+        asset.balance.toString(),
+        asset.contractAddress,
+        asset.decimals,
+        asset.network
+      );
+      if (tx.success) {
+        setRecoverableAssets(prev => {
+          const updated = prev.filter(a => a.id !== asset.id);
+          AsyncStorage.setItem('cw_recoverable_assets', JSON.stringify(updated)).catch(() => {});
+          return updated;
+        });
+        setIsGlobalLoading(false);
+        return true;
+      }
+    } catch {}
+    setIsGlobalLoading(false);
+    return false;
+  }, []);
 
   useEffect(() => {
     if (dataLoaded && pendingAddressRef.current) {
@@ -1711,7 +1768,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const supabaseCardRestoredRef = useRef(false);
   useEffect(() => { supabaseCardRestoredRef.current = false; }, [walletAddress]);
   useEffect(() => {
-    if (transactions.length > 0 && !supabaseCardRestoredRef.current) {
+    if (transactions.length > 0) {
       
       const recoveredTokenBals: Record<string, number> = { 
         USDT: 0, USDC: 0, ETH: 0, BTC: 0, SOL: 0, BNB: 0, XRP: 0, TON: 0, TRX: 0, SUI: 0, INRX: 0
@@ -1768,7 +1825,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       });
 
       // Apply Recovered State
-      if (hasCardActivity) {
+      if (hasCardActivity && !supabaseCardRestoredRef.current) {
         setCardCreated(true);
         const finalBal = Math.max(0, recoveredCardBal);
         setCardBalance(finalBal);
@@ -1778,7 +1835,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         let changed = false;
         const next = { ...prev };
         Object.entries(recoveredTokenBals).forEach(([coin, val]) => {
-          if (coin === 'INRX' && (next.INRX || 0) >= val && val === 0) return;
+          // Never zero out INRX from tx replay — on-chain balance is the source of truth
+          if (coin === 'INRX') return;
           if (Math.abs((next[coin] || 0) - val) > 0.0001) {
             next[coin] = val;
             changed = true;
@@ -2752,21 +2810,25 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setFiatCurrency = useCallback(async (currency: string) => {
-    if (fiatRates[currency] || SUPPORTED_FIAT_CURRENCIES[currency]) {
+    if (fiatRates[currency]) {
       setFiatCurrencyState(currency);
       await AsyncStorage.setItem('cw_fiat_currency', currency);
       if (walletAddress) {
         profileService.upsert(walletAddress, { p2p_currency: currency }).catch(() => {});
         // Sync setting preference to wallet_currency_settings table
         const inrxBalance = balancesRef.current.INRX ?? 0;
-        supabase.from('wallet_currency_settings').upsert({
-          wallet_address: walletAddress.toLowerCase(),
-          base_token: 'INRX',
-          display_currency: currency,
-          balance: inrxBalance
-        }, { onConflict: 'wallet_address' }).catch((e: any) => {
-          console.warn('[WalletContext] failed to sync settings on change:', e.message);
-        });
+        (async () => {
+          try {
+            await supabase.from('wallet_currency_settings').upsert({
+              wallet_address: walletAddress.toLowerCase(),
+              base_token: 'INRX',
+              display_currency: currency,
+              balance: inrxBalance
+            }, { onConflict: 'wallet_address' });
+          } catch (e: any) {
+            console.warn('[WalletContext] failed to sync settings on change:', e?.message || e);
+          }
+        })();
       }
     }
   }, [walletAddress, fiatRates]);
@@ -2797,7 +2859,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, [fiatCurrency, fiatRates]);
 
   const formatOrderFiat = useCallback((amountLocal: number, currencyCode: string) => {
-    const fiat = fiatRates[currencyCode] || SUPPORTED_FIAT_CURRENCIES[currencyCode] || SUPPORTED_FIAT_CURRENCIES['USD'];
+    const fiat = fiatRates[currencyCode] || fiatRates['USD'] || { code: 'USD', symbol: '$', rate: 1.0, locale: 'en-US' };
     if (fiat.code === 'JPY' || fiat.code === 'VND') {
       return Math.round(amountLocal).toLocaleString(fiat.locale);
     }
@@ -2833,6 +2895,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     sendETH, sendCrypto, topupCard, spendCard, toggleFreezeCard, reportLostCard, applySwapBalances, switchNetwork,
     bridgeINRX,
     fiatCurrency, setFiatCurrency, formatFiat, convertFiat, fiatSymbol, formatOrderFiat, fiatRates,
+    loadCurrencies: loadDynamicRates, getEnabledCurrencies: () => Object.values(fiatRates), getCurrencySymbol: (code: string) => fiatRates[code]?.symbol || '$', getExchangeRate: (code: string) => fiatRates[code]?.rate ?? 1.0,
+    tokenContracts, getTokenContracts: () => tokenContracts, getContractsByNetwork: (n: string) => tokenContracts.filter(c => c.network_name === n), getContractsByCurrency: (c: string) => tokenContracts.filter(tc => tc.currency_code === c),
     isGlobalLoading,
     setGlobalLoading: (loading: boolean, msg?: string) => {
       if (msg) setGlobalLoadingMessage(msg);
@@ -2865,6 +2929,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     sendETH, sendCrypto, topupCard, spendCard, toggleFreezeCard, reportLostCard, applySwapBalances, switchNetwork,
     bridgeINRX,
     fiatCurrency, setFiatCurrency, formatFiat, convertFiat, fiatSymbol, formatOrderFiat, fiatRates,
+    loadDynamicRates, tokenContracts,
     isGlobalLoading,
     globalLoadingMessage,
     userUuid,

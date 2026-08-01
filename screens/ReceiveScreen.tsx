@@ -31,19 +31,7 @@ const FALLBACK_NETWORKS = [
   { network_name: 'Ripple Ledger', symbol: 'XRP', is_active: true, is_mainnet: true, min_deposit: '1 XRP', estimated_arrival: '10 seconds', warning_text: 'Only send XRP to this address.', supported_assets: ['XRP'] },
 ];
 
-const ASSET_LIST = [
-  { symbol: 'ETH', name: 'Ethereum' },
-  { symbol: 'USDT', name: 'Tether' },
-  { symbol: 'USDC', name: 'USD Coin' },
-  { symbol: 'TRX', name: 'TRON' },
-  { symbol: 'BTC', name: 'Bitcoin' },
-  { symbol: 'SOL', name: 'Solana' },
-  { symbol: 'BNB', name: 'BNB' },
-  { symbol: 'XRP', name: 'Ripple' },
-  { symbol: 'TON', name: 'Toncoin' },
-  { symbol: 'SUI', name: 'Sui' },
-  { symbol: 'INRX', name: 'e-Rupee Stablecoin' },
-];
+// ASSET_LIST removed for dynamic lookup
 
 // ── Tab type ──
 type ReceiveTab = 'wallet' | 'payment';
@@ -182,7 +170,7 @@ export function parseUIDQRPayload(data: string): UIDQRPayload | null {
 
 export default function ReceiveScreen({ navigation, route }: any) {
   const insets = useSafeAreaInsets();
-  const { walletAddress, tronAddress: ctxTronAddress, isDarkMode, walletName, userUid, accountType, adminNetworks } = useWallet() as any;
+  const { walletAddress, tronAddress: ctxTronAddress, isDarkMode, walletName, userUid, accountType, adminNetworks, tokenContracts, fiatRates } = useWallet() as any;
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
 
   const [activeTab, setActiveTab] = useState<ReceiveTab>(route?.params?.symbol ? 'wallet' : 'payment');
@@ -299,7 +287,44 @@ export default function ReceiveScreen({ navigation, route }: any) {
     }
   };
 
-  const filteredAssets = ASSET_LIST.filter(
+  // Create dynamic asset list
+  const dynamicAssetList = React.useMemo(() => {
+    const list = [
+      { symbol: 'ETH', name: 'Ethereum' },
+      { symbol: 'BTC', name: 'Bitcoin' },
+      { symbol: 'SOL', name: 'Solana' },
+      { symbol: 'TRX', name: 'TRON' },
+      { symbol: 'BNB', name: 'BNB' },
+      { symbol: 'XRP', name: 'Ripple' },
+      { symbol: 'TON', name: 'Toncoin' },
+      { symbol: 'SUI', name: 'Sui' },
+    ];
+
+    if (tokenContracts && tokenContracts.length > 0) {
+      tokenContracts.forEach((tc: any) => {
+        const symbol = tc.currency_code || tc.currency;
+        if (symbol && !list.find(a => a.symbol === symbol)) {
+          const name = fiatRates[symbol]?.name || `${symbol} Token`;
+          list.push({ symbol, name });
+        }
+      });
+    }
+
+    const fallbacks = [
+      { symbol: 'USDT', name: 'Tether' },
+      { symbol: 'USDC', name: 'USD Coin' },
+      { symbol: 'INRX', name: 'e-Rupee Stablecoin' }
+    ];
+    fallbacks.forEach(f => {
+      if (!list.find(a => a.symbol === f.symbol)) {
+        list.push(f);
+      }
+    });
+
+    return list;
+  }, [tokenContracts, fiatRates]);
+
+  const filteredAssets = dynamicAssetList.filter(
     a => a.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
          a.name.toLowerCase().includes(searchQuery.toLowerCase())
   );

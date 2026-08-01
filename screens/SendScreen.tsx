@@ -34,19 +34,7 @@ const FALLBACK_NETWORKS = [
   { network_name: 'Ripple Ledger', symbol: 'XRP', is_active: true, is_mainnet: true, min_deposit: '1 XRP', estimated_arrival: '10 seconds', warning_text: 'Only send XRP to this address.', supported_assets: ['XRP'] },
 ];
 
-const ASSET_LIST = [
-  { symbol: 'ETH', name: 'Ethereum' },
-  { symbol: 'USDT', name: 'Tether' },
-  { symbol: 'USDC', name: 'USD Coin' },
-  { symbol: 'TRX', name: 'TRON' },
-  { symbol: 'BTC', name: 'Bitcoin' },
-  { symbol: 'SOL', name: 'Solana' },
-  { symbol: 'BNB', name: 'BNB' },
-  { symbol: 'XRP', name: 'Ripple' },
-  { symbol: 'TON', name: 'Toncoin' },
-  { symbol: 'SUI', name: 'Sui' },
-  { symbol: 'INRX', name: 'e-Rupee Stablecoin' },
-];
+// ASSET_LIST removed for dynamic lookup
 
 const CoinIcon = memo(({ symbol, size = 24 }: { symbol: string; size?: number }) => {
   const meta  = COIN_META[symbol];
@@ -85,8 +73,8 @@ export default function SendScreen({ navigation, route }: any) {
     ethBalance, sendETH, isDarkMode, walletAddress, tronAddress, 
     balances, addTx, refreshBalance,
     applySwapBalances, formatFiat, fiatCurrency, fiatSymbol, adminNetworks,
-    customTokens
-  } = useWallet();
+    customTokens, tokenContracts, fiatRates
+  } = useWallet() as any;
   const { prices } = useMarket();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const styles = React.useMemo(() => makeStyles(T), [T]);
@@ -162,9 +150,40 @@ export default function SendScreen({ navigation, route }: any) {
 
   const activeNets = adminNetworks && adminNetworks.length > 0 ? adminNetworks : FALLBACK_NETWORKS;
   
-  // Create an extended ASSET_LIST that includes custom tokens
+  // Create an extended ASSET_LIST that includes custom tokens and backend contracts dynamically
   const extendedAssetList = React.useMemo(() => {
-    const list = [...ASSET_LIST];
+    const list = [
+      { symbol: 'ETH', name: 'Ethereum' },
+      { symbol: 'BTC', name: 'Bitcoin' },
+      { symbol: 'SOL', name: 'Solana' },
+      { symbol: 'TRX', name: 'TRON' },
+      { symbol: 'BNB', name: 'BNB' },
+      { symbol: 'XRP', name: 'Ripple' },
+      { symbol: 'TON', name: 'Toncoin' },
+      { symbol: 'SUI', name: 'Sui' },
+    ];
+
+    if (tokenContracts && tokenContracts.length > 0) {
+      tokenContracts.forEach((tc: any) => {
+        const symbol = tc.currency_code || tc.currency;
+        if (symbol && !list.find(a => a.symbol === symbol)) {
+          const name = fiatRates[symbol]?.name || `${symbol} Token`;
+          list.push({ symbol, name });
+        }
+      });
+    }
+
+    const fallbacks = [
+      { symbol: 'USDT', name: 'Tether' },
+      { symbol: 'USDC', name: 'USD Coin' },
+      { symbol: 'INRX', name: 'e-Rupee Stablecoin' }
+    ];
+    fallbacks.forEach(f => {
+      if (!list.find(a => a.symbol === f.symbol)) {
+        list.push(f);
+      }
+    });
+
     if (customTokens && customTokens.length > 0) {
       customTokens.forEach((t: any) => {
         if (!list.find(a => a.symbol === t.symbol)) {
@@ -172,8 +191,9 @@ export default function SendScreen({ navigation, route }: any) {
         }
       });
     }
+
     return list;
-  }, [customTokens]);
+  }, [tokenContracts, fiatRates, customTokens]);
 
   const compatibleNets = React.useMemo(() => {
     const standardNets = activeNets.filter((n: any) => n.is_active && n.supported_assets && n.supported_assets.includes(selectedAsset));
@@ -721,7 +741,7 @@ export default function SendScreen({ navigation, route }: any) {
                 <Text style={{ color: T.textDim, fontSize: 12, textAlign: 'center', marginTop: 4 }}>This asset has no active networks available.</Text>
               </View>
             ) : (
-              compatibleNets.map(net => (
+              compatibleNets.map((net: any) => (
                 <TouchableOpacity
                   key={net.id || net.network_name}
                   style={[styles.networkRow, { backgroundColor: T.surface, borderColor: T.border }]}

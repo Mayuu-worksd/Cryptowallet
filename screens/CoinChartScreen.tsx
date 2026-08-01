@@ -16,7 +16,6 @@ import { useWallet, useMarket } from '../store/WalletContext';
 import { COIN_META, COIN_COLORS } from '../constants';
 import { marketService, SYMBOL_TO_COINGECKO_ID } from '../services/marketService';
 import SkeletonLoader from '../components/ui/SkeletonLoader';
-import { SUPPORTED_FIAT_CURRENCIES } from '../constants/currencyConfig';
 import { CurrencyText } from '../components/CurrencyText';
 import { parseDateSafe, formatDateShort } from '../utils/date';
 
@@ -254,13 +253,13 @@ const TradingChart = React.memo(({ prices, color, isDark, formatPrice }: Trading
 export default function CoinChartScreen({ route, navigation }: any) {
   const insets = useSafeAreaInsets();
   const { symbol } = route.params as { symbol: string };
-  const { isDarkMode, balances, ethBalance, formatFiat, fiatCurrency, transactions } = useWallet() as any;
+  const { isDarkMode, balances, ethBalance, formatFiat, fiatCurrency, transactions, fiatRates } = useWallet() as any;
   const { prices } = useMarket();
   const T     = isDarkMode ? Theme.colors : Theme.lightColors;
   const color = COIN_COLORS[symbol] ?? T.primary;
   const meta  = COIN_META[symbol];
 
-  const fiatInfo = SUPPORTED_FIAT_CURRENCIES[fiatCurrency] || { symbol: '$', rate: 1 };
+  const fiatInfo = fiatRates[fiatCurrency] || { symbol: '$', rate: 1 };
   const fiatSymbolStr = fiatInfo.symbol;
 
   const [chartData, setChartData] = useState<number[]>([]);

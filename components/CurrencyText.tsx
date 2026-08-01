@@ -1,7 +1,7 @@
 import React from 'react';
-import { Text, TextStyle, StyleSheet, View } from 'react-native';
+import { Text, TextStyle, StyleSheet } from 'react-native';
 import getSymbolFromCurrency from 'currency-symbol-map';
-import { SUPPORTED_FIAT_CURRENCIES } from '../constants/currencyConfig';
+import { useWallet } from '../store/WalletContext';
 import AedSymbol from './AedSymbol';
 
 interface CurrencyTextProps {
@@ -18,7 +18,17 @@ export const CurrencyText = ({ amount, code, style, hideBalance = false, skipCon
   const fontSize = flattened.fontSize || 16;
   const color = flattened.color || '#FFFFFF';
   
-  const fiatConfig = SUPPORTED_FIAT_CURRENCIES[code] || SUPPORTED_FIAT_CURRENCIES['USD'];
+  let fiatRates: Record<string, any> = {};
+  try {
+    const wallet = useWallet();
+    if (wallet && wallet.fiatRates) {
+      fiatRates = wallet.fiatRates;
+    }
+  } catch (e) {
+    // Fallback if context is not loaded
+  }
+
+  const fiatConfig = fiatRates[code] || fiatRates['USD'] || { code: 'USD', rate: 1.0, locale: 'en-US', symbol: '$' };
   const rate = fiatConfig?.rate ?? 1.0;
   const locale = fiatConfig?.locale ?? 'en-US';
 
@@ -51,7 +61,9 @@ export const CurrencyText = ({ amount, code, style, hideBalance = false, skipCon
   
   const displayAmt = hideBalance ? '••••' : cleanAmt;
 
-  if (code === 'AED') {
+  const symbol = fiatConfig?.symbol || getSymbolFromCurrency(code) || code;
+
+  if (code === 'AED' || symbol === 'AED' || symbol === 'د.إ') {
     return (
       <Text style={style}>
         <AedSymbol size={fontSize * 0.85} color={color as string} style={{ transform: [{ translateY: fontSize * 0.15 }] }} />
@@ -60,7 +72,6 @@ export const CurrencyText = ({ amount, code, style, hideBalance = false, skipCon
     );
   }
 
-  const symbol = getSymbolFromCurrency(code) || code;
   return (
     <Text style={style}>
       {symbol}{displayAmt}

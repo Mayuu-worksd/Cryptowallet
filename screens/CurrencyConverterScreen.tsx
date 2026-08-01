@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useWallet } from "../store/WalletContext";
 import { haptics } from "../utils/haptics";
-import { SUPPORTED_FIAT_CURRENCIES } from "../constants/currencyConfig";
+// SUPPORTED_FIAT_CURRENCIES removed for dynamic loader
 
 export default function CurrencyConverterScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
@@ -71,10 +71,10 @@ export default function CurrencyConverterScreen({ navigation }: any) {
     else setToCurrency(c);
     setModalVisible(false);
   };
-
+  
   const handleConvert = async () => {
     if (parsedAmount <= 0) return;
-    haptics.impact();
+    haptics.selection();
     setIsProcessing(true);
     
     // Simulate network delay for realism
@@ -105,14 +105,14 @@ export default function CurrencyConverterScreen({ navigation }: any) {
 
     setIsProcessing(false);
     setIsSuccess(true);
-    haptics.notification("success");
+    haptics.success();
 
     setTimeout(() => {
       navigation.goBack();
     }, 2000);
   };
 
-  const availableCurrencies = [...Object.keys(fiatRates || SUPPORTED_FIAT_CURRENCIES), 'INRX'];
+  const availableCurrencies = [...Object.keys(fiatRates || {}), 'INRX'];
 
   return (
     <KeyboardAvoidingView
@@ -150,7 +150,7 @@ export default function CurrencyConverterScreen({ navigation }: any) {
               />
               <TouchableOpacity onPress={() => openSelector('from')} style={[styles.currencySelector, { borderColor: T.border, backgroundColor: T.surface }]}>
                 <Text style={[styles.currencyCode, { color: T.text }]}>
-                  {fromCurrency === 'INRX' ? '🇮🇳 INRX' : `${(SUPPORTED_FIAT_CURRENCIES as any)[fromCurrency]?.flag || '🌐'} ${fromCurrency}`}
+                  {fromCurrency === 'INRX' ? '🇮🇳 INRX' : `${fiatRates[fromCurrency]?.flag || '🌐'} ${fromCurrency}`}
                 </Text>
                 <Feather name="chevron-down" size={16} color={T.text} />
               </TouchableOpacity>
@@ -175,7 +175,7 @@ export default function CurrencyConverterScreen({ navigation }: any) {
               </Text>
               <TouchableOpacity onPress={() => openSelector('to')} style={[styles.currencySelector, { borderColor: T.border, backgroundColor: T.surface }]}>
                 <Text style={[styles.currencyCode, { color: T.text }]}>
-                  {toCurrency === 'INRX' ? '🇮🇳 INRX' : `${(SUPPORTED_FIAT_CURRENCIES as any)[toCurrency]?.flag || '🌐'} ${toCurrency}`}
+                  {toCurrency === 'INRX' ? '🇮🇳 INRX' : `${fiatRates[toCurrency]?.flag || '🌐'} ${toCurrency}`}
                 </Text>
                 <Feather name="chevron-down" size={16} color={T.text} />
               </TouchableOpacity>
@@ -232,8 +232,8 @@ export default function CurrencyConverterScreen({ navigation }: any) {
                 const details = c === 'INRX' 
                   ? { flag: '🇮🇳', name: 'INRX Token', symbol: 'INRX' } 
                   : {
-                      flag: (SUPPORTED_FIAT_CURRENCIES as any)[c]?.flag || '🌐',
-                      name: fiatRates[c]?.name || (SUPPORTED_FIAT_CURRENCIES as any)[c]?.name || c,
+                      flag: fiatRates[c]?.flag || '🌐',
+                      name: fiatRates[c]?.name || c,
                       symbol: fiatRates[c]?.symbol || c
                     };
                 return (
@@ -267,29 +267,29 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 16 },
   backBtn: { width: 40, height: 40, justifyContent: "center", alignItems: "flex-start" },
-  headerTitle: { fontSize: 20, fontWeight: "900", fontFamily: Fonts.display, textTransform: "uppercase" },
+  headerTitle: { fontSize: 20, fontWeight: "900", fontFamily: Fonts.extraBold, textTransform: "uppercase" },
   scrollContent: { paddingHorizontal: 20, paddingVertical: 20, paddingBottom: 120 },
   card: { borderWidth: 3, borderRadius: 16, padding: 16, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4 },
   inputSection: { borderWidth: 2, borderRadius: 12, padding: 16 },
   inputHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
-  inputLabel: { fontSize: 12, fontWeight: "800", fontFamily: Fonts.mono, textTransform: "uppercase" },
+  inputLabel: { fontSize: 12, fontWeight: "800", fontFamily: Fonts.medium, textTransform: "uppercase" },
   inputRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  amountInput: { flex: 1, fontSize: 32, fontWeight: "900", fontFamily: Fonts.display },
+  amountInput: { flex: 1, fontSize: 32, fontWeight: "900", fontFamily: Fonts.extraBold },
   currencySelector: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 2, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20 },
-  currencyCode: { fontSize: 14, fontWeight: "800", fontFamily: Fonts.mono },
+  currencyCode: { fontSize: 14, fontWeight: "800", fontFamily: Fonts.medium },
   swapBtnContainer: { alignItems: "center", marginVertical: -16, zIndex: 10 },
   swapBtn: { width: 44, height: 44, borderRadius: 22, borderWidth: 3, alignItems: "center", justifyContent: "center" },
   detailsBox: { marginTop: 24, paddingHorizontal: 8, gap: 12 },
   detailRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  detailLabel: { fontSize: 12, fontWeight: "700", fontFamily: Fonts.mono, textTransform: "uppercase" },
-  detailValue: { fontSize: 12, fontWeight: "800", fontFamily: Fonts.mono },
+  detailLabel: { fontSize: 12, fontWeight: "700", fontFamily: Fonts.medium, textTransform: "uppercase" },
+  detailValue: { fontSize: 12, fontWeight: "800", fontFamily: Fonts.medium },
   bottomContainer: { position: "absolute", bottom: 0, left: 0, right: 0, padding: 20, paddingBottom: 40, borderTopWidth: 2 },
   actionBtn: { height: 56, borderWidth: 3, borderRadius: 12, alignItems: "center", justifyContent: "center", shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0 },
-  actionBtnText: { fontSize: 16, fontWeight: "900", fontFamily: Fonts.display, textTransform: "uppercase", letterSpacing: 1 },
+  actionBtnText: { fontSize: 16, fontWeight: "900", fontFamily: Fonts.extraBold, textTransform: "uppercase", letterSpacing: 1 },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center", padding: 20 },
   modalContent: { width: "100%", maxHeight: "70%", borderWidth: 3, borderRadius: 16, padding: 20 },
-  modalTitle: { fontSize: 18, fontWeight: "900", fontFamily: Fonts.display, textTransform: "uppercase", marginBottom: 16 },
+  modalTitle: { fontSize: 18, fontWeight: "900", fontFamily: Fonts.extraBold, textTransform: "uppercase", marginBottom: 16 },
   modalItem: { flexDirection: "row", alignItems: "center", padding: 16, borderWidth: 2, borderRadius: 12, marginBottom: 12 },
-  modalItemCode: { fontSize: 16, fontWeight: "900", fontFamily: Fonts.display },
-  modalItemName: { fontSize: 12, fontWeight: "700", fontFamily: Fonts.mono, marginTop: 4 },
+  modalItemCode: { fontSize: 16, fontWeight: "900", fontFamily: Fonts.extraBold },
+  modalItemName: { fontSize: 12, fontWeight: "700", fontFamily: Fonts.medium, marginTop: 4 },
 });

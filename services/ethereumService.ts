@@ -262,34 +262,4 @@ export const ethereumService = {
       return { hash: '', success: false, error: msg };
     }
   },
-
-  async getCustomTokenMetadata(contractAddress: string, network?: string): Promise<{ symbol: string; decimals: number } | null> {
-    try {
-      const p = getProvider(network);
-      const contract = new ethers.Contract(contractAddress, ERC20_ABI, p);
-      const [symbol, decimals] = await Promise.all([
-        contract.symbol(),
-        contract.decimals(),
-      ]);
-      return { symbol, decimals: Number(decimals) };
-    } catch (e) {
-      console.warn('Failed to fetch custom token metadata:', e);
-      return null;
-    }
-  },
-
-  async getCustomTokenBalance(address: string, contractAddress: string, network?: string): Promise<number> {
-    try {
-      const p = getProvider(network);
-      const contract = new ethers.Contract(contractAddress, ERC20_ABI, p);
-      const [bal, decimals] = await Promise.all([
-        contract.balanceOf(address),
-        contract.decimals(),
-      ]);
-      return Number(formatUnits(bal, decimals));
-    } catch (e) {
-      console.warn('Failed to fetch custom token balance:', e);
-      return 0;
-    }
-  },
 };

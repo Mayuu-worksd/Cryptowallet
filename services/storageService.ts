@@ -266,23 +266,4 @@ export const storageService = {
       ]);
     }
   },
-
-  async saveCustomTokens(tokens: any[]): Promise<void> {
-    if (Platform.OS === 'web') {
-      localStorage.setItem(KEYS.CUSTOM_TOKENS, JSON.stringify(tokens));
-    } else {
-      await AsyncStorage.setItem(KEYS.CUSTOM_TOKENS, JSON.stringify(tokens));
-    }
-  },
-
-  async getCustomTokens(): Promise<any[]> {
-    try {
-      const val = Platform.OS === 'web'
-        ? localStorage.getItem(KEYS.CUSTOM_TOKENS)
-        : await AsyncStorage.getItem(KEYS.CUSTOM_TOKENS);
-      return val ? JSON.parse(val) : [];
-    } catch {
-      return [];
-    }
-  },
 };

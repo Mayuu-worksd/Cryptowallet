@@ -47,18 +47,7 @@ const COUNTRIES = [
   { name: 'Switzerland', flag: '🇨🇭', currency: 'CHF' },
 ];
 
-const CURRENCIES = [
-  { code: 'INR', name: 'Indian Rupee' },
-  { code: 'USD', name: 'US Dollar' },
-  { code: 'GBP', name: 'British Pound' },
-  { code: 'EUR', name: 'Euro' },
-  { code: 'AED', name: 'UAE Dirham' },
-  { code: 'SGD', name: 'Singapore Dollar' },
-  { code: 'JPY', name: 'Japanese Yen' },
-  { code: 'AUD', name: 'Australian Dollar' },
-  { code: 'CAD', name: 'Canadian Dollar' },
-  { code: 'CHF', name: 'Swiss Franc' },
-];
+// Hardcoded CURRENCIES removed for dynamic loader
 
 const CoinIcon = ({ symbol, size = 36 }: { symbol: string; size?: number }) => {
   const meta = COIN_META[symbol];
@@ -83,7 +72,7 @@ export default function SettingsScreen({ navigation }: any) {
     pinEnabled, refreshPinEnabled, isReadOnly, kycStatus, accountType, setAccountType,
     p2pCountry, p2pCurrency, setP2PPreferences, setFiatCurrency, formatFiat, fiatCurrency,
     userUuid, userUid, kycEmail,
-    cardCreated, cardDetails,
+    cardCreated, cardDetails, fiatRates
   } = useWallet() as any;
   const isTronNetwork = network === 'TRON' || network === 'TRON Nile';
   // Show EVM address on EVM networks, TRON address on TRON networks
@@ -379,7 +368,7 @@ export default function SettingsScreen({ navigation }: any) {
         visible={showCurrencyModal} 
         onClose={() => setShowCurrencyModal(false)}
         title="Base Currency"
-        items={CURRENCIES}
+        items={Object.values(fiatRates || {}).map((c: any) => ({ code: c.code, name: c.name }))}
         selected={p2pCurrency}
         onSelect={(c: any) => { setP2PPreferences(p2pCountry, c.code); setFiatCurrency(c.code); showToast(`Currency updated to ${c.code}`, 'success'); }}
         type="currency"

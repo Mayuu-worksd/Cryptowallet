@@ -13,7 +13,6 @@ import {
   CardVariant, ShippingFee, FiatCurrency,
 } from '../services/supabaseService';
 import { LinearGradient } from 'expo-linear-gradient';
-import { SUPPORTED_FIAT_CURRENCIES } from '../constants/currencyConfig';
 import { CurrencyText } from '../components/CurrencyText';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');

@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useWallet } from '../../store/WalletContext';
-import { SUPPORTED_FIAT_CURRENCIES, SUPPORTED_TOKENS } from '../../constants/currencyConfig';
+import { SUPPORTED_TOKENS } from '../../constants/currencyConfig';
 
 type Props = {
   visible: boolean;
@@ -46,7 +46,7 @@ type RowItem = {
 };
 
 export default function SetCurrenciesSheet({ visible, onClose, cardNumber }: Props) {
-  const { enabledCardCurrencies, setEnabledCardCurrencies } = useWallet();
+  const { enabledCardCurrencies, setEnabledCardCurrencies, fiatRates } = useWallet();
   const [searchQuery, setSearchQuery] = useState('');
 
   const last4 = cardNumber.replace(/\D/g, '').slice(-4) || '****';
@@ -58,16 +58,16 @@ export default function SetCurrenciesSheet({ visible, onClose, cardNumber }: Pro
   const q = searchQuery.toLowerCase();
 
   const fiatRows = useMemo(() =>
-    Object.values(SUPPORTED_FIAT_CURRENCIES)
-      .filter(c => !q || c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q))
-      .map(c => ({
+    Object.values(fiatRates || {})
+      .filter((c: any) => !q || c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q))
+      .map((c: any) => ({
         code: c.code,
         name: c.name,
         iconUrl: flagUrl(FIAT_FLAG_ISO[c.code] ?? c.code.slice(0, 2).toLowerCase()),
         color: '#888',
         isCrypto: false as const,
       })),
-  [q]);
+  [q, fiatRates]);
 
   const tokenRows = useMemo(() =>
     SETTLEMENT_TOKENS.filter(t => !q || t.code.toLowerCase().includes(q) || t.name.toLowerCase().includes(q)),

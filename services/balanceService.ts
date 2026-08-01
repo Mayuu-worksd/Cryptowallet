@@ -2,6 +2,7 @@ import { ethers } from 'ethers';
 import { Platform } from 'react-native';
 import AsyncStorageNative from '@react-native-async-storage/async-storage';
 import { RPC_URLS } from '../config';
+import { supabase } from './supabaseClient';
 
 // ethers v5/v6 compatibility shims
 const formatEther = (ethers as any).formatEther ?? ethers.utils.formatEther;
@@ -316,57 +317,86 @@ export async function getWalletBalances(
     }
   }
 
-  const provider  = makeProvider(network);
+  const provider = makeProvider(network);
 
-  const [ethRaw, usdcRaw, usdtRaw, inrxRaw] = await Promise.allSettled([
-    provider.getBalance(walletAddress),
-    TOKEN_CONTRACTS.USDC[network]
-      ? fetchERC20(provider, walletAddress, TOKEN_CONTRACTS.USDC[network], TOKEN_DECIMALS.USDC)
-      : Promise.resolve(0),
-    TOKEN_CONTRACTS.USDT[network]
-      ? fetchERC20(provider, walletAddress, TOKEN_CONTRACTS.USDT[network], TOKEN_DECIMALS.USDT)
-      : Promise.resolve(0),
-    TOKEN_CONTRACTS.INRX[network]
-      ? fetchERC20(provider, walletAddress, TOKEN_CONTRACTS.INRX[network], TOKEN_DECIMALS.INRX)
-      : Promise.resolve(0),
-  ]);
+  // Fetch active contracts on this network from Supabase
+  let activeContracts: any[] = [];
+  try {
+    const { data } = await supabase
+      .from('token_contracts')
+      .select('*')
+      .eq('network_name', network)
+      .eq('is_enabled', true);
+    if (data) {
+      activeContracts = data;
+    }
+  } catch (err) {
+    console.warn('[balanceService] Failed to query dynamic contracts:', err);
+  }
 
-  if (ethRaw.status === 'rejected') console.error('[balanceService] ethRaw rejected:', (ethRaw as any).reason);
-  if (usdcRaw.status === 'rejected') console.error('[balanceService] usdcRaw rejected:', (usdcRaw as any).reason);
-  if (usdtRaw.status === 'rejected') console.error('[balanceService] usdtRaw rejected:', (usdtRaw as any).reason);
-  if (inrxRaw.status === 'rejected') console.error('[balanceService] inrxRaw rejected:', (inrxRaw as any).reason);
+  // Fetch native balance
+  const nativePromise = provider.getBalance(walletAddress);
 
-  console.log('[balanceService] Promise.allSettled results:', {
-    eth: ethRaw.status === 'fulfilled' ? ethRaw.value.toString() : 'rejected',
-    usdc: usdcRaw.status === 'fulfilled' ? usdcRaw.value : 'rejected',
-    usdt: usdtRaw.status === 'fulfilled' ? usdtRaw.value : 'rejected',
-    inrx: inrxRaw.status === 'fulfilled' ? inrxRaw.value : 'rejected',
+  // Always fetch INRX from hardcoded contract if not already in activeContracts
+  const inrxContractAddr = TOKEN_CONTRACTS.INRX?.[network];
+  const hasInrxInDynamic = activeContracts.some(c => c.currency_code === 'INRX');
+  if (inrxContractAddr && !hasInrxInDynamic) {
+    activeContracts = [
+      ...activeContracts,
+      { currency_code: 'INRX', contract_address: inrxContractAddr, decimals: TOKEN_DECIMALS.INRX ?? 6 }
+    ];
+  }
+
+  // Fetch dynamic contract balances
+  const contractPromises = activeContracts.map(async (c) => {
+    const code = c.currency_code;
+    const address = c.contract_address;
+    const decimals = c.decimals || 18;
+    if (address && address.startsWith('0x')) {
+      try {
+        const bal = await fetchERC20(provider, walletAddress, address, decimals);
+        return { code, bal };
+      } catch (err) {
+        console.warn(`[balanceService] Error fetching balance for ${code}:`, err);
+        return { code, bal: 0 };
+      }
+    } else {
+      return { code, bal: 0 };
+    }
   });
 
-  const chainETH  = ethRaw.status  === 'fulfilled' ? parseFloat(formatEther(ethRaw.value)) : null;
-  const chainUSDC = usdcRaw.status === 'fulfilled' ? usdcRaw.value : null;
-  const chainUSDT = usdtRaw.status === 'fulfilled' ? usdtRaw.value : null;
-  const chainINRX = inrxRaw.status === 'fulfilled' ? inrxRaw.value : null;
+  const results = await Promise.allSettled([
+    nativePromise,
+    ...contractPromises
+  ]);
 
-  // Load network-specific cached values (never bleed across networks)
-  const cachedETH  = local[`ETH_${network}` as keyof WalletBalances] as number | undefined;
-  const cachedUSDT = local[`USDT_ERC20_${network}` as keyof WalletBalances] as number | undefined;
-  const cachedUSDC = local[`USDC_ERC20_${network}` as keyof WalletBalances] as number | undefined;
-  const cachedINRX = local[`INRX_${network}` as keyof WalletBalances] as number | undefined;
+  const nativeResult = results[0];
+  const chainETH = nativeResult.status === 'fulfilled' ? parseFloat(formatEther(nativeResult.value)) : null;
 
-  // Use live chain value; fall back ONLY to this network's own cache if RPC failed
-  const resolvedETH  = chainETH  !== null ? chainETH  : (cachedETH  ?? 0);
-  const resolvedUSDT = chainUSDT !== null ? chainUSDT : (cachedUSDT ?? 0);
-  const resolvedUSDC = chainUSDC !== null ? chainUSDC : (cachedUSDC ?? 0);
-  const resolvedINRX = chainINRX !== null ? chainINRX : (cachedINRX ?? 0);
+  const chainBalances: Record<string, number> = {};
+  results.slice(1).forEach((res, i) => {
+    const c = activeContracts[i];
+    if (res.status === 'fulfilled') {
+      chainBalances[c.currency_code] = res.value.bal;
+    } else {
+      chainBalances[c.currency_code] = 0;
+    }
+  });
 
-  const balances: WalletBalances = {
-    USDT_ERC20: resolvedUSDT,
-    USDC_ERC20: resolvedUSDC,
+  // Load network-specific cached values
+  const cachedETH = local[`ETH_${network}` as keyof WalletBalances] as number | undefined;
+  const cachedUSDT = local[`USDT_ERC20_${network}` as any] as number | undefined;
+  const cachedUSDC = local[`USDC_ERC20_${network}` as any] as number | undefined;
+  const cachedINRX = local[`INRX_${network}` as any] as number | undefined;
+  const resolvedETH = chainETH !== null ? chainETH : (cachedETH ?? 0);
+
+  const balances: any = {
+    USDT_ERC20: cachedUSDT ?? local.USDT_ERC20 ?? 0,
+    USDC_ERC20: cachedUSDC ?? local.USDC_ERC20 ?? 0,
     USDT_TRC20: local.USDT_TRC20 ?? 0,
     USDC_TRC20: local.USDC_TRC20 ?? 0,
-    USDT: resolvedUSDT,
-    USDC: resolvedUSDC,
+    USDT: cachedUSDT ?? local.USDT ?? 0,
+    USDC: cachedUSDC ?? local.USDC ?? 0,
     ETH: resolvedETH,
     TRX: local.TRX ?? 0,
     BTC: local.BTC ?? 0,
@@ -375,8 +405,29 @@ export async function getWalletBalances(
     XRP: local.XRP ?? 0,
     TON: local.TON ?? 0,
     SUI: local.SUI ?? 0,
-    INRX: resolvedINRX,
+    INRX: cachedINRX ?? local.INRX ?? 0,
   };
+
+  // Merge the dynamic contract balances into the balances object
+  activeContracts.forEach(c => {
+    const code = c.currency_code;
+    const chainVal = chainBalances[code];
+    const cachedVal = local[`${code}_${network}` as any] as number | undefined;
+    balances[code] = chainVal !== undefined && chainVal !== null ? chainVal : (cachedVal ?? 0);
+  });
+
+  // Map backward compatible fields
+  if (chainBalances.USDC !== undefined) {
+    balances.USDC = chainBalances.USDC;
+    balances.USDC_ERC20 = chainBalances.USDC;
+  }
+  if (chainBalances.USDT !== undefined) {
+    balances.USDT = chainBalances.USDT;
+    balances.USDT_ERC20 = chainBalances.USDT;
+  }
+  if (chainBalances.INRX !== undefined) {
+    balances.INRX = chainBalances.INRX;
+  }
 
   await saveTokenBalances(network, balances);
 

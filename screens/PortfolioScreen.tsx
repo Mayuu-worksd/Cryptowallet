@@ -14,8 +14,6 @@ import { CurrencyText } from '../components/CurrencyText';
 import { haptics } from '../utils/haptics';
 import { supabase } from '../services/supabaseClient';
 import { P2POrder } from '../services/merchantService';
-import { SUPPORTED_FIAT_CURRENCIES } from '../constants/currencyConfig';
-
 const CoinIcon = memo(({ symbol, size = 40 }: { symbol: string; size?: number }) => {
   const meta = COIN_META[symbol];
   const color = COIN_COLORS[symbol] || '#888';
@@ -45,27 +43,29 @@ const CoinIcon = memo(({ symbol, size = 40 }: { symbol: string; size?: number })
   );
 });
 
-const FIAT_META: Record<string, { flag: string; color: string }> = {
-  USD: { flag: '🇺🇸', color: '#2E7D32' },
-  EUR: { flag: '🇪🇺', color: '#1A237E' },
-  INR: { flag: '🇮🇳', color: '#E65100' },
-  GBP: { flag: '🇬🇧', color: '#1565C0' },
-  AED: { flag: '🇦🇪', color: '#006064' },
-  SGD: { flag: '🇸🇬', color: '#C62828' },
-  JPY: { flag: '🇯🇵', color: '#B71C1C' },
-  CAD: { flag: '🇨🇦', color: '#BF360C' },
-  AUD: { flag: '🇦🇺', color: '#0D47A1' },
-  BRL: { flag: '🇧🇷', color: '#1B5E20' },
-  THB: { flag: '🇹🇭', color: '#0288D1' },
-  BHD: { flag: '🇧🇭', color: '#D32F2F' },
-  VND: { flag: '🇻🇳', color: '#C62828' },
-  SAR: { flag: '🇸🇦', color: '#2E7D32' },
-  KWD: { flag: '🇰🇼', color: '#00897B' },
-  RUB: { flag: '🇷🇺', color: '#1976D2' },
+const FIAT_META: Record<string, { color: string }> = {
+  USD: { color: '#2E7D32' },
+  EUR: { color: '#1A237E' },
+  INR: { color: '#E65100' },
+  GBP: { color: '#1565C0' },
+  AED: { color: '#006064' },
+  SGD: { color: '#C62828' },
+  JPY: { color: '#B71C1C' },
+  CAD: { color: '#BF360C' },
+  AUD: { color: '#0D47A1' },
+  BRL: { color: '#1B5E20' },
+  THB: { color: '#0288D1' },
+  BHD: { color: '#D32F2F' },
+  VND: { color: '#C62828' },
+  SAR: { color: '#2E7D32' },
+  KWD: { color: '#00897B' },
+  RUB: { color: '#1976D2' },
 };
 
 const FiatIcon = memo(({ code, size = 40 }: { code: string; size?: number }) => {
-  const meta = FIAT_META[code] ?? { flag: '💵', color: '#37474F' };
+  const { fiatRates } = useWallet();
+  const flag = fiatRates[code]?.flag || '💵';
+  const meta = FIAT_META[code] ?? { color: '#37474F' };
   return (
     <View style={{
       width: size, height: size, borderRadius: size / 2,
@@ -73,7 +73,7 @@ const FiatIcon = memo(({ code, size = 40 }: { code: string; size?: number }) => 
       borderWidth: 1.5, borderColor: meta.color + '40',
       alignItems: 'center', justifyContent: 'center',
     }}>
-      <Text style={{ fontSize: size * 0.52 }}>{meta.flag}</Text>
+      <Text style={{ fontSize: size * 0.52 }}>{flag}</Text>
     </View>
   );
 });
@@ -286,13 +286,15 @@ export default function PortfolioScreen({ navigation }: any) {
     return total;
   }, [assetsList, realBalances]);
 
+  const { fiatRates } = useWallet();
+
   const fiatWalletsList = useMemo(() => {
-    return Object.values(SUPPORTED_FIAT_CURRENCIES).map(f => ({
+    return Object.values(fiatRates || {}).map((f: any) => ({
       code: f.code,
       name: `${f.name} Wallet`,
       formattedBalance: balanceVisible ? formatOrderFiat(0, f.code) : '••••'
     }));
-  }, [balanceVisible]);
+  }, [balanceVisible, fiatRates]);
 
   return (
     <View style={[styles.container, { backgroundColor: T.background }]}>

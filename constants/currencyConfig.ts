@@ -17,21 +17,6 @@ export interface TokenConfig {
   decimals: number;
 }
 
-export const SUPPORTED_FIAT_CURRENCIES: Record<string, FiatCurrency> = {
-  USD: { code: 'USD', symbol: '$', name: 'US Dollar', rate: 1.0, locale: 'en-US', format: 'en-US', flag: '🇺🇸' },
-  INR: { code: 'INR', symbol: '₹', name: 'Indian Rupee', rate: 83.5, locale: 'en-IN', format: 'en-IN', flag: '🇮🇳' },
-  EUR: { code: 'EUR', symbol: '€', name: 'Euro', rate: 0.92, locale: 'de-DE', format: 'de-DE', flag: '🇪🇺' },
-  GBP: { code: 'GBP', symbol: '£', name: 'British Pound', rate: 0.79, locale: 'en-GB', format: 'en-GB', flag: '🇬🇧' },
-  AED: { code: 'AED', symbol: 'AED', name: 'UAE Dirham', rate: 3.67, locale: 'en-US', format: 'en-US', flag: '🇦🇪' },
-  AUD: { code: 'AUD', symbol: 'A$', name: 'Australian Dollar', rate: 1.51, locale: 'en-AU', format: 'en-AU', flag: '🇦🇺' },
-  SGD: { code: 'SGD', symbol: 'S$', name: 'Singapore Dollar', rate: 1.35, locale: 'en-SG', format: 'en-SG', flag: '🇸🇬' },
-  RUB: { code: 'RUB', symbol: '₽', name: 'Russian Ruble', rate: 90.0, locale: 'ru-RU', format: 'ru-RU', flag: '🇷🇺' },
-  BHD: { code: 'BHD', symbol: 'BD', name: 'Bahraini Dinar', rate: 0.38, locale: 'en-US', format: 'en-US', flag: '🇧🇭' },
-  VND: { code: 'VND', symbol: '₫', name: 'Vietnamese Dong', rate: 25400.0, locale: 'vi-VN', format: 'vi-VN', flag: '🇻🇳' },
-  SAR: { code: 'SAR', symbol: '﷼', name: 'Saudi Riyal', rate: 3.75, locale: 'en-US', format: 'en-US', flag: '🇸🇦' },
-  KWD: { code: 'KWD', symbol: 'KD', name: 'Kuwaiti Dinar', rate: 0.31, locale: 'en-US', format: 'en-US', flag: '🇰🇼' },
-  THB: { code: 'THB', symbol: '฿', name: 'Thai Baht', rate: 36.5, locale: 'th-TH', format: 'th-TH', flag: '🇹🇭' },
-};
 
 export const SUPPORTED_TOKENS: Record<string, TokenConfig> = {
   USDT: {

@@ -9,7 +9,6 @@ import { Theme } from '../constants';
 import AedSymbol from '../components/AedSymbol';
 import { p2pService, P2POrder, FIAT_CURRENCIES, PAYMENT_METHODS, getLiveRate, calcPlatformFee } from '../services/merchantService';
 import TransactionLoader from '../components/ui/TransactionLoader';
-import { SUPPORTED_FIAT_CURRENCIES } from '../constants/currencyConfig';
 import { supabase } from '../services/supabaseClient';
 import { CurrencyText } from '../components/CurrencyText';
 
@@ -113,6 +112,7 @@ function formatDateTime(dateStr?: string): string {
 }
 
 function OrderCard({ order, onPress, T, walletAddress, formatOrderFiat, formatFiat, globalFiatCurrency }: { order: P2POrder; onPress: () => void; T: any; walletAddress: string; formatOrderFiat: (amt: number, curr: string) => string; formatFiat: (usd: number) => string; globalFiatCurrency: string; }) {
+  const { fiatRates } = useWallet() as any;
   const isMine   = order.seller_wallet.toLowerCase() === walletAddress.toLowerCase();
   const isBuying = order.buyer_wallet?.toLowerCase() === walletAddress.toLowerCase();
 
@@ -180,7 +180,7 @@ function OrderCard({ order, onPress, T, walletAddress, formatOrderFiat, formatFi
             {globalFiatCurrency !== order.fiat_currency && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 2 }}>
                 <Text style={{ fontSize: 11, color: T.textDim, fontWeight: '600' }}>≈</Text>
-                <CurrencyText amount={Number(order.fiat_total || 0) / (SUPPORTED_FIAT_CURRENCIES[order.fiat_currency]?.rate || 1)} code={globalFiatCurrency} style={{ fontSize: 11, color: T.textDim, fontWeight: '600' }} />
+                <CurrencyText amount={Number(order.fiat_total || 0) / (fiatRates[order.fiat_currency]?.rate || 1)} code={globalFiatCurrency} style={{ fontSize: 11, color: T.textDim, fontWeight: '600' }} />
               </View>
             )}
           </View>
@@ -642,7 +642,7 @@ function ProfessionalRateChart({ sellAmount, sellRate, sellFiat, sellToken, live
 
 export default function P2PMarketplaceScreen({ navigation, route }: any) {
   const insets = useSafeAreaInsets();
-  const { walletAddress, isDarkMode, balances, ethBalance, lockedBalance, lockBalance, resetLockedBalances, p2pCountry, p2pCurrency, accountType, network, formatOrderFiat, formatFiat, fiatCurrency } = useWallet() as any;
+  const { walletAddress, isDarkMode, balances, ethBalance, lockedBalance, lockBalance, resetLockedBalances, p2pCountry, p2pCurrency, accountType, network, formatOrderFiat, formatFiat, fiatCurrency, fiatRates } = useWallet() as any;
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
   const isBusiness = accountType === 'business';
 

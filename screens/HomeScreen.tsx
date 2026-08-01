@@ -33,8 +33,7 @@ import { useWallet, useMarket } from "../store/WalletContext";
 import CopyableAddress from "../components/CopyableAddress";
 import { haptics } from "../utils/haptics";
 import { COIN_META, COIN_COLORS } from "../constants";
-import { SUPPORTED_FIAT_CURRENCIES } from "../constants/currencyConfig";
-import { NewsItem } from "../services/marketService";
+import { supabase } from "../services/supabaseClient";
 import { NetworkSelector } from "../components/NetworkSelector";
 import { CurrencySelector } from "../components/CurrencySelector";
 import { CurrencyText } from "../components/CurrencyText";
@@ -351,6 +350,7 @@ const MarketTicker = memo(
     convertFiat: (usd: number) => number;
     fiatCurrency: string;
   }) => {
+    const { fiatRates } = useWallet() as any;
     const translateX = useRef(new Animated.Value(0)).current;
     const pulseAnim = useRef(new Animated.Value(1)).current;
     const animRef = useRef<Animated.CompositeAnimation | null>(null);
@@ -526,7 +526,7 @@ const MarketTicker = memo(
                           >
                             {usdVal !== null
                               ? (() => {
-                                  const fiat = SUPPORTED_FIAT_CURRENCIES[fiatCurrency];
+                                  const fiat = fiatRates[fiatCurrency];
                                   if (!fiat) return `$ ${usdVal.toFixed(2)}`;
                                   const converted = usdVal * fiat.rate;
                                   if (converted >= 1000) {
@@ -675,7 +675,7 @@ const tickerStyles = StyleSheet.create({
   },
 });
 
-const NewsCard = memo(({ item, T }: { item: NewsItem; T: any }) => {
+const NewsCard = memo(({ item, T }: { item: any; T: any }) => {
   const timeAgo = (dateStr: string) => {
     const diff = Date.now() - new Date(dateStr).getTime();
     const h = Math.floor(diff / 3_600_000);
@@ -885,7 +885,7 @@ export default function HomeScreen({ navigation }: any) {
   const realBalances: Record<string, number> = useMemo(() => {
     const isTron = network === "TRON" || network === "TRON Nile";
     const isBSC = network === "BSC" || network === "BSC Testnet";
-    const res = {
+    const res: any = {
       ETH: isTron || isBSC ? 0 : parseFloat(ethBalance) || 0,
       TRX: isTron ? (balances.TRX ?? 0) : 0,
       BNB: isBSC ? parseFloat(ethBalance) || 0 : (balances.BNB ?? 0),
@@ -906,7 +906,7 @@ export default function HomeScreen({ navigation }: any) {
     if (customTokens && customTokens.length > 0) {
       customTokens.forEach((t: any) => {
         if (t.network === network) {
-          res[t.symbol] = balances[t.symbol] ?? 0;
+          res[t.symbol] = (balances as any)[t.symbol] ?? 0;
         }
       });
     }
@@ -952,7 +952,9 @@ export default function HomeScreen({ navigation }: any) {
         if (a.symbol === "TRX" && !isTron) return false;
         // Hide BNB on non-BSC networks (if balance is 0)
         if (a.symbol === "BNB" && !isBSC && a.amount === 0) return false;
-        // Only show other coins (including INRX) if user actually has a balance > 0
+        // Always show INRX if user has a balance
+        if (a.symbol === "INRX") return a.amount > 0;
+        // Only show other coins if user actually has a balance > 0
         return a.amount > 0;
       })
       .sort((a, b) => b.usd - a.usd);
@@ -1415,7 +1417,7 @@ export default function HomeScreen({ navigation }: any) {
                   <Text
                     style={[styles.currencyToggleText, { color: T.textMuted }]}
                   >
-                    {SUPPORTED_FIAT_CURRENCIES[fiatCurrency]?.flag || fiatSymbol} {fiatCurrency}
+                    {fiatRates[fiatCurrency]?.flag || fiatSymbol} {fiatCurrency}
                   </Text>
                   <Feather name="chevron-down" size={12} color={T.textMuted} />
                 </TouchableOpacity>
