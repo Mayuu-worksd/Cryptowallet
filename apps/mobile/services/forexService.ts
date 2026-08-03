@@ -226,3 +226,14 @@ export async function getLiveRates(forceRefresh = false): Promise<Record<string,
 export function invalidateForexCache(): void {
   memCache = null;
 }
+
+/**
+ * Synchronously retrieves the latest cached INR exchange rate from memory.
+ * Falls back to the baseline of 83.5 if the cache is empty.
+ */
+export function getCachedINRRate(): number {
+  if (memCache && memCache.rates && memCache.rates.INR) {
+    return memCache.rates.INR.rate;
+  }
+  return 83.5;
+}

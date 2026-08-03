@@ -750,7 +750,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [tab, filterFiat, filterToken, walletAddress, isBusiness]);
+  }, [tab, filterFiat, filterToken, walletAddress]);
 
   // Auto-switch to My Orders if buyer has active in-progress orders (runs once on mount)
   useEffect(() => {
@@ -773,7 +773,7 @@ export default function P2PMarketplaceScreen({ navigation, route }: any) {
   useFocusEffect(useCallback(() => {
     if (hasFetchedOnce.current) loadOrders(true);
     healLockedBalance();
-  }, [tab, filterFiat, filterToken, walletAddress, isBusiness]));
+  }, [tab, filterFiat, filterToken, walletAddress]));
 
   // Fetch real 7-day price history from CoinGecko
   useEffect(() => {

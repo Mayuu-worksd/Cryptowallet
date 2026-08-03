@@ -47,15 +47,19 @@ export async function POST(
       .update(updates)
       .eq('codego_card_id', cardId);
 
-    await supabase
-      .from('provider_cards')
-      .update({
-        status: liveCard.status,
-        provider_status: liveCard.providerStatus || liveCard.status,
-        balance: liveBalance,
-        provider_response: liveCard.raw || {},
-      })
-      .eq('provider_card_id', cardId);
+    try {
+      await supabase
+        .from('provider_cards')
+        .update({
+          status: liveCard.status,
+          provider_status: liveCard.providerStatus || liveCard.status,
+          balance: liveBalance,
+          provider_response: liveCard.raw || {},
+        })
+        .eq('provider_card_id', cardId);
+    } catch (_e) {
+      // Ignore if table not created yet
+    }
 
     return NextResponse.json(
       createSuccessResponse({

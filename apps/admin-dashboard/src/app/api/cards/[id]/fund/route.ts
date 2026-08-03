@@ -54,10 +54,14 @@ export async function POST(
       .update({ balance: newBalance })
       .eq('codego_card_id', cardId);
 
-    await supabase
-      .from('provider_cards')
-      .update({ balance: newBalance })
-      .eq('provider_card_id', cardId);
+    try {
+      await supabase
+        .from('provider_cards')
+        .update({ balance: newBalance })
+        .eq('provider_card_id', cardId);
+    } catch (_e) {
+      // Ignore if table not created yet
+    }
 
     return NextResponse.json(
       createSuccessResponse({

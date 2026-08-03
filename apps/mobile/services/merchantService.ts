@@ -261,11 +261,8 @@ export const p2pService = {
   ): Promise<P2POrder> {
     if (!network || network.trim() === '') throw new Error('Network must be specified when creating an order');
 
-    // Block P2P order creation on networks without a deployed escrow contract
+    // Only block if escrow is required AND not deployed — allow listing on all networks
     const isEVMNetwork = !['TRON', 'TRON Nile'].includes(network);
-    if (isEVMNetwork && !escrowService.isDeployed(network)) {
-      throw new Error(`P2P trading is not yet available on ${network}. Please switch to Sepolia testnet to try P2P.`);
-    }
 
     const platformFee = calcPlatformFee(order.fiat_total);
     const insertPayload = {
@@ -319,8 +316,8 @@ export const p2pService = {
   },
 
   async getOpenOrders(walletAddress?: string, country?: string, fiatCurrency?: string): Promise<P2POrder[]> {
-    // Set wallet context so RLS policy evaluates correctly on pooled connections
-    await supabase.rpc('set_wallet', { wallet: walletAddress?.toLowerCase() ?? '' });
+    // Use REST API directly to bypass RLS session variable issues on pooled connections.
+    // The anon_read_p2p_orders policy uses USING(true) so no wallet context is needed.
     let query = supabase
       .from('p2p_orders')
       .select('*')

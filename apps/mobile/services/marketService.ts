@@ -1,5 +1,6 @@
 import { SUPPORTED_TOKENS } from '../constants/currencyConfig';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getLiveRates } from './forexService';
 
 // Single source of truth — symbol ↔ CoinGecko ID mapping
 export const SYMBOL_TO_COINGECKO_ID: Record<string, string> = Object.fromEntries(
@@ -90,7 +91,12 @@ export const marketService = {
           if (sym && val.usd > 0) result[sym] = { usd: val.usd, change24h: val.usd_24h_change ?? 0 };
         }
         // Inject INRX (e-Rupee Stablecoin) live reserve pricing pegged to ₹1 INR ($0.012 USD)
-        result['INRX'] = { usd: 0.012, change24h: 0.15 };
+        let inrRate = 83.5;
+        try {
+          const rates = await getLiveRates();
+          if (rates.INR && rates.INR.rate > 0) inrRate = rates.INR.rate;
+        } catch (_e) {}
+        result['INRX'] = { usd: Number((1 / inrRate).toFixed(6)), change24h: 0.15 };
         if (Object.keys(result).length === 0) throw new Error('Empty price response');
         priceCache = { data: result, ts: Date.now() };
         return result;
@@ -161,7 +167,13 @@ export const marketService = {
     // 1. Check Stablecoin Cases
     if (symbol === 'INRX') {
       const limit = timeframe === '1Y' ? 365 : timeframe === '1M' ? 180 : timeframe === '1W' ? 168 : timeframe === '1D' ? 96 : 60;
-      return getSeededChartData('INRX', timeframe, limit, 0.012, 0.002);
+      let inrRate = 83.5;
+      try {
+        const rates = await getLiveRates();
+        if (rates.INR && rates.INR.rate > 0) inrRate = rates.INR.rate;
+      } catch (_e) {}
+      const baseline = Number((1 / inrRate).toFixed(6));
+      return getSeededChartData('INRX', timeframe, limit, baseline, baseline * 0.16);
     }
 
     if (symbol === 'USDT' && timeframe === 'LIVE') {

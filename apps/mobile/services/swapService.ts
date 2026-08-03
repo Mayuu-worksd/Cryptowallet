@@ -2,6 +2,7 @@ import { ethers } from 'ethers';
 import { Platform } from 'react-native';
 import AsyncStorageNative from '@react-native-async-storage/async-storage';
 import { SUPPORTED_TOKENS as CONFIG_SUPPORTED_TOKENS } from '../constants/currencyConfig';
+import { getLiveRates } from './forexService';
 
 const AsyncStorage = Platform.OS === 'web'
   ? {
@@ -360,6 +361,14 @@ async function tryCoinGeckoQuote(from: string, to: string, amount: string): Prom
 
 // ─── Layer 4: Cached / hardcoded (NEVER fails) ───────────────────────────────
 async function tryCachedQuote(from: string, to: string, amount: string): Promise<SwapQuote> {
+  // Dynamically resolve INRX fallback price based on live INR rate
+  try {
+    const rates = await getLiveRates();
+    if (rates.INR && rates.INR.rate > 0) {
+      FALLBACK_PRICES.INRX = Number((1 / rates.INR.rate).toFixed(6));
+    }
+  } catch (_e) {}
+
   let fromUsd = FALLBACK_PRICES[from] ?? 1;
   let toUsd   = FALLBACK_PRICES[to]   ?? 1;
   try {

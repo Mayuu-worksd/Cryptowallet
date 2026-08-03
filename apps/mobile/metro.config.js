@@ -21,6 +21,7 @@ config.resetCache = false;
 // Watch all source files for instant hot reload
 config.watchFolders = [
   path.resolve(__dirname),
+  path.resolve(__dirname, '../../assets'),
 ];
 
 // Exclude transient tool directories that may disappear mid-watch

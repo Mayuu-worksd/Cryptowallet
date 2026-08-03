@@ -15,6 +15,7 @@ import AsyncStorageNative from '@react-native-async-storage/async-storage';
 import { etherscanService, ChainTx, TokenTx } from './etherscanService';
 import { alchemyService, AlchemyTransfer } from './alchemyService';
 import { tronService, TronTx } from './tronService';
+import { getCachedINRRate } from './forexService';
 
 const AsyncStorage = Platform.OS === 'web'
   ? {
@@ -168,7 +169,7 @@ function fromChainTx(tx: ChainTx | TokenTx, walletAddress: string, ethPriceUsd: 
     } catch {
       amountStr = '0.00';
     }
-    usd = (parseFloat(amountStr) * (tokenName === 'INRX' ? 0.012 : 1.0)).toFixed(2);
+    usd = (parseFloat(amountStr) * (tokenName === 'INRX' ? (1 / getCachedINRRate()) : 1.0)).toFixed(2);
   } else {
     const ethAmt = parseFloat(formatEther(tx.value || '0'));
     amountStr = ethAmt.toFixed(6);
@@ -212,12 +213,12 @@ function fromAlchemyTx(tx: AlchemyTransfer, walletAddress: string, ethPriceUsd: 
   if (tx.value !== null) {
     const rawAmt = tx.value;
     amountStr = rawAmt.toFixed(rawAmt < 1 ? 4 : 2);
-    usd = (rawAmt * (tokenName === 'INRX' ? 0.012 : (tokenName === 'ETH' ? ethPriceUsd : 1.0))).toFixed(2);
+    usd = (rawAmt * (tokenName === 'INRX' ? (1 / getCachedINRRate()) : (tokenName === 'ETH' ? ethPriceUsd : 1.0))).toFixed(2);
   } else if (tx.rawContract?.value && tx.rawContract?.decimal) {
     const decimals = parseInt(tx.rawContract.decimal, 16) || 18;
     const rawAmt = parseFloat(formatUnits(tx.rawContract.value, decimals));
     amountStr = rawAmt.toFixed(rawAmt < 1 ? 4 : 2);
-    usd = (rawAmt * (tokenName === 'INRX' ? 0.012 : 1.0)).toFixed(2);
+    usd = (rawAmt * (tokenName === 'INRX' ? (1 / getCachedINRRate()) : 1.0)).toFixed(2);
   }
 
   const date = tx.metadata?.blockTimestamp || new Date().toISOString();
@@ -489,7 +490,7 @@ export const transactionService = {
              amt = parseFloat(formatUnits(tx.rawContract.value, decimals));
           }
           amountStr = amt.toFixed(amt < 1 ? 4 : 2);
-          const usd = (amt * (tokenName === 'INRX' ? 0.012 : (tokenName === 'ETH' ? ethPriceUsd : 1.0))).toFixed(2);
+          const usd = (amt * (tokenName === 'INRX' ? (1 / getCachedINRRate()) : (tokenName === 'ETH' ? ethPriceUsd : 1.0))).toFixed(2);
           const rawDate = tx.metadata?.blockTimestamp ? new Date(tx.metadata.blockTimestamp).getTime() : Date.now();
 
           return {
@@ -596,7 +597,7 @@ export const transactionService = {
             type:    isOut ? 'sent' : 'received',
             coin:    tokenSymbol,
             amount:  amt.toFixed(amt < 1 ? 4 : 2),
-            usdValue: (amt * (tokenSymbol === 'INRX' ? 0.012 : 1.0)).toFixed(2),
+            usdValue: (amt * (tokenSymbol === 'INRX' ? (1 / getCachedINRRate()) : 1.0)).toFixed(2),
             address: isOut ? tx.to : tx.from,
             status:  (tx.isError === '1' || tx.txreceipt_status === '0') ? 'failed' : 'success',
             date:    new Date(parseInt(tx.timeStamp, 10) * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),

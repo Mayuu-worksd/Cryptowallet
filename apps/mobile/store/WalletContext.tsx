@@ -616,37 +616,40 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         }
         setEnabledCardCurrenciesState(base);
       }
-      if (vcc && vcc.codego_card_id && !vcc.codego_card_id.startsWith('mock_cg_')) {
-        // ── Fetch real KripiCard transactions and merge into cardTransactions ──
-        try {
-          const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-          const kripiTxRes = await fetch(`${apiUrl}/api/public/card/${vcc.card_last4}`);
-          if (kripiTxRes.ok) {
-            const kripiTxJson = await kripiTxRes.json();
-            const kripiTxs: CardTransaction[] = (kripiTxJson.transactions || []).map((tx: any) => ({
-              id: tx.id,
-              type: tx.type === 'topup' ? 'topup' as const : 'spend' as const,
-              amount: Number(tx.amount),
-              label: tx.merchant || (tx.type === 'topup' ? 'Top-up' : 'Card Spend'),
-              status: 'success' as const,
-              timestamp: tx.date || new Date().toISOString(),
-            }));
-            // Update balance from KripiCard live data
-            if (kripiTxJson.card?.balance !== undefined) {
-              const liveBalance = Number(kripiTxJson.card.balance);
-              setCardBalance(liveBalance);
-              await vccService.updateBalance(walletAddress, liveBalance).catch(() => {});
-              await AsyncStorage.multiSet([['cw_card_balance', String(liveBalance)]]).catch(() => {});
+      if (vcc) {
+        const isRealCard = vcc.codego_card_id && !vcc.codego_card_id.startsWith('mock_cg_');
+        if (isRealCard) {
+          // ── Fetch real KripiCard transactions and merge into cardTransactions ──
+          try {
+            const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+            const kripiTxRes = await fetch(`${apiUrl}/api/public/card/${vcc.card_last4}`);
+            if (kripiTxRes.ok) {
+              const kripiTxJson = await kripiTxRes.json();
+              const kripiTxs: CardTransaction[] = (kripiTxJson.transactions || []).map((tx: any) => ({
+                id: tx.id,
+                type: tx.type === 'topup' ? 'topup' as const : 'spend' as const,
+                amount: Number(tx.amount),
+                label: tx.merchant || (tx.type === 'topup' ? 'Top-up' : 'Card Spend'),
+                status: 'success' as const,
+                timestamp: tx.date || new Date().toISOString(),
+              }));
+              // Update balance from KripiCard live data
+              if (kripiTxJson.card?.balance !== undefined) {
+                const liveBalance = Number(kripiTxJson.card.balance);
+                setCardBalance(liveBalance);
+                await vccService.updateBalance(walletAddress, liveBalance).catch(() => {});
+                await AsyncStorage.multiSet([['cw_card_balance', String(liveBalance)]]).catch(() => {});
+              }
+              if (kripiTxs.length > 0) {
+                setCardTransactions(kripiTxs);
+                AsyncStorage.setItem('cw_card_transactions', JSON.stringify(kripiTxs)).catch(() => {});
+                return; // skip Supabase tx merge below — KripiCard is source of truth
+              }
             }
-            if (kripiTxs.length > 0) {
-              setCardTransactions(kripiTxs);
-              AsyncStorage.setItem('cw_card_transactions', JSON.stringify(kripiTxs)).catch(() => {});
-              return; // skip Supabase tx merge below — KripiCard is source of truth
-            }
-          }
-        } catch (_e) {}
+          } catch (_e) {}
+        }
 
-        if (vcc.codego_card_id && (!dbCard || !dbCardService.decryptNumber(dbCard, walletAddress))) {
+        if (isRealCard && vcc.codego_card_id && (!dbCard || !dbCardService.decryptNumber(dbCard, walletAddress))) {
           try {
             const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
             const liveRes = await fetch(`${apiUrl}/api/cards/${vcc.codego_card_id}`);
@@ -676,7 +679,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         let decryptedCvv    = dbCard ? dbCardService.decryptCvv(dbCard, walletAddress)    : '';
 
         // Auto-recover missing credentials — fetch from KripiCard API
-        if (!decryptedNumber && vcc.codego_card_id && walletAddress) {
+        if (isRealCard && !decryptedNumber && vcc.codego_card_id && walletAddress) {
           try {
             const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
             const liveRes = await fetch(`${apiUrl}/api/cards/${vcc.codego_card_id}`);
@@ -699,6 +702,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             }
           } catch (_e) {}
         }
+
+        // Mock fallback for mock card credentials
+        if (!isRealCard && !decryptedNumber) {
+          decryptedNumber = '4111 1111 1111 ' + (vcc.card_last4 || '0000');
+          decryptedCvv = '123';
+        }
+
         setCardCreated(true);
         setCardBalance(vcc.balance);
         setCardFrozen(vcc.card_status === 'frozen');
@@ -717,15 +727,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           return nextDetails;
         });
         AsyncStorage.multiSet([['cw_card_balance', String(vcc.balance)]]).catch(() => {});
-      } else if (vcc && (!vcc.codego_card_id || vcc.codego_card_id.startsWith('mock_cg_'))) {
-        try {
-          await supabase.from('vcc_cards').delete().eq('wallet_address', walletAddress.toLowerCase());
-        } catch {}
-        await AsyncStorage.multiRemove(['cw_card_created', 'cw_card_balance', 'cw_card_transactions']);
-        storageService.clearCardDetails().catch(() => {});
-        setCardCreated(false);
-        setCardBalance(0);
-        setCardDetails({ number: '\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022', expiry: '\u2022\u2022/\u2022\u2022', cvv: '\u2022\u2022\u2022', brand: 'VISA', holderName: 'CARD HOLDER', design: 'dark' });
       } else if (dbCard) {
         let decryptedNumber = dbCardService.decryptNumber(dbCard, walletAddress);
         let decryptedCvv    = dbCardService.decryptCvv(dbCard, walletAddress);
@@ -1289,14 +1290,20 @@ export function WalletProvider({ children }: { children: ReactNode }) {
               } catch { return null; }
             };
 
-            if (vcc && vcc.codego_card_id && !vcc.codego_card_id.startsWith('mock_cg_')) {
+            if (vcc) {
               const variant = variants.find(v => v.id === vcc.card_variant);
               let finalNumber = dbCard ? dbCardService.decryptNumber(dbCard, address) : '';
               let finalCvv    = dbCard ? dbCardService.decryptCvv(dbCard, address)    : '';
+              const isRealCard = vcc.codego_card_id && !vcc.codego_card_id.startsWith('mock_cg_');
               // Still nothing — fetch real credentials from KripiCard API
-              if (!finalNumber) {
+              if (isRealCard && !finalNumber && vcc.codego_card_id) {
                 const live = await fetchKripiCredentials(vcc.codego_card_id, vcc, variant);
                 if (live) { finalNumber = live.number; finalCvv = live.cvv; }
+              }
+              // Mock fallback for mock card credentials
+              if (!isRealCard && !finalNumber) {
+                finalNumber = '4111 1111 1111 ' + (vcc.card_last4 || '0000');
+                finalCvv = '123';
               }
               const restoredDetails = {
                 number:     finalNumber,
@@ -1316,16 +1323,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
                 ['cw_card_balance', String(vcc.balance)],
               ]);
               storageService.saveCardDetails(restoredDetails).catch(() => {});
-            } else if (vcc && (!vcc.codego_card_id || vcc.codego_card_id.startsWith('mock_cg_'))) {
-              // Mock card (no real KripiCard id or mock_cg_ prefix) — reset so user can create a real card
-              try {
-                await supabase.from('vcc_cards').delete().eq('wallet_address', address.toLowerCase());
-              } catch {}
-              await AsyncStorage.multiRemove(['cw_card_created', 'cw_card_balance', 'cw_card_transactions']);
-              storageService.clearCardDetails().catch(() => {});
-              setCardCreated(false);
-              setCardBalance(0);
-              setCardDetails({ number: '\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022', expiry: '\u2022\u2022/\u2022\u2022', cvv: '\u2022\u2022\u2022', brand: 'VISA', holderName: 'CARD HOLDER', design: 'dark' });
             } else if (dbCard) {
               let finalNumber = dbCardService.decryptNumber(dbCard, address);
               let finalCvv    = dbCardService.decryptCvv(dbCard, address);
