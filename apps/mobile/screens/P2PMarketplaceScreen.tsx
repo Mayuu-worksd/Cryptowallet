@@ -270,13 +270,13 @@ function RateChart({
     ? ((selectedRate - liveRate) / liveRate) * 100
     : null;
 
-  // Tap points — 5 preset levels
+  // Tap points — 5 preset price levels (discount → premium vs live market)
   const presets = liveRate ? [
-    { label: '-2%', rate: liveRate * 0.98 },
-    { label: '-1%', rate: liveRate * 0.99 },
-    { label: 'MKT', rate: liveRate },
-    { label: '+1%', rate: liveRate * 1.01 },
-    { label: '+2%', rate: liveRate * 1.02 },
+    { label: 'DISC -2%', rate: liveRate * 0.98 },
+    { label: 'DISC -1%', rate: liveRate * 0.99 },
+    { label: 'MARKET',   rate: liveRate },
+    { label: 'PREM +1%', rate: liveRate * 1.01 },
+    { label: 'PREM +2%', rate: liveRate * 1.02 },
   ] : [];
 
   return (
@@ -405,10 +405,14 @@ function RateChart({
 
       {/* Preset rate buttons */}
       {presets.length > 0 && (
-        <View style={rc.presets}>
+        <View>
+          <Text style={{ fontSize: 10, fontWeight: '700', color: T.textDim, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4, letterSpacing: 0.5 }}>
+            SET YOUR SELL PRICE (vs live market)
+          </Text>
+          <View style={rc.presets}>
           {presets.map(p => {
             const isActive = Math.abs(selectedRate - p.rate) < 0.5;
-            const isMkt = p.label === 'MKT';
+            const isMkt = p.label === 'MARKET';
             return (
               <TouchableOpacity
                 key={p.label}
@@ -436,6 +440,7 @@ function RateChart({
               </TouchableOpacity>
             );
           })}
+          </View>
         </View>
       )}
 

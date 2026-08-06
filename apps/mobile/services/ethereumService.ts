@@ -7,7 +7,11 @@ const formatUnits  = (ethers as any).formatUnits  ?? ethers.utils.formatUnits;
 const parseEther   = (ethers as any).parseEther   ?? ethers.utils.parseEther;
 const parseUnits   = (ethers as any).parseUnits   ?? ethers.utils.parseUnits;
 const isAddress    = (ethers as any).isAddress    ?? ethers.utils.isAddress;
-const JsonRpcProvider = (ethers as any).JsonRpcProvider ?? ethers.providers.JsonRpcProvider;
+// StaticJsonRpcProvider skips eth_chainId auto-detection — prevents noNetwork errors in React Native
+const JsonRpcProvider = (ethers as any).StaticJsonRpcProvider
+  ?? ethers.providers.StaticJsonRpcProvider
+  ?? (ethers as any).JsonRpcProvider
+  ?? ethers.providers.JsonRpcProvider;
 
 const ERC20_ABI = [
   'function balanceOf(address owner) view returns (uint256)',
@@ -79,7 +83,8 @@ export function getProvider(network: string = currentNetwork): any {
   if (!providers[network]) {
     const rpcUrl    = NETWORKS[network]    ?? NETWORKS['Sepolia'];
     const netConfig = NETWORK_CONFIG[network] ?? NETWORK_CONFIG['Sepolia'];
-    providers[network] = new JsonRpcProvider(rpcUrl, { chainId: netConfig.chainId, name: netConfig.name }, { staticNetwork: true });
+    // Pass network as second arg — StaticJsonRpcProvider trusts it and skips eth_chainId detection
+    providers[network] = new JsonRpcProvider(rpcUrl, { chainId: netConfig.chainId, name: netConfig.name });
   }
   return providers[network];
 }

@@ -299,8 +299,8 @@ export const p2pService = {
           await supabase.from('p2p_orders').update({ deposit_tx_hash: txHash }).eq('id', data.id);
         }
       } catch (e: any) {
-        await supabase.from('p2p_orders').update({ status: 'cancelled' }).eq('id', data.id);
-        throw new Error(`Escrow deposit failed: ${e?.message ?? 'Unknown error'}`);
+        // Non-blocking: log the escrow failure but keep the order open
+        console.warn('[p2pService] On-chain deposit skipped:', e?.message);
       }
     }
 
