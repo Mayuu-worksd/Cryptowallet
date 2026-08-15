@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS wallet_profiles (
   is_dark_mode    BOOLEAN     NOT NULL DEFAULT true,
   token_balances  JSONB       NOT NULL DEFAULT '{}',
   locked_balances JSONB       NOT NULL DEFAULT '{}',
+  is_suspended    BOOLEAN     NOT NULL DEFAULT false,
   created_at      TIMESTAMPTZ DEFAULT NOW(),
   updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
@@ -26,6 +27,7 @@ ALTER TABLE wallet_profiles ADD COLUMN IF NOT EXISTS network         TEXT       
 ALTER TABLE wallet_profiles ADD COLUMN IF NOT EXISTS is_dark_mode    BOOLEAN     NOT NULL DEFAULT true;
 ALTER TABLE wallet_profiles ADD COLUMN IF NOT EXISTS token_balances  JSONB       NOT NULL DEFAULT '{}';
 ALTER TABLE wallet_profiles ADD COLUMN IF NOT EXISTS locked_balances JSONB       NOT NULL DEFAULT '{}';
+ALTER TABLE wallet_profiles ADD COLUMN IF NOT EXISTS is_suspended    BOOLEAN     NOT NULL DEFAULT false;
 
 -- updated_at trigger
 DROP TRIGGER IF EXISTS wallet_profiles_updated_at ON wallet_profiles;

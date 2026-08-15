@@ -253,6 +253,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [userUid,          setUserUid]          = useState('');
   const [kycEmail,         setKycEmail]         = useState('');
   const [kycFullName,      setKycFullName]      = useState('');
+  const [isSuspended,      setIsSuspended]      = useState(false);
   const [ethBalance,       setEthBalance]       = useState('0.0');
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);
   const [hasWallet,        setHasWallet]        = useState(false);
@@ -1226,6 +1227,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
               profileForStartup = await profileService.upsert(address, { wallet_name: defaultName }).catch(() => null);
             }
             if (profileForStartup) {
+              setIsSuspended(!!profileForStartup.is_suspended);
               if (profileForStartup.user_uuid) {
                 setUserUuid(profileForStartup.user_uuid);
               }
@@ -1452,14 +1454,19 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           filter: `wallet_address=eq.${walletAddress.toLowerCase()}`,
         },
         (payload: any) => {
+          const isSusp = payload.new?.is_suspended;
+          if (isSusp !== undefined && isSusp !== null) {
+            setIsSuspended(!!isSusp);
+          }
           const tb = payload.new?.token_balances;
-          if (!tb) return;
-          const parsed = typeof tb === 'string' ? JSON.parse(tb) : tb;
-          if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
-            setBalances(parsed);
-            balancesRef.current = parsed;
-            setEthBalance(Number(parsed.ETH ?? 0).toFixed(6));
-            ethBalanceRef.current = Number(parsed.ETH ?? 0).toFixed(6);
+          if (tb) {
+            const parsed = typeof tb === 'string' ? JSON.parse(tb) : tb;
+            if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+              setBalances(parsed);
+              balancesRef.current = parsed;
+              setEthBalance(Number(parsed.ETH ?? 0).toFixed(6));
+              ethBalanceRef.current = Number(parsed.ETH ?? 0).toFixed(6);
+            }
           }
         }
       )
@@ -2073,6 +2080,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         try {
           const profile = await profileService.get(data.address);
           if (profile) {
+            setIsSuspended(!!profile.is_suspended);
             const name = profile.wallet_name || `Wallet ${data.address.slice(-4).toUpperCase()}`;
             setWalletNameState(name);
             await storageService.saveWalletName(name);
@@ -2343,6 +2351,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     ]);
     await storageService.clearCardDetails();
     // Fully reset in-memory state → App.tsx re-renders Landing stack
+    setIsSuspended(false);
     setHasWallet(false);
     setWalletAddress('');
     setTronAddress('');
@@ -2881,6 +2890,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     userUid,
     kycEmail,
     kycFullName,
+    isSuspended,
+    setIsSuspended,
     adminNetworks,
     customTokens,
     addCustomToken,
@@ -2910,6 +2921,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     userUid,
     kycEmail,
     kycFullName,
+    isSuspended,
     adminNetworks,
     customTokens,
     addCustomToken,

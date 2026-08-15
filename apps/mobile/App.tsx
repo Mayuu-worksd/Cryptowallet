@@ -194,6 +194,7 @@ import EarnScreen from "./screens/EarnScreen";
 import CreditScreen from "./screens/CreditScreen";
 import MoreScreen from "./screens/MoreScreen";
 import { registerNavigationRef, updateScreenSecurity } from "./utils/screenSecurityManager";
+import DeviceLockedOverlay from "./components/DeviceLockedOverlay";
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -1569,6 +1570,7 @@ export default function App() {
               <NotificationProvider>
                 <WebApp />
                 <GlobalLoadingOverlay />
+                <DeviceLockedOverlay />
               </NotificationProvider>
             </WalletProvider>
           </GestureHandlerRootView>
@@ -1631,6 +1633,7 @@ export default function App() {
                 >
                   <MobileNavigator />
                   <GlobalLoadingOverlay />
+                  <DeviceLockedOverlay />
                 </NavigationContainer>
               </NotificationProvider>
           </WalletProvider>

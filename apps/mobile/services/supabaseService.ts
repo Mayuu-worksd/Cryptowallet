@@ -834,6 +834,7 @@ export type WalletProfile = {
   is_dark_mode?:   boolean | null;
   token_balances?: Record<string, number> | null;
   locked_balances?: Record<string, number> | null;
+  is_suspended?:   boolean | null;
   user_uuid?:      string;
   user_uid?:       number;
 };
