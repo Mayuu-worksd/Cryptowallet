@@ -95,6 +95,13 @@ export const marketService = {
         try {
           const rates = await getLiveRates();
           if (rates.INR && rates.INR.rate > 0) inrRate = rates.INR.rate;
+          
+          // Inject all dynamic fiat stablecoins (THB, PKR, AED, CNY, RUB, UZS, VND, IDR, PHP, etc.)
+          for (const [code, rateInfo] of Object.entries(rates)) {
+            if (code !== 'USD' && rateInfo.rate > 0) {
+              result[code] = { usd: Number((1 / rateInfo.rate).toFixed(6)), change24h: 0 };
+            }
+          }
         } catch (_e) {}
         result['INRX'] = { usd: Number((1 / inrRate).toFixed(6)), change24h: 0.15 };
         if (Object.keys(result).length === 0) throw new Error('Empty price response');
@@ -165,15 +172,36 @@ export const marketService = {
 
   async fetchChartData(symbol: string, timeframe: string): Promise<number[]> {
     // 1. Check Stablecoin Cases
-    if (symbol === 'INRX') {
+    const CUSTOM_STABLECOIN_SYMBOLS = ['THB', 'PKR', 'AED', 'CNY', 'RUB', 'UZS', 'VND', 'IDR', 'PHP', 'INRX'];
+    if (CUSTOM_STABLECOIN_SYMBOLS.includes(symbol)) {
       const limit = timeframe === '1Y' ? 365 : timeframe === '1M' ? 180 : timeframe === '1W' ? 168 : timeframe === '1D' ? 96 : 60;
-      let inrRate = 83.5;
+      
+      // Default baseline rates relative to 1 USD
+      const defaultRates: Record<string, number> = {
+        THB: 36.5,
+        PKR: 278.5,
+        AED: 3.67,
+        CNY: 7.23,
+        RUB: 89.5,
+        UZS: 12600.0,
+        VND: 25400.0,
+        IDR: 16300.0,
+        PHP: 58.5,
+        INRX: 83.5
+      };
+
+      let rate = defaultRates[symbol] || 1.0;
+      const rateKey = symbol === 'INRX' ? 'INR' : symbol;
       try {
         const rates = await getLiveRates();
-        if (rates.INR && rates.INR.rate > 0) inrRate = rates.INR.rate;
+        if (rates[rateKey] && rates[rateKey].rate > 0) {
+          rate = rates[rateKey].rate;
+        }
       } catch (_e) {}
-      const baseline = Number((1 / inrRate).toFixed(6));
-      return getSeededChartData('INRX', timeframe, limit, baseline, baseline * 0.16);
+      
+      const baseline = Number((1 / rate).toFixed(symbol === 'UZS' || symbol === 'VND' ? 8 : 6));
+      // Pegged stablecoins have extremely low volatility (0.5%)
+      return getSeededChartData(symbol, timeframe, limit, baseline, baseline * 0.005);
     }
 
     if (symbol === 'USDT' && timeframe === 'LIVE') {
