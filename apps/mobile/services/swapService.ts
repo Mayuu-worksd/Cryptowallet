@@ -3,6 +3,37 @@ import { Platform } from 'react-native';
 import AsyncStorageNative from '@react-native-async-storage/async-storage';
 import { SUPPORTED_TOKENS as CONFIG_SUPPORTED_TOKENS } from '../constants/currencyConfig';
 import { getLiveRates } from './forexService';
+import { supabase } from './supabaseClient';
+
+const CUSTOM_STABLECOIN_SYMBOLS = ['THB', 'PKR', 'AED', 'CNY', 'RUB', 'UZS', 'VND', 'IDR', 'PHP', 'INRX'];
+
+export function isCustomStablecoin(symbol: string): boolean {
+  return CUSTOM_STABLECOIN_SYMBOLS.includes(symbol);
+}
+
+export async function getDynamicTokenConfig(symbol: string, network: string): Promise<{ address: string; decimals: number } | null> {
+  if (symbol === 'INRX') {
+    return {
+      address: network === 'Polygon' ? '0xd52280A15b30e5EdfFF858E7EC22266604358F26' : '0x51a5f24560547f587999c331788ac495d40d95ba',
+      decimals: 6
+    };
+  }
+  try {
+    const { data } = await supabase
+      .from('token_contracts')
+      .select('contract_address, decimals')
+      .eq('currency_code', symbol)
+      .eq('network_name', network === 'Polygon Amoy' ? 'Polygon Amoy' : network === 'Sepolia' ? 'Sepolia' : network)
+      .eq('is_enabled', true)
+      .maybeSingle();
+    if (data && data.contract_address) {
+      return { address: data.contract_address, decimals: data.decimals || 6 };
+    }
+  } catch (err) {
+    console.error('Failed to get dynamic token config:', err);
+  }
+  return null;
+}
 
 const AsyncStorage = Platform.OS === 'web'
   ? {
@@ -41,7 +72,7 @@ const SEPOLIA_TOKENS: Record<string, string> = {
   ETH:  ETH_SENTINEL,
   WETH: '0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14',
   USDC: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
-  USDT: '0x7169D38820dfd117C3FA1f22a697dBA58d90BA06',
+  USDT: '0xbD1ea96750Ef2E971D4B17F80DeB29a081BbA9A0',
   DAI:  '0x3e622317f8C93f7328350cF0B56d9eD4C620C5d6',
   INRX: '0x51A5F24560547f587999c331788aC495D40d95ba',
   CUSTOM: '0x51A5F24560547f587999c331788aC495D40d95ba',
@@ -81,7 +112,7 @@ export type SwapQuote = {
   price:           string;
   estimatedGas:    string;
   isSimulated:     boolean;
-  source:          '0x' | 'uniswap_v3' | 'coingecko' | 'cached';
+  source:          '0x' | 'uniswap_v3' | 'coingecko' | 'cached' | 'reserve_mint_burn';
   fromToken:       string;
   toToken:         string;
   slippage:        string;
@@ -391,6 +422,41 @@ export async function getSwapQuote(
   const normalizedAmount = amount ? amount.replace(',', '.') : '0';
   if (!normalizedAmount || parseAmount(normalizedAmount) <= 0) return tryCachedQuote(from, to, '0');
 
+  if (isCustomStablecoin(from) || isCustomStablecoin(to)) {
+    let fromUsd = 1.0;
+    let toUsd = 1.0;
+    try {
+      const { marketService } = await import('./marketService');
+      const prices = await marketService.fetchPrices();
+      fromUsd = prices[from]?.usd ?? (from === 'INRX' ? 0.012 : 1.0);
+      toUsd = prices[to]?.usd ?? (to === 'INRX' ? 0.012 : 1.0);
+    } catch {
+      const rates = await getLiveRates();
+      if (from !== 'USDT' && from !== 'USDC' && rates[from]?.rate > 0) fromUsd = 1 / rates[from].rate;
+      if (to !== 'USDT' && to !== 'USDC' && rates[to]?.rate > 0) toUsd = 1 / rates[to].rate;
+    }
+
+    const amt = parseAmount(normalizedAmount);
+    const buyAmt = toUsd > 0 ? (amt * fromUsd) / toUsd : 0;
+    const rate = toUsd > 0 ? (fromUsd / toUsd) : 0;
+
+    return {
+      buyAmount: buyAmt.toFixed(6),
+      sellAmount: normalizedAmount,
+      price: rate.toFixed(6),
+      estimatedGas: '0.002',
+      isSimulated: false,
+      source: 'reserve_mint_burn',
+      fromToken: from,
+      toToken: to,
+      slippage: '1',
+      minimumReceived: (buyAmt * 0.99).toFixed(6),
+      toAmount: buyAmt.toFixed(6),
+      rate: rate.toFixed(6),
+      usdValue: (amt * fromUsd).toFixed(2),
+    };
+  }
+
   // TRON: try SunSwap first, fall back to simulated
   if (network === 'TRON' || network === 'TRON Nile') {
     if (network === 'TRON') {
@@ -669,6 +735,148 @@ async function _saveSwapHistory(data: SwapQuote & { txHash: string; isSimulated:
   } catch (e) { console.error('Failed to save swap_transactions', e); }
 }
 
+async function _executeReserveMintBurnSwap(
+  quote: SwapQuote, wallet: ethers.Wallet, network: string,
+  onStatus?: (msg: string) => void
+): Promise<SwapResult> {
+  const adminReserve = '0x7D828173126408B4Fbdd3CEf614698d452BE5a3e';
+  
+  const fromToken = quote.fromToken;
+  const toToken = quote.toToken;
+  
+  onStatus?.(`Initializing swap: ${fromToken} → ${toToken}...`);
+  
+  const fromCfg = await getDynamicTokenConfig(fromToken, network);
+  const toCfg = await getDynamicTokenConfig(toToken, network);
+  
+  // Resolve USDT address
+  const usdtAddr = network === 'Sepolia' ? SEPOLIA_TOKENS.USDT : (MAINNET_TOKENS[network]?.USDT || SEPOLIA_TOKENS.USDT);
+  
+  let txHash = '';
+
+  // Production Upgradeable Stablecoin System on Sepolia Testnet
+  if (network === 'Sepolia') {
+    const RESERVE_CONVERSION = '0x463A8dB7CE733d0DF5F05Bb2Fe58c845a08f5b33';
+    const conversionContract = new ethers.Contract(RESERVE_CONVERSION, [
+      'function swapUSDTToStablecoin(bytes32 tokenId, uint256 usdtAmount) returns (uint256)',
+      'function swapStablecoinToUSDT(bytes32 tokenId, uint256 stablecoinAmount) returns (uint256)',
+      'function swapStablecoinToStablecoin(bytes32 fromTokenId, bytes32 toTokenId, uint256 stablecoinAmount) returns (uint256)'
+    ], wallet);
+    
+    if (fromToken === 'USDT' && toCfg) {
+      const usdtContract = new ethers.Contract(usdtAddr, [
+        'function approve(address spender, uint256 amount) returns (bool)'
+      ], wallet);
+      
+      const amtIn = ethers.utils.parseUnits(quote.sellAmount, 6);
+      
+      onStatus?.(`Approving ReserveConversion for ${quote.sellAmount} USDT...`);
+      const tx1 = await usdtContract.approve(RESERVE_CONVERSION, amtIn);
+      await tx1.wait(1);
+      
+      onStatus?.(`Executing swapUSDTToStablecoin...`);
+      const tokenId = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(toToken));
+      const tx2 = await conversionContract.swapUSDTToStablecoin(tokenId, amtIn);
+      const receipt = await tx2.wait(1);
+      txHash = receipt.transactionHash;
+    }
+    else if (toToken === 'USDT' && fromCfg) {
+      const amtIn = ethers.utils.parseUnits(quote.sellAmount, fromCfg.decimals);
+      
+      // ReserveConversion has BURNER_ROLE so it can burn user's tokens directly on-chain
+      onStatus?.(`Executing swapStablecoinToUSDT...`);
+      const tokenId = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(fromToken));
+      const tx2 = await conversionContract.swapStablecoinToUSDT(tokenId, amtIn);
+      const receipt = await tx2.wait(1);
+      txHash = receipt.transactionHash;
+    }
+    else if (fromCfg && toCfg) {
+      // Stablecoin1 -> Stablecoin2 (atomic swap)
+      const amtIn = ethers.utils.parseUnits(quote.sellAmount, fromCfg.decimals);
+      
+      onStatus?.(`Executing atomic swap: ${fromToken} → ${toToken}...`);
+      const tokenId1 = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(fromToken));
+      const tokenId2 = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(toToken));
+      const tx = await conversionContract.swapStablecoinToStablecoin(tokenId1, tokenId2, amtIn);
+      const receipt = await tx.wait(1);
+      txHash = receipt.transactionHash;
+    }
+    else {
+      throw new Error(`Unsupported token pair: ${fromToken} to ${toToken}`);
+    }
+    
+    onStatus?.('Swap complete!');
+    return { success: true, hash: txHash };
+  }
+
+  // Legacy/Default mock behavior for other networks
+  if (fromToken === 'USDT' && toCfg) {
+    const usdtContract = new ethers.Contract(usdtAddr, [
+      'function transfer(address to, uint256 amount) returns (bool)'
+    ], wallet);
+    
+    const amtIn = ethers.utils.parseUnits(quote.sellAmount, 6);
+    const amtOut = ethers.utils.parseUnits(quote.buyAmount, toCfg.decimals);
+    
+    onStatus?.(`Transferring ${quote.sellAmount} USDT to reserve...`);
+    const tx1 = await usdtContract.transfer(adminReserve, amtIn);
+    await tx1.wait(1);
+    
+    onStatus?.(`Minting ${quote.buyAmount} ${toToken} on-chain...`);
+    const stableContract = new ethers.Contract(toCfg.address, [
+      'function mint(address to, uint256 amount) returns (bool)'
+    ], wallet);
+    const tx2 = await stableContract.mint(wallet.address, amtOut);
+    const receipt = await tx2.wait(1);
+    txHash = receipt.transactionHash;
+  }
+  else if (toToken === 'USDT' && fromCfg) {
+    const amtIn = ethers.utils.parseUnits(quote.sellAmount, fromCfg.decimals);
+    const amtOut = ethers.utils.parseUnits(quote.buyAmount, 6);
+    
+    onStatus?.(`Burning ${quote.sellAmount} ${fromToken}...`);
+    const stableContract = new ethers.Contract(fromCfg.address, [
+      'function burnFrom(uint256 amount, string reason) returns (bool)'
+    ], wallet);
+    
+    const tx1 = await stableContract["burnFrom(uint256,string)"](amtIn, "Swap to USDT");
+    const receipt1 = await tx1.wait(1);
+    txHash = receipt1.transactionHash;
+    
+    onStatus?.(`Releasing ${quote.buyAmount} USDT from reserve...`);
+    const usdtContract = new ethers.Contract(usdtAddr, [
+      'function transfer(address to, uint256 amount) returns (bool)'
+    ], wallet);
+    const tx2 = await usdtContract.transfer(wallet.address, amtOut);
+    await tx2.wait(1);
+  }
+  else if (fromCfg && toCfg) {
+    const amtIn = ethers.utils.parseUnits(quote.sellAmount, fromCfg.decimals);
+    const amtOut = ethers.utils.parseUnits(quote.buyAmount, toCfg.decimals);
+    
+    onStatus?.(`Burning ${quote.sellAmount} ${fromToken}...`);
+    const fromContract = new ethers.Contract(fromCfg.address, [
+      'function burnFrom(uint256 amount, string reason) returns (bool)'
+    ], wallet);
+    const tx1 = await fromContract["burnFrom(uint256,string)"](amtIn, `Swap to ${toToken}`);
+    await tx1.wait(1);
+    
+    onStatus?.(`Minting ${quote.buyAmount} ${toToken}...`);
+    const toContract = new ethers.Contract(toCfg.address, [
+      'function mint(address to, uint256 amount) returns (bool)'
+    ], wallet);
+    const tx2 = await toContract.mint(wallet.address, amtOut);
+    const receipt = await tx2.wait(1);
+    txHash = receipt.transactionHash;
+  }
+  else {
+    throw new Error(`Unsupported token pair: ${fromToken} to ${toToken}`);
+  }
+  
+  onStatus?.('Swap complete!');
+  return { success: true, hash: txHash };
+}
+
 export const saveSwapToHistory = _saveSwapHistory;
 
 // ─── Public: executeSwap ──────────────────────────────────────────────────────
@@ -694,6 +902,16 @@ async function _doExecuteSwap(
     if (network === 'TRON' && !quote.isSimulated) {
       const result = await _executeSunSwap(quote, privateKey, walletAddress, onStatus);
       if (result.success && result.hash) await _saveSwapHistory({ ...quote, txHash: result.hash, isSimulated: false });
+      return result;
+    }
+
+    if (quote.source === 'reserve_mint_burn') {
+      const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+      const wallet   = new ethers.Wallet(privateKey, provider);
+      const result = await _executeReserveMintBurnSwap(quote, wallet, network, onStatus);
+      if (result.success && result.hash) {
+        await _saveSwapHistory({ ...quote, txHash: result.hash, isSimulated: false });
+      }
       return result;
     }
 
