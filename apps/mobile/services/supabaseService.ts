@@ -834,9 +834,10 @@ export type WalletProfile = {
   is_dark_mode?:   boolean | null;
   token_balances?: Record<string, number> | null;
   locked_balances?: Record<string, number> | null;
-  is_suspended?:   boolean | null;
-  user_uuid?:      string;
-  user_uid?:       number;
+  is_suspended?:      boolean | null;
+  suspension_reason?:  string | null;
+  user_uuid?:          string;
+  user_uid?:           number;
 };
 
 export const profileService = {
@@ -848,6 +849,9 @@ export const profileService = {
     if (error) throw error;
     if (!data) return null;
     const profile = { ...data };
+    if (profile && profile.user_id) {
+      (profile as any).user_uuid = profile.user_id;
+    }
     if (typeof profile.token_balances === 'string') {
       try {
         profile.token_balances = JSON.parse(profile.token_balances);
@@ -884,6 +888,9 @@ export const profileService = {
     if (error) throw error;
     if (!data) return null;
     const profile = { ...data };
+    if (profile && profile.user_id) {
+      (profile as any).user_uuid = profile.user_id;
+    }
     if (typeof profile.token_balances === 'string') {
       try {
         profile.token_balances = JSON.parse(profile.token_balances);
@@ -1152,7 +1159,7 @@ export interface FiatCryptoRequest {
   id: string;
   ticket_id: string;
   wallet_address: string;
-  user_uuid: string;
+  user_uuid?: string;
   type: 'deposit' | 'withdrawal';
   fiat_currency: string;
   crypto_asset: string;
@@ -1174,7 +1181,7 @@ export interface FiatCryptoRequest {
 
 export interface LedgerEntry {
   id: string;
-  user_uuid: string;
+  user_uuid?: string;
   wallet_address: string;
   transaction_id?: string | null;
   ticket_id: string;
@@ -1280,7 +1287,7 @@ export const fiatRequestService = {
       .select()
       .single();
     if (error) throw error;
-    return data;
+    return data ? { ...data, user_uuid: data.user_id } : null;
   },
 
   async submitWithdrawal(
@@ -1299,7 +1306,7 @@ export const fiatRequestService = {
       p_bank_details: bankDetails
     });
     if (error) throw error;
-    return data;
+    return data ? { ...data, user_uuid: data.user_id } : null;
   },
 
   async getRequests(walletAddress: string): Promise<FiatCryptoRequest[]> {
@@ -1310,7 +1317,7 @@ export const fiatRequestService = {
       .eq('wallet_address', walletAddress.toLowerCase())
       .order('created_at', { ascending: false });
     if (error) throw error;
-    return data ?? [];
+    return (data ?? []).map((r: any) => ({ ...r, user_uuid: r.user_id }));
   },
 
   async getLedgerEntries(walletAddress: string): Promise<LedgerEntry[]> {
@@ -1321,7 +1328,7 @@ export const fiatRequestService = {
       .eq('wallet_address', walletAddress.toLowerCase())
       .order('created_at', { ascending: false });
     if (error) throw error;
-    return data ?? [];
+    return (data ?? []).map((e: any) => ({ ...e, user_uuid: e.user_id }));
   },
 };
 

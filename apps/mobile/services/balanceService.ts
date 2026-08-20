@@ -32,14 +32,14 @@ const TOKEN_CONTRACTS: Record<string, Record<string, string>> = {
   },
   USDT: {
     Ethereum: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
-    Sepolia:  '0x7169D38820dfd117C3FA1f22a697dBA58d90BA06',
+    Sepolia:  '0xbD1ea96750Ef2E971D4B17F80DeB29a081BbA9A0',
     Polygon:  '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
     Arbitrum: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
     BSC:      '0x55d398326f99059fF775485246999027B3197955',
-    'Base Sepolia':     '0x7169D38820dfd117C3FA1f22a697dBA58d90BA06',
-    'Polygon Amoy':     '0x7169D38820dfd117C3FA1f22a697dBA58d90BA06',
-    'Arbitrum Sepolia': '0x7169D38820dfd117C3FA1f22a697dBA58d90BA06',
-    'Optimism Sepolia': '0x7169D38820dfd117C3FA1f22a697dBA58d90BA06',
+    'Base Sepolia':     '0xbD1ea96750Ef2E971D4B17F80DeB29a081BbA9A0',
+    'Polygon Amoy':     '0xbD1ea96750Ef2E971D4B17F80DeB29a081BbA9A0',
+    'Arbitrum Sepolia': '0xbD1ea96750Ef2E971D4B17F80DeB29a081BbA9A0',
+    'Optimism Sepolia': '0xbD1ea96750Ef2E971D4B17F80DeB29a081BbA9A0',
   },
   INRX: {
     Sepolia:  '0x51a5f24560547f587999c331788ac495d40d95ba',
@@ -148,6 +148,13 @@ export async function saveTokenBalances(network: string, balances: Partial<Walle
       toSave[`USDC_ERC20_${network}`] = (balances as any).USDC_ERC20 ?? balances.USDC;
       toSave[`USDT_ERC20_${network}`] = (balances as any).USDT_ERC20 ?? balances.USDT;
       toSave[`INRX_${network}`] = balances.INRX;
+      // Persist all dynamic/custom token balances (THB, AED, PKR, etc.)
+      const KNOWN_KEYS = new Set(['ETH','USDT','USDC','INRX','BTC','SOL','BNB','XRP','TON','TRX','SUI','USDT_TRC20','USDC_TRC20','USDT_ERC20','USDC_ERC20']);
+      Object.entries(balances).forEach(([key, val]) => {
+        if (!KNOWN_KEYS.has(key) && typeof val === 'number' && val >= 0) {
+          toSave[`${key}_${network}`] = val;
+        }
+      });
     }
 
     await AsyncStorage.setItem('cw_token_balances', JSON.stringify(toSave));
@@ -408,25 +415,39 @@ export async function getWalletBalances(
     INRX: cachedINRX ?? local.INRX ?? 0,
   };
 
+  const isTestnet = network.toLowerCase().includes('sepolia') || 
+                    network.toLowerCase().includes('testnet') || 
+                    network.toLowerCase().includes('devnet') || 
+                    network.toLowerCase().includes('nile') || 
+                    network.toLowerCase().includes('amoy');
+
   // Merge the dynamic contract balances into the balances object
   activeContracts.forEach(c => {
     const code = c.currency_code;
     const chainVal = chainBalances[code];
-    const cachedVal = local[`${code}_${network}` as any] as number | undefined;
-    balances[code] = chainVal !== undefined && chainVal !== null ? chainVal : (cachedVal ?? 0);
+    const cachedVal = (local[`${code}_${network}` as any] as number | undefined) ?? (local[code] ?? 0);
+    
+    if (isTestnet) {
+      balances[code] = Math.max(chainVal ?? 0, cachedVal ?? 0);
+    } else {
+      balances[code] = chainVal !== undefined && chainVal !== null ? chainVal : (cachedVal ?? 0);
+    }
   });
 
   // Map backward compatible fields
   if (chainBalances.USDC !== undefined) {
-    balances.USDC = chainBalances.USDC;
-    balances.USDC_ERC20 = chainBalances.USDC;
+    const cachedUSDCVal = (local[`USDC_ERC20_${network}` as any] as number | undefined) ?? (local.USDC ?? 0);
+    balances.USDC = isTestnet ? Math.max(chainBalances.USDC, cachedUSDCVal) : chainBalances.USDC;
+    balances.USDC_ERC20 = balances.USDC;
   }
   if (chainBalances.USDT !== undefined) {
-    balances.USDT = chainBalances.USDT;
-    balances.USDT_ERC20 = chainBalances.USDT;
+    const cachedUSDTVal = (local[`USDT_ERC20_${network}` as any] as number | undefined) ?? (local.USDT ?? 0);
+    balances.USDT = isTestnet ? Math.max(chainBalances.USDT, cachedUSDTVal) : chainBalances.USDT;
+    balances.USDT_ERC20 = balances.USDT;
   }
   if (chainBalances.INRX !== undefined) {
-    balances.INRX = chainBalances.INRX;
+    const cachedINRXVal = (local[`INRX_${network}` as any] as number | undefined) ?? (local.INRX ?? 0);
+    balances.INRX = isTestnet ? Math.max(chainBalances.INRX, cachedINRXVal) : chainBalances.INRX;
   }
 
   await saveTokenBalances(network, balances);

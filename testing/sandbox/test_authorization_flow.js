@@ -12,7 +12,7 @@
  */
 
 const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config({ path: './admin-dashboard/.env.local' });
+require('dotenv').config({ path: './apps/admin-dashboard/.env.local' });
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

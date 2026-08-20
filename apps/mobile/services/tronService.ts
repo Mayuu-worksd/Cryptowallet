@@ -371,11 +371,103 @@ export const tronService = {
     }
   },
 
-  // ─── Estimate TRON bandwidth/energy fee (flat estimate) ────────────────────
+  // ─── Fetch recipient token balance to determine if account is initialized ───
+  async getRecipientTokenBalance(toAddress: string, contractAddress: string, network: string): Promise<number> {
+    const base = this.getBaseUrl(network);
+    try {
+      const res = await fetch(`${base}/v1/accounts/${toAddress}`, {
+        headers: { 'Accept': 'application/json' },
+      });
+      const json = await res.json();
+      const account = json?.data?.[0];
+      if (!account) return 0;
+      const trc20: any[] = account.trc20 ?? [];
+      for (const t of trc20) {
+        for (const [addr, bal] of Object.entries(t)) {
+          if (addr.toLowerCase() === contractAddress.toLowerCase()) {
+            return parseInt(String(bal), 10);
+          }
+        }
+      }
+    } catch {}
+    return 0;
+  },
+
+  // ─── Fetch sender resource limits ───────────────────────────────────────────
+  async getAccountResources(address: string, network: string): Promise<{
+    freeBandwidth: number;
+    stakedBandwidth: number;
+    stakedEnergy: number;
+  }> {
+    const base = this.getBaseUrl(network);
+    const ownerHex = tronAddressToHex(address);
+    try {
+      const res = await fetch(`${base}/wallet/getaccountresource`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: ownerHex, visible: true }),
+      });
+      const json = await res.json();
+      
+      const freeLimit = json.freeNetLimit ?? 0;
+      const freeUsed = json.freeNetUsed ?? 0;
+      const freeBandwidth = Math.max(0, freeLimit - freeUsed);
+
+      const netLimit = json.NetLimit ?? 0;
+      const netUsed = json.NetUsed ?? 0;
+      const stakedBandwidth = Math.max(0, netLimit - netUsed);
+
+      const energyLimit = json.EnergyLimit ?? 0;
+      const energyUsed = json.EnergyUsed ?? 0;
+      const stakedEnergy = Math.max(0, energyLimit - energyUsed);
+
+      return { freeBandwidth, stakedBandwidth, stakedEnergy };
+    } catch {
+      return { freeBandwidth: 600, stakedBandwidth: 0, stakedEnergy: 0 };
+    }
+  },
+
+  // ─── Estimate TRON bandwidth/energy fee (dynamic estimate) ──────────────────
+  async estimateDynamicFee(params: {
+    fromAddress: string;
+    toAddress: string;
+    contractAddress?: string; // empty if native TRX
+    network: string;
+  }): Promise<number> {
+    const isTrc20 = !!params.contractAddress;
+    const requiredBandwidth = isTrc20 ? 345 : 268;
+    
+    let requiredEnergy = 0;
+    if (isTrc20 && params.contractAddress) {
+      const balance = await this.getRecipientTokenBalance(params.toAddress, params.contractAddress, params.network);
+      requiredEnergy = balance > 0 ? 31892 : 64892;
+    }
+
+    try {
+      const resources = await this.getAccountResources(params.fromAddress, params.network);
+      
+      // Calculate Bandwidth cost
+      const totalBandwidth = resources.freeBandwidth + resources.stakedBandwidth;
+      let bandwidthCostTrx = 0;
+      if (totalBandwidth < requiredBandwidth) {
+        bandwidthCostTrx = (requiredBandwidth - totalBandwidth) * 0.001; // 1000 SUN per byte
+      }
+
+      // Calculate Energy cost
+      let energyCostTrx = 0;
+      if (requiredEnergy > 0 && resources.stakedEnergy < requiredEnergy) {
+        energyCostTrx = (requiredEnergy - resources.stakedEnergy) * 0.0001; // 100 SUN per energy point
+      }
+
+      return parseFloat((bandwidthCostTrx + energyCostTrx).toFixed(6));
+    } catch {
+      return isTrc20 ? 7.2 : 0.35; // fallback maximums based on 100 SUN/energy and 1000 SUN/bandwidth
+    }
+  },
+
+  // Backward compatibility flat fee estimate
   estimateFee(_network: string): number {
-    // Standard TRX transfer costs ~0.1 TRX in bandwidth
-    // If bandwidth is exhausted, ~1 TRX in energy
-    return 1.0; // conservative estimate in TRX
+    return 1.0;
   },
 
   // ─── Send TRX (native) ─────────────────────────────────────────────────────

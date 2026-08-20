@@ -78,8 +78,8 @@ const SEPOLIA_TOKENS: Record<string, string> = {
   CUSTOM: '0x51A5F24560547f587999c331788aC495D40d95ba',
 };
 
-const UNISWAP_ROUTER_SEPOLIA = '0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48e';
-const UNISWAP_QUOTER_SEPOLIA = '0xEd1f6473345F45b75833fd55D191EaA8D2C54Dd9';
+const UNISWAP_ROUTER_SEPOLIA = '0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E';
+const UNISWAP_QUOTER_SEPOLIA = '0xED1f6473345f45b75833fD55d191eAA8d2C54dD9';
 const POOL_FEE = 3000;
 
 const ZRX_APIS: Record<string, string> = {
@@ -163,15 +163,19 @@ function isSafeUrl(url: string, allowed: string[]): boolean {
 }
 
 export function parseSwapError(e: any): string {
-  const msg: string = e?.reason ?? e?.message ?? 'Unknown error';
+  // Prefer the on-chain revert reason over the generic JSON-RPC wrapper message
+  const msg: string = e?.reason ?? e?.error?.message ?? e?.message ?? 'Unknown error';
   if (msg.includes('insufficient funds'))   return 'Insufficient ETH for gas fees';
   if (msg.includes('INSUFFICIENT_OUTPUT'))  return 'Price moved too much. Try increasing slippage.';
   if (msg.includes('user rejected'))        return 'Transaction rejected';
+  if (msg.includes('missing role') || msg.includes('AccessControl')) return 'Swap failed: contract permission denied. Contact support.';
   if (msg.includes('nonce'))                return 'Transaction conflict. Please try again.';
-  if (msg.includes('gas'))                  return 'Gas estimation failed. Network may be congested.';
+  if (msg.includes('gas required exceeds') || msg.includes('out of gas')) return 'Gas estimation failed. Network may be congested.';
   if (msg.includes('No liquidity'))         return 'No liquidity for this pair on this network.';
   if (msg.includes('rate limit') || msg.includes('429')) return 'Too many requests. Wait 10 seconds.';
-  if (msg.includes('timeout') || msg.includes('network')) return 'Network slow. Please try again.';
+  if (msg.includes('timed out') || msg.includes('Swap timed out')) return 'Network slow. Please try again.';
+  // Only generic network errors — NOT every error that happens to contain "network"
+  if (msg.includes('network changed') || msg.includes('network error')) return 'Network error. Please try again.';
   return `Swap failed: ${msg.slice(0, 120)}`;
 }
 
@@ -477,7 +481,15 @@ export async function getSwapQuote(
     return tryCachedQuote(from, to, normalizedAmount);
   }
 
-  // Sepolia: try Uniswap V3, fall back to simulated
+  // Sepolia: ETH/USDT/USDC pairs → use direct mint/burn (always real on-chain)
+  const SEPOLIA_DIRECT_TOKENS = ['ETH', 'USDT', 'USDC'];
+  if (SEPOLIA_DIRECT_TOKENS.includes(from) && SEPOLIA_DIRECT_TOKENS.includes(to)) {
+    const cg = await tryCoinGeckoQuote(from, to, normalizedAmount);
+    const base = cg ?? await tryCachedQuote(from, to, normalizedAmount);
+    return { ...base, isSimulated: false, source: 'reserve_mint_burn' };
+  }
+
+  // Sepolia: other pairs → try Uniswap V3, fall back to simulated
   if (rpcUrl) {
     const q = await tryUniswapSepoliaQuote(from, to, normalizedAmount, rpcUrl);
     if (q) return q;
@@ -743,11 +755,20 @@ async function _executeReserveMintBurnSwap(
   
   const fromToken = quote.fromToken;
   const toToken = quote.toToken;
+
+  console.log(`[SWAP] _executeReserveMintBurnSwap START`);
+  console.log(`[SWAP] pair: ${fromToken} → ${toToken} | network: ${network}`);
+  console.log(`[SWAP] sellAmount: ${quote.sellAmount} | buyAmount: ${quote.buyAmount} | usdValue: ${quote.usdValue}`);
+  console.log(`[SWAP] wallet: ${wallet.address}`);
+  console.log(`[SWAP] rpcUrl:`, wallet.provider ? (wallet.provider as any).connection?.url ?? 'provider attached' : 'NO PROVIDER');
   
   onStatus?.(`Initializing swap: ${fromToken} → ${toToken}...`);
   
   const fromCfg = await getDynamicTokenConfig(fromToken, network);
   const toCfg = await getDynamicTokenConfig(toToken, network);
+
+  console.log(`[SWAP] fromCfg:`, fromCfg);
+  console.log(`[SWAP] toCfg:`, toCfg);
   
   // Resolve USDT address
   const usdtAddr = network === 'Sepolia' ? SEPOLIA_TOKENS.USDT : (MAINNET_TOKENS[network]?.USDT || SEPOLIA_TOKENS.USDT);
@@ -756,6 +777,13 @@ async function _executeReserveMintBurnSwap(
 
   // Production Upgradeable Stablecoin System on Sepolia Testnet
   if (network === 'Sepolia') {
+    // ETH ↔ USDT / ETH ↔ USDC / USDT ↔ USDC — direct mint/burn on MockUSDT (real on-chain tx)
+    const SEPOLIA_DIRECT_TOKENS = ['ETH', 'USDT', 'USDC'];
+    if (SEPOLIA_DIRECT_TOKENS.includes(fromToken) && SEPOLIA_DIRECT_TOKENS.includes(toToken)) {
+      console.log(`[SWAP] → routing to _executeSepoliaDirectSwap`);
+      return await _executeSepoliaDirectSwap(quote, wallet, onStatus);
+    }
+
     const RESERVE_CONVERSION = '0x463A8dB7CE733d0DF5F05Bb2Fe58c845a08f5b33';
     const conversionContract = new ethers.Contract(RESERVE_CONVERSION, [
       'function swapUSDTToStablecoin(bytes32 tokenId, uint256 usdtAmount) returns (uint256)',
@@ -764,6 +792,7 @@ async function _executeReserveMintBurnSwap(
     ], wallet);
     
     if (fromToken === 'USDT' && toCfg) {
+      console.log(`[SWAP] → branch: USDT → custom stablecoin`);
       const usdtContract = new ethers.Contract(usdtAddr, [
         'function approve(address spender, uint256 amount) returns (bool)'
       ], wallet);
@@ -781,6 +810,7 @@ async function _executeReserveMintBurnSwap(
       txHash = receipt.transactionHash;
     }
     else if (toToken === 'USDT' && fromCfg) {
+      console.log(`[SWAP] → branch: custom stablecoin → USDT`);
       const amtIn = ethers.utils.parseUnits(quote.sellAmount, fromCfg.decimals);
       
       // ReserveConversion has BURNER_ROLE so it can burn user's tokens directly on-chain
@@ -790,8 +820,68 @@ async function _executeReserveMintBurnSwap(
       const receipt = await tx2.wait(1);
       txHash = receipt.transactionHash;
     }
+    else if (fromToken === 'ETH' && toCfg) {
+      console.log(`[SWAP] → branch: ETH → custom stablecoin`);
+      // ETH → Custom Stablecoin (e.g. THB, PKR, AED):
+      // Step 1: Mint USDT to user using _executeSepoliaDirectSwap logic (open mint on testnet)
+      // Step 2: Approve ReserveConversion to pull that USDT
+      // Step 3: swapUSDTToStablecoin → mints target token to user
+      const usdValue = parseFloat(quote.usdValue ?? '0');
+      console.log(`[SWAP] usdValue for USDT mint: ${usdValue}`);
+      if (usdValue <= 0) throw new Error('Could not determine USD value of ETH amount');
+      const usdtAmt = ethers.utils.parseUnits(usdValue.toFixed(6), 6);
+
+      // Step 1: Mint USDT via MockUSDT (open mint on Sepolia testnet — no role needed)
+      onStatus?.(`Step 1/3 — Minting ${usdValue.toFixed(2)} USDT...`);
+      const mockUsdtAbi = [
+        'function mint(address to, uint256 amount)',
+        'function approve(address spender, uint256 amount) returns (bool)',
+      ];
+      const usdtContract = new ethers.Contract(SEPOLIA_TOKENS.USDT, mockUsdtAbi, wallet);
+      console.log(`[SWAP] Step 1: minting ${usdValue.toFixed(6)} USDT to ${wallet.address}`);
+      const tx1 = await usdtContract.mint(wallet.address, usdtAmt, { gasLimit: 120000 });
+      console.log(`[SWAP] Step 1 tx sent: ${tx1.hash}`);
+      await tx1.wait(1);
+      console.log(`[SWAP] Step 1 confirmed`);
+
+      // Step 2: Approve ReserveConversion to spend that USDT
+      onStatus?.(`Step 2/3 — Approving...`);
+      console.log(`[SWAP] Step 2: approving ReserveConversion for ${usdtAmt.toString()} USDT`);
+      const tx2 = await usdtContract.approve(RESERVE_CONVERSION, usdtAmt, { gasLimit: 80000 });
+      console.log(`[SWAP] Step 2 tx sent: ${tx2.hash}`);
+      await tx2.wait(1);
+      console.log(`[SWAP] Step 2 confirmed`);
+
+      // Step 3: Swap USDT → stablecoin via ReserveConversion
+      onStatus?.(`Step 3/3 — Swapping to ${toToken}...`);
+      const tokenId = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(toToken));
+      console.log(`[SWAP] Step 3: swapUSDTToStablecoin | tokenId: ${tokenId} | usdtAmt: ${usdtAmt.toString()}`);
+      const tx3 = await conversionContract.swapUSDTToStablecoin(tokenId, usdtAmt, { gasLimit: 200000 });
+      console.log(`[SWAP] Step 3 tx sent: ${tx3.hash}`);
+      const receipt = await tx3.wait(1);
+      console.log(`[SWAP] Step 3 confirmed: ${receipt.transactionHash}`);
+      txHash = receipt.transactionHash;
+    }
+    else if (toToken === 'ETH' && fromCfg) {
+      console.log(`[SWAP] → branch: custom stablecoin → ETH`);
+      const amtIn = ethers.utils.parseUnits(quote.sellAmount, fromCfg.decimals);
+      onStatus?.(`Burning ${quote.sellAmount} ${fromToken}...`);
+      const stableContract = new ethers.Contract(fromCfg.address, [
+        'function burn(uint256 amount)',
+        'function burnFrom(uint256 amount, string memory reason) returns (bool)'
+      ], wallet);
+      let tx;
+      try {
+        tx = await stableContract["burnFrom(uint256,string)"](amtIn, 'Swap to ETH', { gasLimit: 120000 });
+      } catch {
+        tx = await stableContract.burn(amtIn, { gasLimit: 120000 });
+      }
+      const receipt = await tx.wait(1);
+      txHash = receipt.transactionHash;
+      onStatus?.(`${fromToken} burned. ETH balance reflects faucet; on testnet ETH is not credited.`);
+    }
     else if (fromCfg && toCfg) {
-      // Stablecoin1 -> Stablecoin2 (atomic swap)
+      console.log(`[SWAP] → branch: stablecoin → stablecoin`);
       const amtIn = ethers.utils.parseUnits(quote.sellAmount, fromCfg.decimals);
       
       onStatus?.(`Executing atomic swap: ${fromToken} → ${toToken}...`);
@@ -802,10 +892,12 @@ async function _executeReserveMintBurnSwap(
       txHash = receipt.transactionHash;
     }
     else {
+      console.error(`[SWAP] ❌ No branch matched! fromToken=${fromToken} toToken=${toToken} fromCfg=${JSON.stringify(fromCfg)} toCfg=${JSON.stringify(toCfg)}`);
       throw new Error(`Unsupported token pair: ${fromToken} to ${toToken}`);
     }
     
     onStatus?.('Swap complete!');
+    console.log(`[SWAP] ✅ SUCCESS txHash: ${txHash}`);
     return { success: true, hash: txHash };
   }
 
@@ -850,6 +942,37 @@ async function _executeReserveMintBurnSwap(
     const tx2 = await usdtContract.transfer(wallet.address, amtOut);
     await tx2.wait(1);
   }
+  else if (fromToken === 'ETH' && toCfg) {
+    const amtOut = ethers.utils.parseUnits(quote.buyAmount, toCfg.decimals);
+    onStatus?.(`Minting ${quote.buyAmount} ${toToken}...`);
+    const stableContract = new ethers.Contract(toCfg.address, [
+      'function mint(address to, uint256 amount) returns (bool)'
+    ], wallet);
+    const tx = await stableContract.mint(wallet.address, amtOut);
+    const receipt = await tx.wait(1);
+    txHash = receipt.transactionHash;
+  }
+  else if (toToken === 'ETH' && fromCfg) {
+    const amtIn = ethers.utils.parseUnits(quote.sellAmount, fromCfg.decimals);
+    onStatus?.(`Burning ${quote.sellAmount} ${fromToken}...`);
+    const stableContract = new ethers.Contract(fromCfg.address, [
+      'function burnFrom(uint256 amount, string reason) returns (bool)',
+      'function burn(uint256 amount) returns (bool)',
+      'function burnFrom(address account, uint256 amount) returns (bool)'
+    ], wallet);
+    let tx;
+    try {
+      tx = await stableContract["burnFrom(uint256,string)"](amtIn, "Swap to ETH");
+    } catch {
+      try {
+        tx = await stableContract.burn(amtIn);
+      } catch {
+        tx = await stableContract.burnFrom(wallet.address, amtIn);
+      }
+    }
+    const receipt = await tx.wait(1);
+    txHash = receipt.transactionHash;
+  }
   else if (fromCfg && toCfg) {
     const amtIn = ethers.utils.parseUnits(quote.sellAmount, fromCfg.decimals);
     const amtOut = ethers.utils.parseUnits(quote.buyAmount, toCfg.decimals);
@@ -877,6 +1000,80 @@ async function _executeReserveMintBurnSwap(
   return { success: true, hash: txHash };
 }
 
+// ─── Execute Sepolia direct mint/burn swap (ETH ↔ USDT/USDC) ────────────────
+// MockUSDT/USDC have open mint() — we use that for real on-chain testnet swaps.
+// ETH→stable: mint stable tokens to user (real tx)
+// stable→ETH: burn stable by sending to zero address (real tx), ETH balance unchanged
+//             (on testnet ETH comes from faucet, not from the swap itself)
+const MOCK_USDC_SEPOLIA = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238';
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+
+const MOCK_TOKEN_ABI = [
+  'function mint(address to, uint256 amount)',
+  'function transfer(address to, uint256 amount) returns (bool)',
+  'function balanceOf(address) view returns (uint256)',
+];
+
+async function _executeSepoliaDirectSwap(
+  quote: SwapQuote, wallet: ethers.Wallet,
+  onStatus?: (msg: string) => void
+): Promise<SwapResult> {
+  const { fromToken, toToken, sellAmount, buyAmount } = quote;
+
+  // Resolve token addresses
+  const tokenAddr = (sym: string) =>
+    sym === 'USDT' ? SEPOLIA_TOKENS.USDT :
+    sym === 'USDC' ? MOCK_USDC_SEPOLIA : null;
+
+  if (fromToken === 'ETH') {
+    // ETH → stable: mint stable tokens to user
+    const addr = tokenAddr(toToken);
+    if (!addr) return { success: false, error: `No Sepolia address for ${toToken}` };
+    onStatus?.(`Minting ${buyAmount} ${toToken} on Sepolia...`);
+    const contract = new ethers.Contract(addr, MOCK_TOKEN_ABI, wallet);
+    const amtOut = ethers.utils.parseUnits(buyAmount, 6);
+    const tx = await contract.mint(wallet.address, amtOut, { gasLimit: 100000 });
+    onStatus?.(`Submitted! ${tx.hash.slice(0, 12)}...`);
+    const receipt = await tx.wait(1);
+    onStatus?.('Swap complete!');
+    return { success: true, hash: receipt.transactionHash, explorerUrl: `https://sepolia.etherscan.io/tx/${receipt.transactionHash}` };
+  }
+
+  if (toToken === 'ETH') {
+    // stable → ETH: burn stable by sending to zero address (real tx)
+    const addr = tokenAddr(fromToken);
+    if (!addr) return { success: false, error: `No Sepolia address for ${fromToken}` };
+    onStatus?.(`Burning ${sellAmount} ${fromToken} on Sepolia...`);
+    const contract = new ethers.Contract(addr, MOCK_TOKEN_ABI, wallet);
+    const amtIn = ethers.utils.parseUnits(sellAmount, 6);
+    const tx = await contract.transfer(ZERO_ADDRESS, amtIn, { gasLimit: 100000 });
+    onStatus?.(`Submitted! ${tx.hash.slice(0, 12)}...`);
+    const receipt = await tx.wait(1);
+    onStatus?.('Swap complete!');
+    return { success: true, hash: receipt.transactionHash, explorerUrl: `https://sepolia.etherscan.io/tx/${receipt.transactionHash}` };
+  }
+
+  // USDT ↔ USDC: burn from, mint to
+  const fromAddr = tokenAddr(fromToken);
+  const toAddr = tokenAddr(toToken);
+  if (!fromAddr || !toAddr) return { success: false, error: 'Token not supported' };
+
+  onStatus?.(`Burning ${sellAmount} ${fromToken}...`);
+  const fromContract = new ethers.Contract(fromAddr, MOCK_TOKEN_ABI, wallet);
+  const amtIn = ethers.utils.parseUnits(sellAmount, 6);
+  const tx1 = await fromContract.transfer(ZERO_ADDRESS, amtIn, { gasLimit: 100000 });
+  await tx1.wait(1);
+
+  onStatus?.(`Minting ${buyAmount} ${toToken}...`);
+  const toContract = new ethers.Contract(toAddr, MOCK_TOKEN_ABI, wallet);
+  const amtOut = ethers.utils.parseUnits(buyAmount, 6);
+  const tx2 = await toContract.mint(wallet.address, amtOut, { gasLimit: 100000 });
+  onStatus?.(`Submitted! ${tx2.hash.slice(0, 12)}...`);
+  const receipt = await tx2.wait(1);
+  onStatus?.('Swap complete!');
+  return { success: true, hash: receipt.transactionHash, explorerUrl: `https://sepolia.etherscan.io/tx/${receipt.transactionHash}` };
+}
+
 export const saveSwapToHistory = _saveSwapHistory;
 
 // ─── Public: executeSwap ──────────────────────────────────────────────────────
@@ -897,6 +1094,8 @@ async function _doExecuteSwap(
   walletAddress: string, network: string,
   onStatus?: (msg: string) => void
 ): Promise<SwapResult> {
+  console.log(`[SWAP] executeSwap called | ${quote.fromToken} → ${quote.toToken} | network: ${network} | source: ${quote.source} | isSimulated: ${quote.isSimulated}`);
+  console.log(`[SWAP] ALCHEMY_KEY present:`, !!process.env.EXPO_PUBLIC_ALCHEMY_KEY, '| rpcUrl:', rpcUrl?.slice(0, 60));
   try {
     // TRON mainnet: use SunSwap
     if (network === 'TRON' && !quote.isSimulated) {
@@ -906,8 +1105,32 @@ async function _doExecuteSwap(
     }
 
     if (quote.source === 'reserve_mint_burn') {
-      const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
-      const wallet   = new ethers.Wallet(privateKey, provider);
+      if (network !== 'Sepolia') {
+        return { success: false, error: `${quote.fromToken}/${quote.toToken} swaps are only supported on Sepolia testnet. Switch network and try again.` };
+      }
+      // Use multiple fallback RPCs — publicnode is unreliable on mobile
+      const alchemyKey = process.env.EXPO_PUBLIC_ALCHEMY_KEY;
+      const SEPOLIA_RPCS = [
+        alchemyKey ? `https://eth-sepolia.g.alchemy.com/v2/${alchemyKey}` : null,
+        rpcUrl,
+        'https://sepolia.drpc.org',
+        'https://rpc.ankr.com/eth_sepolia',
+        'https://ethereum-sepolia-rpc.publicnode.com',
+      ].filter(Boolean) as string[];
+      let provider: ethers.providers.JsonRpcProvider | null = null;
+      for (const url of SEPOLIA_RPCS) {
+        try {
+          const p = new ethers.providers.JsonRpcProvider(url);
+          await Promise.race([p.getNetwork(), new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 12000))]);
+          provider = p;
+          console.log(`[SWAP] connected to RPC: ${url.slice(0, 50)}`);
+          break;
+        } catch (e) {
+          console.warn(`[SWAP] RPC failed: ${url.slice(0, 50)}`);
+        }
+      }
+      if (!provider) return { success: false, error: 'Could not connect to Sepolia network. Check your internet connection.' };
+      const wallet = new ethers.Wallet(privateKey, provider);
       const result = await _executeReserveMintBurnSwap(quote, wallet, network, onStatus);
       if (result.success && result.hash) {
         await _saveSwapHistory({ ...quote, txHash: result.hash, isSimulated: false });
@@ -946,6 +1169,7 @@ async function _doExecuteSwap(
     }
     return result;
   } catch (e: any) {
+    console.error(`[SWAP] ❌ FAILED:`, e?.reason ?? e?.error?.message ?? e?.message ?? e);
     return { success: false, error: parseSwapError(e) };
   }
 }

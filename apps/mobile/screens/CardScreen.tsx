@@ -19,6 +19,7 @@ import EditCardSheet from '../components/card/EditCardSheet';
 import SetCurrenciesSheet from '../components/card/SetCurrenciesSheet';
 import TransactionDetailsSheet from '../components/card/TransactionDetailsSheet';
 import { CurrencyText } from '../components/CurrencyText';
+import { getCurrencySymbol } from '../constants/currencyMetadata';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CRIMSON = '#EC2629';
@@ -244,11 +245,11 @@ export default function CardScreen({ navigation, route }: any) {
     () => FIAT_ALL.filter(c => enabledCardCurrencies[c] !== false).slice(0, 6),
     [enabledCardCurrencies]
   );
-  const FIAT_SYMBOLS: Record<string, string> = {
-    USD: '$', EUR: '€', AED: 'د.إ', GBP: '£', INR: '₹',
-    AUD: 'A$', SGD: 'S$', SAR: '﷼', KWD: 'KD', BHD: 'BD',
-    THB: '฿', VND: '₫', RUB: '₽', JPY: '¥', HKD: 'HK$',
-  };
+  const FIAT_SYMBOLS = useMemo(() => {
+    return Object.fromEntries(
+      FIAT_ALL.map(c => [c, getCurrencySymbol(c)])
+    );
+  }, []);
 
   // Skin configurations for virtual
   const skinStyles = useMemo(() => {

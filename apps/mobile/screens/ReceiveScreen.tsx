@@ -19,11 +19,11 @@ const { width } = Dimensions.get('window');
 
 // ── Fallback Network Configurations ──
 const FALLBACK_NETWORKS = [
-  { network_name: 'Ethereum (ERC20)', symbol: 'ETH', is_active: true, is_mainnet: true, min_deposit: '0.005 ETH', estimated_arrival: '3 minutes', warning_text: 'Only send ETH/USDT/USDC/INRX via ERC20.', supported_assets: ['ETH', 'USDT', 'USDC', 'INRX'] },
-  { network_name: 'TRON (TRC20)', symbol: 'TRX', is_active: true, is_mainnet: true, min_deposit: '10 TRX', estimated_arrival: '1 minute', warning_text: 'Only send TRX/USDT/USDC/INRX via TRC20.', supported_assets: ['TRX', 'USDT', 'USDC', 'INRX'] },
-  { network_name: 'Polygon Network', symbol: 'MATIC', is_active: true, is_mainnet: true, min_deposit: '5 MATIC', estimated_arrival: '2 minutes', warning_text: 'Only send MATIC/USDT/USDC/INRX via Polygon.', supported_assets: ['MATIC', 'USDT', 'USDC', 'INRX'] },
+  { network_name: 'Ethereum (ERC20)', symbol: 'ETH', is_active: true, is_mainnet: true, min_deposit: '0.005 ETH', estimated_arrival: '3 minutes', warning_text: 'Only send supported ERC20 assets.', supported_assets: ['ETH', 'USDT', 'USDC', 'INRX', 'THB', 'PKR', 'AED', 'CNY', 'RUB', 'UZS', 'VND', 'IDR', 'PHP'] },
+  { network_name: 'TRON (TRC20)', symbol: 'TRX', is_active: true, is_mainnet: true, min_deposit: '10 TRX', estimated_arrival: '1 minute', warning_text: 'Only send TRX/USDT/USDC via TRC20.', supported_assets: ['TRX', 'USDT', 'USDC'] },
+  { network_name: 'Polygon Network', symbol: 'MATIC', is_active: true, is_mainnet: true, min_deposit: '5 MATIC', estimated_arrival: '2 minutes', warning_text: 'Only send MATIC/USDT/USDC/INRX via Polygon.', supported_assets: ['MATIC', 'USDT', 'USDC', 'INRX', 'THB', 'PKR', 'AED', 'CNY', 'RUB', 'UZS', 'VND', 'IDR', 'PHP'] },
   { network_name: 'Arbitrum One', symbol: 'ETH', is_active: true, is_mainnet: true, min_deposit: '0.002 ETH', estimated_arrival: '30 seconds', warning_text: 'Only send ETH/USDT/USDC via Arbitrum.', supported_assets: ['ETH', 'USDT', 'USDC'] },
-  { network_name: 'Sepolia Testnet', symbol: 'ETH', is_active: true, is_mainnet: false, min_deposit: '0.001 ETH', estimated_arrival: '15 seconds', warning_text: 'Only send Sepolia ETH/USDT/USDC/INRX.', supported_assets: ['ETH', 'USDT', 'USDC', 'INRX'] },
+  { network_name: 'Sepolia Testnet', symbol: 'ETH', is_active: true, is_mainnet: false, min_deposit: '0.001 ETH', estimated_arrival: '15 seconds', warning_text: 'Only send Sepolia supported tokens.', supported_assets: ['ETH', 'USDT', 'USDC', 'INRX', 'THB', 'PKR', 'AED', 'CNY', 'RUB', 'UZS', 'VND', 'IDR', 'PHP'] },
   { network_name: 'Bitcoin Network', symbol: 'BTC', is_active: true, is_mainnet: true, min_deposit: '0.0002 BTC', estimated_arrival: '10-60 minutes', warning_text: 'Only send Bitcoin (BTC) to this address.', supported_assets: ['BTC'] },
   { network_name: 'Solana Network', symbol: 'SOL', is_active: true, is_mainnet: true, min_deposit: '0.05 SOL', estimated_arrival: '10 seconds', warning_text: 'Only send SOL/USDT/USDC via Solana.', supported_assets: ['SOL', 'USDT', 'USDC'] },
   { network_name: 'TON Network', symbol: 'TON', is_active: true, is_mainnet: true, min_deposit: '0.5 TON', estimated_arrival: '1 minute', warning_text: 'Only send TON to this address.', supported_assets: ['TON'] },
@@ -201,9 +201,28 @@ export default function ReceiveScreen({ navigation, route }: any) {
   }, [ctxTronAddress]);
 
   const activeNets = adminNetworks && adminNetworks.length > 0 ? adminNetworks : FALLBACK_NETWORKS;
-  const compatibleNets = selectedAsset
-    ? activeNets.filter((n: any) => n.is_active && n.supported_assets && n.supported_assets.includes(selectedAsset))
-    : [];
+  
+  const compatibleNets = React.useMemo(() => {
+    if (!selectedAsset) return [];
+    const standardNets = activeNets.filter((n: any) => n.is_active && n.supported_assets && n.supported_assets.includes(selectedAsset));
+    
+    // Inject dynamic database networks
+    if (tokenContracts && tokenContracts.length > 0) {
+      tokenContracts.forEach((tc: any) => {
+        const symbol = tc.currency_code || tc.currency;
+        if (symbol === selectedAsset) {
+          const matchNet = activeNets.find((n: any) => 
+            n.network_name === tc.network_name ||
+            n.network_name === (tc.network_name === 'Polygon Amoy' ? 'Polygon Network' : tc.network_name === 'Sepolia' ? 'Sepolia Testnet' : tc.network_name)
+          );
+          if (matchNet && !standardNets.find((n: any) => n.network_name === matchNet.network_name)) {
+            standardNets.push(matchNet);
+          }
+        }
+      });
+    }
+    return standardNets;
+  }, [activeNets, selectedAsset, tokenContracts]);
 
   const displayAddress = selectedAsset && selectedNetworkObj
     ? getDepositAddress(walletAddress, selectedAsset, selectedNetworkObj, tronAddress)

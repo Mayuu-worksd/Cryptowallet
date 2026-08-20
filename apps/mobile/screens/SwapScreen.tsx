@@ -15,8 +15,14 @@ import { notificationService } from '../services/notificationService';
 import TransactionLoader from '../components/ui/TransactionLoader';
 import { commissionService } from '../services/commissionService';
 import { CurrencyText } from '../components/CurrencyText';
+import { supabase } from '../services/supabaseClient';
 
 import { SUPPORTED_TOKENS as CONFIG_SUPPORTED_TOKENS } from '../constants/currencyConfig';
+
+const FLAG_MAP: Record<string, string> = {
+  THB: '🇹🇭', PKR: '🇵🇰', AED: '🇦🇪', CNY: '🇨🇳', RUB: '🇷🇺',
+  UZS: '🇺🇿', VND: '🇻🇳', IDR: '🇮🇩', PHP: '🇵🇭', INRX: '🇮🇳'
+};
 
 const COIN_NOTES: Record<string, string> = Object.fromEntries(
   Object.entries(CONFIG_SUPPORTED_TOKENS).map(([k, v]) => [k, v.name])
@@ -29,7 +35,10 @@ const SWAP_META: Record<string, { name: string; iconUrl: string; color: string }
 function CoinIcon({ sym, url, size = 24 }: { sym: string; url?: string; size?: number }) {
   const meta = SWAP_META[sym];
   const sourceUrl = url || meta?.iconUrl;
+  const color = meta?.color || '#888';
+  const flag = FLAG_MAP[sym];
   const [failed, setFailed] = React.useState(false);
+
   if (sourceUrl && !failed) {
     return (
       <Image
@@ -39,12 +48,27 @@ function CoinIcon({ sym, url, size = 24 }: { sym: string; url?: string; size?: n
       />
     );
   }
+
+  if (flag) {
+    return (
+      <View style={{
+        width: size, height: size, borderRadius: size / 2,
+        backgroundColor: color + '25',
+        borderWidth: 1.5, borderColor: color + '40',
+        alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Text style={{ fontSize: size * 0.52 }}>{flag}</Text>
+      </View>
+    );
+  }
+
   return (
-    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: (meta?.color ?? '#888') + '20', alignItems: 'center', justifyContent: 'center' }}>
-      <Text style={{ fontSize: size * 0.35, fontWeight: '800', color: meta?.color ?? '#888' }}>{sym.slice(0, 2)}</Text>
+    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color + '20', alignItems: 'center', justifyContent: 'center' }}>
+      <Text style={{ fontSize: size * 0.35, fontWeight: '800', color: color }}>{sym.slice(0, 2)}</Text>
     </View>
   );
 }
+
 
 const TokenSelector = memo(({ sym, url, onPress, styles, T }: any) => (
   <TouchableOpacity style={styles.tokenPill} onPress={onPress} activeOpacity={0.7}>
@@ -110,7 +134,33 @@ export default function SwapScreen({ navigation, route }: any) {
 
   const [customTokens, setCustomTokens] = useState<Record<string, { name: string, iconUrl: string, price: number }>>({});
 
-  const CLEAN_TOKENS = NETWORK_TOKENS[network] ?? ['ETH', 'USDT', 'USDC'];
+  const [dynamicTokens, setDynamicTokens] = useState<string[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    const fetchDynamicTokens = async () => {
+      try {
+        const { data } = await supabase
+          .from('token_contracts')
+          .select('currency_code')
+          .eq('network_name', network === 'Polygon Amoy' ? 'Polygon Amoy' : network === 'Sepolia' ? 'Sepolia' : network)
+          .eq('is_enabled', true);
+        if (data && active) {
+          const codes = data.map((c: any) => c.currency_code);
+          setDynamicTokens(Array.from(new Set(codes)));
+        }
+      } catch (err) {
+        console.warn('Failed to fetch dynamic tokens for swap:', err);
+      }
+    };
+    fetchDynamicTokens();
+    return () => { active = false; };
+  }, [network]);
+
+  const CLEAN_TOKENS = Array.from(new Set([
+    ...(NETWORK_TOKENS[network] ?? ['ETH', 'USDT', 'USDC']),
+    ...dynamicTokens
+  ]));
 
   const isSupported = swapService.isNetworkSupported(network);
   const isTronNetwork = network === 'TRON' || network === 'TRON Nile';

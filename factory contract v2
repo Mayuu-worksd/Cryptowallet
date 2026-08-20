@@ -1,0 +1,105 @@
+# Walkthrough: Production Multi-Currency Stablecoin Architecture
+
+This walkthrough summarizes the successful implementation, testing, deployment, and integration of the production-ready multi-currency stablecoin architecture on the Sepolia testnet.
+
+---
+
+## 1. Deployed Smart Contracts (Sepolia)
+
+All production contracts are deployed on the Ethereum Sepolia network:
+
+*   **Logic Implementation (`FiatTokenUpgradeable`):** [0x43692b4BB9FB4815FC128Bb196e488f0f4f106d7](https://sepolia.etherscan.io/address/0x43692b4BB9FB4815FC128Bb196e488f0f4f106d7)
+*   **Factory Controller (`TokenFactory`):** [0x57e0dc93157888bfA28E2AcE99b31d75341c2979](https://sepolia.etherscan.io/address/0x57e0dc93157888bfA28E2AcE99b31d75341c2979)
+*   **Thai Baht (THB) Token Proxy:** [0x288cd557B7EF9CF317DbEC59d425C23913ab6BeB](https://sepolia.etherscan.io/address/0x288cd557B7EF9CF317DbEC59d425C23913ab6BeB)
+*   **Multi-Currency Bridge (`MultiCurrencyBridge`):** [0xA7283676630FbcA55f3f0743755A0815CcF78103](https://sepolia.etherscan.io/address/0xA7283676630FbcA55f3f0743755A0815CcF78103)
+*   **Reserve Conversion (`ReserveConversion`):** [0x55E0b89Cdd37Aedf3346d36aB7A375c2612E5EAe](https://sepolia.etherscan.io/address/0x55E0b89Cdd37Aedf3346d36aB7A375c2612E5EAe)
+*   **USDT Mock Reference Contract:** [0xbD1ea96750Ef2E971D4B17F80DeB29a081BbA9A0](https://sepolia.etherscan.io/address/0xbD1ea96750Ef2E971D4B17F80DeB29a081BbA9A0)
+*   **Admin/Deployer Address:** `0x7D828173126408B4Fbdd3CEf614698d452BE5a3e`
+
+---
+
+## 2. On-Chain E2E Verification Results
+
+A custom on-chain validation script was executed directly on Sepolia using the deployer wallet. Here is the confirmation log of the successful test runs:
+
+```text
+=================================================
+    PRODUCTION STABLECOIN ON-CHAIN E2E TESTS     
+=================================================
+User Wallet Address: 0x7D828173126408B4Fbdd3CEf614698d452BE5a3e
+Initial USDT Balance: 1000000000.0 USDT
+Initial THB Balance:  1000000000.0 THB
+
+[TEST 1] Swapping 10 USDT → THB...
+  Approving ReserveConversion contract to spend 10 USDT...
+  Allowance set.
+  Executing swapUSDTToStablecoin...
+  Tx Hash: 0xf5fb1b8427c0ff46b60dfbd8998b4466ca562cf6ba2dc3f2f93683748b32fd0a
+  Confirmed!
+  USDT Balance: 999999990.0 USDT
+  THB Balance:  1000000365.0 THB
+✅ USDT -> THB swap PASSED.
+
+[TEST 2] Swapping 365 THB → USDT...
+  Reserve USDT Liquidity: 10.0 USDT
+  Executing swapStablecoinToUSDT (burning stablecoin)...
+  Tx Hash: 0x083cd71c9ff24a0f2df833af2d9fb0cb4d6f867b8497d840192416eda298a08d
+  Confirmed!
+  USDT Balance: 1000000000.0 USDT
+  THB Balance:  1000000000.0 THB
+✅ THB -> USDT swap PASSED.
+
+[TEST 3] Locking 50 THB on Sepolia Bridge (Cross-Chain outbound)...
+  Approving Bridge contract to spend 50 THB...
+  Executing lock (outbound bridge)...
+  Lock Tx Hash: 0xb8901d90d25ab2bb8ba3ea27cca6dc1065d699402d8bb3191018a27efbae1680
+  Confirmed! Tokens successfully locked (burned).
+✅ Lock/Burn outbound bridge transaction PASSED.
+
+[TEST 4] Simulating Inbound Bridge Release with Relayer Signature...
+  Computed txHash: 0xdc871b23b69f962715d454a04c2e3734a87d07db65a52f8a73fb2b95cb19eac8
+  Signature generated.
+  Executing release (inbound bridge)...
+  Release Tx Hash: 0x80f71cc62a4533239dc42137e72dc9549481d775fb2eae26ab3e038c0c72f3ba
+  Confirmed! Tokens successfully released (minted).
+
+[TEST 5] Checking Replay Protection (Double Release execution)...
+  Attempting to call release again with the same parameters...
+  Replay transaction reverted as expected.
+✅ Double execution check PASSED.
+
+=================================================
+        ON-CHAIN E2E TESTS PASSED SUCCESSFULLY   
+=================================================
+```
+
+---
+
+## 3. Core Role & Access Configurations
+
+To guarantee maximum on-chain security, the following role settings were completed during the deployment:
+
+1.  **Bridge Permissions (`MultiCurrencyBridge`):**
+    *   Granted `MINTER_ROLE` on the `THB Token Proxy`.
+    *   Granted `BURNER_ROLE` on the `THB Token Proxy`.
+    *   Granted `RELAYER_ROLE` on the `Bridge` to the relayer wallet `0x7D828173126408B4Fbdd3CEf614698d452BE5a3e`.
+2.  **Conversion Permissions (`ReserveConversion`):**
+    *   Granted `MINTER_ROLE` on the `THB Token Proxy`.
+    *   Granted `BURNER_ROLE` on the `THB Token Proxy`.
+    *   Token registration: `THB_ID` mapped to `0x288cd557B7EF9CF317DbEC59d425C23913ab6BeB`.
+    *   FX Rate: Set to `36.5 THB / 1.0 USDT`.
+
+---
+
+## 4. Wallet Integration Changes
+
+1.  **Supabase Seeding:**
+    *   Updated the `token_contracts` registry in Supabase to link `THB` on `Sepolia` to the new proxy `0x288cd557B7EF9CF317DbEC59d425C23913ab6BeB`.
+    *   Dynamic balance discovery and UI updates load this token proxy automatically.
+2.  **Conversion Updates (`swapService.ts`):**
+    *   Modified `_executeReserveMintBurnSwap` so swaps involving custom stablecoins (like THB) on Sepolia interact directly with the `ReserveConversion` contract on-chain.
+    *   Supports USDT approval, token conversions, and multi-asset routing.
+3.  **Bridge Updates (`bridgeService.ts`):**
+    *   Enhanced `checkAllowance`, `approveBridge`, and `lockTokens` to dynamically support token symbol routing.
+    *   When bridging THB, the mobile app uses the new `MultiCurrencyBridge` address and correct token proxy.
+    *   Leaves the legacy `INRX` bridge configuration untouched.

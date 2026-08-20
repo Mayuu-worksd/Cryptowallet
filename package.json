@@ -2,7 +2,6 @@
   "name": "crypto-wallet-monorepo",
   "private": true,
   "version": "1.0.0",
-  "packageManager": "pnpm@10.34.5",
   "description": "Institutional Grade Multi-Device Crypto Wallet Monorepo",
   "scripts": {
     "dev": "turbo run dev",

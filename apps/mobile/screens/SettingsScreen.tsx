@@ -10,6 +10,7 @@ import {
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const isSmall = SCREEN_WIDTH < 375;
 import * as Clipboard from 'expo-clipboard';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Feather } from '@expo/vector-icons';
 import * as Updates from 'expo-updates';
 import { useWallet, useMarket } from '../store/WalletContext';
@@ -1208,6 +1209,32 @@ export default function SettingsScreen({ navigation }: any) {
         ) : (
           // Normal mode: show Logout + Delete Account
           <View style={{ gap: 12 }}>
+            <TouchableOpacity
+              style={[styles.logoutBtn, { backgroundColor: T.surface, borderColor: T.border }]}
+              onPress={() => {
+                haptics.selection();
+                Alert.alert(
+                  'Clear Transaction Cache',
+                  'This removes fake/test transactions from your device. Your real transactions will reload from Supabase automatically.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Clear',
+                      style: 'destructive',
+                      onPress: async () => {
+                        await AsyncStorage.multiRemove(['cw_transactions', 'swap_transactions']);
+                        showToast('Cache cleared. Restart the app to reload.', 'success');
+                      },
+                    },
+                  ]
+                );
+              }}
+              activeOpacity={0.7}
+            >
+              <Feather name="trash" size={18} color={T.textMuted} />
+              <Text style={[styles.logoutBtnText, { color: T.textMuted }]}>Clear Transaction Cache</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity
               style={[styles.logoutBtn, { backgroundColor: T.surface, borderColor: T.error }]}
               onPress={handleLogout}

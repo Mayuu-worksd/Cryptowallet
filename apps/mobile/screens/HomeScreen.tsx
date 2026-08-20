@@ -92,13 +92,19 @@ const SkeletonBox = memo(
   },
 );
 
-// ─── Coin icon with fallback ───────────────────────────────────────────────────
+const FLAG_MAP: Record<string, string> = {
+  THB: '🇹🇭', PKR: '🇵🇰', AED: '🇦🇪', CNY: '🇨🇳', RUB: '🇷🇺',
+  UZS: '🇺🇿', VND: '🇻🇳', IDR: '🇮🇩', PHP: '🇵🇭', INRX: '🇮🇳'
+};
+
 const CoinIcon = memo(
   ({ symbol, size = 44 }: { symbol: string; size?: number }) => {
     const meta = COIN_META[symbol];
     const color = COIN_COLORS[symbol] || "#888";
+    const flag = FLAG_MAP[symbol];
     const [failed, setFailed] = React.useState(false);
-    if (meta && !failed) {
+
+    if (meta?.iconUrl && !failed) {
       return (
         <Image
           source={{ uri: meta.iconUrl }}
@@ -107,6 +113,24 @@ const CoinIcon = memo(
         />
       );
     }
+
+    if (flag) {
+      return (
+        <View
+          style={{
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+            backgroundColor: (color || "#007AFF") + "25",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Text style={{ fontSize: size * 0.52 }}>{flag}</Text>
+        </View>
+      );
+    }
+
     return (
       <View
         style={{
@@ -127,6 +151,7 @@ const CoinIcon = memo(
     );
   },
 );
+
 
 // ─── Animated action button ────────────────────────────────────────────────────
 const ActionBtn = memo(
@@ -299,7 +324,7 @@ const TokenRow = memo(
                 {COIN_META[symbol]?.name ?? symbol}
               </Text>
               <Text style={[styles.tokenSub, { color: T.textMuted }]}>
-                {hideBalance ? "••••" : `${safeAmt.toFixed(4)} ${symbol}`}
+                {hideBalance ? "••••" : `${safeAmt.toFixed(4)} ${COIN_META[symbol]?.symbol ?? symbol.replace('_TRC20', '').replace('_ERC20', '')}`}
               </Text>
             </View>
           </View>

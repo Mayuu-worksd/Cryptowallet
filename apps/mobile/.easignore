@@ -1,40 +1,28 @@
-# Dependencies & build output
+# Block node_modules
 node_modules/
+**/node_modules/
+
+# Block all lock files except package-lock.json (force npm install on server)
+yarn.lock
+**/yarn.lock
+pnpm-lock.yaml
+**/pnpm-lock.yaml
+package-lock.json
+
+# Block pnpm workspace config
+pnpm-workspace.yaml
+
+# Block build output
 .expo/
 dist/
 web-build/
 *.tsbuildinfo
 
-# Admin dashboard (not part of mobile build)
-admin-dashboard/
-
-# SQL migration files
-*.sql
-
-# HTML mockups
+# Block unnecessary files
 *.html
-
-# Design/screenshot files in root only (not assets/)
-asset_raw.html
-receive_redesign.png
-stitch_card_design.png
-stitch_screenshot.png
-
-# Test/debug files
-test.txt
-quote_test.json
-quote_test2.json
-response.json
-response2.json
-
-# Docs
-README.md
-FIX_SUMMARY.md
-INTEGRATION_GUIDE.md
-
-# Misc
+*.sql
+*.md
 .vercel/
 .kilocode/
 .aider.chat.history.md
 .aider.input.history
-package.json.xG7kZYuWoIzDAkTIVqjomCp5vtzBC0BIyWCdmGPHZz4

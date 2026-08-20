@@ -14,11 +14,18 @@ import { CurrencyText } from '../components/CurrencyText';
 import { haptics } from '../utils/haptics';
 import { supabase } from '../services/supabaseClient';
 import { P2POrder } from '../services/merchantService';
+const FLAG_MAP: Record<string, string> = {
+  THB: '🇹🇭', PKR: '🇵🇰', AED: '🇦🇪', CNY: '🇨🇳', RUB: '🇷🇺',
+  UZS: '🇺🇿', VND: '🇻🇳', IDR: '🇮🇩', PHP: '🇵🇭', INRX: '🇮🇳'
+};
+
 const CoinIcon = memo(({ symbol, size = 40 }: { symbol: string; size?: number }) => {
   const meta = COIN_META[symbol];
   const color = COIN_COLORS[symbol] || '#888';
+  const flag = FLAG_MAP[symbol];
   const [failed, setFailed] = useState(false);
-  if (meta && !failed) {
+
+  if (meta?.iconUrl && !failed) {
     return (
       <Image
         source={{ uri: meta.iconUrl }}
@@ -27,6 +34,20 @@ const CoinIcon = memo(({ symbol, size = 40 }: { symbol: string; size?: number })
       />
     );
   }
+
+  if (flag) {
+    return (
+      <View style={{
+        width: size, height: size, borderRadius: size / 2,
+        backgroundColor: (color || '#007AFF') + '20',
+        borderWidth: 1.5, borderColor: (color || '#007AFF') + '40',
+        alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Text style={{ fontSize: size * 0.52 }}>{flag}</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={{
       width: size,
@@ -42,6 +63,7 @@ const CoinIcon = memo(({ symbol, size = 40 }: { symbol: string; size?: number })
     </View>
   );
 });
+
 
 const FIAT_META: Record<string, { color: string }> = {
   USD: { color: '#2E7D32' },
@@ -89,7 +111,17 @@ const STABLE_FALLBACK: Record<string, number> = {
   XRP: 0.50, 
   TON: 7.5, 
   TRX: 0.12, 
-  SUI: 1.80, 
+  SUI: 1.80,
+  // Custom stablecoins — pegged to fiat, price = 1/fiat_rate_vs_USD
+  THB: 0.028,   // 1 THB ≈ $0.028
+  PKR: 0.0036,  // 1 PKR ≈ $0.0036
+  AED: 0.272,   // 1 AED ≈ $0.272
+  CNY: 0.138,   // 1 CNY ≈ $0.138
+  RUB: 0.011,   // 1 RUB ≈ $0.011
+  UZS: 0.000078,// 1 UZS ≈ $0.000078
+  VND: 0.000039,// 1 VND ≈ $0.000039
+  IDR: 0.000062,// 1 IDR ≈ $0.000062
+  PHP: 0.017,   // 1 PHP ≈ $0.017
 };
 
 // Sleek redotpay styled crypto row
@@ -119,7 +151,7 @@ const CryptoAssetRow = memo(({ a, T, isUp, prices, formatFiat, balanceVisible, o
           <CoinIcon symbol={a.symbol} size={42} />
           <View style={styles.assetInfo}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={[styles.assetSymbol, { color: T.text }]}>{a.symbol}</Text>
+              <Text style={[styles.assetSymbol, { color: T.text }]}>{COIN_META[a.symbol]?.symbol ?? a.symbol.replace('_TRC20', '').replace('_ERC20', '')}</Text>
               {a.locked > 0 && (
                 <View style={[styles.lockedBadgeMini, { backgroundColor: 'rgba(245,158,11,0.12)' }]}>
                   <Feather name="lock" size={9} color="#FFA500" />
@@ -186,7 +218,7 @@ export default function PortfolioScreen({ navigation }: any) {
   const {
     ethBalance, balances, isDarkMode, walletAddress, lockedBalance,
     formatFiat, convertFiat, fiatSymbol, fiatCurrency, setFiatCurrency, formatOrderFiat,
-    balanceVisible, toggleBalanceVisible, fiatRates
+    balanceVisible, toggleBalanceVisible, fiatRates, network
   } = useWallet();
   const { prices } = useMarket();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
@@ -199,6 +231,7 @@ export default function PortfolioScreen({ navigation }: any) {
   const [fiatDepositModal, setFiatDepositModal] = useState<any>(null);
   const [bankDetails, setBankDetails] = useState<any[]>([]);
   const [loadingBanks, setLoadingBanks] = useState(false);
+  const [hideZeroBalances, setHideZeroBalances] = useState(true);
 
   const { refreshBalance } = useWallet();
 
@@ -318,6 +351,14 @@ export default function PortfolioScreen({ navigation }: any) {
       formattedBalance: balanceVisible ? formatOrderFiat(0, f.code) : '••••'
     }));
   }, [balanceVisible, fiatRates]);
+
+  const filteredAssets = useMemo(() => {
+    if (!hideZeroBalances) return assetsList;
+    const nativeCoin = network.toLowerCase().includes('tron') ? 'TRX' : (network.toLowerCase().includes('solana') ? 'SOL' : (network.toLowerCase().includes('bitcoin') ? 'BTC' : 'ETH'));
+    return assetsList.filter(a => {
+      return a.amount > 0 || a.symbol === nativeCoin;
+    });
+  }, [assetsList, hideZeroBalances, network]);
 
   return (
     <View style={[styles.container, { backgroundColor: T.background }]}>
@@ -529,34 +570,50 @@ export default function PortfolioScreen({ navigation }: any) {
 
         {/* Tab Headers: Crypto & Fiat */}
         <View style={styles.tabsContainer}>
-          <View style={styles.tabsRow}>
-            <TouchableOpacity
-              style={styles.tabButton}
-              onPress={() => { haptics.selection(); setActiveTab('crypto'); }}
-              activeOpacity={0.7}
-            >
-              <Text style={[
-                styles.tabButtonText,
-                { color: activeTab === 'crypto' ? T.text : T.textDim, fontFamily: activeTab === 'crypto' ? Fonts.bold : Fonts.medium }
-              ]}>
-                Crypto
-              </Text>
-              {activeTab === 'crypto' && <View style={[styles.activeTabLine, { backgroundColor: T.text }]} />}
-            </TouchableOpacity>
+          <View style={[styles.tabsRow, { justifyContent: 'space-between', alignItems: 'center' }]}>
+            <View style={{ flexDirection: 'row', gap: 24 }}>
+              <TouchableOpacity
+                style={styles.tabButton}
+                onPress={() => { haptics.selection(); setActiveTab('crypto'); }}
+                activeOpacity={0.7}
+              >
+                <Text style={[
+                  styles.tabButtonText,
+                  { color: activeTab === 'crypto' ? T.text : T.textDim, fontFamily: activeTab === 'crypto' ? Fonts.bold : Fonts.medium }
+                ]}>
+                  Crypto
+                </Text>
+                {activeTab === 'crypto' && <View style={[styles.activeTabLine, { backgroundColor: T.text }]} />}
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.tabButton}
-              onPress={() => { haptics.selection(); setActiveTab('fiat'); }}
-              activeOpacity={0.7}
-            >
-              <Text style={[
-                styles.tabButtonText,
-                { color: activeTab === 'fiat' ? T.text : T.textDim, fontFamily: activeTab === 'fiat' ? Fonts.bold : Fonts.medium }
-              ]}>
-                Fiat
-              </Text>
-              {activeTab === 'fiat' && <View style={[styles.activeTabLine, { backgroundColor: T.text }]} />}
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.tabButton}
+                onPress={() => { haptics.selection(); setActiveTab('fiat'); }}
+                activeOpacity={0.7}
+              >
+                <Text style={[
+                  styles.tabButtonText,
+                  { color: activeTab === 'fiat' ? T.text : T.textDim, fontFamily: activeTab === 'fiat' ? Fonts.bold : Fonts.medium }
+                ]}>
+                  Fiat
+                </Text>
+                {activeTab === 'fiat' && <View style={[styles.activeTabLine, { backgroundColor: T.text }]} />}
+              </TouchableOpacity>
+            </View>
+
+            {activeTab === 'crypto' && (
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 }}
+                onPress={() => {
+                  haptics.selection();
+                  setHideZeroBalances(p => !p);
+                }}
+                activeOpacity={0.7}
+              >
+                <Feather name={hideZeroBalances ? "check-square" : "square"} size={14} color={T.textDim} />
+                <Text style={{ fontSize: 12, color: T.textDim, fontFamily: Fonts.medium }}>Hide 0 balances</Text>
+              </TouchableOpacity>
+            )}
           </View>
           <View style={[styles.tabUnderlineBorder, { backgroundColor: T.border + '25' }]} />
         </View>
@@ -564,7 +621,7 @@ export default function PortfolioScreen({ navigation }: any) {
         {/* Tab Content List */}
         <View style={styles.assetsListWrapper}>
           {activeTab === 'crypto' ? (
-            assetsList.map(a => {
+            filteredAssets.map(a => {
               const isUp = a.change24h >= 0;
               return (
                 <CryptoAssetRow

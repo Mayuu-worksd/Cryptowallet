@@ -21,6 +21,7 @@ import { SUPPORTED_TOKENS } from '../constants/currencyConfig';
 import { commissionService } from '../services/commissionService';
 import { parseDateSafe } from '../utils/date';
 import { getLiveRates, invalidateForexCache } from '../services/forexService';
+import { getCurrencySymbol } from '../constants/currencyMetadata';
 
 export type Transaction = {
   id: string;
@@ -254,6 +255,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [kycEmail,         setKycEmail]         = useState('');
   const [kycFullName,      setKycFullName]      = useState('');
   const [isSuspended,      setIsSuspended]      = useState(false);
+  const [suspensionReason, setSuspensionReason] = useState('');
   const [ethBalance,       setEthBalance]       = useState('0.0');
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);
   const [hasWallet,        setHasWallet]        = useState(false);
@@ -995,13 +997,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const startup = async () => {
       try {
         // Load UI preferences first (fastest)
-        const [savedDarkMode, savedAccountType, savedP2PCountry, savedP2PCurrency, savedLockedBal, savedFiatCurrency] = await Promise.all([
+        const [savedDarkMode, savedAccountType, savedP2PCountry, savedP2PCurrency, savedLockedBal, savedFiatCurrency, savedSuspended, savedSuspensionReason] = await Promise.all([
           AsyncStorage.getItem('cw_is_dark_mode'),
           AsyncStorage.getItem('cw_account_type'),
           AsyncStorage.getItem('cw_p2p_country'),
           AsyncStorage.getItem('cw_p2p_currency'),
           AsyncStorage.getItem('cw_locked_balance'),
           AsyncStorage.getItem('cw_fiat_currency'),
+          AsyncStorage.getItem('cw_is_suspended'),
+          AsyncStorage.getItem('cw_suspension_reason'),
         ]);
         // NOTE: cw_card_currencies intentionally NOT read from AsyncStorage.
         // Card currency config comes from Supabase only (admin_settings + user profile).
@@ -1012,6 +1016,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         if (savedP2PCountry)  setP2PCountryState(savedP2PCountry);
         if (savedP2PCurrency) setP2PCurrencyState(savedP2PCurrency);
         if (savedLockedBal)   setLockedBalance(JSON.parse(savedLockedBal));
+        // Offline suspension fallback — apply last-known suspension state before Supabase loads
+        if (savedSuspended === 'true') {
+          setIsSuspended(true);
+          setSuspensionReason(savedSuspensionReason || '');
+        }
         // card_currencies: loaded exclusively from Supabase below — no AsyncStorage read
 
         if (savedAccountType && savedP2PCountry && savedP2PCurrency) {
@@ -1227,7 +1236,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
               profileForStartup = await profileService.upsert(address, { wallet_name: defaultName }).catch(() => null);
             }
             if (profileForStartup) {
-              setIsSuspended(!!profileForStartup.is_suspended);
+              const suspended = !!profileForStartup.is_suspended;
+              const reason = profileForStartup.suspension_reason || '';
+              setIsSuspended(suspended);
+              setSuspensionReason(reason);
+              // Persist to AsyncStorage so offline restarts also show the lock
+              AsyncStorage.setItem('cw_is_suspended', String(suspended)).catch(() => {});
+              AsyncStorage.setItem('cw_suspension_reason', reason).catch(() => {});
               if (profileForStartup.user_uuid) {
                 setUserUuid(profileForStartup.user_uuid);
               }
@@ -1457,6 +1472,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           const isSusp = payload.new?.is_suspended;
           if (isSusp !== undefined && isSusp !== null) {
             setIsSuspended(!!isSusp);
+            const reason = payload.new?.suspension_reason || '';
+            setSuspensionReason(reason);
+            // Persist immediately so offline restart also locks
+            AsyncStorage.setItem('cw_is_suspended', String(!!isSusp)).catch(() => {});
+            AsyncStorage.setItem('cw_suspension_reason', reason).catch(() => {});
           }
           const tb = payload.new?.token_balances;
           if (tb) {
@@ -1812,12 +1832,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setCardBalance(finalBal);
       }
 
+      const HEALER_KNOWN_TOKENS = new Set(['USDT','USDC','ETH','BTC','SOL','BNB','XRP','TON','TRX','SUI']);
       setBalances(prev => {
         let changed = false;
         const next = { ...prev };
         Object.entries(recoveredTokenBals).forEach(([coin, val]) => {
-          // Never zero out INRX from tx replay — on-chain balance is the source of truth
-          if (coin === 'INRX') return;
+          // Only replay hardcoded tokens — never zero out dynamic tokens (THB, AED, PKR, etc.) or INRX
+          if (!HEALER_KNOWN_TOKENS.has(coin)) return;
           if (Math.abs((next[coin] || 0) - val) > 0.0001) {
             next[coin] = val;
             changed = true;
@@ -1955,6 +1976,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           nextBalances.INRX = cached[`INRX_${n}`] ?? 0;
           nextBalances.USDC = nextBalances.USDC_ERC20;
           nextBalances.USDT = nextBalances.USDT_ERC20;
+          // Restore dynamic tokens (THB, AED, PKR, etc.)
+          Object.keys(cached).forEach(key => {
+            if (key.endsWith(`_${n}`)) {
+              const sym = key.slice(0, key.length - n.length - 1);
+              const KNOWN = new Set(['ETH','USDC_ERC20','USDT_ERC20','INRX','BNB']);
+              if (!KNOWN.has(sym)) nextBalances[sym] = cached[key] ?? 0;
+            }
+          });
           setEthBalance(Number(nextBalances.ETH).toFixed(6));
           ethBalanceRef.current = Number(nextBalances.ETH).toFixed(6);
         }
@@ -2080,7 +2109,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         try {
           const profile = await profileService.get(data.address);
           if (profile) {
-            setIsSuspended(!!profile.is_suspended);
+            const suspended = !!profile.is_suspended;
+            const reason = profile.suspension_reason || '';
+            setIsSuspended(suspended);
+            setSuspensionReason(reason);
+            AsyncStorage.setItem('cw_is_suspended', String(suspended)).catch(() => {});
+            AsyncStorage.setItem('cw_suspension_reason', reason).catch(() => {});
             const name = profile.wallet_name || `Wallet ${data.address.slice(-4).toUpperCase()}`;
             setWalletNameState(name);
             await storageService.saveWalletName(name);
@@ -2351,7 +2385,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     ]);
     await storageService.clearCardDetails();
     // Fully reset in-memory state → App.tsx re-renders Landing stack
-    setIsSuspended(false);
+    // NOTE: do NOT clear isSuspended here — importWallet will re-check from Supabase.
+    // Clearing it would allow a suspended user to bypass by disconnecting + re-importing offline.
     setHasWallet(false);
     setWalletAddress('');
     setTronAddress('');
@@ -2817,9 +2852,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, [walletAddress, fiatRates]);
 
   const fiatSymbol = useMemo(() => {
-    if (fiatCurrency === 'AED') return 'AED'; // The UI will render the SVG
-    return fiatRates[fiatCurrency]?.symbol || getSymbolFromCurrency(fiatCurrency) || '$';
-  }, [fiatCurrency, fiatRates]);
+    return getCurrencySymbol(fiatCurrency);
+  }, [fiatCurrency]);
 
   const convertFiat = useCallback((amountUSD: number) => {
     const rate = fiatRates[fiatCurrency]?.rate ?? 1.0;
@@ -2892,6 +2926,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     kycFullName,
     isSuspended,
     setIsSuspended,
+    suspensionReason,
     adminNetworks,
     customTokens,
     addCustomToken,
@@ -2922,6 +2957,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     kycEmail,
     kycFullName,
     isSuspended,
+    suspensionReason,
     adminNetworks,
     customTokens,
     addCustomToken,

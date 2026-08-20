@@ -1,6 +1,6 @@
 import React from 'react';
 import { Text, TextStyle, StyleSheet } from 'react-native';
-import getSymbolFromCurrency from 'currency-symbol-map';
+import { getCurrencySymbol } from '../constants/currencyMetadata';
 import { useWallet } from '../store/WalletContext';
 import AedSymbol from './AedSymbol';
 
@@ -61,7 +61,7 @@ export const CurrencyText = ({ amount, code, style, hideBalance = false, skipCon
   
   const displayAmt = hideBalance ? '••••' : cleanAmt;
 
-  const symbol = fiatConfig?.symbol || getSymbolFromCurrency(code) || code;
+  const symbol = fiatConfig?.symbol || getCurrencySymbol(code);
 
   if (code === 'AED' || symbol === 'AED' || symbol === 'د.إ') {
     return (

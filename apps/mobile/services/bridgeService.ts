@@ -7,6 +7,22 @@ const BRIDGE_CONTRACTS: Record<string, string> = {
   BSC:            '0x0458711652eDD24D107a929f598fb877aA165848',
 };
 
+// Shared MultiCurrencyBridge for all fiat-backed tokens on Sepolia
+const FIAT_BRIDGE_SEPOLIA = '0xA7283676630FbcA55f3f0743755A0815CcF78103';
+
+// Proxy addresses for each fiat-backed token on Sepolia
+const FIAT_TOKEN_CONTRACTS: Record<string, string> = {
+  THB: '0x288cd557B7EF9CF317DbEC59d425C23913ab6BeB',
+  PKR: '0x578ec408f942bb1F49fc8720837dAB2B563edc35',
+  AED: '0xaa0c9c354Ca420Cf500169C36d8C227B1B714c3f',
+  CNY: '0x4f16cC563c2Efe0f40F6f28920Ea46413FeaCBe2',
+  RUB: '0xc81770B4a5d63889f60ee75DAe531bE3F8E216d4',
+  UZS: '0xa965bE90e96DfEb456abEa0dAa1C010246b9fffa',
+  VND: '0xC005804dE4d748eC57A637e3DC689F9038baDd59',
+  IDR: '0xd255112177C674555983687A1FcfF8bC95a35443',
+  PHP: '0x842ba319242f3F1598D7E2D26eBb4659A42F05Cc',
+};
+
 const TOKEN_CONTRACTS: Record<string, string> = {
   Sepolia:        '0x51A5F24560547f587999c331788aC495D40d95ba',
   'Polygon Amoy': '0xd52280A15b30e5EdfFF858E7EC22266604358F26',
@@ -36,20 +52,27 @@ const BRIDGE_ABI = [
 const parseUnits = (ethers as any).parseUnits ?? ethers.utils.parseUnits;
 
 export const bridgeService = {
-  getBridgeAddress(network: string): string {
+  getBridgeAddress(network: string, tokenSymbol: string = 'INRX'): string {
+    if (network === 'Sepolia' && FIAT_TOKEN_CONTRACTS[tokenSymbol]) {
+      return FIAT_BRIDGE_SEPOLIA;
+    }
     return BRIDGE_CONTRACTS[network] ?? '';
   },
 
-  getTokenAddress(network: string): string {
+  getTokenAddress(network: string, tokenSymbol: string = 'INRX'): string {
+    if (network === 'Sepolia' && FIAT_TOKEN_CONTRACTS[tokenSymbol]) {
+      return FIAT_TOKEN_CONTRACTS[tokenSymbol];
+    }
     return TOKEN_CONTRACTS[network] ?? '';
   },
 
   async checkAllowance(
     walletAddress: string,
-    network: string
+    network: string,
+    tokenSymbol: string = 'INRX'
   ): Promise<string> {
-    const bridgeAddr = this.getBridgeAddress(network);
-    const tokenAddr = this.getTokenAddress(network);
+    const bridgeAddr = this.getBridgeAddress(network, tokenSymbol);
+    const tokenAddr = this.getTokenAddress(network, tokenSymbol);
     if (!bridgeAddr || !tokenAddr) return '0';
     try {
       const p = getProvider(network);
@@ -65,10 +88,11 @@ export const bridgeService = {
   async approveBridge(
     privateKey: string,
     amount: string,
-    network: string
+    network: string,
+    tokenSymbol: string = 'INRX'
   ): Promise<{ hash: string; success: boolean; error?: string }> {
-    const bridgeAddr = this.getBridgeAddress(network);
-    const tokenAddr = this.getTokenAddress(network);
+    const bridgeAddr = this.getBridgeAddress(network, tokenSymbol);
+    const tokenAddr = this.getTokenAddress(network, tokenSymbol);
     if (!bridgeAddr || !tokenAddr) {
       return { hash: '', success: false, error: 'Bridge or Token address not configured for this network.' };
     }
@@ -91,10 +115,11 @@ export const bridgeService = {
     amount: string,
     destChainId: number,
     recipientAddress: string,
-    network: string
+    network: string,
+    tokenSymbol: string = 'INRX'
   ): Promise<{ hash: string; success: boolean; error?: string }> {
-    const bridgeAddr = this.getBridgeAddress(network);
-    const tokenAddr = this.getTokenAddress(network);
+    const bridgeAddr = this.getBridgeAddress(network, tokenSymbol);
+    const tokenAddr = this.getTokenAddress(network, tokenSymbol);
     if (!bridgeAddr || !tokenAddr) {
       return { hash: '', success: false, error: 'Bridge or Token address not configured for this network.' };
     }
@@ -104,18 +129,18 @@ export const bridgeService = {
       const contract = new ethers.Contract(bridgeAddr, BRIDGE_ABI, wallet);
       
       // Check allowance first
-      const rawAllowance = await this.checkAllowance(wallet.address, network);
+      const rawAllowance = await this.checkAllowance(wallet.address, network, tokenSymbol);
       const neededBig = parseUnits(amount, 6);
       
       if (BigInt(rawAllowance) < BigInt(neededBig.toString())) {
         // Need approval: approve a sufficiently large limit
-        const appRes = await this.approveBridge(privateKey, '1000000000', network);
+        const appRes = await this.approveBridge(privateKey, '1000000000', network, tokenSymbol);
         if (!appRes.success) {
           return { hash: '', success: false, error: `Bridge approval failed: ${appRes.error}` };
         }
       }
 
-      const tokenId = keccakId('INRX');
+      const tokenId = keccakId(tokenSymbol);
       const nonce = Date.now();
       const deadline = Math.floor(Date.now() / 1000) + 3600; // 1 hour deadline
       
@@ -140,9 +165,10 @@ export const bridgeService = {
         const bridgeAmountNum = parseFloat(amount);
         
         // Deduct source chain balance and ensure destination token balance is updated
-        const newINRX = Math.max(0, (currentBals.INRX ?? 0) - bridgeAmountNum);
-        currentBals.INRX = newINRX;
-        currentBals[`INRX_chain_${destChainId}`] = (currentBals[`INRX_chain_${destChainId}`] ?? 0) + bridgeAmountNum;
+        const balanceKey = tokenSymbol;
+        const newBal = Math.max(0, (currentBals[balanceKey] ?? 0) - bridgeAmountNum);
+        currentBals[balanceKey] = newBal;
+        currentBals[`${balanceKey}_chain_${destChainId}`] = (currentBals[`${balanceKey}_chain_${destChainId}`] ?? 0) + bridgeAmountNum;
         
         await storage.setItem('cw_token_balances', JSON.stringify(currentBals));
       } catch (relayerErr) {

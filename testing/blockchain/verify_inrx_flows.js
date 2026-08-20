@@ -18,7 +18,7 @@
 
 const { ethers } = require('ethers');
 const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config({ path: './admin-dashboard/.env.local' });
+require('dotenv').config({ path: './apps/admin-dashboard/.env.local' });
 
 // Supabase Setup
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -123,17 +123,21 @@ async function runSimulationFlow(wallets) {
   console.log('--- Running Database Integration & Flow Simulation ---');
 
   // Check if wallet_currency_settings table exists
-  let localFallback = false;
-  try {
-    const { error } = await supabase.from('wallet_currency_settings').select('wallet_address').limit(1);
-    if (error) {
+  let localFallback = !process.env.PRIVATE_KEY;
+  if (localFallback) {
+    console.log('ℹ️ Running in local fallback database emulation mode (no PRIVATE_KEY env provided).\n');
+  } else {
+    try {
+      const { error } = await supabase.from('wallet_currency_settings').select('*').limit(1);
+      if (error) {
+        localFallback = true;
+        console.log('⚠️ [NOTE] Table \'wallet_currency_settings\' not yet migrated in Supabase.');
+        console.log(`   Database returned error: ${error.message}`);
+        console.log('   Running in local fallback database emulation mode.\n');
+      }
+    } catch (err) {
       localFallback = true;
-      console.log('⚠️ [NOTE] Table \'wallet_currency_settings\' not yet migrated in Supabase.');
-      console.log(`   Database returned error: ${error.message}`);
-      console.log('   Running in local fallback database emulation mode.\n');
     }
-  } catch (err) {
-    localFallback = true;
   }
 
   const localDB = {
@@ -184,7 +188,7 @@ async function runSimulationFlow(wallets) {
       });
       return;
     }
-    await supabase.from('transactions').insert({
+    const { error } = await supabase.from('transactions').insert({
       wallet_address: tx.wallet_address.toLowerCase(),
       type: tx.type,
       token: 'INRX',
@@ -195,6 +199,9 @@ async function runSimulationFlow(wallets) {
       tx_hash: tx.tx_hash,
       description: tx.description
     });
+    if (error) {
+      console.error(`❌ [Supabase Error] failed to insert transaction: ${error.message} (code: ${error.code})`);
+    }
   }
 
   async function dbGetTxs(addr) {
@@ -202,11 +209,14 @@ async function runSimulationFlow(wallets) {
     if (localFallback) {
       return localDB.transactions.filter(t => t.wallet_address === cleanAddr || t.to_address === cleanAddr);
     }
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('transactions')
       .select('*')
       .or(`wallet_address.eq.${cleanAddr},to_address.eq.${cleanAddr}`)
       .eq('token', 'INRX');
+    if (error) {
+      console.error(`❌ [Supabase Error] failed to query transactions: ${error.message} (code: ${error.code})`);
+    }
     return data || [];
   }
 

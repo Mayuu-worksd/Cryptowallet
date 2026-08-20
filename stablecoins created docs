@@ -1,0 +1,74 @@
+# Walkthrough: ERC-20 Factory & THB Deployed PoC
+
+The reusable **ERC-20 Token Factory** and the **Thai Baht (THB)** stablecoin contract have been successfully compiled, deployed to Sepolia, and verified on-chain!
+
+---
+
+## 1. Deployed Smart Contracts
+
+*   **TokenFactory Contract:** [0xd36c1cfaFE2e867E43787F7e734E4B78b82fB53D](https://sepolia.etherscan.io/address/0xd36c1cfaFE2e867E43787F7e734E4B78b82fB53D)
+*   **Thai Baht (THB) Token Contract:** [0x5DA1034636F90b1b2e62F917847502FA5796653f](https://sepolia.etherscan.io/address/0x5DA1034636F90b1b2e62F917847502FA5796653f)
+
+---
+
+## 2. On-Chain E2E Verification Results
+All tests in the validation suite passed successfully:
+```text
+=================================================
+      ERC-20 FACTORY & THB DEPLOYER SCRIPT       
+=================================================
+Deployer Wallet Address: 0x7D828173126408B4Fbdd3CEf614698d452BE5a3e
+Deployer Balance: 3.347037126210875758 ETH
+
+Deploying TokenFactory...
+✅ TokenFactory deployed successfully at: 0xd36c1cfaFE2e867E43787F7e734E4B78b82fB53D
+
+Deploying Thai Baht (THB) token via TokenFactory...
+Transaction submitted. Hash: 0x44dc042824c9fcdbd8469561fe6393f6faae74ee5e3861ecb2ae24dd453cf02d
+Transaction confirmed.
+✅ Thai Baht (THB) Token deployed successfully at: 0x5DA1034636F90b1b2e62F917847502FA5796653f
+
+-------------------------------------------------
+         E2E ON-CHAIN VERIFICATION SUITE         
+-------------------------------------------------
+Metadata Check:
+  Name:     Thai Baht (Expected: Thai Baht)
+  Symbol:   THB (Expected: THB)
+  Decimals: 6 (Expected: 6)
+✅ Metadata check PASSED.
+
+Supply Check:
+  Total Supply:     1000000000.0 THB
+  Deployer Balance: 1000000000.0 THB
+✅ Supply check PASSED.
+
+Access Control Check:
+  Deployer has MINTER_ROLE: true
+✅ Access control check PASSED.
+
+Testing Minter minting to a test recipient...
+  Recipient Balance after mint: 500.0 THB
+✅ Mint check PASSED.
+
+Testing custom burnFrom(amount, reason)...
+  Deployer balance after burning 100 THB: 999999900.0 THB
+✅ Burn check PASSED.
+
+=================================================
+           DEPLOYMENT & E2E TESTS PASSED         
+=================================================
+Factory Contract:  0xd36c1cfaFE2e867E43787F7e734E4B78b82fB53D
+THB Token Contract: 0x5DA1034636F90b1b2e62F917847502FA5796653f
+=================================================
+```
+
+---
+
+## 3. Database Registration
+To integrate the THB contract address with your wallet application:
+1. **SQL Seeding:** Run the SQL command in [add_thb_token_contract.sql](file:///c:/Users/KARTHICK%20MAYUR/OneDrive/Desktop/cryptowallet/database/schemas/add_thb_token_contract.sql) directly inside your Supabase Dashboard SQL editor.
+2. **Javascript Seeding:** Run the Supabase seeder script locally:
+   ```bash
+   node scripts/seed_supabase.js
+   ```
+This links `THB` on Sepolia to `0x5DA1034636F90b1b2e62F917847502FA5796653f` with `6` decimals. The wallet application will dynamically fetch the balance and execute send/receive transactions using the existing ERC-20 module.

@@ -1,0 +1,59 @@
+# Ignore all node_modules at any level (EAS installs dependencies on the build server)
+**/node_modules/
+node_modules/
+
+# Force EAS to use npm - block all other lock files
+apps/mobile/package-lock.json
+pnpm-lock.yaml
+**/yarn.lock
+
+# Ignore monorepo package manager config so EAS uses npm
+pnpm-workspace.yaml
+pnpm-lock.yaml
+turbo.json
+apps/mobile/package-lock.json
+
+# Ignore build/compiler caches
+**/.expo/
+**/dist/
+**/web-build/
+**/.turbo/
+.turbo/
+.vercel/
+**/*.tsbuildinfo
+**/android/
+**/ios/
+android/
+ios/
+
+# Ignore apps not needed for the mobile build
+apps/admin-dashboard/
+
+# Ignore Hardhat compiler artifacts and cache in blockchain package
+packages/blockchain/artifacts/
+packages/blockchain/cache/
+
+# Ignore other non-mobile folders
+database/
+scratch/
+testing/
+scripts/
+docs/
+postman/
+
+# Ignore media, logs, and other large/unnecessary files
+**/*.sql
+**/*.mp4
+**/*.gif
+**/*.pdf
+/*.png
+/*.jpg
+/*.jpeg
+/*.svg
+/*.gif
+/*.pdf
+.aider.chat.history.md
+.aider.input.history
+structure.txt
+*.bak
+package.json.xG7kZYuWoIzDAkTIVqjomCp5vtzBC0BIyWCdmGPHZz4

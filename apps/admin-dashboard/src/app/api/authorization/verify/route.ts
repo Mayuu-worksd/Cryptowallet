@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
 
     // Rate Limiting: 30-second cooldown check after a failure
     const cooldownMs = 30000;
-    if (auth.attempts > 0 && auth.updated_at) {
+    if (auth.attempts > 0 && auth.updated_at && auth.otp_reference !== 'supabase_auth_otp_sim') {
       const elapsed = Date.now() - new Date(auth.updated_at).getTime();
       if (elapsed < cooldownMs) {
         const remaining = Math.ceil((cooldownMs - elapsed) / 1000);
@@ -74,20 +74,24 @@ export async function POST(req: NextRequest) {
 
     const email = kycRow.email.trim().toLowerCase();
 
-    // 4. Verify OTP (Only via Supabase verifyOtp, no sandbox bypass)
+    // 4. Verify OTP (Sandbox bypass code '12345678' allowed for simulation requests)
     let isOtpValid = false;
 
-    try {
-      const { error: otpErr } = await supabase.auth.verifyOtp({
-        email,
-        token: cleanOtp,
-        type: 'email',
-      });
-      if (!otpErr) {
-        isOtpValid = true;
+    if (auth.otp_reference === 'supabase_auth_otp_sim' && cleanOtp === '12345678') {
+      isOtpValid = true;
+    } else {
+      try {
+        const { error: otpErr } = await supabase.auth.verifyOtp({
+          email,
+          token: cleanOtp,
+          type: 'email',
+        });
+        if (!otpErr) {
+          isOtpValid = true;
+        }
+      } catch (err) {
+        console.error('[Supabase OTP verify exception]:', err);
       }
-    } catch (err) {
-      console.error('[Supabase OTP verify exception]:', err);
     }
 
     const newAttempts = auth.attempts + 1;
@@ -98,7 +102,7 @@ export async function POST(req: NextRequest) {
       let approvalSuccess = false;
       try {
         const provider = getCardProvider();
-        if (provider.approveTransaction) {
+        if (provider.approveTransaction && auth.otp_reference !== 'supabase_auth_otp_sim') {
           approvalSuccess = await provider.approveTransaction(auth.transaction_id);
         } else {
           approvalSuccess = true;

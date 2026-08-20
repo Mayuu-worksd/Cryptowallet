@@ -1,59 +1,74 @@
 const { getDefaultConfig } = require('expo/metro-config');
 const path = require('path');
 
-const config = getDefaultConfig(__dirname);
+process.env.EXPO_NO_METRO_WORKSPACE_ROOT = '1';
 
-config.maxWorkers = 1;
+const projectRoot = __dirname;
+const monorepoRoot = path.resolve(__dirname, '../..');
 
-// ── Fast Refresh + verbose logging ───────────────────────────────────────────
+const config = getDefaultConfig(projectRoot);
+
+config.projectRoot = projectRoot;
+const monorepoNodeModules = path.join(monorepoRoot, 'node_modules');
+config.watchFolders = [
+  projectRoot,
+  ...(require('fs').existsSync(monorepoNodeModules) ? [monorepoNodeModules] : []),
+];
+
 config.server = {
   ...config.server,
-  enhanceMiddleware: (middleware) => middleware,
+  unstable_serverRoot: projectRoot,
 };
+
+config.maxWorkers = 1;
 
 config.transformer = {
   ...config.transformer,
   unstable_allowRequireContext: true,
 };
 
-config.resetCache = false;
+const NOOP = path.resolve(projectRoot, 'utils/noopModule.js');
 
-// Watch all source files for instant hot reload
-config.watchFolders = [
-  path.resolve(__dirname),
-  path.resolve(__dirname, '../../assets'),
-];
+const NODE_SHIMS = {
+  buffer: require.resolve('buffer/'),
+  stream: require.resolve('stream-browserify'),
+  events: require.resolve('events/'),
+  url:    require.resolve('url/'),
+  http:   NOOP,
+  https:  NOOP,
+  net:    NOOP,
+  tls:    NOOP,
+  zlib:   NOOP,
+  fs:     NOOP,
+  crypto: require.resolve('react-native-get-random-values'),
+};
 
-// Exclude transient tool directories that may disappear mid-watch
 config.resolver.blockList = [
   /\.kilocode[\/\\].*/,
 ];
 
-const NOOP = path.resolve(__dirname, 'utils/noopModule.js');
-
-// Intercept 'ws' — it's a Node-only WebSocket lib bundled inside @supabase/realtime-js.
-// React Native has a built-in WebSocket global, so we shim ws to an empty module.
 config.resolver.resolveRequest = (context, moduleName, platform) => {
   if (moduleName === 'ws' || moduleName.startsWith('ws/')) {
     return { filePath: NOOP, type: 'sourceFile' };
   }
+  const shim = NODE_SHIMS[moduleName];
+  if (shim) return { filePath: shim, type: 'sourceFile' };
   return context.resolveRequest(context, moduleName, platform);
 };
 
-// Polyfill other Node built-ins that libraries may reference
 config.resolver.extraNodeModules = {
   ...config.resolver.extraNodeModules,
-  stream:  require.resolve('stream-browserify'),
-  events:  require.resolve('events/'),
-  buffer:  require.resolve('buffer/'),
-  url:     require.resolve('url/'),
-  http:    NOOP,
-  https:   NOOP,
-  net:     NOOP,
-  tls:     NOOP,
-  zlib:    NOOP,
-  fs:      NOOP,
-  crypto:  require.resolve('react-native-get-random-values'),
+  buffer: require.resolve('buffer/'),
+  stream: require.resolve('stream-browserify'),
+  events: require.resolve('events/'),
+  url:    require.resolve('url/'),
+  http:   NOOP,
+  https:  NOOP,
+  net:    NOOP,
+  tls:    NOOP,
+  zlib:   NOOP,
+  fs:     NOOP,
+  crypto: require.resolve('react-native-get-random-values'),
 };
 
 module.exports = config;

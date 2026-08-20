@@ -73,20 +73,20 @@ export default function UsersPage() {
 
   // 3. Toggle Suspension Mutation
   const toggleSuspension = useMutation({
-    mutationFn: async ({ wallet, suspend }: { wallet: string; suspend: boolean }) => {
+    mutationFn: async ({ wallet, suspend, reason }: { wallet: string; suspend: boolean; reason?: string }) => {
       const addr = wallet.toLowerCase().trim();
-      
-      // Try the dedicated RPC toggle first, fallback to standard table update
       const { error: rpcError } = await supabase.rpc('admin_toggle_user_suspension', {
         p_wallet: addr,
         p_suspend: suspend,
+        p_reason: reason ?? null,
       });
-
       if (rpcError) {
-        console.warn('RPC admin_toggle_user_suspension failed, direct table update:', rpcError.message);
+        // Fallback: direct table update
+        const patch: any = { is_suspended: suspend };
+        if (reason !== undefined) patch.suspension_reason = suspend ? reason : null;
         const { error: tableError } = await supabase
           .from('wallet_profiles')
-          .update({ is_suspended: suspend })
+          .update(patch)
           .eq('wallet_address', addr);
         if (tableError) throw tableError;
       }
@@ -470,7 +470,7 @@ export default function UsersPage() {
             <div className="mt-8 pt-4 border-t-3 border-[#1a1a1a] bg-white flex items-center gap-4">
               {selectedUser.is_suspended ? (
                 <button
-                  onClick={() => toggleSuspension.mutate({ wallet: selectedUser.wallet_address, suspend: false })}
+                  onClick={() => toggleSuspension.mutate({ wallet: selectedUser.wallet_address, suspend: false, reason: '' })}
                   disabled={toggleSuspension.isPending}
                   className="flex-1 brutalist-button-blue py-3 flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
@@ -484,8 +484,13 @@ export default function UsersPage() {
               ) : (
                 <button
                   onClick={() => {
-                    if (confirm(`CRITICAL CONFIRMATION: Are you sure you want to suspend wallet node ${selectedUser.wallet_address}? This will block all swap trading and escrows.`)) {
-                      toggleSuspension.mutate({ wallet: selectedUser.wallet_address, suspend: true });
+                    const reason = window.prompt(
+                      `Enter suspension reason for ${selectedUser.wallet_address.slice(0,10)}...\n\nExamples: "Unauthorized access detected", "Fraudulent activity", "KYC violation"`,
+                      'Unauthorized access detected'
+                    );
+                    if (reason === null) return; // cancelled
+                    if (confirm(`CONFIRM: Suspend wallet node ${selectedUser.wallet_address}?\nReason: ${reason || '(none)'}\n\nThis blocks all wallet operations immediately.`)) {
+                      toggleSuspension.mutate({ wallet: selectedUser.wallet_address, suspend: true, reason: reason.trim() || 'Unauthorized access detected' });
                     }
                   }}
                   disabled={toggleSuspension.isPending}

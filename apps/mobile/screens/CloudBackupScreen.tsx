@@ -414,7 +414,7 @@ export default function CloudBackupScreen({ navigation }: any) {
                   <Text style={[styles.label, { color: T.textMuted }]}>Verification Code</Text>
                   <TextInput
                     style={[styles.input, { color: T.text, borderColor: T.border, fontSize: 24, letterSpacing: 8, textAlign: 'center' }]}
-                    placeholder="000000"
+                    placeholder="00000000"
                     placeholderTextColor={T.textDim}
                     value={otp}
                     onChangeText={setOtp}

@@ -13,7 +13,7 @@ import Toast from '../components/Toast';
 import { LinearGradient } from 'expo-linear-gradient';
 import { haptics } from '../utils/haptics';
 import TransactionLoader from '../components/ui/TransactionLoader';
-import { tronService } from '../services/tronService';
+import { tronService, TRON_TOKENS } from '../services/tronService';
 import { storageService } from '../services/storageService';
 import { CurrencyText } from '../components/CurrencyText';
 import { recipientService, RecipientInfo, RecentRecipient } from '../services/supabaseService';
@@ -21,12 +21,12 @@ import * as Clipboard from 'expo-clipboard';
 
 // ── Fallback Network Configurations ──
 const FALLBACK_NETWORKS = [
-  { network_name: 'Ethereum (ERC20)', symbol: 'ETH', is_active: true, is_mainnet: true, min_deposit: '0.005 ETH', estimated_arrival: '3 minutes', warning_text: 'Only send ETH/USDT/USDC/INRX via ERC20.', supported_assets: ['ETH', 'USDT', 'USDC', 'INRX'] },
+  { network_name: 'Ethereum (ERC20)', symbol: 'ETH', is_active: true, is_mainnet: true, min_deposit: '0.005 ETH', estimated_arrival: '3 minutes', warning_text: 'Only send supported ERC20 assets.', supported_assets: ['ETH', 'USDT', 'USDC', 'INRX', 'THB', 'PKR', 'AED', 'CNY', 'RUB', 'UZS', 'VND', 'IDR', 'PHP'] },
   { network_name: 'BNB Smart Chain', symbol: 'BNB', is_active: true, is_mainnet: true, min_deposit: '0.01 BNB', estimated_arrival: '3 seconds', warning_text: 'Only send BNB/USDT/USDC via BSC.', supported_assets: ['BNB', 'USDT', 'USDC'] },
-  { network_name: 'TRON (TRC20)', symbol: 'TRX', is_active: true, is_mainnet: true, min_deposit: '10 TRX', estimated_arrival: '1 minute', warning_text: 'Only send TRX/USDT/USDC/INRX via TRC20.', supported_assets: ['TRX', 'USDT', 'USDC', 'INRX'] },
-  { network_name: 'Polygon Network', symbol: 'MATIC', is_active: true, is_mainnet: true, min_deposit: '5 MATIC', estimated_arrival: '2 minutes', warning_text: 'Only send MATIC/USDT/USDC/INRX via Polygon.', supported_assets: ['MATIC', 'USDT', 'USDC', 'INRX'] },
+  { network_name: 'TRON (TRC20)', symbol: 'TRX', is_active: true, is_mainnet: true, min_deposit: '10 TRX', estimated_arrival: '1 minute', warning_text: 'Only send TRX/USDT/USDC via TRC20.', supported_assets: ['TRX', 'USDT', 'USDC'] },
+  { network_name: 'Polygon Network', symbol: 'MATIC', is_active: true, is_mainnet: true, min_deposit: '5 MATIC', estimated_arrival: '2 minutes', warning_text: 'Only send MATIC/USDT/USDC/INRX via Polygon.', supported_assets: ['MATIC', 'USDT', 'USDC', 'INRX', 'THB', 'PKR', 'AED', 'CNY', 'RUB', 'UZS', 'VND', 'IDR', 'PHP'] },
   { network_name: 'Arbitrum One', symbol: 'ETH', is_active: true, is_mainnet: true, min_deposit: '0.002 ETH', estimated_arrival: '30 seconds', warning_text: 'Only send ETH/USDT/USDC via Arbitrum.', supported_assets: ['ETH', 'USDT', 'USDC'] },
-  { network_name: 'Sepolia Testnet', symbol: 'ETH', is_active: true, is_mainnet: false, min_deposit: '0.001 ETH', estimated_arrival: '15 seconds', warning_text: 'Only send Sepolia ETH/USDT/USDC/INRX.', supported_assets: ['ETH', 'USDT', 'USDC', 'INRX'] },
+  { network_name: 'Sepolia Testnet', symbol: 'ETH', is_active: true, is_mainnet: false, min_deposit: '0.001 ETH', estimated_arrival: '15 seconds', warning_text: 'Only send Sepolia supported tokens.', supported_assets: ['ETH', 'USDT', 'USDC', 'INRX', 'THB', 'PKR', 'AED', 'CNY', 'RUB', 'UZS', 'VND', 'IDR', 'PHP'] },
   { network_name: 'Bitcoin Network', symbol: 'BTC', is_active: true, is_mainnet: true, min_deposit: '0.0002 BTC', estimated_arrival: '10-60 minutes', warning_text: 'Only send Bitcoin (BTC) to this address.', supported_assets: ['BTC'] },
   { network_name: 'Solana Network', symbol: 'SOL', is_active: true, is_mainnet: true, min_deposit: '0.05 SOL', estimated_arrival: '10 seconds', warning_text: 'Only send SOL/USDT/USDC via Solana.', supported_assets: ['SOL', 'USDT', 'USDC'] },
   { network_name: 'TON Network', symbol: 'TON', is_active: true, is_mainnet: true, min_deposit: '0.5 TON', estimated_arrival: '1 minute', warning_text: 'Only send TON to this address.', supported_assets: ['TON'] },
@@ -198,6 +198,22 @@ export default function SendScreen({ navigation, route }: any) {
   const compatibleNets = React.useMemo(() => {
     const standardNets = activeNets.filter((n: any) => n.is_active && n.supported_assets && n.supported_assets.includes(selectedAsset));
     
+    // If the selected asset is a dynamic database token, add its networks
+    if (tokenContracts && tokenContracts.length > 0) {
+      tokenContracts.forEach((tc: any) => {
+        const symbol = tc.currency_code || tc.currency;
+        if (symbol === selectedAsset) {
+          const matchNet = activeNets.find((n: any) => 
+            n.network_name === tc.network_name ||
+            n.network_name === (tc.network_name === 'Polygon Amoy' ? 'Polygon Network' : tc.network_name === 'Sepolia' ? 'Sepolia Testnet' : tc.network_name)
+          );
+          if (matchNet && !standardNets.find((n: any) => n.network_name === matchNet.network_name)) {
+            standardNets.push(matchNet);
+          }
+        }
+      });
+    }
+
     // If the selected asset is a custom token, add its specific network
     const isCustomToken = customTokens?.find((t: any) => t.symbol === selectedAsset);
     if (isCustomToken) {
@@ -207,7 +223,7 @@ export default function SendScreen({ navigation, route }: any) {
       }
     }
     return standardNets;
-  }, [activeNets, selectedAsset, customTokens]);
+  }, [activeNets, selectedAsset, customTokens, tokenContracts]);
 
   const coinPrice    = prices[selectedAsset]?.usd ?? (selectedAsset === 'ETH' ? 3500 : (selectedAsset === 'BTC' ? 65000 : 1));
   const parsedAmount = parseFloat(amount) || 0;
@@ -334,18 +350,43 @@ export default function SendScreen({ navigation, route }: any) {
       }, 600);
       return () => clearTimeout(t);
     }
-    if (selectedAsset === 'TRX') {
-      const flatFee = tronService.estimateFee(selectedNetworkObj?.network_name || 'TRON Nile').toFixed(6);
-      setGasEth(flatFee);
-      validateAmount(amount, flatFee);
-      return;
+    const netName = (selectedNetworkObj?.network_name || '').toUpperCase();
+    if (selectedAsset === 'TRX' || netName.includes('TRON') || selectedNetworkObj?.symbol === 'TRX') {
+      const t = setTimeout(async () => {
+        setEstimating(true);
+        try {
+          const fromAddr = tronAddress;
+          const toAddr = address;
+          const contractAddr = selectedAsset === 'TRX' ? undefined : (
+            TRON_TOKENS[selectedAsset]?.[selectedNetworkObj?.network_name] ?? 
+            TRON_TOKENS[selectedAsset]?.['TRON']
+          );
+          
+          const estFee = await tronService.estimateDynamicFee({
+            fromAddress: fromAddr,
+            toAddress: toAddr,
+            contractAddress: contractAddr,
+            network: selectedNetworkObj?.network_name || 'TRON Nile'
+          });
+          
+          const estFeeStr = estFee.toFixed(6);
+          setGasEth(estFeeStr);
+          validateAmount(amount, estFeeStr);
+        } catch (_e) {
+          const fallbackFee = selectedAsset === 'TRX' ? '0.300000' : '27.500000';
+          setGasEth(fallbackFee);
+          validateAmount(amount, fallbackFee);
+        } finally {
+          setEstimating(false);
+        }
+      }, 600);
+      return () => clearTimeout(t);
     }
     
     // Fallback static flat fees for other tokens
     let flatFee = '0.0005';
-    const netName = (selectedNetworkObj?.network_name || '').toUpperCase();
     if (selectedAsset === 'USDT' || selectedAsset === 'USDC') {
-      flatFee = (netName.includes('TRON') || selectedNetworkObj?.symbol === 'TRX') ? '2.0' : '0.001';
+      flatFee = '0.001';
     } else if (selectedAsset === 'BTC') {
       flatFee = '0.0001';
     } else if (selectedAsset === 'SOL') {
@@ -366,12 +407,29 @@ export default function SendScreen({ navigation, route }: any) {
   // ── Review button ──
   const handleReview = () => {
     let err = false;
+    const netName = (selectedNetworkObj?.network_name || '').toUpperCase();
+    const isTron = netName.includes('TRON') || selectedNetworkObj?.symbol === 'TRX';
+
     if (!amount || parsedAmount <= 0) { 
       setAmountError('Enter a valid amount'); 
       err = true; 
     } else if (parsedAmount > availBal) { 
       setAmountError('Insufficient balance'); 
       err = true; 
+    } else if (isTron) {
+      const trxBal = balances.TRX ?? 0;
+      const requiredFee = gasEthNum || 0;
+      if (selectedAsset === 'TRX') {
+        if (parsedAmount + requiredFee > availBal) {
+          setAmountError(`Insufficient TRX for amount + gas. Max: ${Math.max(0, availBal - requiredFee).toFixed(6)} TRX`);
+          err = true;
+        }
+      } else {
+        if (trxBal < requiredFee) {
+          setAmountError(`Insufficient TRX for transaction fee. Required: ${requiredFee} TRX, Available: ${trxBal.toFixed(6)} TRX`);
+          err = true;
+        }
+      }
     } else if ((selectedAsset === 'ETH' || selectedAsset === 'TRX') && parsedAmount + (gasEthNum || 0.0005) > availBal) { 
       setAmountError(`Insufficient for gas. Max sendable: ${Math.max(0, availBal - (gasEthNum || 0.0005)).toFixed(6)} ${selectedAsset}`); 
       err = true; 
