@@ -24,7 +24,7 @@ const FIAT_TOKEN_CONTRACTS: Record<string, string> = {
 };
 
 const TOKEN_CONTRACTS: Record<string, string> = {
-  Sepolia:        '0x51A5F24560547f587999c331788aC495D40d95ba',
+  Sepolia:        '0x451a80dE07d5ab6140A5272dC6F62742FAcC6BaB',
   'Polygon Amoy': '0xd52280A15b30e5EdfFF858E7EC22266604358F26',
   // NOTE: BSC INRX contract address — confirm with INRX team before mainnet use
   BSC:            '0x51A5F24560547f587999c331788aC495D40d95ba',

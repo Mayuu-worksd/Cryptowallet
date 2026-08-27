@@ -24,7 +24,7 @@ const AsyncStorage = Platform.OS === 'web'
     }
   : AsyncStorageNative;
 
-const CUSTOM_TOKEN_ADDRESS = '0x51A5F24560547f587999c331788aC495D40d95ba'.toLowerCase();
+const CUSTOM_TOKEN_ADDRESS = '0x451a80dE07d5ab6140A5272dC6F62742FAcC6BaB'.toLowerCase();
 const CACHE_KEY = 'tx_history_cache';
 
 // ─── Unified transaction shape ────────────────────────────────────────────────

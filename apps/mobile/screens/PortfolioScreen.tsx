@@ -125,7 +125,7 @@ const STABLE_FALLBACK: Record<string, number> = {
 };
 
 // Sleek redotpay styled crypto row
-const CryptoAssetRow = memo(({ a, T, isUp, prices, formatFiat, balanceVisible, onPress, fiatCurrency, fiatRates }: any) => {
+const CryptoAssetRow = memo(({ a, T, isUp, prices, formatFiat, balanceVisible, onPress, fiatCurrency, fiatRates, isFavorite, onToggleFavorite }: any) => {
   const scale = useRef(new Animated.Value(1)).current;
   
   let price = prices[a.symbol]?.usd ?? STABLE_FALLBACK[a.symbol] ?? 0;
@@ -148,6 +148,21 @@ const CryptoAssetRow = memo(({ a, T, isUp, prices, formatFiat, balanceVisible, o
     >
       <Animated.View style={[{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flex: 1 }, { transform: [{ scale }] }]}>
         <View style={styles.assetLeft}>
+          <TouchableOpacity
+            style={{ paddingRight: 10, paddingLeft: 4, justifyContent: 'center', alignItems: 'center' }}
+            onPress={(e) => {
+              e.stopPropagation();
+              haptics.selection();
+              onToggleFavorite(a.symbol);
+            }}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Ionicons
+              name={isFavorite ? "star" : "star-outline"}
+              size={20}
+              color={isFavorite ? "#FFD700" : T.textDim}
+            />
+          </TouchableOpacity>
           <CoinIcon symbol={a.symbol} size={42} />
           <View style={styles.assetInfo}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -218,7 +233,7 @@ export default function PortfolioScreen({ navigation }: any) {
   const {
     ethBalance, balances, isDarkMode, walletAddress, lockedBalance,
     formatFiat, convertFiat, fiatSymbol, fiatCurrency, setFiatCurrency, formatOrderFiat,
-    balanceVisible, toggleBalanceVisible, fiatRates, network
+    balanceVisible, toggleBalanceVisible, fiatRates, network, favoriteTokens, toggleFavorite
   } = useWallet();
   const { prices } = useMarket();
   const T = isDarkMode ? Theme.colors : Theme.lightColors;
@@ -634,6 +649,8 @@ export default function PortfolioScreen({ navigation }: any) {
                   fiatCurrency={fiatCurrency}
                   balanceVisible={balanceVisible}
                   fiatRates={fiatRates}
+                  isFavorite={favoriteTokens?.includes(a.symbol)}
+                  onToggleFavorite={toggleFavorite}
                   onPress={() => { haptics.selection(); navigation.navigate('CoinChart', { symbol: a.symbol }); }}
                 />
               );

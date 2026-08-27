@@ -14,7 +14,7 @@ export function isCustomStablecoin(symbol: string): boolean {
 export async function getDynamicTokenConfig(symbol: string, network: string): Promise<{ address: string; decimals: number } | null> {
   if (symbol === 'INRX') {
     return {
-      address: network === 'Polygon' ? '0xd52280A15b30e5EdfFF858E7EC22266604358F26' : '0x51a5f24560547f587999c331788ac495d40d95ba',
+      address: network === 'Polygon' ? '0xd52280A15b30e5EdfFF858E7EC22266604358F26' : '0x451a80dE07d5ab6140A5272dC6F62742FAcC6BaB',
       decimals: 6
     };
   }
@@ -51,7 +51,7 @@ const MAINNET_TOKENS: Record<string, Record<string, string>> = {
     USDC: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
     USDT: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
     DAI:  '0x6B175474E89094C44Da98b954EedeAC495271d0F',
-    INRX: '0x51A5F24560547f587999c331788aC495D40d95ba',
+    INRX: '0x451a80dE07d5ab6140A5272dC6F62742FAcC6BaB',
   },
   Polygon: {
     ETH:  '0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619',
@@ -71,11 +71,11 @@ const MAINNET_TOKENS: Record<string, Record<string, string>> = {
 const SEPOLIA_TOKENS: Record<string, string> = {
   ETH:  ETH_SENTINEL,
   WETH: '0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14',
-  USDC: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
-  USDT: '0xbD1ea96750Ef2E971D4B17F80DeB29a081BbA9A0',
+  USDC: '0x29553D1AD85C55b41812c19856E1106cBB406EA9',
+  USDT: '0xbD1ea96750Ef2E971D4B17F80DeB29a081BbA9A0', // canonical MockUSDT — matches deployed_addresses.json
   DAI:  '0x3e622317f8C93f7328350cF0B56d9eD4C620C5d6',
-  INRX: '0x51A5F24560547f587999c331788aC495D40d95ba',
-  CUSTOM: '0x51A5F24560547f587999c331788aC495D40d95ba',
+  INRX: '0x451a80dE07d5ab6140A5272dC6F62742FAcC6BaB',
+  CUSTOM: '0x451a80dE07d5ab6140A5272dC6F62742FAcC6BaB',
 };
 
 const UNISWAP_ROUTER_SEPOLIA = '0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E';
@@ -800,12 +800,12 @@ async function _executeReserveMintBurnSwap(
       const amtIn = ethers.utils.parseUnits(quote.sellAmount, 6);
       
       onStatus?.(`Approving ReserveConversion for ${quote.sellAmount} USDT...`);
-      const tx1 = await usdtContract.approve(RESERVE_CONVERSION, amtIn);
+      const tx1 = await usdtContract.approve(RESERVE_CONVERSION, amtIn, { gasLimit: 80000 });
       await tx1.wait(1);
       
       onStatus?.(`Executing swapUSDTToStablecoin...`);
       const tokenId = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(toToken));
-      const tx2 = await conversionContract.swapUSDTToStablecoin(tokenId, amtIn);
+      const tx2 = await conversionContract.swapUSDTToStablecoin(tokenId, amtIn, { gasLimit: 250000 });
       const receipt = await tx2.wait(1);
       txHash = receipt.transactionHash;
     }
@@ -816,7 +816,7 @@ async function _executeReserveMintBurnSwap(
       // ReserveConversion has BURNER_ROLE so it can burn user's tokens directly on-chain
       onStatus?.(`Executing swapStablecoinToUSDT...`);
       const tokenId = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(fromToken));
-      const tx2 = await conversionContract.swapStablecoinToUSDT(tokenId, amtIn);
+      const tx2 = await conversionContract.swapStablecoinToUSDT(tokenId, amtIn, { gasLimit: 250000 });
       const receipt = await tx2.wait(1);
       txHash = receipt.transactionHash;
     }
@@ -863,22 +863,46 @@ async function _executeReserveMintBurnSwap(
       txHash = receipt.transactionHash;
     }
     else if (toToken === 'ETH' && fromCfg) {
-      console.log(`[SWAP] → branch: custom stablecoin → ETH`);
+      console.log(`[SWAP] → branch: custom stablecoin → ETH (2-step: reserve redeem → USDT→ETH)`);
       const amtIn = ethers.utils.parseUnits(quote.sellAmount, fromCfg.decimals);
-      onStatus?.(`Burning ${quote.sellAmount} ${fromToken}...`);
-      const stableContract = new ethers.Contract(fromCfg.address, [
-        'function burn(uint256 amount)',
-        'function burnFrom(uint256 amount, string memory reason) returns (bool)'
+
+      // Step 1: Redeem custom token → USDT via ReserveConversion
+      // This burns the custom token and releases USDT from the reserve to the user.
+      onStatus?.(`Step 1/2 — Redeeming ${quote.sellAmount} ${fromToken} for USDT...`);
+      const tokenId = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(fromToken));
+      console.log(`[SWAP] Step 1: swapStablecoinToUSDT | tokenId: ${tokenId} | amtIn: ${amtIn.toString()}`);
+      const redeemTx = await conversionContract.swapStablecoinToUSDT(tokenId, amtIn, { gasLimit: 200000 });
+      console.log(`[SWAP] Step 1 tx sent: ${redeemTx.hash}`);
+      const redeemReceipt = await redeemTx.wait(1);
+      console.log(`[SWAP] Step 1 confirmed: ${redeemReceipt.transactionHash}`);
+
+      // Step 2: Burn the released USDT (send to zero address) to represent ETH receipt.
+      // On Sepolia testnet there is no USDT/ETH liquidity pool, so we burn the USDT
+      // and credit ETH via applySwapBalances in the UI layer (same pattern as
+      // _executeSepoliaDirectSwap for USDT→ETH).
+      onStatus?.(`Step 2/2 — Converting USDT to ETH...`);
+      const usdtContract = new ethers.Contract(usdtAddr, [
+        'function transfer(address to, uint256 amount) returns (bool)',
+        'function balanceOf(address) view returns (uint256)',
       ], wallet);
-      let tx;
-      try {
-        tx = await stableContract["burnFrom(uint256,string)"](amtIn, 'Swap to ETH', { gasLimit: 120000 });
-      } catch {
-        tx = await stableContract.burn(amtIn, { gasLimit: 120000 });
+      // Use the USDT amount that was released (quote.buyAmount is in ETH; derive USDT from usdValue)
+      const usdValue = parseFloat(quote.usdValue ?? '0');
+      const usdtReleased = usdValue > 0
+        ? ethers.utils.parseUnits(usdValue.toFixed(6), 6)
+        : (amtIn.mul(1000000)).div(ethers.BigNumber.from('36500000')); // fallback: use THB rate
+      // Verify user actually received the USDT before burning it
+      const usdtBal: ethers.BigNumber = await usdtContract.balanceOf(wallet.address);
+      const burnAmt = usdtBal.gte(usdtReleased) ? usdtReleased : usdtBal;
+      if (burnAmt.gt(0)) {
+        const burnTx = await usdtContract.transfer(ZERO_ADDRESS, burnAmt, { gasLimit: 100000 });
+        console.log(`[SWAP] Step 2 tx sent: ${burnTx.hash}`);
+        const burnReceipt = await burnTx.wait(1);
+        txHash = burnReceipt.transactionHash;
+        console.log(`[SWAP] Step 2 confirmed: ${txHash}`);
+      } else {
+        // USDT balance was zero (edge case) — use the redeem tx hash
+        txHash = redeemReceipt.transactionHash;
       }
-      const receipt = await tx.wait(1);
-      txHash = receipt.transactionHash;
-      onStatus?.(`${fromToken} burned. ETH balance reflects faucet; on testnet ETH is not credited.`);
     }
     else if (fromCfg && toCfg) {
       console.log(`[SWAP] → branch: stablecoin → stablecoin`);
@@ -887,7 +911,7 @@ async function _executeReserveMintBurnSwap(
       onStatus?.(`Executing atomic swap: ${fromToken} → ${toToken}...`);
       const tokenId1 = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(fromToken));
       const tokenId2 = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(toToken));
-      const tx = await conversionContract.swapStablecoinToStablecoin(tokenId1, tokenId2, amtIn);
+      const tx = await conversionContract.swapStablecoinToStablecoin(tokenId1, tokenId2, amtIn, { gasLimit: 250000 });
       const receipt = await tx.wait(1);
       txHash = receipt.transactionHash;
     }
@@ -1005,7 +1029,7 @@ async function _executeReserveMintBurnSwap(
 // ETH→stable: mint stable tokens to user (real tx)
 // stable→ETH: burn stable by sending to zero address (real tx), ETH balance unchanged
 //             (on testnet ETH comes from faucet, not from the swap itself)
-const MOCK_USDC_SEPOLIA = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238';
+const MOCK_USDC_SEPOLIA = '0x29553D1AD85C55b41812c19856E1106cBB406EA9';
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 const MOCK_TOKEN_ABI = [

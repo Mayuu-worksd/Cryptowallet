@@ -21,7 +21,7 @@ const ERC20_ABI = ['function balanceOf(address owner) view returns (uint256)'];
 const TOKEN_CONTRACTS: Record<string, Record<string, string>> = {
   USDC: {
     Ethereum: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-    Sepolia:  '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
+    Sepolia:  '0x29553D1AD85C55b41812c19856E1106cBB406EA9',
     Polygon:  '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174',
     Arbitrum: '0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8',
     BSC:      '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
@@ -42,7 +42,7 @@ const TOKEN_CONTRACTS: Record<string, Record<string, string>> = {
     'Optimism Sepolia': '0xbD1ea96750Ef2E971D4B17F80DeB29a081BbA9A0',
   },
   INRX: {
-    Sepolia:  '0x51a5f24560547f587999c331788ac495d40d95ba',
+    Sepolia:  '0x451a80dE07d5ab6140A5272dC6F62742FAcC6BaB',
     Ethereum: '0x51a5f24560547f587999c331788ac495d40d95ba',
     Polygon:  '0xd52280A15b30e5EdfFF858E7EC22266604358F26',
     'Polygon Amoy': '0xd52280A15b30e5EdfFF858E7EC22266604358F26',

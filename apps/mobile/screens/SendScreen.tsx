@@ -523,8 +523,8 @@ export default function SendScreen({ navigation, route }: any) {
             'Polygon Network':  '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174',
             Arbitrum:           '0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8',
             'Arbitrum One':     '0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8',
-            Sepolia:            '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
-            'Sepolia Testnet':  '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
+            Sepolia:            '0x29553D1AD85C55b41812c19856E1106cBB406EA9',
+            'Sepolia Testnet':  '0x29553D1AD85C55b41812c19856E1106cBB406EA9',
             BSC:                '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
             'BNB Smart Chain':  '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
           },
@@ -533,8 +533,8 @@ export default function SendScreen({ navigation, route }: any) {
             Ethereum:           '0x51A5F24560547f587999c331788aC495D40d95ba',
             Polygon:            '0xd52280A15b30e5EdfFF858E7EC22266604358F26',
             'Polygon Network':  '0xd52280A15b30e5EdfFF858E7EC22266604358F26',
-            Sepolia:            '0x51A5F24560547f587999c331788aC495D40d95ba',
-            'Sepolia Testnet':  '0x51A5F24560547f587999c331788aC495D40d95ba',
+            Sepolia:            '0x451a80dE07d5ab6140A5272dC6F62742FAcC6BaB',
+            'Sepolia Testnet':  '0x451a80dE07d5ab6140A5272dC6F62742FAcC6BaB',
           },
         };
 

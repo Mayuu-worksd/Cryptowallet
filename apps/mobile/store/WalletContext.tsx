@@ -166,6 +166,8 @@ type WalletContextType = {
   getTokenContracts: () => any[];
   getContractsByNetwork: (network: string) => any[];
   getContractsByCurrency: (currency: string) => any[];
+  favoriteTokens: string[];
+  toggleFavorite: (symbol: string) => Promise<void>;
 };
 
 const WalletContext = createContext<WalletContextType>({} as WalletContextType);
@@ -184,6 +186,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [fiatCurrency,     setFiatCurrencyState] = useState('USD');
   const [fiatRates,        setFiatRates]        = useState<Record<string, any>>({});
   const [tokenContracts,   setTokenContracts]   = useState<any[]>([]);
+  const [favoriteTokens,   setFavoriteTokens]   = useState<string[]>([]);
 
   const loadDynamicRates = useCallback(async (forceRefresh = false) => {
     try {
@@ -1069,7 +1072,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
           // ── Step 1: Load everything from AsyncStorage instantly (existing users) ──
           const [savedName, savedTxs, savedCard, savedDetails, savedCardCreated,
-                 savedTokenBals, savedFrozen, savedReadOnly, savedCardTxs] = await Promise.all([
+                 savedTokenBals, savedFrozen, savedReadOnly, savedCardTxs, savedFavorites] = await Promise.all([
             storageService.getWalletName(),
             AsyncStorage.getItem('cw_transactions'),
             AsyncStorage.getItem('cw_card_balance'),
@@ -1079,11 +1082,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             cardService.getCardFrozen(),
             AsyncStorage.getItem('cw_read_only'),
             AsyncStorage.getItem('cw_card_transactions'),
+            AsyncStorage.getItem('cw_favorite_tokens'),
           ]);
 
           const readOnly = savedReadOnly === 'true';
           setIsReadOnly(readOnly);
           if (savedName)        setWalletNameState(savedName);
+          if (savedFavorites) {
+            try {
+              setFavoriteTokens(JSON.parse(savedFavorites));
+            } catch {}
+          }
           if (!readOnly && savedTxs) {
             const parsed: Transaction[] = JSON.parse(savedTxs);
             // Check if any P2P pending txs need healing before loading into state
@@ -2827,6 +2836,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const toggleFavorite = useCallback(async (symbol: string) => {
+    setFavoriteTokens(prev => {
+      const next = prev.includes(symbol)
+        ? prev.filter(s => s !== symbol)
+        : [...prev, symbol];
+      AsyncStorage.setItem('cw_favorite_tokens', JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, []);
+
   const setFiatCurrency = useCallback(async (currency: string) => {
     if (fiatRates[currency]) {
       setFiatCurrencyState(currency);
@@ -2911,6 +2930,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     createWallet, importWallet, deleteWallet, enterReadOnlyMode, refreshBalance, refreshCardData, fetchBalance,
     sendETH, sendCrypto, topupCard, spendCard, toggleFreezeCard, reportLostCard, applySwapBalances, switchNetwork,
     bridgeINRX,
+    favoriteTokens, toggleFavorite,
     fiatCurrency, setFiatCurrency, formatFiat, convertFiat, fiatSymbol, formatOrderFiat, fiatRates,
     loadCurrencies: loadDynamicRates, getEnabledCurrencies: () => Object.values(fiatRates), getCurrencySymbol: (code: string) => fiatRates[code]?.symbol || '$', getExchangeRate: (code: string) => fiatRates[code]?.rate ?? 1.0,
     tokenContracts, getTokenContracts: () => tokenContracts, getContractsByNetwork: (n: string) => tokenContracts.filter(c => c.network_name === n), getContractsByCurrency: (c: string) => tokenContracts.filter(tc => tc.currency_code === c),
@@ -2966,7 +2986,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     triggerRecoveryScan,
     importRecoveredAsset,
     ignoreRecoveredAsset,
-    recoverAsset
+    recoverAsset,
+    favoriteTokens,
+    toggleFavorite
   ]);
 
   return (

@@ -35,7 +35,7 @@ const TOKEN_CONTRACTS: Record<string, Record<string, string>> = {
     Ethereum: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
     Polygon:  '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174',
     Arbitrum: '0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8',
-    Sepolia:  '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
+    Sepolia:  '0x29553D1AD85C55b41812c19856E1106cBB406EA9',
     'Base Sepolia': '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
     'Polygon Amoy': '0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582',
     'Arbitrum Sepolia': '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d',
@@ -43,7 +43,7 @@ const TOKEN_CONTRACTS: Record<string, Record<string, string>> = {
   },
   INRX: {
     Ethereum: '0x51a5f24560547f587999c331788aC495D40d95ba',
-    Sepolia:  '0x51a5f24560547f587999c331788aC495D40d95ba',
+    Sepolia:  '0x451a80dE07d5ab6140A5272dC6F62742FAcC6BaB',
     Polygon:  '0xd52280A15b30e5EdfFF858E7EC22266604358F26',
     'Polygon Amoy': '0xd52280A15b30e5EdfFF858E7EC22266604358F26',
   },

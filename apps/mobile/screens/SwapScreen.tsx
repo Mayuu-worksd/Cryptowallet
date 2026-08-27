@@ -136,9 +136,27 @@ export default function SwapScreen({ navigation, route }: any) {
 
   const [dynamicTokens, setDynamicTokens] = useState<string[]>([]);
 
+  // Cache key for persisting dynamic token list per network
+  const DYNAMIC_TOKENS_CACHE_KEY = `cw_dynamic_tokens_${network}`;
+
   useEffect(() => {
     let active = true;
     const fetchDynamicTokens = async () => {
+      // Load cached tokens immediately so the list is never empty on mount
+      try {
+        const AsyncStorageModule = Platform.OS === 'web'
+          ? { getItem: async (k: string) => { try { return localStorage.getItem(k); } catch { return null; } } }
+          : (await import('@react-native-async-storage/async-storage')).default;
+        const cached = await AsyncStorageModule.getItem(DYNAMIC_TOKENS_CACHE_KEY);
+        if (cached && active) {
+          const parsed: string[] = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setDynamicTokens(parsed);
+          }
+        }
+      } catch { /* ignore cache read errors */ }
+
+      // Fetch live from Supabase — Supabase is the source of truth for is_enabled
       try {
         const { data } = await supabase
           .from('token_contracts')
@@ -146,11 +164,19 @@ export default function SwapScreen({ navigation, route }: any) {
           .eq('network_name', network === 'Polygon Amoy' ? 'Polygon Amoy' : network === 'Sepolia' ? 'Sepolia' : network)
           .eq('is_enabled', true);
         if (data && active) {
-          const codes = data.map((c: any) => c.currency_code);
-          setDynamicTokens(Array.from(new Set(codes)));
+          const codes = Array.from(new Set(data.map((c: any) => c.currency_code))) as string[];
+          setDynamicTokens(codes);
+          // Persist the fresh list so next cold-start has it available
+          try {
+            const AsyncStorageModule = Platform.OS === 'web'
+              ? { setItem: async (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { } } }
+              : (await import('@react-native-async-storage/async-storage')).default;
+            await AsyncStorageModule.setItem(DYNAMIC_TOKENS_CACHE_KEY, JSON.stringify(codes));
+          } catch { /* ignore cache write errors */ }
         }
       } catch (err) {
-        console.warn('Failed to fetch dynamic tokens for swap:', err);
+        console.warn('Failed to fetch dynamic tokens for swap (using cached list):', err);
+        // Supabase failed — cached tokens already set above, no further action needed
       }
     };
     fetchDynamicTokens();
