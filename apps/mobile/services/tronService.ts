@@ -453,15 +453,196 @@ export const tronService = {
         bandwidthCostTrx = (requiredBandwidth - totalBandwidth) * 0.001; // 1000 SUN per byte
       }
 
-      // Calculate Energy cost
+      // Calculate Energy cost (420 SUN per energy point on TRON mainnet protocol)
       let energyCostTrx = 0;
       if (requiredEnergy > 0 && resources.stakedEnergy < requiredEnergy) {
-        energyCostTrx = (requiredEnergy - resources.stakedEnergy) * 0.0001; // 100 SUN per energy point
+        energyCostTrx = (requiredEnergy - resources.stakedEnergy) * 0.00042; // 420 SUN per energy point
       }
 
       return parseFloat((bandwidthCostTrx + energyCostTrx).toFixed(6));
     } catch {
-      return isTrc20 ? 7.2 : 0.35; // fallback maximums based on 100 SUN/energy and 1000 SUN/bandwidth
+      return isTrc20 ? 27.5 : 0.35; // fallback maximums based on 420 SUN/energy and 1000 SUN/bandwidth
+    }
+  },
+
+  // ─── Tether WDK GasFree Integration (Production-Safe) ────────────────────
+  /**
+   * Converts a TRON Base58 address into an EVM-compatible 0x hex address (last 20 bytes).
+   * Necessary for EIP-712/TIP-712 typed signature format validation in standard libraries.
+   */
+  tronToEvmAddress(address: string): string {
+    const hex = tronAddressToHex(address);
+    if (!hex) return '';
+    return '0x' + hex.slice(-40);
+  },
+
+  /**
+   * Fetches GasFree quote, next nonce, and verifying details from the backend proxy API.
+   * Prevents exposing API secrets on client devices.
+   */
+  async getGasFreeQuote(address: string, network: string): Promise<{
+    nonce: number;
+    gasFreeAddress: string;
+    active: boolean;
+    maxFee: string;
+    serviceProvider: string;
+    verifyingContract: string;
+  }> {
+    const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'https://cryptowallet-dun.vercel.app';
+    const res = await fetch(`${backendUrl}/api/public/tron/gasfree?action=quote&address=${address}&network=${encodeURIComponent(network)}`, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Failed to fetch GasFree quote from backend');
+    }
+
+    return await res.json();
+  },
+
+  /**
+   * Signs the TIP-712 PermitTransfer message locally using the user's private key.
+   * Ensures private keys NEVER leave the local device.
+   */
+  async signGasFreeTransfer(params: {
+    privateKey: string;
+    token: string;
+    serviceProvider: string;
+    user: string;
+    receiver: string;
+    value: string;
+    maxFee: string;
+    deadline: number;
+    nonce: number;
+    network: string;
+    verifyingContract: string;
+  }): Promise<string> {
+    const wallet = new ethers.Wallet(params.privateKey);
+
+    const domain = {
+      name: 'GasFreeController',
+      version: 'V1.0.0',
+      chainId: params.network === 'TRON' ? 728126428 : 3448148188,
+      verifyingContract: this.tronToEvmAddress(params.verifyingContract),
+    };
+
+    const types = {
+      PermitTransfer: [
+        { name: 'token', type: 'address' },
+        { name: 'serviceProvider', type: 'address' },
+        { name: 'user', type: 'address' },
+        { name: 'receiver', type: 'address' },
+        { name: 'value', type: 'uint256' },
+        { name: 'maxFee', type: 'uint256' },
+        { name: 'deadline', type: 'uint256' },
+        { name: 'version', type: 'uint256' },
+        { name: 'nonce', type: 'uint256' }
+      ]
+    };
+
+    const value = {
+      token: this.tronToEvmAddress(params.token),
+      serviceProvider: this.tronToEvmAddress(params.serviceProvider),
+      user: this.tronToEvmAddress(params.user),
+      receiver: this.tronToEvmAddress(params.receiver),
+      value: params.value,
+      maxFee: params.maxFee,
+      deadline: params.deadline,
+      version: 1, // signature version 1
+      nonce: params.nonce,
+    };
+
+    if (typeof (wallet as any).signTypedData === 'function') {
+      return await (wallet as any).signTypedData(domain, types, value);
+    }
+    return await (wallet as any)._signTypedData(domain, types, value);
+  },
+
+  /**
+   * Core flow for GasFree TRC-20 USDT transfer.
+   * Fetches status/nonce -> signs TIP-712 payload locally -> submits authorization to backend.
+   */
+  async sendTRC20GasFree(params: {
+    privateKey: string;
+    toAddress: string;
+    amount: number;
+    contractAddress: string;
+    decimals: number;
+    network: string;
+  }): Promise<{ txHash: string; success: boolean; feePaid: string; error?: string }> {
+    try {
+      const ownerTronAddr = await tronAddressFromPrivateKey(params.privateKey);
+
+      // 1. Get quote & details from backend proxy
+      const quote = await this.getGasFreeQuote(ownerTronAddr, params.network);
+
+      // Convert transfer value to smallest unit (e.g. 6 decimals for USDT)
+      const transferValue = Math.floor(params.amount * Math.pow(10, params.decimals)).toString();
+      
+      // 1-hour expiration deadline
+      const deadline = Math.floor(Date.now() / 1000) + 3600;
+
+      // 2. Sign EIP-712 Transfer locally on user's device
+      const sig = await this.signGasFreeTransfer({
+        privateKey: params.privateKey,
+        token: params.contractAddress,
+        serviceProvider: quote.serviceProvider,
+        user: ownerTronAddr,
+        receiver: params.toAddress,
+        value: transferValue,
+        maxFee: quote.maxFee,
+        deadline,
+        nonce: quote.nonce,
+        network: params.network,
+        verifyingContract: quote.verifyingContract,
+      });
+
+      // 3. Submit authorization payload to backend proxy
+      const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'https://cryptowallet-dun.vercel.app';
+      const submitRes = await fetch(`${backendUrl}/api/public/tron/gasfree?action=submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          network: params.network,
+          token: params.contractAddress,
+          serviceProvider: quote.serviceProvider,
+          user: ownerTronAddr,
+          receiver: params.toAddress,
+          value: transferValue,
+          maxFee: quote.maxFee,
+          deadline,
+          version: 1,
+          nonce: quote.nonce,
+          sig,
+        }),
+      });
+
+      const submitJson = await submitRes.json();
+      if (!submitRes.ok || !submitJson.success) {
+        throw new Error(submitJson.error || 'Failed to submit GasFree transfer to relayer');
+      }
+
+      // Convert maxFee back to normal unit for logs/fees display
+      const feePaid = (parseInt(quote.maxFee, 10) / Math.pow(10, params.decimals)).toFixed(6);
+
+      // Extract transaction ID/hash from successful relayer submit response
+      const txHash = submitJson.data?.txHash || submitJson.data?.data?.txHash || 'gasfree_completed';
+
+      return {
+        txHash,
+        success: true,
+        feePaid,
+      };
+
+    } catch (err: any) {
+      return {
+        txHash: '',
+        success: false,
+        feePaid: '0',
+        error: err?.message || 'GasFree USDT transfer failed',
+      };
     }
   },
 

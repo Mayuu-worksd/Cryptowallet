@@ -100,6 +100,7 @@ export default function SendScreen({ navigation, route }: any) {
   const [estimating, setEstimating]     = useState(false);
   const [amountError, setAmountError]   = useState('');
   const [gasEth, setGasEth]             = useState('');
+  const [isGasFree, setIsGasFree]       = useState(false);
   const [sending, setSending]           = useState(false);
   const [sendStatus, setSendStatus]     = useState('');
   const [toast, setToast]               = useState({ visible: false, message: '', type: 'success' as 'success' | 'error' | 'info' });
@@ -228,11 +229,15 @@ export default function SendScreen({ navigation, route }: any) {
   const coinPrice    = prices[selectedAsset]?.usd ?? (selectedAsset === 'ETH' ? 3500 : (selectedAsset === 'BTC' ? 65000 : 1));
   const parsedAmount = parseFloat(amount) || 0;
   const gasEthNum    = parseFloat(gasEth) || 0;
-  const totalDeducted = (parsedAmount + gasEthNum).toFixed(6);
+
+  const isTronNet = (selectedNetworkObj?.network_name || '').toUpperCase().includes('TRON') || selectedNetworkObj?.symbol === 'TRX';
+  const feePaidInSameAsset = isGasFree || selectedAsset === 'TRX' || (selectedAsset === 'ETH' && !isTronNet);
+
+  const totalDeducted = (parsedAmount + (feePaidInSameAsset ? gasEthNum : 0)).toFixed(6);
   const availBal     = selectedAsset === 'ETH' ? (parseFloat(ethBalance) || 0) : (balances[selectedAsset] ?? 0);
   const fiatAmountNum = parsedAmount * coinPrice;
-  const fiatGasNum    = gasEthNum * coinPrice;
-  const fiatTotalNum  = (parsedAmount + gasEthNum) * coinPrice;
+  const fiatGasNum    = gasEthNum * (isGasFree ? coinPrice : (prices[selectedNetworkObj?.symbol || 'TRX']?.usd || coinPrice));
+  const fiatTotalNum  = fiatAmountNum + (feePaidInSameAsset ? fiatGasNum : 0);
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') =>
     setToast({ visible: true, message, type });
@@ -325,8 +330,14 @@ export default function SendScreen({ navigation, route }: any) {
         return; 
       }
     }
+    if (isGasFree && selectedAsset === 'USDT') {
+      if (p + gas > availBal) {
+        setAmountError(`Insufficient USDT for amount + fee. Max: ${Math.max(0, availBal - gas).toFixed(6)} USDT`);
+        return;
+      }
+    }
     setAmountError('');
-  }, [availBal, gasEth, selectedAsset]);
+  }, [availBal, gasEth, selectedAsset, isGasFree]);
 
   // ── Gas estimation ──
   useEffect(() => {
@@ -362,17 +373,61 @@ export default function SendScreen({ navigation, route }: any) {
             TRON_TOKENS[selectedAsset]?.['TRON']
           );
           
-          const estFee = await tronService.estimateDynamicFee({
-            fromAddress: fromAddr,
-            toAddress: toAddr,
-            contractAddress: contractAddr,
-            network: selectedNetworkObj?.network_name || 'TRON Nile'
-          });
+          const trxBal = balances.TRX ?? 0;
+          let estFee = 0;
+          let gasFree = false;
+
+          if (selectedAsset === 'USDT' && contractAddr) {
+            // First estimate standard fee in TRX
+            const estFeeTRX = await tronService.estimateDynamicFee({
+              fromAddress: fromAddr,
+              toAddress: toAddr,
+              contractAddress: contractAddr,
+              network: selectedNetworkObj?.network_name || 'TRON Nile'
+            });
+
+            // Check if user has enough TRX or Energy.
+            // If TRX balance is less than required TRX burn fee, attempt GasFree route.
+            const resources = await tronService.getAccountResources(
+              fromAddr,
+              selectedNetworkObj?.network_name || 'TRON Nile'
+            );
+            const balance = await tronService.getRecipientTokenBalance(
+              toAddr,
+              contractAddr,
+              selectedNetworkObj?.network_name || 'TRON Nile'
+            );
+            const requiredEnergy = balance > 0 ? 31892 : 64892;
+
+            if (resources.stakedEnergy < requiredEnergy && trxBal < estFeeTRX) {
+              // Trigger GasFree
+              gasFree = true;
+              setIsGasFree(true);
+              const quote = await tronService.getGasFreeQuote(
+                fromAddr,
+                selectedNetworkObj?.network_name || 'TRON Nile'
+              );
+              // Max fee in USDT (6 decimals)
+              estFee = parseFloat(quote.maxFee) / 1000000;
+            } else {
+              setIsGasFree(false);
+              estFee = estFeeTRX;
+            }
+          } else {
+            setIsGasFree(false);
+            estFee = await tronService.estimateDynamicFee({
+              fromAddress: fromAddr,
+              toAddress: toAddr,
+              contractAddress: contractAddr,
+              network: selectedNetworkObj?.network_name || 'TRON Nile'
+            });
+          }
           
           const estFeeStr = estFee.toFixed(6);
           setGasEth(estFeeStr);
           validateAmount(amount, estFeeStr);
         } catch (_e) {
+          setIsGasFree(false);
           const fallbackFee = selectedAsset === 'TRX' ? '0.300000' : '27.500000';
           setGasEth(fallbackFee);
           validateAmount(amount, fallbackFee);
@@ -425,9 +480,16 @@ export default function SendScreen({ navigation, route }: any) {
           err = true;
         }
       } else {
-        if (trxBal < requiredFee) {
-          setAmountError(`Insufficient TRX for transaction fee. Required: ${requiredFee} TRX, Available: ${trxBal.toFixed(6)} TRX`);
-          err = true;
+        if (isGasFree && selectedAsset === 'USDT') {
+          if (parsedAmount + requiredFee > availBal) {
+            setAmountError(`Insufficient USDT for amount + GasFree fee. Max: ${Math.max(0, availBal - requiredFee).toFixed(6)} USDT`);
+            err = true;
+          }
+        } else {
+          if (trxBal < requiredFee) {
+            setAmountError(`Insufficient TRX for transaction fee. Required: ${requiredFee} TRX, Available: ${trxBal.toFixed(6)} TRX`);
+            err = true;
+          }
         }
       }
     } else if ((selectedAsset === 'ETH' || selectedAsset === 'TRX') && parsedAmount + (gasEthNum || 0.0005) > availBal) { 
@@ -577,14 +639,26 @@ export default function SendScreen({ navigation, route }: any) {
             else {
               const { deriveTronAddress } = await import('../services/tronService');
               const tron = await deriveTronAddress(mnemonic);
-              const tronResult = await tronService.sendTRC20({
-                privateKey:      tron.privateKey,
-                toAddress:       address,
-                amount:          parsedAmount,
-                contractAddress: contractAddr,
-                decimals:        decimals,
-                network:         targetTronNetName,
-              });
+              let tronResult;
+              if (isGasFree && selectedAsset === 'USDT') {
+                tronResult = await tronService.sendTRC20GasFree({
+                  privateKey:      tron.privateKey,
+                  toAddress:       address,
+                  amount:          parsedAmount,
+                  contractAddress: contractAddr,
+                  decimals:        decimals,
+                  network:         targetTronNetName,
+                });
+              } else {
+                tronResult = await tronService.sendTRC20({
+                  privateKey:      tron.privateKey,
+                  toAddress:       address,
+                  amount:          parsedAmount,
+                  contractAddress: contractAddr,
+                  decimals:        decimals,
+                  network:         targetTronNetName,
+                });
+              }
               result = { success: tronResult.success, error: tronResult.error, hash: tronResult.txHash };
               if (tronResult.success) {
                 addTx({ type: 'sent', coin: selectedAsset, amount: parsedAmount.toFixed(6), usdValue: (parsedAmount * coinPrice).toFixed(2), address, status: 'success', txHash: tronResult.txHash });
@@ -1109,7 +1183,7 @@ export default function SendScreen({ navigation, route }: any) {
                 <ActivityIndicator size="small" color={T.primary} />
               ) : (
                 <Text style={[styles.gasValue, { color: T.text }]}>
-                  {gasEth ? `${parseFloat(gasEth).toFixed(6)} ${selectedAsset} (${fiatSymbol} ${formatFiat(fiatGasNum)})` : '—'}
+                  {gasEth ? `${parseFloat(gasEth).toFixed(6)} ${isGasFree ? 'USDT (GasFree)' : (isTronNet ? 'TRX' : (selectedNetworkObj?.symbol || selectedAsset))} (${fiatSymbol} ${formatFiat(fiatGasNum)})` : '—'}
                 </Text>
               )}
             </View>
@@ -1166,7 +1240,7 @@ export default function SendScreen({ navigation, route }: any) {
             <View style={[styles.reviewRow, { borderBottomColor: T.border }]}>
               <Text style={[styles.reviewLabel, { color: T.textDim }]}>Network Fee</Text>
               <View style={{ alignItems: 'flex-end' }}>
-                <Text style={[styles.reviewValue, { color: T.text }]}>{gasEth ? `${parseFloat(gasEth).toFixed(6)} ${selectedAsset}` : '—'}</Text>
+                <Text style={[styles.reviewValue, { color: T.text }]}>{gasEth ? `${parseFloat(gasEth).toFixed(6)} ${isGasFree ? 'USDT (GasFree)' : (isTronNet ? 'TRX' : (selectedNetworkObj?.symbol || selectedAsset))}` : '—'}</Text>
                 {gasEth && (
                   <CurrencyText amount={fiatGasNum} code={fiatCurrency} style={{ color: T.textDim, fontSize: 11, fontFamily: Fonts.bold, marginTop: 2 }} />
                 )}
