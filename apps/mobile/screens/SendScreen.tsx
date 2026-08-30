@@ -149,7 +149,28 @@ export default function SendScreen({ navigation, route }: any) {
     }
   }, [scannedUid, step]);
 
-  const activeNets = adminNetworks && adminNetworks.length > 0 ? adminNetworks : FALLBACK_NETWORKS;
+  const activeNets = React.useMemo(() => {
+    const dbNets = adminNetworks && adminNetworks.length > 0 ? adminNetworks : [];
+    if (dbNets.length === 0) return FALLBACK_NETWORKS;
+    
+    return dbNets.map((net: any) => {
+      // Find matching fallback network to merge missing redesign fields
+      const fallback = FALLBACK_NETWORKS.find(
+        f => f.network_name.toLowerCase() === net.network_name.toLowerCase() ||
+             f.symbol.toLowerCase() === net.symbol.toLowerCase()
+      );
+      
+      return {
+        ...net,
+        supported_assets: net.supported_assets && net.supported_assets.length > 0
+          ? net.supported_assets 
+          : (fallback?.supported_assets || [net.symbol]),
+        min_deposit: net.min_deposit || fallback?.min_deposit || '0.001',
+        estimated_arrival: net.estimated_arrival || fallback?.estimated_arrival || '3 minutes',
+        warning_text: net.warning_text || fallback?.warning_text || 'Only send assets through the selected network.',
+      };
+    });
+  }, [adminNetworks]);
   
   // Create an extended ASSET_LIST that includes custom tokens and backend contracts dynamically
   const extendedAssetList = React.useMemo(() => {
