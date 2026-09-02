@@ -753,6 +753,17 @@ export default function SendScreen({ navigation, route }: any) {
                   decimals:        decimals,
                   network:         targetTronNetName,
                 });
+                if (!tronResult.success) {
+                  console.warn('⚠️ [SendScreen] GasFree transfer failed, trying standard TRC-20 broadcast fallback...');
+                  tronResult = await tronService.sendTRC20({
+                    privateKey:      tron.privateKey,
+                    toAddress:       address,
+                    amount:          parsedAmount,
+                    contractAddress: contractAddr,
+                    decimals:        decimals,
+                    network:         targetTronNetName,
+                  });
+                }
               } else {
                 tronResult = await tronService.sendTRC20({
                   privateKey:      tron.privateKey,
@@ -847,8 +858,11 @@ export default function SendScreen({ navigation, route }: any) {
       
       haptics.error();
       let msg = result.error ?? 'Transfer failed. Please try again.';
-      if (msg.includes('insufficient funds')) msg = 'Not enough funds to cover gas fees.';
-      else if (msg.includes('nonce')) msg = 'Transaction conflict. Please try again.';
+      if (msg.includes('insufficient funds') || msg.includes('insufficient balance') || msg.includes('InsufficientBalanceException')) {
+        msg = 'GasFree relayer requires testnet TRX on Nile. Claim free testnet TRX at nile.tronscan.org/#/faucet!';
+      } else if (msg.includes('nonce')) {
+        msg = 'Transaction conflict. Please try again.';
+      }
       showToast(msg, 'error');
     }
   };
