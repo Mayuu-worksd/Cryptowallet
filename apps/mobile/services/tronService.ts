@@ -337,12 +337,9 @@ export const tronService = {
           if (inrxContract && addr.toLowerCase() === inrxContract.toLowerCase()) {
             inrx = parseInt(String(bal), 10) / 1_000_000;
           }
-        }
-      }
-
-      if (usdt === 0 && usdtContract) {
+      if (usdtContract) {
         const directBal = await this.getTRC20BalanceOf(tronAddress, usdtContract, network);
-        if (directBal > 0) usdt = directBal;
+        usdt = directBal;
       }
 
       return { TRX: trx, USDT: usdt, USDC: usdc, INRX: inrx };
@@ -667,7 +664,13 @@ export const tronService = {
       const feePaid = (parseInt(quote.maxFee, 10) / Math.pow(10, params.decimals)).toFixed(6);
 
       // Extract transaction ID/hash from successful relayer submit response
-      const txHash = submitJson.data?.txHash || submitJson.data?.data?.txHash || 'gasfree_completed';
+      const txHash = submitJson.data?.txHash || 
+                     submitJson.data?.hash || 
+                     submitJson.data?.transactionHash || 
+                     submitJson.data?.data?.txHash || 
+                     submitJson.data?.data?.hash || 
+                     submitJson.data?.data?.transactionHash || 
+                     '';
 
       return {
         txHash,

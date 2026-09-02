@@ -30,15 +30,16 @@ const EXPLORER: Record<string, string> = {
 };
 
 function getExplorerUrl(hash: string, network: string): string {
-  // TRON tx hashes are 64-char hex without 0x prefix
-  // ETH tx hashes start with 0x
-  const isTronHash = hash && !hash.startsWith('0x') && hash.length === 64;
-  if (isTronHash) {
-    return (EXPLORER['TRON Nile'].includes('nile') && network === 'TRON Nile')
-      ? EXPLORER['TRON Nile'] + hash
-      : EXPLORER['TRON'] + hash;
+  if (!hash) return '';
+  const net = (network || '').toUpperCase();
+  const cleanHash = hash.replace(/^0x/, '');
+  if (net.includes('TRON') || net.includes('NILE')) {
+    const base = net.includes('NILE')
+      ? 'https://nile.tronscan.org/#/transaction/'
+      : 'https://tronscan.org/#/transaction/';
+    return base + cleanHash;
   }
-  return (EXPLORER[network] ?? EXPLORER.Sepolia) + hash;
+  return (EXPLORER[network] ?? EXPLORER.Sepolia) + (hash.startsWith('0x') ? hash : '0x' + hash);
 }
 
 // ─── Type → visual config ─────────────────────────────────────────────────────
