@@ -744,20 +744,29 @@ export const tronService = {
 
       if (!submitRes.ok || !submitJson.success) {
         if (params.network.includes('Nile')) {
-          console.log('⚡ [tronService] Tether Nile relayer error. Executing Admin Sponsored TRC-20 Transfer on-chain...');
+          console.log(`⚡ [tronService] Tether Nile relayer error. Sponsoring TRX gas from Admin Relayer to user wallet (${ownerTronAddr})...`);
           const adminRelayerKey = '4a03df11e237d2d66f0ca1be7067b8ac6c11223605cf974f8bc63ff0a806dcfa';
-          const sponsoredTx = await this.sendTRC20({
+          // 1. Sponsor TRX gas to user wallet
+          await this.sendTRX({
             privateKey: adminRelayerKey,
+            toAddress: ownerTronAddr,
+            amount: 15,
+            network: params.network,
+          });
+          console.log(`✅ [tronService] Gas Sponsored! Broadcasting user USDT transaction on-chain...`);
+          // 2. Broadcast user USDT transaction on-chain
+          const realTx = await this.sendTRC20({
+            privateKey: params.privateKey,
             toAddress: receiverTronAddr,
             amount: params.amount,
             contractAddress: params.contractAddress,
             decimals: params.decimals,
             network: params.network,
           });
-          if (sponsoredTx.success) {
-            console.log(`🎉 [tronService] Admin Sponsored GasFree Transfer Successful! TxID: ${sponsoredTx.txHash}`);
+          if (realTx.success) {
+            console.log(`🎉 [tronService] Sponsored GasFree Transfer Successful! TxID: ${realTx.txHash}`);
             return {
-              txHash: sponsoredTx.txHash,
+              txHash: realTx.txHash,
               success: true,
               feePaid: '0.000000',
             };
@@ -790,28 +799,35 @@ export const tronService = {
     } catch (err: any) {
       console.error(`❌ [tronService] GasFree Transfer Failed:`, err?.message || err);
       if (params.network.includes('Nile')) {
-        console.log('⚡ [tronService] Tether Nile relayer catch error. Executing Admin Sponsored TRC-20 Transfer on-chain...');
+        console.log(`⚡ [tronService] Tether Nile relayer catch error. Sponsoring TRX gas to user wallet (${ownerTronAddr})...`);
         try {
           const adminRelayerKey = '4a03df11e237d2d66f0ca1be7067b8ac6c11223605cf974f8bc63ff0a806dcfa';
           let receiverTronAddr = this.normalizeTronAddress(params.toAddress);
-          const sponsoredTx = await this.sendTRC20({
+          await this.sendTRX({
             privateKey: adminRelayerKey,
+            toAddress: ownerTronAddr,
+            amount: 15,
+            network: params.network,
+          });
+          console.log(`✅ [tronService] Gas Sponsored! Broadcasting user USDT transaction on-chain...`);
+          const realTx = await this.sendTRC20({
+            privateKey: params.privateKey,
             toAddress: receiverTronAddr,
             amount: params.amount,
             contractAddress: params.contractAddress,
             decimals: params.decimals,
             network: params.network,
           });
-          if (sponsoredTx.success) {
-            console.log(`🎉 [tronService] Admin Sponsored GasFree Transfer Successful! TxID: ${sponsoredTx.txHash}`);
+          if (realTx.success) {
+            console.log(`🎉 [tronService] Sponsored GasFree Transfer Successful! TxID: ${realTx.txHash}`);
             return {
-              txHash: sponsoredTx.txHash,
+              txHash: realTx.txHash,
               success: true,
               feePaid: '0.000000',
             };
           }
-        } catch (sponsorErr) {
-          console.error('[tronService] Admin sponsored fallback error:', sponsorErr);
+        } catch (sponsorErr: any) {
+          console.error('[tronService] Admin sponsored fallback error:', sponsorErr?.message || sponsorErr);
         }
       }
       return {
