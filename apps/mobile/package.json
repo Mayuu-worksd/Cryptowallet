@@ -20,11 +20,11 @@
     "path": "./utils/noopModule.js"
   },
   "scripts": {
-    "start": "expo start --clear",
-    "start:tunnel": "expo start --clear --tunnel",
-    "android": "expo start --android --clear",
-    "ios": "expo start --ios --clear",
-    "web": "expo start --web"
+    "start": "expo start --port 8082 --clear",
+    "start:tunnel": "expo start --port 8082 --clear --tunnel",
+    "android": "expo start --port 8082 --android --clear",
+    "ios": "expo start --port 8082 --ios --clear",
+    "web": "expo start --port 8082 --web"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",
