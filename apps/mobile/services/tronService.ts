@@ -282,8 +282,19 @@ export type TronTx = {
   token:       string;   // 'TRX' or token symbol
 };
 
-// ─── TRON service ─────────────────────────────────────────────────────────────
 export const tronService = {
+
+  isValidTronAddress(address: string): boolean {
+    return isValidTronAddress(address);
+  },
+
+  evmToTronAddress(evmAddress: string): string {
+    return evmToTronAddress(evmAddress);
+  },
+
+  normalizeTronAddress(address: string, fallbackEvmAddress?: string): string {
+    return normalizeTronAddress(address, fallbackEvmAddress);
+  },
 
   getBaseUrl(network: string): string {
     return network === 'TRON' ? 'https://api.trongrid.io' : 'https://nile.trongrid.io';
