@@ -153,6 +153,26 @@ async function tronAddressFromPrivateKey(privateKey: string): Promise<string> {
   return base58Encode(full);
 }
 
+export function isValidTronAddress(address: string): boolean {
+  try {
+    if (!address || typeof address !== 'string' || !address.startsWith('T') || address.length !== 34) {
+      return false;
+    }
+    const decoded = base58Decode(address);
+    if (decoded.length !== 25) return false;
+    const payload = decoded.slice(0, 21);
+    const checksum = decoded.slice(21, 25);
+    const hash1 = sha256Sync(payload);
+    const hash2 = sha256Sync(hash1);
+    return checksum[0] === hash2[0] &&
+           checksum[1] === hash2[1] &&
+           checksum[2] === hash2[2] &&
+           checksum[3] === hash2[3];
+  } catch {
+    return false;
+  }
+}
+
 export function evmToTronAddress(evmAddress: string): string {
   if (!evmAddress) return '';
   const cleanHex = evmAddress.toLowerCase().replace(/^0x/, '');
@@ -645,10 +665,8 @@ export const tronService = {
       const deadline = Math.floor(Date.now() / 1000) + 3600;
 
       let receiverTronAddr = params.toAddress;
-      if (receiverTronAddr.startsWith('0x')) {
+      if (!isValidTronAddress(receiverTronAddr) && receiverTronAddr.startsWith('0x')) {
         receiverTronAddr = evmToTronAddress(receiverTronAddr);
-      } else if (receiverTronAddr.startsWith('t')) {
-        receiverTronAddr = 'T' + receiverTronAddr.slice(1);
       }
 
       // 2. Sign EIP-712 Transfer locally on user's device

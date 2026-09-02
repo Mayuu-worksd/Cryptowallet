@@ -321,16 +321,18 @@ export default function SendScreen({ navigation, route }: any) {
       
       // Resolve the transfer address based on network
       const netName = (selectedNetworkObj?.network_name || '').toUpperCase();
-      let targetAddr = (netName.includes('TRON') || selectedNetworkObj?.symbol === 'TRX')
-        ? (result.tron_address || result.wallet_address || '')
-        : (result.wallet_address || '');
-
-      if ((netName.includes('TRON') || selectedNetworkObj?.symbol === 'TRX') && targetAddr) {
-        if (targetAddr.startsWith('0x')) {
-          targetAddr = tronService.evmToTronAddress(targetAddr);
-        } else if (targetAddr.startsWith('t')) {
-          targetAddr = 'T' + targetAddr.slice(1);
+      const isTronNet = netName.includes('TRON') || selectedNetworkObj?.symbol === 'TRX';
+      let targetAddr = '';
+      if (isTronNet) {
+        if (result.tron_address && tronService.isValidTronAddress(result.tron_address)) {
+          targetAddr = result.tron_address;
+        } else if (result.wallet_address && result.wallet_address.startsWith('0x')) {
+          targetAddr = tronService.evmToTronAddress(result.wallet_address);
+        } else {
+          targetAddr = result.tron_address || result.wallet_address || '';
         }
+      } else {
+        targetAddr = result.wallet_address || '';
       }
       setAddress(targetAddr);
       haptics.success();
