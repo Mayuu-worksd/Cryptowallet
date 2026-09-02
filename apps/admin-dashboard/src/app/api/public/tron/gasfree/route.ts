@@ -175,8 +175,11 @@ export async function POST(req: NextRequest) {
       }, { status: submitRes.status });
     }
 
+    const txHash = resJson.txHash || resJson.hash || resJson.transactionHash || resJson.data?.txHash || resJson.data?.hash || resJson.data?.transactionHash || resJson.data?.taskId || resJson.taskId || '';
+
     return NextResponse.json({
       success: true,
+      txHash,
       data: resJson,
     });
 

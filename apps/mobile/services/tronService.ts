@@ -664,7 +664,8 @@ export const tronService = {
       const feePaid = (parseInt(quote.maxFee, 10) / Math.pow(10, params.decimals)).toFixed(6);
 
       // Extract transaction ID/hash from successful relayer submit response
-      const txHash = submitJson.data?.txHash || 
+      const txHash = submitJson.txHash ||
+                     submitJson.data?.txHash || 
                      submitJson.data?.hash || 
                      submitJson.data?.transactionHash || 
                      submitJson.data?.data?.txHash || 

@@ -29,8 +29,15 @@ const EXPLORER: Record<string, string> = {
   'TRON Nile': 'https://nile.tronscan.org/#/transaction/',
 };
 
-function getExplorerUrl(hash: string, network: string): string {
-  if (!hash) return '';
+function getExplorerUrl(hash: string, network: string, fallbackAddr?: string): string {
+  if (!hash || hash.includes('gasfree_completed')) {
+    const net = (network || '').toUpperCase();
+    if (fallbackAddr && (net.includes('TRON') || net.includes('NILE'))) {
+      const base = net.includes('NILE') ? 'https://nile.tronscan.org/#/address/' : 'https://tronscan.org/#/address/';
+      return base + fallbackAddr;
+    }
+    return '';
+  }
   const net = (network || '').toUpperCase();
   const cleanHash = hash.replace(/^0x/, '');
   if (net.includes('TRON') || net.includes('NILE')) {
@@ -218,7 +225,7 @@ const DetailModal = memo(({ tx, T, cfg, network, onClose, formatFiat }: {
     ...(tx.hash ? [{ label: 'Tx Hash', value: `${tx.hash.slice(0, 14)}…${tx.hash.slice(-8)}` }] : []),
   ];
  
-  const explorerUrl = tx.hash ? getExplorerUrl(tx.hash, network) : null;
+  const explorerUrl = tx.hash ? getExplorerUrl(tx.hash, network, tx.from || tx.to) : null;
 
   const bottomPadding = Math.max(40, insets.bottom + 16);
 
