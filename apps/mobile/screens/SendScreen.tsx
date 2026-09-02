@@ -431,8 +431,10 @@ export default function SendScreen({ navigation, route }: any) {
 
   // ── Gas estimation ──
   useEffect(() => {
-    if (!address || !amount || !parsedAmount || step !== 'amount') {
-      setGasEth('');
+    if (!address || !amount || !parsedAmount || (step !== 'amount' && step !== 'review')) {
+      if (step === 'asset' || step === 'network' || step === 'recipient') {
+        setGasEth('');
+      }
       return;
     }
     if (selectedAsset === 'ETH') {
@@ -1337,8 +1339,8 @@ export default function SendScreen({ navigation, route }: any) {
             <View style={[styles.reviewRow, { borderBottomColor: T.border }]}>
               <Text style={[styles.reviewLabel, { color: T.textDim }]}>Network Fee</Text>
               <View style={{ alignItems: 'flex-end' }}>
-                <Text style={[styles.reviewValue, { color: T.text }]}>{gasEth ? `${parseFloat(gasEth).toFixed(6)} ${isGasFree ? 'USDT (GasFree)' : (isTronNet ? 'TRX' : (selectedNetworkObj?.symbol || selectedAsset))}` : '—'}</Text>
-                {gasEth && (
+                <Text style={[styles.reviewValue, { color: T.text }]}>{gasEth !== '' ? `${parseFloat(gasEth || '0').toFixed(6)} ${isGasFree ? 'USDT (GasFree)' : (isTronNet ? 'TRX' : (selectedNetworkObj?.symbol || selectedAsset))}` : '—'}</Text>
+                {gasEth !== '' && (
                   <CurrencyText amount={fiatGasNum} code={fiatCurrency} style={{ color: T.textDim, fontSize: 11, fontFamily: Fonts.bold, marginTop: 2 }} />
                 )}
               </View>

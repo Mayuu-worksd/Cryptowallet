@@ -341,9 +341,10 @@ export const tronService = {
     return 0;
   },
 
-  async getAllBalances(tronAddress: string, network: string): Promise<{
+  async getAllBalances(rawTronAddress: string, network: string): Promise<{
     TRX: number; USDT: number; USDC: number; INRX: number;
   }> {
+    const tronAddress = normalizeTronAddress(rawTronAddress);
     const base = this.getBaseUrl(network);
     try {
       // Resolve dynamic contract addresses for current TRON network
@@ -412,7 +413,9 @@ export const tronService = {
 
       if (usdtContract) {
         const directBal = await this.getTRC20BalanceOf(tronAddress, usdtContract, network);
-        usdt = directBal;
+        if (directBal > 0 || usdt === 0) {
+          usdt = directBal;
+        }
       }
 
       return { TRX: trx, USDT: usdt, USDC: usdc, INRX: inrx };

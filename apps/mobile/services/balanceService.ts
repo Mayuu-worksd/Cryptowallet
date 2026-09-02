@@ -279,7 +279,8 @@ export async function getWalletBalances(
   if (isTronNet) {
     try {
       const { tronService } = await import('./tronService');
-      const tronBals = await tronService.getAllBalances(walletAddress, network);
+      const tronAddr = tronService.normalizeTronAddress(walletAddress);
+      const tronBals = await tronService.getAllBalances(tronAddr, network);
       const resolvedTRX = tronBals.TRX !== undefined ? tronBals.TRX : (local.TRX ?? 0);
       const resolvedUSDT = tronBals.USDT !== undefined ? tronBals.USDT : (local.USDT ?? local.USDT_TRC20 ?? 0);
       const resolvedUSDC = tronBals.USDC !== undefined ? tronBals.USDC : (local.USDC ?? local.USDC_TRC20 ?? 0);
