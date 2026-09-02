@@ -1977,7 +1977,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           nextBalances.USDC_TRC20 = cached.USDC_TRC20 ?? 0;
           nextBalances.USDC = nextBalances.USDC_TRC20;
           nextBalances.USDT = nextBalances.USDT_TRC20;
-          nextBalances.INRX = cached.INRX ?? prev.INRX ?? 0;
+          nextBalances.INRX = cached.INRX ?? balancesRef.current.INRX ?? 0;
         } else if (!isSol && !isBTC) {
           // General EVM
           nextBalances.ETH = cached[`ETH_${n}`] ?? 0;

@@ -830,10 +830,6 @@ export const tronService = {
     return TRON_FAUCETS[network] ?? [];
   },
 
-  isValidTronAddress(address: string): boolean {
-    return /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(address);
-  },
-
   // ─── Send TRC20 token (USDT, USDC, INRX) ───────────────────────────────────
   async sendTRC20(params: {
     privateKey: string;
