@@ -219,28 +219,7 @@ export function tronAddressToHex(base58Address: string): string {
   }
 }
 
-// ─── Sign raw TRON transaction with private key ──────────────────────────────
-export function signTronTx(transaction: any, privateKeyHex: string): any {
-  const cleanKey = privateKeyHex.startsWith('0x') ? privateKeyHex.slice(2) : privateKeyHex;
-  const txDataHex = transaction.rawDataHex || transaction.raw_data_hex;
-  const txBytes = hexToBytes(txDataHex);
-  const txHash = sha256Sync(txBytes);
 
-  const wallet = new ethers.Wallet('0x' + cleanKey);
-  const signingKey = (wallet as any)._signingKey ? (wallet as any)._signingKey() : (wallet as any).signingKey;
-  const signature = signingKey.signDigest ? signingKey.signDigest(txHash) : signingKey.sign(txHash);
-
-  const rHex = signature.r.slice(2).padStart(64, '0');
-  const sHex = signature.s.slice(2).padStart(64, '0');
-  const recId = signature.recoveryParam !== undefined ? signature.recoveryParam : (signature.v !== undefined ? (signature.v >= 27 ? signature.v - 27 : signature.v) : 0);
-  const vHex = recId.toString(16).padStart(2, '0');
-
-  const sigHex = rHex + sHex + vHex;
-  return {
-    ...transaction,
-    signature: [sigHex],
-  };
-}
 
 // ─── TRON token contracts ─────────────────────────────────────────────────────
 export const TRON_TOKENS: Record<string, Record<string, string>> = {
