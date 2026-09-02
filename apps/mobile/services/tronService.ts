@@ -186,6 +186,20 @@ export function evmToTronAddress(evmAddress: string): string {
   return base58Encode(full);
 }
 
+export function normalizeTronAddress(address: string, fallbackEvmAddress?: string): string {
+  if (!address && !fallbackEvmAddress) return '';
+  if (address && isValidTronAddress(address)) return address;
+  if (address && address.startsWith('0x')) return evmToTronAddress(address);
+  if (fallbackEvmAddress && fallbackEvmAddress.startsWith('0x')) {
+    const derived = evmToTronAddress(fallbackEvmAddress);
+    if (isValidTronAddress(derived)) return derived;
+  }
+  if (address && (address.startsWith('t') || address.startsWith('T')) && address.length === 34) {
+    return 'T' + address.slice(1);
+  }
+  return address || '';
+}
+
 // ─── Convert TRON Base58 address → 21-byte hex (with 0x41 prefix) ────────────
 export function tronAddressToHex(base58Address: string): string {
   try {
@@ -664,10 +678,7 @@ export const tronService = {
       // 1-hour expiration deadline
       const deadline = Math.floor(Date.now() / 1000) + 3600;
 
-      let receiverTronAddr = params.toAddress;
-      if (!isValidTronAddress(receiverTronAddr) && receiverTronAddr.startsWith('0x')) {
-        receiverTronAddr = evmToTronAddress(receiverTronAddr);
-      }
+      let receiverTronAddr = this.normalizeTronAddress(params.toAddress);
 
       // 2. Sign EIP-712 Transfer locally on user's device
       const sig = await this.signGasFreeTransfer({

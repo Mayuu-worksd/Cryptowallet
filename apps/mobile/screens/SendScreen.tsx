@@ -322,18 +322,9 @@ export default function SendScreen({ navigation, route }: any) {
       // Resolve the transfer address based on network
       const netName = (selectedNetworkObj?.network_name || '').toUpperCase();
       const isTronNet = netName.includes('TRON') || selectedNetworkObj?.symbol === 'TRX';
-      let targetAddr = '';
-      if (isTronNet) {
-        if (result.tron_address && tronService.isValidTronAddress(result.tron_address)) {
-          targetAddr = result.tron_address;
-        } else if (result.wallet_address && result.wallet_address.startsWith('0x')) {
-          targetAddr = tronService.evmToTronAddress(result.wallet_address);
-        } else {
-          targetAddr = result.tron_address || result.wallet_address || '';
-        }
-      } else {
-        targetAddr = result.wallet_address || '';
-      }
+      const targetAddr = isTronNet
+        ? tronService.normalizeTronAddress(result.tron_address || result.wallet_address || '', result.wallet_address)
+        : (result.wallet_address || '');
       setAddress(targetAddr);
       haptics.success();
     } catch (e) {
@@ -346,14 +337,15 @@ export default function SendScreen({ navigation, route }: any) {
   // ── Select a recent recipient ──
   const selectRecent = (r: RecentRecipient) => {
     const netName = (selectedNetworkObj?.network_name || '').toUpperCase();
-    const targetAddr = (netName.includes('TRON') || selectedNetworkObj?.symbol === 'TRX')
-      ? (r.tron_address || r.recipient_wallet || '')
+    const isTronNet = netName.includes('TRON') || selectedNetworkObj?.symbol === 'TRX';
+    const targetAddr = isTronNet
+      ? tronService.normalizeTronAddress(r.tron_address || r.recipient_wallet || '', r.recipient_wallet)
       : (r.recipient_wallet || '');
     setAddress(targetAddr);
     setRecipient({
       found: true,
       wallet_address: r.recipient_wallet,
-      tron_address: r.tron_address,
+      tron_address: targetAddr,
       wallet_name: r.wallet_name || r.recipient_name || 'Unknown',
       user_uid: r.recipient_uid,
       account_type: r.account_type,
