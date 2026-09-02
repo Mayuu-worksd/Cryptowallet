@@ -337,6 +337,9 @@ export const tronService = {
           if (inrxContract && addr.toLowerCase() === inrxContract.toLowerCase()) {
             inrx = parseInt(String(bal), 10) / 1_000_000;
           }
+        }
+      }
+
       if (usdtContract) {
         const directBal = await this.getTRC20BalanceOf(tronAddress, usdtContract, network);
         usdt = directBal;
