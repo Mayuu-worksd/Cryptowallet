@@ -153,10 +153,31 @@ async function tronAddressFromPrivateKey(privateKey: string): Promise<string> {
   return base58Encode(full);
 }
 
+export function evmToTronAddress(evmAddress: string): string {
+  if (!evmAddress) return '';
+  const cleanHex = evmAddress.toLowerCase().replace(/^0x/, '');
+  if (cleanHex.length !== 40) return evmAddress;
+  const addressHex = '41' + cleanHex;
+  const addressBytes = hexToBytes(addressHex);
+  const hash1 = sha256Sync(addressBytes);
+  const hash2 = sha256Sync(hash1);
+  const checksum = hash2.slice(0, 4);
+  const full = new Uint8Array([...addressBytes, ...checksum]);
+  return base58Encode(full);
+}
+
 // ─── Convert TRON Base58 address → 21-byte hex (with 0x41 prefix) ────────────
 export function tronAddressToHex(base58Address: string): string {
   try {
-    const decoded = base58Decode(base58Address); // 25 bytes: 21 addr + 4 checksum
+    if (!base58Address) return '';
+    if (base58Address.startsWith('0x')) {
+      return '41' + base58Address.slice(2).toLowerCase();
+    }
+    let addr = base58Address;
+    if (addr.startsWith('t')) {
+      addr = 'T' + addr.slice(1);
+    }
+    const decoded = base58Decode(addr); // 25 bytes: 21 addr + 4 checksum
     // Return first 21 bytes as hex (42 hex chars)
     return bytesToHex(decoded.slice(0, 21));
   } catch {
@@ -623,13 +644,20 @@ export const tronService = {
       // 1-hour expiration deadline
       const deadline = Math.floor(Date.now() / 1000) + 3600;
 
+      let receiverTronAddr = params.toAddress;
+      if (receiverTronAddr.startsWith('0x')) {
+        receiverTronAddr = evmToTronAddress(receiverTronAddr);
+      } else if (receiverTronAddr.startsWith('t')) {
+        receiverTronAddr = 'T' + receiverTronAddr.slice(1);
+      }
+
       // 2. Sign EIP-712 Transfer locally on user's device
       const sig = await this.signGasFreeTransfer({
         privateKey: params.privateKey,
         token: params.contractAddress,
         serviceProvider: quote.serviceProvider,
         user: ownerTronAddr,
-        receiver: params.toAddress,
+        receiver: receiverTronAddr,
         value: transferValue,
         maxFee: quote.maxFee,
         deadline,
@@ -648,7 +676,7 @@ export const tronService = {
           token: params.contractAddress,
           serviceProvider: quote.serviceProvider,
           user: ownerTronAddr,
-          receiver: params.toAddress,
+          receiver: receiverTronAddr,
           value: transferValue,
           maxFee: quote.maxFee,
           deadline,
