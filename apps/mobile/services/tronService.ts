@@ -248,21 +248,38 @@ export const tronService = {
     }
   },
 
+  // ─── Fetch TRC20 balance via constant contract call (balanceOf) ────────────
+  async getTRC20BalanceOf(tronAddress: string, contractAddress: string, network: string): Promise<number> {
+    const base = this.getBaseUrl(network);
+    try {
+      const ownerHex = tronAddressToHex(tronAddress);
+      const contractHex = tronAddressToHex(contractAddress);
+      if (!ownerHex || !contractHex) return 0;
+      const paramHex = ownerHex.slice(-40).padStart(64, '0');
+      const res = await fetch(`${base}/wallet/triggerconstantcontract`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          owner_address: ownerHex,
+          contract_address: contractHex,
+          function_selector: 'balanceOf(address)',
+          parameter: paramHex,
+        })
+      });
+      const json = await res.json();
+      const hexVal = json?.constant_result?.[0];
+      if (hexVal) {
+        return parseInt(hexVal, 16) / 1_000_000;
+      }
+    } catch {}
+    return 0;
+  },
+
   async getAllBalances(tronAddress: string, network: string): Promise<{
     TRX: number; USDT: number; USDC: number; INRX: number;
   }> {
     const base = this.getBaseUrl(network);
     try {
-      const res  = await fetch(`${base}/v1/accounts/${tronAddress}`, {
-        headers: { 'Accept': 'application/json' },
-      });
-      const json = await res.json();
-      const account = json?.data?.[0];
-
-      if (!account) return { TRX: 0, USDT: 0, USDC: 0, INRX: 0 };
-
-      const trx = (account.balance ?? 0) / 1_000_000;
-
       // Resolve dynamic contract addresses for current TRON network
       let dynamicInrx = '';
       let dynamicUsdt = '';
@@ -287,6 +304,23 @@ export const tronService = {
       const usdtContract = dynamicUsdt || (TRON_TOKENS.USDT[network] ?? '');
       const usdcContract = dynamicUsdc || (TRON_TOKENS.USDC[network] ?? '');
       const inrxContract = dynamicInrx || (TRON_TOKENS.INRX[network] ?? '');
+
+      const res  = await fetch(`${base}/v1/accounts/${tronAddress}`, {
+        headers: { 'Accept': 'application/json' },
+      });
+      const json = await res.json();
+      const account = json?.data?.[0];
+
+      if (!account) {
+        // Account un-activated on TRON (0 TRX) — query smart contract directly for USDT balance
+        let usdtFallback = 0;
+        if (usdtContract) {
+          usdtFallback = await this.getTRC20BalanceOf(tronAddress, usdtContract, network);
+        }
+        return { TRX: 0, USDT: usdtFallback, USDC: 0, INRX: 0 };
+      }
+
+      const trx = (account.balance ?? 0) / 1_000_000;
       let usdt = 0;
       let usdc = 0;
       let inrx = 0;
@@ -304,6 +338,11 @@ export const tronService = {
             inrx = parseInt(String(bal), 10) / 1_000_000;
           }
         }
+      }
+
+      if (usdt === 0 && usdtContract) {
+        const directBal = await this.getTRC20BalanceOf(tronAddress, usdtContract, network);
+        if (directBal > 0) usdt = directBal;
       }
 
       return { TRX: trx, USDT: usdt, USDC: usdc, INRX: inrx };
