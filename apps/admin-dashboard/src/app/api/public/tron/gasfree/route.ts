@@ -228,21 +228,6 @@ export async function POST(req: NextRequest) {
 
           const triggerJson = await triggerRes.json();
           if (triggerJson?.transaction?.txID) {
-            // Sign with relayer private key
-            const cleanKey = relayerKey.startsWith('0x') ? relayerKey.slice(2) : relayerKey;
-            const txData = triggerJson.transaction.rawDataHex || triggerJson.transaction.raw_data_hex;
-            const signingKey = new crypto.KeyObject({
-              key: Buffer.from(cleanKey, 'hex'),
-              format: 'der',
-              type: 'pkcs8'
-            });
-            
-            // Sign SHA256 of txData
-            const hash = crypto.createHash('sha256').update(Buffer.from(txData, 'hex')).digest();
-            const ecdsa = crypto.createSign('SHA256');
-            ecdsa.update(hash);
-            
-            // Format signed transaction
             const broadcastRes = await fetch(`${base}/wallet/broadcasttransaction`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
