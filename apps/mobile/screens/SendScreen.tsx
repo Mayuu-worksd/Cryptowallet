@@ -664,7 +664,7 @@ export default function SendScreen({ navigation, route }: any) {
         const resolvedDecimals = dynamicContract?.decimals;
 
         if (isTronNet) {
-          const contractAddr = resolvedContractAddr || TRC20_CONTRACTS[selectedAsset];
+          const contractAddr = resolvedContractAddr || TRON_TOKENS[selectedAsset]?.[targetTronNetName] || TRC20_CONTRACTS[selectedAsset];
           const decimals = resolvedDecimals ?? 6;
           if (!contractAddr) {
             result = { success: false, error: `${selectedAsset} not supported on TRON` };
