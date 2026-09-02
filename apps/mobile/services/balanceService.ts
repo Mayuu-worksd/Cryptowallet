@@ -280,6 +280,7 @@ export async function getWalletBalances(
     try {
       const { tronService } = await import('./tronService');
       const tronAddr = tronService.normalizeTronAddress(walletAddress);
+      console.log(`🔍 [balanceService] Querying TRON Balances | Network: "${network}" | Raw Addr: "${walletAddress}" -> Normalized TRON Addr: "${tronAddr}"`);
       const tronBals = await tronService.getAllBalances(tronAddr, network);
       const resolvedTRX = tronBals.TRX !== undefined ? tronBals.TRX : (local.TRX ?? 0);
       const resolvedUSDT = tronBals.USDT !== undefined ? tronBals.USDT : (local.USDT ?? local.USDT_TRC20 ?? 0);
@@ -302,9 +303,11 @@ export async function getWalletBalances(
         SUI: local.SUI ?? 0,
         INRX: resolvedINRX,
       };
+      console.log(`✅ [balanceService] TRON Balances Loaded: TRX=${resolvedTRX}, USDT=${resolvedUSDT}, USDC=${resolvedUSDC}, INRX=${resolvedINRX}`);
       await saveTokenBalances(network, balances);
       return balances;
-    } catch {
+    } catch (err: any) {
+      console.error('❌ [balanceService] Failed to fetch TRON balances:', err?.message || err);
       return {
         USDT_TRC20: local.USDT_TRC20 ?? 0,
         USDC_TRC20: local.USDC_TRC20 ?? 0,

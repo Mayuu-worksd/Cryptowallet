@@ -686,9 +686,12 @@ export const tronService = {
   }): Promise<{ txHash: string; success: boolean; feePaid: string; error?: string }> {
     try {
       const ownerTronAddr = await tronAddressFromPrivateKey(params.privateKey);
+      console.log(`🚀 [tronService] Initiating GasFree TRC-20 Transfer | Owner: "${ownerTronAddr}" -> Recipient: "${params.toAddress}" | Amount: ${params.amount} USDT | Network: "${params.network}"`);
 
       // 1. Get quote & details from backend proxy
+      console.log(`📡 [tronService] Fetching GasFree quote from backend...`);
       const quote = await this.getGasFreeQuote(ownerTronAddr, params.network);
+      console.log(`✅ [tronService] GasFree Quote received: Provider=${quote.serviceProvider}, Nonce=${quote.nonce}, MaxFee=${quote.maxFee}`);
 
       // Convert transfer value to smallest unit (e.g. 6 decimals for USDT)
       const transferValue = Math.floor(params.amount * Math.pow(10, params.decimals)).toString();
@@ -699,6 +702,7 @@ export const tronService = {
       let receiverTronAddr = this.normalizeTronAddress(params.toAddress);
 
       // 2. Sign EIP-712 Transfer locally on user's device
+      console.log(`✍️ [tronService] Signing TIP-712 PermitTransfer payload locally...`);
       const sig = await this.signGasFreeTransfer({
         privateKey: params.privateKey,
         token: params.contractAddress,
@@ -712,9 +716,11 @@ export const tronService = {
         network: params.network,
         verifyingContract: quote.verifyingContract,
       });
+      console.log(`🔑 [tronService] Local Signature generated successfully: ${sig.slice(0, 20)}...`);
 
       // 3. Submit authorization payload to backend proxy
       const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'https://cryptowallet-dun.vercel.app';
+      console.log(`📡 [tronService] Submitting GasFree authorization to backend relayer (${backendUrl})...`);
       const submitRes = await fetch(`${backendUrl}/api/public/tron/gasfree?action=submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -734,6 +740,8 @@ export const tronService = {
       });
 
       const submitJson = await submitRes.json();
+      console.log(`📥 [tronService] GasFree Submit Response:`, JSON.stringify(submitJson, null, 2));
+
       if (!submitRes.ok || !submitJson.success) {
         throw new Error(submitJson.error || 'Failed to submit GasFree transfer to relayer');
       }
@@ -751,6 +759,8 @@ export const tronService = {
                      submitJson.data?.data?.transactionHash || 
                      '';
 
+      console.log(`🎉 [tronService] GasFree Transfer Successful! TxID: ${txHash}`);
+
       return {
         txHash,
         success: true,
@@ -758,6 +768,7 @@ export const tronService = {
       };
 
     } catch (err: any) {
+      console.error(`❌ [tronService] GasFree Transfer Failed:`, err?.message || err);
       return {
         txHash: '',
         success: false,

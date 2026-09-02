@@ -564,10 +564,13 @@ export default function SendScreen({ navigation, route }: any) {
     const netName = (selectedNetworkObj?.network_name || '').toUpperCase();
     const isTron = netName.includes('TRON') || selectedNetworkObj?.symbol === 'TRX';
 
+    console.log(`📋 [SendScreen] Review Requested | Asset: ${selectedAsset} | Network: ${selectedNetworkObj?.network_name} | Amount: ${parsedAmount} | Available: ${availBal} | TRX Bal: ${balances.TRX} | GasFee: ${gasEth} | GasFree: ${isGasFree}`);
+
     if (!amount || parsedAmount <= 0) { 
       setAmountError('Enter a valid amount'); 
       err = true; 
     } else if (parsedAmount > availBal) { 
+      console.warn(`⚠️ [SendScreen] Validation Error: Amount ${parsedAmount} > Available Balance ${availBal}`);
       setAmountError('Insufficient balance'); 
       err = true; 
     } else if (isTron) {
@@ -586,6 +589,7 @@ export default function SendScreen({ navigation, route }: any) {
           }
         } else {
           if (trxBal < requiredFee) {
+            console.warn(`⚠️ [SendScreen] Validation Error: TRX balance (${trxBal}) < Required Fee (${requiredFee})`);
             setAmountError(`Insufficient TRX for transaction fee. Required: ${requiredFee} TRX, Available: ${trxBal.toFixed(6)} TRX`);
             err = true;
           }
@@ -597,6 +601,7 @@ export default function SendScreen({ navigation, route }: any) {
     }
 
     if (err) { shakeError(); return; }
+    console.log(`✅ [SendScreen] Review Validation Passed -> Moving to Review Step`);
     haptics.selection();
     setStep('review');
   };
