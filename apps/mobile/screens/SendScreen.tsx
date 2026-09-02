@@ -450,8 +450,8 @@ export default function SendScreen({ navigation, route }: any) {
                 fromAddr,
                 selectedNetworkObj?.network_name || 'TRON Nile'
               );
-              // Max fee in USDT (6 decimals)
-              estFee = parseFloat(quote.maxFee) / 1000000;
+              // Sponsored GasFree — 0 fee charged to end-user!
+              estFee = 0;
             } else {
               setIsGasFree(false);
               estFee = estFeeTRX;
