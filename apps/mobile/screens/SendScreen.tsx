@@ -274,6 +274,57 @@ export default function SendScreen({ navigation, route }: any) {
     setRecipient(null);
     haptics.selection();
 
+    // Check if input is a direct blockchain address
+    const isTronAddr = tronService.isValidTronAddress(q) || /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(q);
+    const isEvmAddr = /^0x[a-fA-F0-9]{40}$/.test(q);
+    const isSolAddr = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(q);
+
+    if (m === 'wallet' && (isTronAddr || isEvmAddr || isSolAddr)) {
+      const canonicalTron = isTronAddr
+        ? tronService.normalizeTronAddress(q)
+        : (isEvmAddr ? tronService.evmToTronAddress(q) : undefined);
+
+      let result: RecipientInfo = {
+        found: true,
+        wallet_address: q,
+        tron_address: canonicalTron,
+        wallet_name: 'External Wallet',
+      };
+
+      try {
+        const dbResult = await recipientService.lookupByWallet(q);
+        if (dbResult && dbResult.found) {
+          result.wallet_name = dbResult.wallet_name || 'External Wallet';
+          result.user_uid = dbResult.user_uid;
+          result.account_type = dbResult.account_type;
+          if (dbResult.tron_address) result.tron_address = tronService.normalizeTronAddress(dbResult.tron_address, dbResult.wallet_address);
+        }
+      } catch (_e) {}
+
+      // Self-send check
+      const recipientAddr = result.wallet_address?.toLowerCase();
+      const recipientTron = result.tron_address?.toLowerCase();
+      const myAddr = walletAddress?.toLowerCase();
+      const myTron = tronAddress?.toLowerCase();
+      if ((recipientAddr && recipientAddr === myAddr) || (recipientTron && recipientTron === myTron)) {
+        setSearchError('You cannot send funds to yourself.');
+        haptics.error();
+        setSearching(false);
+        return;
+      }
+
+      setRecipient(result);
+      const netName = (selectedNetworkObj?.network_name || '').toUpperCase();
+      const isTronNet = netName.includes('TRON') || selectedNetworkObj?.symbol === 'TRX';
+      const targetAddr = isTronNet
+        ? tronService.normalizeTronAddress(result.tron_address || result.wallet_address || '', result.wallet_address)
+        : (result.wallet_address || '');
+      setAddress(targetAddr);
+      haptics.success();
+      setSearching(false);
+      return;
+    }
+
     try {
       let result: RecipientInfo;
       if (m === 'uid') {
@@ -288,22 +339,10 @@ export default function SendScreen({ navigation, route }: any) {
       }
 
       if (!result.found) {
-        const isTronAddr = /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(q);
-        const isEvmAddr = /^0x[a-fA-F0-9]{40}$/.test(q);
-        const isSolAddr = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(q);
-        if (m === 'wallet' && (isTronAddr || isEvmAddr || isSolAddr)) {
-          result = {
-            found: true,
-            wallet_address: q,
-            tron_address: isTronAddr ? q : undefined,
-            wallet_name: 'External Wallet',
-          };
-        } else {
-          setSearchError('Recipient not found. Check the details and try again.');
-          haptics.error();
-          setSearching(false);
-          return;
-        }
+        setSearchError('Recipient not found. Check the details and try again.');
+        haptics.error();
+        setSearching(false);
+        return;
       }
 
       // Self-send check
@@ -353,6 +392,20 @@ export default function SendScreen({ navigation, route }: any) {
     setSearchError('');
     haptics.selection();
   };
+
+  // ── Instant Gas Fee Initialization on Step 4 ──
+  useEffect(() => {
+    if (step !== 'amount') return;
+    const netName = (selectedNetworkObj?.network_name || '').toUpperCase();
+    const isTronNet = netName.includes('TRON') || selectedNetworkObj?.symbol === 'TRX';
+    if (selectedAsset === 'USDT' && isTronNet && (balances.TRX ?? 0) < 27.5) {
+      setIsGasFree(true);
+      setGasEth('0.000000');
+      setAmountError('');
+    } else if (!gasEth) {
+      setGasEth('0.000000');
+    }
+  }, [step, selectedAsset, selectedNetworkObj, balances.TRX]);
 
   // ── Amount Validation ──
   const validateAmount = useCallback((val: string, currentGasEth?: string) => {
