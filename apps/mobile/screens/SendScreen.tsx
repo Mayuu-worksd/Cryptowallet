@@ -288,30 +288,44 @@ export default function SendScreen({ navigation, route }: any) {
       }
 
       if (!result.found) {
-        setSearchError('Recipient not found. Check the details and try again.');
-        haptics.error();
-      } else {
-        // Self-send check
-        const recipientAddr = result.wallet_address?.toLowerCase();
-        const recipientTron = result.tron_address?.toLowerCase();
-        const myAddr = walletAddress?.toLowerCase();
-        const myTron = tronAddress?.toLowerCase();
-        if ((recipientAddr && recipientAddr === myAddr) || (recipientTron && recipientTron === myTron)) {
-          setSearchError('You cannot send funds to yourself.');
+        const isTronAddr = /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(q);
+        const isEvmAddr = /^0x[a-fA-F0-9]{40}$/.test(q);
+        const isSolAddr = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(q);
+        if (m === 'wallet' && (isTronAddr || isEvmAddr || isSolAddr)) {
+          result = {
+            found: true,
+            wallet_address: q,
+            tron_address: isTronAddr ? q : undefined,
+            wallet_name: 'External Wallet',
+          };
+        } else {
+          setSearchError('Recipient not found. Check the details and try again.');
           haptics.error();
           setSearching(false);
           return;
         }
-        setRecipient(result);
-        
-        // Resolve the transfer address based on network
-        const netName = (selectedNetworkObj?.network_name || '').toUpperCase();
-        const targetAddr = (netName.includes('TRON') || selectedNetworkObj?.symbol === 'TRX')
-          ? (result.tron_address || result.wallet_address || '')
-          : (result.wallet_address || '');
-        setAddress(targetAddr);
-        haptics.success();
       }
+
+      // Self-send check
+      const recipientAddr = result.wallet_address?.toLowerCase();
+      const recipientTron = result.tron_address?.toLowerCase();
+      const myAddr = walletAddress?.toLowerCase();
+      const myTron = tronAddress?.toLowerCase();
+      if ((recipientAddr && recipientAddr === myAddr) || (recipientTron && recipientTron === myTron)) {
+        setSearchError('You cannot send funds to yourself.');
+        haptics.error();
+        setSearching(false);
+        return;
+      }
+      setRecipient(result);
+      
+      // Resolve the transfer address based on network
+      const netName = (selectedNetworkObj?.network_name || '').toUpperCase();
+      const targetAddr = (netName.includes('TRON') || selectedNetworkObj?.symbol === 'TRX')
+        ? (result.tron_address || result.wallet_address || '')
+        : (result.wallet_address || '');
+      setAddress(targetAddr);
+      haptics.success();
     } catch (e) {
       setSearchError('Search failed. Please try again.');
       haptics.error();
