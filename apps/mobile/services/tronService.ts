@@ -367,12 +367,16 @@ export const tronService = {
       const account = json?.data?.[0];
 
       if (!account) {
-        // Account un-activated on TRON (0 TRX) — query smart contract directly for USDT balance
+        // Account un-activated on TRON (0 TRX) — query smart contract directly for USDT & INRX balance
         let usdtFallback = 0;
+        let inrxFallback = 0;
         if (usdtContract) {
           usdtFallback = await this.getTRC20BalanceOf(tronAddress, usdtContract, network);
         }
-        return { TRX: 0, USDT: usdtFallback, USDC: 0, INRX: 0 };
+        if (inrxContract) {
+          inrxFallback = await this.getTRC20BalanceOf(tronAddress, inrxContract, network);
+        }
+        return { TRX: 0, USDT: usdtFallback, USDC: 0, INRX: inrxFallback };
       }
 
       const trx = (account.balance ?? 0) / 1_000_000;
