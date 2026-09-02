@@ -137,7 +137,7 @@ function bytesToHex(bytes: Uint8Array): string {
 }
 
 // ─── TRON address from private key ───────────────────────────────────────────
-async function tronAddressFromPrivateKey(privateKey: string): Promise<string> {
+function tronAddressFromPrivateKey(privateKey: string): string {
   const uncompressedHex = computeUncompressedPublicKey(privateKey);
   const pubKeyHex = uncompressedHex.slice(4);
   const keccakHash = keccak256('0x' + pubKeyHex);
@@ -687,7 +687,7 @@ export const tronService = {
     network: string;
   }): Promise<{ txHash: string; success: boolean; feePaid: string; error?: string }> {
     try {
-      const ownerTronAddr = await tronAddressFromPrivateKey(params.privateKey);
+      const ownerTronAddr = tronAddressFromPrivateKey(params.privateKey);
       console.log(`🚀 [tronService] Initiating GasFree TRC-20 Transfer | Owner: "${ownerTronAddr}" -> Recipient: "${params.toAddress}" | Amount: ${params.amount} USDT | Network: "${params.network}"`);
 
       // 1. Get quote & details from backend proxy
@@ -865,9 +865,11 @@ export const tronService = {
     const base = this.getBaseUrl(params.network);
     try {
       // 1. Derive owner address from private key
-      const ownerTronAddr = await tronAddressFromPrivateKey(params.privateKey);
+      const ownerTronAddr = tronAddressFromPrivateKey(params.privateKey);
       const ownerHex      = tronAddressToHex(ownerTronAddr);
       const toHex         = tronAddressToHex(params.toAddress);
+
+      console.log(`💸 [sendTRX] Sending ${params.amount} TRX from "${ownerTronAddr}" (${ownerHex}) -> "${params.toAddress}" (${toHex})`);
 
       if (!ownerHex || !toHex) {
         throw new Error('Invalid address encoding');
@@ -884,6 +886,8 @@ export const tronService = {
         }),
       });
       const tx = await createRes.json();
+      console.log(`📡 [sendTRX] Create TX response:`, JSON.stringify(tx, null, 2));
+
       if (!tx.txID) throw new Error(tx.Error ?? tx.message ?? 'Failed to create transaction');
 
       // 3. Sign
@@ -896,10 +900,13 @@ export const tronService = {
         body: JSON.stringify(signed),
       });
       const result = await broadcastRes.json();
-      if (!result.result) throw new Error(result.message ?? 'Broadcast failed');
+      console.log(`📡 [sendTRX] Broadcast response:`, JSON.stringify(result, null, 2));
+
+      if (!result.result) throw new Error(result.message ? Buffer.from(result.message, 'hex').toString('utf8') : 'Broadcast failed');
 
       return { txHash: tx.txID, success: true };
     } catch (e: any) {
+      console.error(`❌ [sendTRX] Send TRX failed:`, e?.message || e);
       return { txHash: '', success: false, error: e?.message ?? 'TRON send failed' };
     }
   },
@@ -927,7 +934,7 @@ export const tronService = {
   }): Promise<{ txHash: string; success: boolean; error?: string }> {
     const base = this.getBaseUrl(params.network);
     try {
-      const ownerTronAddr = await tronAddressFromPrivateKey(params.privateKey);
+      const ownerTronAddr = tronAddressFromPrivateKey(params.privateKey);
       const ownerHex      = tronAddressToHex(ownerTronAddr);
       const toHex         = tronAddressToHex(params.toAddress);
       const contractHex   = tronAddressToHex(params.contractAddress);
