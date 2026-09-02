@@ -414,6 +414,16 @@ export default function SendScreen({ navigation, route }: any) {
           let estFee = 0;
           let gasFree = false;
 
+          if (selectedAsset === 'USDT') {
+            if (trxBal < 27.5) {
+              setIsGasFree(true);
+              setGasEth('0.000000');
+              setAmountError('');
+              setEstimating(false);
+              return;
+            }
+          }
+
           if (selectedAsset === 'USDT' && contractAddr) {
             // First estimate standard fee in TRX
             const estFeeTRX = await tronService.estimateDynamicFee({
@@ -423,8 +433,6 @@ export default function SendScreen({ navigation, route }: any) {
               network: selectedNetworkObj?.network_name || 'TRON Nile'
             });
 
-            // Check if user has enough TRX or Energy.
-            // If TRX balance is less than required TRX burn fee, attempt GasFree route.
             const resources = await tronService.getAccountResources(
               fromAddr,
               selectedNetworkObj?.network_name || 'TRON Nile'
@@ -437,14 +445,7 @@ export default function SendScreen({ navigation, route }: any) {
             const requiredEnergy = balance > 0 ? 31892 : 64892;
 
             if (resources.stakedEnergy < requiredEnergy && trxBal < estFeeTRX) {
-              // Trigger GasFree
-              gasFree = true;
               setIsGasFree(true);
-              const quote = await tronService.getGasFreeQuote(
-                fromAddr,
-                selectedNetworkObj?.network_name || 'TRON Nile'
-              );
-              // Sponsored GasFree — 0 fee charged to end-user!
               estFee = 0;
             } else {
               setIsGasFree(false);
@@ -464,10 +465,16 @@ export default function SendScreen({ navigation, route }: any) {
           setGasEth(estFeeStr);
           validateAmount(amount, estFeeStr);
         } catch (_e) {
-          setIsGasFree(false);
-          const fallbackFee = selectedAsset === 'TRX' ? '0.300000' : '27.500000';
-          setGasEth(fallbackFee);
-          validateAmount(amount, fallbackFee);
+          if (selectedAsset === 'USDT' && (balances.TRX ?? 0) < 27.5) {
+            setIsGasFree(true);
+            setGasEth('0.000000');
+            setAmountError('');
+          } else {
+            setIsGasFree(false);
+            const fallbackFee = selectedAsset === 'TRX' ? '0.300000' : '27.500000';
+            setGasEth(fallbackFee);
+            validateAmount(amount, fallbackFee);
+          }
         } finally {
           setEstimating(false);
         }
