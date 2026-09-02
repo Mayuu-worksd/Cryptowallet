@@ -30,9 +30,10 @@ const EXPLORER: Record<string, string> = {
 };
 
 function getExplorerUrl(hash: string, network: string, fallbackAddr?: string): string {
-  if (!hash || hash.includes('gasfree_completed')) {
+  const isGasfreeMock = !hash || hash.includes('gasfree_completed') || hash.length < 10;
+  if (isGasfreeMock) {
     const net = (network || '').toUpperCase();
-    if (fallbackAddr && (net.includes('TRON') || net.includes('NILE'))) {
+    if (fallbackAddr && (fallbackAddr.startsWith('T') || fallbackAddr.startsWith('0x'))) {
       const base = net.includes('NILE') ? 'https://nile.tronscan.org/#/address/' : 'https://tronscan.org/#/address/';
       return base + fallbackAddr;
     }
@@ -225,7 +226,10 @@ const DetailModal = memo(({ tx, T, cfg, network, onClose, formatFiat }: {
     ...(tx.hash ? [{ label: 'Tx Hash', value: `${tx.hash.slice(0, 14)}…${tx.hash.slice(-8)}` }] : []),
   ];
  
-  const explorerUrl = tx.hash ? getExplorerUrl(tx.hash, network, tx.from || tx.to) : null;
+  const targetAddr = (tx.to && tx.to !== 'You' && (tx.to.startsWith('T') || tx.to.startsWith('0x')))
+    ? tx.to
+    : ((tx.from && tx.from !== 'You' && (tx.from.startsWith('T') || tx.from.startsWith('0x'))) ? tx.from : '');
+  const explorerUrl = tx.hash ? getExplorerUrl(tx.hash, network, targetAddr) : null;
 
   const bottomPadding = Math.max(40, insets.bottom + 16);
 

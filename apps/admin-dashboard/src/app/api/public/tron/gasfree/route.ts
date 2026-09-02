@@ -168,11 +168,14 @@ export async function POST(req: NextRequest) {
     });
 
     const resJson = await submitRes.json();
-    if (!submitRes.ok) {
+    const relayerCode = resJson.code ?? resJson.status ?? 200;
+
+    if (!submitRes.ok || relayerCode >= 400) {
       return NextResponse.json({
         success: false,
-        error: resJson.message || resJson.error || 'GasFree submission failed',
-      }, { status: submitRes.status });
+        error: resJson.message || resJson.reason || resJson.error || 'GasFree submission failed',
+        data: resJson,
+      }, { status: relayerCode >= 400 && relayerCode < 600 ? relayerCode : 400 });
     }
 
     const txHash = resJson.txHash || resJson.hash || resJson.transactionHash || resJson.data?.txHash || resJson.data?.hash || resJson.data?.transactionHash || resJson.data?.taskId || resJson.taskId || '';
