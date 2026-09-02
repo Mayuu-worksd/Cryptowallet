@@ -472,15 +472,8 @@ export default function SendScreen({ navigation, route }: any) {
           if (selectedAsset === 'USDT') {
             if (trxBal < 27.5) {
               setIsGasFree(true);
-              try {
-                const quote = await tronService.getGasFreeQuote(fromAddr, selectedNetworkObj?.network_name || 'TRON Nile');
-                const feeUsdt = (parseInt(quote.maxFee, 10) / 1_000_000).toFixed(6);
-                setGasEth(feeUsdt);
-                validateAmount(amount, feeUsdt);
-              } catch {
-                setGasEth('1.000000');
-                validateAmount(amount, '1.000000');
-              }
+              setGasEth('0.000000');
+              validateAmount(amount, '0.000000');
               setEstimating(false);
               return;
             }
