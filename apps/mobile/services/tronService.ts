@@ -755,6 +755,10 @@ export const tronService = {
           network: params.network,
         });
         console.log(`✅ [tronService] Gas Sponsor Broadcast Result:`, sponsorResult);
+        if (!sponsorResult.success) {
+          console.error(`❌ [tronService] Gas sponsorship failed: ${sponsorResult.error}`);
+          throw new Error(sponsorResult.error || 'Gas sponsorship failed');
+        }
         console.log(`⏳ [tronService] Waiting 3.5s for TRX gas block confirmation on TRON Nile...`);
         await new Promise(r => setTimeout(r, 3500));
 
@@ -1021,11 +1025,13 @@ function hexToTronAddress(hexAddr: string): string {
  * Note: TRON uses v = 0 or 1, NOT Ethereum's 27/28.
  */
 function signTronTx(tx: any, privateKey: string): any {
+  const cleanKey = privateKey.startsWith('0x') ? privateKey.slice(2) : privateKey;
+  const fullKey  = '0x' + cleanKey;
   const txID      = tx.txID; // hex string without 0x
   const msgBytes  = hexToBytes(txID);
   
   // Create wallet and get signing key
-  const wallet = new ethers.Wallet(privateKey);
+  const wallet = new ethers.Wallet(fullKey);
   
   // ethers v5: _signingKey is a function returning signing key object
   const signingKey = typeof (wallet as any)._signingKey === 'function' 
