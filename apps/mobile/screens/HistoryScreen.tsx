@@ -30,7 +30,8 @@ const EXPLORER: Record<string, string> = {
 };
 
 function getExplorerUrl(hash: string, network: string, fallbackAddr?: string): string {
-  const isGasfreeMock = !hash || hash.includes('gasfree_completed') || hash.length < 10;
+  const isReal64CharHex = /^[0-9a-fA-F]{64}$/.test((hash || '').replace(/^0x/, ''));
+  const isGasfreeMock = !hash || !isReal64CharHex;
   if (isGasfreeMock) {
     const net = (network || '').toUpperCase();
     if (fallbackAddr && (fallbackAddr.startsWith('T') || fallbackAddr.startsWith('0x'))) {
