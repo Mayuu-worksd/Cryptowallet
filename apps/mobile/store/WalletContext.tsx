@@ -953,17 +953,44 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const addTx = useCallback((tx: Omit<Transaction, 'id' | 'date'>) => {
     const id = Date.now().toString();
-    setTransactions(prev => [{
+    const newTx: Transaction = {
       ...tx,
       id,
       date:    new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
       rawDate: Date.now(),
-    }, ...prev]);
+    };
+    setTransactions(prev => {
+      const next = [newTx, ...prev];
+      AsyncStorage.setItem('cw_transactions', JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+
+    // Best-effort background persistence to Supabase so history survives cross-device and updates
+    const activeAddr = walletAddress || tronAddress;
+    if (activeAddr) {
+      import('../services/supabaseService').then(({ txService }) => {
+        txService.log({
+          wallet_address: activeAddr,
+          type:           tx.type === 'sent' ? 'send' : tx.type === 'received' ? 'receive' : tx.type === 'swap' ? 'swap' : 'send',
+          token:          tx.coin,
+          amount:         parseFloat(tx.amount || '0'),
+          usd_value:      parseFloat(tx.usdValue || '0'),
+          status:         tx.status === 'success' ? 'success' : tx.status === 'failed' ? 'failed' : 'pending',
+          tx_hash:        tx.txHash,
+          label:          tx.address,
+        }).catch(() => {});
+      }).catch(() => {});
+    }
+
     return id;
-  }, []);
+  }, [walletAddress, tronAddress]);
 
   const updateTxStatus = useCallback((id: string, status: Transaction['status']) => {
-    setTransactions(prev => prev.map(tx => tx.id === id ? { ...tx, status } : tx));
+    setTransactions(prev => {
+      const next = prev.map(tx => tx.id === id ? { ...tx, status } : tx);
+      AsyncStorage.setItem('cw_transactions', JSON.stringify(next)).catch(() => {});
+      return next;
+    });
   }, []);
 
   // On startup: heal any P2P pending txs by checking their order status in Supabase

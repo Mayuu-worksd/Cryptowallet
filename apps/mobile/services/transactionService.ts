@@ -249,11 +249,12 @@ export const transactionService = {
     ethPriceUsd: number,
   ): Promise<{ txs: UnifiedTx[]; fromCache: boolean }> {
 
-    // 1. Always load local txs first — these are guaranteed to exist
-    const [rawLocal, rawCard, rawSwap] = await Promise.all([
+    // 1. Always load local txs and Supabase db txs in parallel
+    const [rawLocal, rawCard, rawSwap, dbTxsRes] = await Promise.all([
       AsyncStorage.getItem('cw_transactions').catch(() => null),
       AsyncStorage.getItem('cw_card_transactions').catch(() => null),
       AsyncStorage.getItem('swap_transactions').catch(() => null),
+      import('./supabaseService').then(m => m.txService.getAll(walletAddress, 50)).catch(() => []),
     ]);
 
     let localTxs: LocalTx[] = [];
@@ -262,6 +263,20 @@ export const transactionService = {
     try { const p = rawLocal ? JSON.parse(String(rawLocal)) : []; localTxs = Array.isArray(p) ? p : []; } catch (_e) {}
     try { const p = rawCard  ? JSON.parse(String(rawCard))  : []; cardTxs  = Array.isArray(p) ? p : []; } catch (_e) {}
     try { const p = rawSwap  ? JSON.parse(String(rawSwap))  : []; swapTxs  = Array.isArray(p) ? p : []; } catch (_e) {}
+
+    const fromDb: UnifiedTx[] = (dbTxsRes || []).map((t: any) => ({
+      id:       t.id || t.tx_hash || Date.now().toString(),
+      type:     t.type === 'swap' ? 'swap' : t.type === 'receive' ? 'receive' : 'send',
+      amount:   String(t.amount || '0'),
+      token:    t.token || 'USDT',
+      usdValue: String(t.usd_value || '0'),
+      date:     t.created_at || new Date().toISOString(),
+      status:   t.status === 'success' || t.status === 'completed' ? 'completed' : t.status === 'failed' ? 'failed' : 'pending',
+      from:     t.wallet_address || 'You',
+      to:       t.label || '',
+      hash:     t.tx_hash || null,
+      label:    t.label || `${t.type} ${t.token}`,
+    }));
 
     const fromLocal = localTxs.map(fromLocalTx);
     // Deduplicate card transactions by id before converting
@@ -320,7 +335,7 @@ export const transactionService = {
         const key = tx.hash ?? tx.id;
         if (!seen.has(key)) { seen.add(key); merged.push(tx); }
       }
-      for (const tx of [...fromLocal, ...fromCard, ...fromSwapStore]) {
+      for (const tx of [...fromLocal, ...fromCard, ...fromSwapStore, ...fromDb]) {
         const key = tx.hash ? tx.hash : tx.id;
         if (!seen.has(key)) { seen.add(key); merged.push(tx); }
       }
@@ -378,7 +393,7 @@ export const transactionService = {
       const key = `${tx.hash}:${tx.type}`;
       if (!seen.has(key)) { seen.add(key); merged.push(tx); }
     }
-    for (const tx of [...fromLocal, ...fromCard, ...fromSwapStore]) {
+    for (const tx of [...fromLocal, ...fromCard, ...fromSwapStore, ...fromDb]) {
       const key = tx.hash ? `${tx.hash}:${tx.type}` : tx.id;
       if (!seen.has(key)) { seen.add(key); merged.push(tx); }
     }
