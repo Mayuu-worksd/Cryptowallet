@@ -275,7 +275,9 @@ export default function CMSPage() {
 
     try {
       // 1. Update cms_pages table if available
-      await supabase.from('cms_pages').update({ is_published: nextStatus, updated_at: nowIso }).eq('slug', page.slug).catch(() => {});
+      try {
+        await supabase.from('cms_pages').update({ is_published: nextStatus, updated_at: nowIso }).eq('slug', page.slug);
+      } catch {}
 
       // 2. Update local state
       const nextPages = pages.map(p => (p.slug === page.slug ? updatedItem : p));
@@ -297,7 +299,9 @@ export default function CMSPage() {
     if (!confirm(`Are you sure you want to delete page with slug "${slugToDelete}"?`)) return;
 
     try {
-      await supabase.from('cms_pages').delete().eq('slug', slugToDelete).catch(() => {});
+      try {
+        await supabase.from('cms_pages').delete().eq('slug', slugToDelete);
+      } catch {}
 
       const nextPages = pages.filter(p => p.slug !== slugToDelete);
       setPages(nextPages);
