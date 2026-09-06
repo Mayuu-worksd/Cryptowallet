@@ -655,11 +655,7 @@ export default function SendScreen({ navigation, route }: any) {
     } else if (selectedAsset === 'ETH') {
       result = await sendETH(address, amount);
     } else if (selectedAsset === 'SOL') {
-      const mockHash = 'sol_mock_' + Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
-      result = { success: true, hash: mockHash };
-      addTx({ type: 'sent', coin: 'SOL', amount: parsedAmount.toFixed(6), usdValue: (parsedAmount * coinPrice).toFixed(2), address, status: 'success', txHash: mockHash });
-      applySwapBalances('SOL', parsedAmount, 'SOL', 0);
-      refreshBalance();
+      result = { success: false, error: 'Solana (SOL) on-chain transfers are not currently supported on this network.' };
     } else if (['USDT', 'USDC', 'INRX'].includes(selectedAsset) || customTokens?.some((t: any) => t.symbol === selectedAsset)) {
       const privateKey = await storageService.getPrivateKey();
       if (!privateKey) {
@@ -818,11 +814,7 @@ export default function SendScreen({ navigation, route }: any) {
       }
     } else {
       // BTC, XRP, TON, SUI — different blockchains, not yet integrated
-      const mockHash = `${selectedAsset.toLowerCase()}_mock_` + Math.random().toString(36).substring(2, 11);
-      result = { success: true, hash: mockHash };
-      addTx({ type: 'sent', coin: selectedAsset, amount: parsedAmount.toFixed(6), usdValue: (parsedAmount * coinPrice).toFixed(2), address, status: 'success', txHash: mockHash });
-      applySwapBalances(selectedAsset, parsedAmount, selectedAsset, 0);
-      refreshBalance();
+      result = { success: false, error: `${selectedAsset} transfers are not supported on this network.` };
     }
 
     if (result.success) {

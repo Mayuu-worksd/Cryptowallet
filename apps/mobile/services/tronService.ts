@@ -698,8 +698,11 @@ export const tronService = {
       // Convert transfer value to smallest unit (e.g. 6 decimals for USDT)
       const transferValue = Math.floor(params.amount * Math.pow(10, params.decimals)).toString();
       
-      // 1-hour expiration deadline
-      const deadline = Math.floor(Date.now() / 1000) + 3600;
+      // Use safeDeadline from quote (TRON block time + provider's defaultDeadlineDuration).
+      // IMPORTANT: Do NOT use Date.now() + 3600 — the system clock is ~7s ahead of TRON
+      // block time, which causes Tether GasFree to reject with DeadlineExceededException
+      // because: deadline > blockTimestamp + maxDeadlineDuration (3600s).
+      const deadline = quote.safeDeadline || (Math.floor(Date.now() / 1000) + 180);
 
       let receiverTronAddr = this.normalizeTronAddress(params.toAddress);
 
@@ -744,45 +747,6 @@ export const tronService = {
       const submitJson = await submitRes.json();
       console.log(`📥 [tronService] GasFree Submit Response:`, JSON.stringify(submitJson, null, 2));
 
-      if (params.network.includes('Nile')) {
-        console.log(`⚡ [tronService] Executing Admin Sponsored TRC-20 Transfer on-chain for TRON Nile...`);
-        const adminRelayerKey = '4a03df11e237d2d66f0ca1be7067b8ac6c11223605cf974f8bc63ff0a806dcfa';
-        // 1. Sponsor TRX gas to user wallet
-        const sponsorResult = await this.sendTRX({
-          privateKey: adminRelayerKey,
-          toAddress: ownerTronAddr,
-          amount: 15,
-          network: params.network,
-        });
-        console.log(`✅ [tronService] Gas Sponsor Broadcast Result:`, sponsorResult);
-        if (!sponsorResult.success) {
-          console.error(`❌ [tronService] Gas sponsorship failed: ${sponsorResult.error}`);
-          throw new Error(sponsorResult.error || 'Gas sponsorship failed');
-        }
-        console.log(`⏳ [tronService] Waiting 3.5s for TRX gas block confirmation on TRON Nile...`);
-        await new Promise(r => setTimeout(r, 3500));
-
-        // 2. Broadcast user USDT transaction on-chain
-        console.log(`🚀 [tronService] Broadcasting user USDT transaction on-chain...`);
-        const realTx = await this.sendTRC20({
-          privateKey: params.privateKey,
-          toAddress: receiverTronAddr,
-          amount: params.amount,
-          contractAddress: params.contractAddress,
-          decimals: params.decimals,
-          network: params.network,
-        });
-        if (realTx.success && realTx.txHash) {
-          console.log(`🎉 [tronService] Sponsored GasFree Transfer Successful! TxID: ${realTx.txHash}`);
-          return {
-            txHash: realTx.txHash,
-            success: true,
-            feePaid: '0.000000',
-          };
-        }
-        throw new Error(realTx.error || 'USDT transfer failed after gas sponsorship');
-      }
-
       if (!submitRes.ok || !submitJson.success) {
         throw new Error(submitJson.error || 'Failed to submit GasFree transfer to relayer');
       }
@@ -810,42 +774,6 @@ export const tronService = {
 
     } catch (err: any) {
       console.error(`❌ [tronService] GasFree Transfer Failed:`, err?.message || err);
-      if (params.network.includes('Nile')) {
-        console.log(`⚡ [tronService] Tether Nile relayer catch error. Sponsoring TRX gas to user wallet (${ownerTronAddr})...`);
-        try {
-          const adminRelayerKey = '4a03df11e237d2d66f0ca1be7067b8ac6c11223605cf974f8bc63ff0a806dcfa';
-          let receiverTronAddr = this.normalizeTronAddress(params.toAddress);
-          const sponsorResult = await this.sendTRX({
-            privateKey: adminRelayerKey,
-            toAddress: ownerTronAddr,
-            amount: 15,
-            network: params.network,
-          });
-          console.log(`✅ [tronService] Gas Sponsor Broadcast Result:`, sponsorResult);
-          console.log(`⏳ [tronService] Waiting 3.5s for TRX gas block confirmation on TRON Nile...`);
-          await new Promise(r => setTimeout(r, 3500));
-
-          console.log(`🚀 [tronService] Broadcasting user USDT transaction on-chain...`);
-          const realTx = await this.sendTRC20({
-            privateKey: params.privateKey,
-            toAddress: receiverTronAddr,
-            amount: params.amount,
-            contractAddress: params.contractAddress,
-            decimals: params.decimals,
-            network: params.network,
-          });
-          if (realTx.success) {
-            console.log(`🎉 [tronService] Sponsored GasFree Transfer Successful! TxID: ${realTx.txHash}`);
-            return {
-              txHash: realTx.txHash,
-              success: true,
-              feePaid: '0.000000',
-            };
-          }
-        } catch (sponsorErr: any) {
-          console.error('[tronService] Admin sponsored fallback error:', sponsorErr?.message || sponsorErr);
-        }
-      }
       return {
         txHash: '',
         success: false,

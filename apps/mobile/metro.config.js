@@ -45,6 +45,13 @@ const NODE_SHIMS = {
 
 config.resolver.blockList = [
   /\.kilocode[\/\\].*/,
+  /\.kilo[\/\\].*/,
+  /\.git[\/\\].*/,
+  /\.turbo[\/\\].*/,
+  /structure\.txt$/,
+  /scratch[\/\\].*/,
+  /docs[\/\\].*/,
+  /database[\/\\].*/,
 ];
 
 config.resolver.resolveRequest = (context, moduleName, platform) => {

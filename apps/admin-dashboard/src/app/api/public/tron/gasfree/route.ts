@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
+import { SigningKey } from 'ethers';
 
 const MAINNET_BASE = 'https://open.gasfree.io';
 const NILE_BASE = 'https://open-test.gasfree.io';
@@ -57,7 +58,24 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Credentials not configured' }, { status: 500 });
     }
 
-    // 1. Get Address Details (nonce, balance, active status)
+    // 1. Get TRON block timestamp for deadline calculation.
+    // IMPORTANT: System clock is typically ~7s ahead of TRON block clock.
+    // Tether GasFree enforces: deadline <= blockTimestamp + maxDeadlineDuration (3600s)
+    // Using system time + 3600 causes DeadlineExceededException. Use block time instead.
+    const tronNodeUrl = network === 'TRON' ? 'https://api.trongrid.io' : 'https://nile.trongrid.io';
+    let blockTimeSec = Math.floor(Date.now() / 1000); // fallback to system time
+    try {
+      const blockRes = await fetch(`${tronNodeUrl}/wallet/getnowblock`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      const blockJson = await blockRes.json();
+      const blockMs = blockJson?.block_header?.raw_data?.timestamp;
+      if (blockMs) blockTimeSec = Math.floor(blockMs / 1000);
+    } catch { /* keep system time fallback */ }
+
+    // 2. Get Address Details (nonce, balance, active status)
     const addressPath = `${pathPrefix}/api/v1/address/${address}`;
     const addressHeaders = makeHeaders('GET', addressPath, apiKey, apiSecret);
     const addressRes = await fetch(`${baseUrl}${addressPath}`, {
@@ -72,7 +90,7 @@ export async function GET(req: NextRequest) {
 
     const addressData = await addressRes.json();
 
-    // 2. Get Service Providers List to find the active provider address
+    // 3. Get Service Providers List to find the active provider address and config
     const providersPath = `${pathPrefix}/api/v1/config/provider/all`;
     const providersHeaders = makeHeaders('GET', providersPath, apiKey, apiSecret);
     const providersRes = await fetch(`${baseUrl}${providersPath}`, {
@@ -86,10 +104,16 @@ export async function GET(req: NextRequest) {
     }
 
     const providersData = await providersRes.json();
-    const serviceProvider = providersData?.data?.providers?.[0]?.address || 
-                            providersData?.providers?.[0]?.address || 
-                            providersData?.data?.[0]?.address || 
-                            providersData?.[0]?.address || '';
+    const providerEntry = providersData?.data?.providers?.[0] ||
+                          providersData?.providers?.[0] ||
+                          providersData?.data?.[0] ||
+                          providersData?.[0];
+    const serviceProvider = providerEntry?.address || '';
+    // Use provider's defaultDeadlineDuration (typically 180s), cap at maxDeadlineDuration (3600s)
+    const defaultDeadlineDuration: number = providerEntry?.config?.defaultDeadlineDuration ?? 180;
+    const maxDeadlineDuration: number     = providerEntry?.config?.maxDeadlineDuration ?? 3600;
+    // Safe deadline: block time + defaultDeadlineDuration, well within maxDeadlineDuration
+    const safeDeadline = blockTimeSec + defaultDeadlineDuration;
 
     if (!serviceProvider) {
       return NextResponse.json({ error: 'No active GasFree service provider found' }, { status: 500 });
@@ -136,11 +160,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       success: true,
       nonce: addressData?.nonce ?? addressData?.data?.nonce ?? 0,
+      // gasFreeAddress is the escrow address the user must deposit USDT into before GasFree works
       gasFreeAddress: addressData?.gasFreeAddress ?? addressData?.data?.gasFreeAddress ?? '',
       active: addressData?.active ?? addressData?.data?.active ?? false,
       maxFee: maxFee.toString(),
       serviceProvider,
       verifyingContract: verifyingContracts[network] || verifyingContracts['TRON Nile'],
+      // Deadline helpers — mobile MUST use blockTimeSec (not Date.now()) to avoid DeadlineExceededException.
+      // Tether enforces: deadline <= blockTimestamp + maxDeadlineDuration
+      blockTimeSec,           // Current TRON block timestamp in seconds
+      safeDeadline,           // Recommended deadline = blockTimeSec + defaultDeadlineDuration
+      maxDeadlineDuration,    // Provider's maxDeadlineDuration (3600)
+      defaultDeadlineDuration, // Provider's defaultDeadlineDuration (180)
     });
 
   } catch (err: any) {
@@ -151,7 +182,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { network, ...submitBody } = body;
+    const { network, simulateFallback, ...submitBody } = body;
+    const isSimulateFallback = req.headers.get('x-simulate-gasfree-error') === 'true' || simulateFallback === true;
 
     const targetNetwork = network || 'TRON Nile';
     const { apiKey, apiSecret, baseUrl, pathPrefix } = getCredentials(targetNetwork);
@@ -159,25 +191,38 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Credentials not configured' }, { status: 500 });
     }
 
-    const submitPath = `${pathPrefix}/api/v1/gasfree/submit`;
-    const submitHeaders = makeHeaders('POST', submitPath, apiKey, apiSecret);
-    const submitRes = await fetch(`${baseUrl}${submitPath}`, {
-      method: 'POST',
-      headers: submitHeaders,
-      body: JSON.stringify(submitBody),
-    });
+    let submitRes: Response | null = null;
+    let resJson: any = {};
+    let relayerCode = 200;
 
-    const resJson = await submitRes.json();
-    const relayerCode = resJson.code ?? resJson.status ?? 200;
+    if (!isSimulateFallback) {
+      const submitPath = `${pathPrefix}/api/v1/gasfree/submit`;
+      const submitHeaders = makeHeaders('POST', submitPath, apiKey, apiSecret);
+      submitRes = await fetch(`${baseUrl}${submitPath}`, {
+        method: 'POST',
+        headers: submitHeaders,
+        body: JSON.stringify(submitBody),
+      });
+      resJson = await submitRes.json();
+      relayerCode = resJson.code ?? resJson.status ?? (submitRes.ok ? 200 : 500);
+    } else {
+      console.log('[gasfree/route] Simulated GasFree provider failure triggered.');
+      relayerCode = 503;
+      resJson = { error: 'Simulated GasFree provider failure' };
+    }
 
-    if (!submitRes.ok || relayerCode >= 400) {
-      if (targetNetwork.includes('Nile') || targetNetwork === 'TRON Nile') {
-        console.log('[gasfree/route] Tether testnet relayer failed/error. Triggering Admin Gas Sponsor Relayer...');
+    const primaryTxHash = resJson.txHash || resJson.hash || resJson.transactionHash || resJson.data?.txHash || resJson.data?.hash || resJson.data?.transactionHash || '';
+
+    const isFailed = isSimulateFallback || !submitRes?.ok || relayerCode >= 400 || !primaryTxHash;
+
+    if (isFailed) {
+      if (targetNetwork.includes('Nile') || targetNetwork === 'TRON Nile' || targetNetwork === 'TRON') {
+        console.log('[gasfree/route] Primary GasFree provider unavailable, rejected, or missing txHash. Executing Admin Relayer Fallback...');
         try {
           const relayerKey = process.env.TRON_RELAYER_PRIVATE_KEY || '4a03df11e237d2d66f0ca1be7067b8ac6c11223605cf974f8bc63ff0a806dcfa';
           const { user, receiver, value, token } = submitBody;
           
-          const base = 'https://nile.trongrid.io';
+          const base = targetNetwork === 'TRON' ? 'https://api.trongrid.io' : 'https://nile.trongrid.io';
           
           // Address conversion helper
           const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
@@ -208,7 +253,7 @@ export async function POST(req: NextRequest) {
 
           const relayerHex = base58ToHex('TMQqojJZ3weveT4QZDbHDUGpMtu3CACs7C');
           const toHex = base58ToHex(receiver);
-          const usdtContractHex = base58ToHex(token || 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf');
+          const usdtContractHex = base58ToHex(token || (targetNetwork === 'TRON' ? 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t' : 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf'));
 
           const toAddr20 = toHex.slice(-40).padStart(64, '0');
           const amountHex = BigInt(value || '1000000').toString(16).padStart(64, '0');
@@ -228,17 +273,31 @@ export async function POST(req: NextRequest) {
 
           const triggerJson = await triggerRes.json();
           if (triggerJson?.transaction?.txID) {
+            // Sign the transaction with Admin Relayer private key before broadcast!
+            const signingKey = new SigningKey(relayerKey.startsWith('0x') ? relayerKey : '0x' + relayerKey);
+            const sig = signingKey.sign('0x' + triggerJson.transaction.txID);
+            const r = sig.r.slice(2).padStart(64, '0');
+            const s = sig.s.slice(2).padStart(64, '0');
+            const v = sig.v === 27 || sig.yParity === 0 ? '00' : '01';
+            const signature = r + s + v;
+            const signedTx = { ...triggerJson.transaction, signature: [signature] };
+
             const broadcastRes = await fetch(`${base}/wallet/broadcasttransaction`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(triggerJson.transaction),
+              body: JSON.stringify(signedTx),
             });
-            
-            return NextResponse.json({
-              success: true,
-              txHash: triggerJson.transaction.txID,
-              sponsoredByAdmin: true,
-            });
+
+            const broadcastJson = await broadcastRes.json();
+            if (broadcastJson?.result === true) {
+              return NextResponse.json({
+                success: true,
+                txHash: triggerJson.transaction.txID,
+                sponsoredByAdmin: true,
+              });
+            } else {
+              console.error('[gasfree/route] Admin sponsor broadcast failed:', broadcastJson);
+            }
           }
         } catch (adminErr: any) {
           console.error('[gasfree/route] Admin sponsor execution error:', adminErr?.message || adminErr);
@@ -252,11 +311,9 @@ export async function POST(req: NextRequest) {
       }, { status: relayerCode >= 400 && relayerCode < 600 ? relayerCode : 400 });
     }
 
-    const txHash = resJson.txHash || resJson.hash || resJson.transactionHash || resJson.data?.txHash || resJson.data?.hash || resJson.data?.transactionHash || resJson.data?.taskId || resJson.taskId || '';
-
     return NextResponse.json({
       success: true,
-      txHash,
+      txHash: primaryTxHash,
       data: resJson,
     });
 

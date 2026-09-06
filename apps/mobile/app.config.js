@@ -14,9 +14,7 @@ module.exports = {
       fallbackToCacheTimeout: 3000,
       checkAutomatically: "ON_LOAD",
     },
-    runtimeVersion: {
-      policy: "appVersion",
-    },
+    runtimeVersion: "1.0.0",
 
     splash: {
       image: "./assets/splash-icon.png",

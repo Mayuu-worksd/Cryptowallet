@@ -717,11 +717,12 @@ function _signTron(tx: any, privateKey: string): any {
 async function _executeSimulated(
   quote: SwapQuote, onStatus?: (msg: string) => void
 ): Promise<SwapResult> {
-  onStatus?.('Processing swap...');
-  await new Promise(r => setTimeout(r, 1200));
-  const fakeHash = '0xSIM' + Date.now().toString(16).padStart(60, '0');
-  onStatus?.('Swap complete!');
-  return { success: true, hash: fakeHash };
+  onStatus?.('Checking swap route availability...');
+  await new Promise(r => setTimeout(r, 500));
+  return {
+    success: false,
+    error: `Swap liquidity/route is currently unavailable for ${quote.fromToken} → ${quote.toToken}. Please try another token pair or network.`,
+  };
 }
 
 // ─── Save history ─────────────────────────────────────────────────────────────
