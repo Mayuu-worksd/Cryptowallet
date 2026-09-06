@@ -431,27 +431,20 @@ export async function getWalletBalances(
     const chainVal = chainBalances[code];
     const cachedVal = (local[`${code}_${network}` as any] as number | undefined) ?? (local[code] ?? 0);
     
-    if (isTestnet) {
-      balances[code] = Math.max(chainVal ?? 0, cachedVal ?? 0);
-    } else {
-      balances[code] = chainVal !== undefined && chainVal !== null ? chainVal : (cachedVal ?? 0);
-    }
+    balances[code] = chainVal !== undefined && chainVal !== null ? chainVal : (cachedVal ?? 0);
   });
 
   // Map backward compatible fields
-  if (chainBalances.USDC !== undefined) {
-    const cachedUSDCVal = (local[`USDC_ERC20_${network}` as any] as number | undefined) ?? (local.USDC ?? 0);
-    balances.USDC = isTestnet ? Math.max(chainBalances.USDC, cachedUSDCVal) : chainBalances.USDC;
+  if (chainBalances.USDC !== undefined && chainBalances.USDC !== null) {
+    balances.USDC = chainBalances.USDC;
     balances.USDC_ERC20 = balances.USDC;
   }
-  if (chainBalances.USDT !== undefined) {
-    const cachedUSDTVal = (local[`USDT_ERC20_${network}` as any] as number | undefined) ?? (local.USDT ?? 0);
-    balances.USDT = isTestnet ? Math.max(chainBalances.USDT, cachedUSDTVal) : chainBalances.USDT;
+  if (chainBalances.USDT !== undefined && chainBalances.USDT !== null) {
+    balances.USDT = chainBalances.USDT;
     balances.USDT_ERC20 = balances.USDT;
   }
-  if (chainBalances.INRX !== undefined) {
-    const cachedINRXVal = (local[`INRX_${network}` as any] as number | undefined) ?? (local.INRX ?? 0);
-    balances.INRX = isTestnet ? Math.max(chainBalances.INRX, cachedINRXVal) : chainBalances.INRX;
+  if (chainBalances.INRX !== undefined && chainBalances.INRX !== null) {
+    balances.INRX = chainBalances.INRX;
   }
 
   await saveTokenBalances(network, balances);

@@ -33,6 +33,7 @@ import {
   Coins,
   Terminal,
   Code,
+  FileText,
 } from 'lucide-react';
 
 interface SidebarItem {
@@ -176,6 +177,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'Networks', href: '/dashboard/networks', icon: Network },
     { name: 'Card Currencies', href: '/dashboard/currencies', icon: Coins },
     { name: 'Token Contracts', href: '/dashboard/token-contracts', icon: Code },
+    { name: 'CMS & Legal Pages', href: '/dashboard/cms', icon: FileText },
     { name: 'App Settings', href: '/dashboard/settings', icon: Settings },
     { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
   ];

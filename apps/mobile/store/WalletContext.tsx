@@ -32,6 +32,7 @@ export type Transaction = {
   address: string;
   status: 'success' | 'pending' | 'failed' | 'completed';
   date: string;
+  rawDate?: number;
   txHash?: string;
   contractAddress?: string;
   isInternal?: boolean;
@@ -2089,8 +2090,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       ]);
       await storageService.clearCardDetails();
 
+      const cleanZeroBals = { USDT: 0, USDC: 0, ETH: 0, BTC: 0, SOL: 0, BNB: 0, XRP: 0, TON: 0, TRX: 0, SUI: 0, INRX: 0 };
       if (isNew || isSwitching) {
-        setBalances({ USDT: 0, USDC: 0, ETH: 0, BTC: 0, SOL: 0, BNB: 0, XRP: 0, TON: 0, TRX: 0, SUI: 0, INRX: 0 });
+        balancesRef.current = cleanZeroBals;
+        ethBalanceRef.current = '0.0';
+        setBalances(cleanZeroBals);
         setEthBalance('0.0');
         setLockedBalance({});
         setCardCreated(false);
@@ -2177,7 +2181,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
               setP2PCurrencyState(profile.p2p_currency);
               await AsyncStorage.setItem('cw_p2p_currency', profile.p2p_currency);
             }
-            if (profile.token_balances) {
+            if (isNew) {
+              await profileService.upsert(data.address, { token_balances: {} }).catch(() => {});
+            } else if (profile.token_balances) {
               let tb = profile.token_balances;
               if (typeof tb === 'string') {
                 try { tb = JSON.parse(tb); } catch { tb = {}; }
@@ -2205,7 +2211,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             const defaultName = `Wallet ${data.address.slice(-4).toUpperCase()}`;
             setWalletNameState(defaultName);
             await storageService.saveWalletName(defaultName);
-            const newProfile = await profileService.upsert(data.address, { wallet_name: defaultName }).catch(() => null);
+            const newProfile = await profileService.upsert(data.address, { wallet_name: defaultName, token_balances: {} }).catch(() => null);
             if (newProfile) {
               if (newProfile.user_uuid) setUserUuid(newProfile.user_uuid);
               if (newProfile.user_uid) setUserUid(newProfile.user_uid.toString());
@@ -2418,12 +2424,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     await clearPin();
     await AsyncStorage.removeItem('cw_read_only');
     await AsyncStorage.multiRemove([
-      'cw_card_created', 'cw_card_balance', 'cw_card_transactions'
+      'cw_card_created', 'cw_card_balance', 'cw_card_transactions',
+      'cw_token_balances', 'cw_transactions'
     ]);
     await storageService.clearCardDetails();
     // Fully reset in-memory state → App.tsx re-renders Landing stack
-    // NOTE: do NOT clear isSuspended here — importWallet will re-check from Supabase.
-    // Clearing it would allow a suspended user to bypass by disconnecting + re-importing offline.
+    const cleanZero = { USDT: 0, USDC: 0, ETH: 0, BTC: 0, SOL: 0, BNB: 0, XRP: 0, TON: 0, TRX: 0, SUI: 0, INRX: 0 };
+    balancesRef.current = cleanZero;
+    ethBalanceRef.current = '0.0';
+    setBalances(cleanZero);
     setHasWallet(false);
     setWalletAddress('');
     setTronAddress('');

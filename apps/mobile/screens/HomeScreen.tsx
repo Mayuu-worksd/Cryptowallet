@@ -990,7 +990,7 @@ export default function HomeScreen({ navigation }: any) {
         };
       })
       .filter((a) => {
-        // Always show native token (ETH/TRX) even if balance is 0
+        // Always show native token (ETH/TRX/BNB) for the current network even if balance is 0
         if (a.symbol === nativeSymbol) return true;
         // Show favorited tokens even if balance is 0
         if (favoriteTokens?.includes(a.symbol)) return true;
@@ -1002,9 +1002,7 @@ export default function HomeScreen({ navigation }: any) {
         if (a.symbol === "TRX" && !isTron) return false;
         // Hide BNB on non-BSC networks (if balance is 0)
         if (a.symbol === "BNB" && !isBSC && a.amount === 0) return false;
-        // Always show INRX if user has a balance or is favorited
-        if (a.symbol === "INRX") return a.amount > 0 || favoriteTokens?.includes("INRX");
-        // Only show other coins if user actually has a balance > 0
+        // Only show coins if user actually holds a balance > 0
         return a.amount > 0;
       })
       .sort((a, b) => b.usd - a.usd);

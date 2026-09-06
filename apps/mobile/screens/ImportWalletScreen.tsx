@@ -169,37 +169,6 @@ export default function ImportWalletScreen({ navigation }: any) {
       return;
     }
 
-    let email = verifiedEmail;
-    if (!email) {
-      const stored = await storageService.getVerifiedEmail() || await AsyncStorage.getItem('cw_user_email') || await AsyncStorage.getItem('cw_email');
-      if (stored) {
-        email = stored;
-        setVerifiedEmail(stored);
-      }
-    }
-
-    const isDeviceVerified = (await AsyncStorage.getItem('cw_device_verified')) === 'true' || (await AsyncStorage.getItem('cw_has_ever_verified')) === 'true';
-
-    if (!email && !isDeviceVerified) {
-      haptics.selection();
-      setShowOTP(true);
-      return;
-    }
-
-    await storageService.setVerifiedEmail(email || 'verified_user@device');
-    await AsyncStorage.setItem('cw_device_verified', 'true');
-    await AsyncStorage.setItem('cw_has_ever_verified', 'true');
-
-    doImport(trimmed);
-  };
-
-  const handleOTPVerified = async (email: string) => {
-    haptics.success();
-    setVerifiedEmail(email);
-    await storageService.setVerifiedEmail(email);
-    await AsyncStorage.setItem('cw_user_email', email);
-    setShowOTP(false);
-    const trimmed = mnemonic.trim().toLowerCase().replace(/\s+/g, ' ');
     doImport(trimmed);
   };
 
@@ -228,12 +197,6 @@ export default function ImportWalletScreen({ navigation }: any) {
   return (
     <View style={[styles.container, { backgroundColor: T.background }]}>
       <ImportingOverlay visible={loading} isDarkMode={isDarkMode} done={importDone} />
-      <EmailOTPModal
-        visible={showOTP}
-        isDarkMode={isDarkMode}
-        onVerified={handleOTPVerified}
-        onCancel={() => setShowOTP(false)}
-      />
       <Toast
         visible={toast.visible}
         message={toast.message}
@@ -393,7 +356,19 @@ export default function ImportWalletScreen({ navigation }: any) {
           </TouchableOpacity>
           <Text style={[styles.footerTerms, { color: T.textMuted }]}>
             By importing, you agree to our{' '}
-            <Text style={{ textDecorationLine: 'underline', color: T.text, fontFamily: Fonts.bold }}>Terms of Service</Text>
+            <Text
+              style={{ textDecorationLine: 'underline', color: T.text, fontFamily: Fonts.bold }}
+              onPress={() => navigation.navigate('CMSContent', { slug: 'terms', title: 'Terms of Service' })}
+            >
+              Terms of Service
+            </Text>
+            {' & '}
+            <Text
+              style={{ textDecorationLine: 'underline', color: T.text, fontFamily: Fonts.bold }}
+              onPress={() => navigation.navigate('CMSContent', { slug: 'privacy', title: 'Privacy Policy' })}
+            >
+              Privacy Policy
+            </Text>
           </Text>
         </View>
       </KeyboardAvoidingView>

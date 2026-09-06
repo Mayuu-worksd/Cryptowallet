@@ -114,43 +114,6 @@ export default function CreateWalletScreen({ navigation }: any) {
 
   const handleCreate = async () => {
     haptics.selection();
-    let email = verifiedEmail;
-    if (!email) {
-      const stored = await storageService.getVerifiedEmail() || await AsyncStorage.getItem('cw_user_email') || await AsyncStorage.getItem('cw_email');
-      if (stored) {
-        email = stored;
-        setVerifiedEmail(stored);
-      }
-    }
-
-    const isDeviceVerified = (await AsyncStorage.getItem('cw_device_verified')) === 'true' || (await AsyncStorage.getItem('cw_has_ever_verified')) === 'true';
-
-    if (email || isDeviceVerified) {
-      await storageService.setVerifiedEmail(email || 'verified_user@device');
-      setStep('info');
-      setLoading(true);
-      setTimeout(async () => {
-        try {
-          const data = await createWallet();
-          setMnemonic(data.mnemonic);
-          setStep('phrase');
-        } catch (e: any) {
-          showToast(e?.message ?? 'Failed to create wallet. Please try again.', 'error');
-          setStep('info');
-        } finally {
-          setLoading(false);
-        }
-      }, 150);
-    } else {
-      setStep('otp');
-    }
-  };
-
-  const handleOTPVerified = async (email: string) => {
-    haptics.success();
-    setVerifiedEmail(email);
-    await storageService.setVerifiedEmail(email);
-    await AsyncStorage.setItem('cw_user_email', email);
     setStep('info');
     setLoading(true);
     setTimeout(async () => {
@@ -231,12 +194,6 @@ export default function CreateWalletScreen({ navigation }: any) {
   return (
     <View style={[styles.container, { backgroundColor: T.background }]}>
       <SavingOverlay visible={loading && step === 'done'} done={savingDone} isDarkMode={isDarkMode} />
-      <EmailOTPModal
-        visible={step === 'otp'}
-        isDarkMode={isDarkMode}
-        onVerified={handleOTPVerified}
-        onCancel={() => setStep('info')}
-      />
       <Toast
         visible={toast.visible}
         message={toast.message}
@@ -415,6 +372,22 @@ export default function CreateWalletScreen({ navigation }: any) {
                 <Text style={{ textDecorationLine: 'underline', color: T.text, fontFamily: Fonts.bold }}>Import instead.</Text>
               </Text>
             </TouchableOpacity>
+            <Text style={{ textAlign: 'center', fontSize: 11, fontFamily: Fonts.medium, color: T.textMuted, marginTop: 8 }}>
+              By creating a wallet, you agree to our{' '}
+              <Text
+                style={{ textDecorationLine: 'underline', color: T.text, fontFamily: Fonts.bold }}
+                onPress={() => navigation.navigate('CMSContent', { slug: 'terms', title: 'Terms of Service' })}
+              >
+                Terms
+              </Text>
+              {' & '}
+              <Text
+                style={{ textDecorationLine: 'underline', color: T.text, fontFamily: Fonts.bold }}
+                onPress={() => navigation.navigate('CMSContent', { slug: 'privacy', title: 'Privacy Policy' })}
+              >
+                Privacy Policy
+              </Text>
+            </Text>
           </>
         )}
 

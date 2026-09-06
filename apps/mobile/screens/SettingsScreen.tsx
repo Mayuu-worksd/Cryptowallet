@@ -1109,6 +1109,60 @@ export default function SettingsScreen({ navigation }: any) {
             </View>
             <Feather name="chevron-right" size={20} color={T.textMuted} />
           </TouchableOpacity>
+
+          {/* Terms of Service */}
+          <TouchableOpacity
+            style={[styles.menuRow, { borderBottomWidth: 1, borderBottomColor: T.border }]}
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate('CMSContent', { slug: 'terms', title: 'Terms of Service' })}
+          >
+            <View style={styles.menuLeft}>
+              <View style={[styles.menuIconBox, { backgroundColor: T.background }]}>
+                <Feather name="file-text" size={18} color={T.text} />
+              </View>
+              <View>
+                <Text style={[styles.menuLabel, { color: T.text }]}>Terms of Service</Text>
+                <Text style={[styles.menuSub, { color: T.textMuted }]}>View legal terms and user agreement</Text>
+              </View>
+            </View>
+            <Feather name="chevron-right" size={20} color={T.textMuted} />
+          </TouchableOpacity>
+
+          {/* Privacy Policy */}
+          <TouchableOpacity
+            style={[styles.menuRow, { borderBottomWidth: 1, borderBottomColor: T.border }]}
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate('CMSContent', { slug: 'privacy', title: 'Privacy Policy' })}
+          >
+            <View style={styles.menuLeft}>
+              <View style={[styles.menuIconBox, { backgroundColor: T.background }]}>
+                <Feather name="shield" size={18} color={T.primary} />
+              </View>
+              <View>
+                <Text style={[styles.menuLabel, { color: T.text }]}>Privacy Policy</Text>
+                <Text style={[styles.menuSub, { color: T.textMuted }]}>Read how your data is protected</Text>
+              </View>
+            </View>
+            <Feather name="chevron-right" size={20} color={T.textMuted} />
+          </TouchableOpacity>
+
+          {/* About CryptoWallet */}
+          <TouchableOpacity
+            style={styles.menuRow}
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate('CMSContent', { slug: 'about', title: 'About CryptoWallet' })}
+          >
+            <View style={styles.menuLeft}>
+              <View style={[styles.menuIconBox, { backgroundColor: T.background }]}>
+                <Feather name="info" size={18} color={T.text} />
+              </View>
+              <View>
+                <Text style={[styles.menuLabel, { color: T.text }]}>About CryptoWallet</Text>
+                <Text style={[styles.menuSub, { color: T.textMuted }]}>App version & key features</Text>
+              </View>
+            </View>
+            <Feather name="chevron-right" size={20} color={T.textMuted} />
+          </TouchableOpacity>
           </View>
 
         {/* Testnet Faucets */}

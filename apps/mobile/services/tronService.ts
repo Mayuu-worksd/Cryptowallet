@@ -601,6 +601,10 @@ export const tronService = {
     maxFee: string;
     serviceProvider: string;
     verifyingContract: string;
+    safeDeadline?: number;
+    blockTimeSec?: number;
+    maxDeadlineDuration?: number;
+    defaultDeadlineDuration?: number;
   }> {
     const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'https://cryptowallet-dun.vercel.app';
     const res = await fetch(`${backendUrl}/api/public/tron/gasfree?action=quote&address=${address}&network=${encodeURIComponent(network)}`, {

@@ -168,6 +168,7 @@ import BusinessKYCDocumentScreen from "./screens/BusinessKYCDocumentScreen";
 import BusinessKYCResultScreen from "./screens/BusinessKYCResultScreen";
 import VCCCardDetailScreen from "./screens/VCCCardDetailScreen";
 import MerchantDashboardScreen from "./screens/MerchantDashboardScreen";
+import CMSContentScreen from "./screens/CMSContentScreen";
 import MerchantQRScreen from "./screens/MerchantQRScreen";
 import BridgeScreen from "./screens/BridgeScreen";
 import MessagesScreen from "./screens/MessagesScreen";
@@ -1082,6 +1083,7 @@ function MobileNavigator() {
             <Stack.Screen name="Landing" component={LandingScreen} />
             <Stack.Screen name="CreateWallet" component={CreateWalletScreen} />
             <Stack.Screen name="ImportWallet" component={ImportWalletScreen} />
+            <Stack.Screen name="CMSContent" component={CMSContentScreen} />
             <Stack.Screen
               name="RecoverWallet"
               component={RecoverWalletScreen}
@@ -1093,6 +1095,7 @@ function MobileNavigator() {
             <Stack.Screen name="Send" component={SendScreen} />
             <Stack.Screen name="Receive" component={ReceiveScreen} />
             <Stack.Screen name="Swap" component={SwapScreen} />
+            <Stack.Screen name="CMSContent" component={CMSContentScreen} />
             <Stack.Screen name="CurrencyConverter" component={CurrencyConverterScreen} />
             <Stack.Screen name="Bridge" component={BridgeScreen} />
             <Stack.Screen name="History" component={HistoryScreen} />
@@ -1395,6 +1398,8 @@ function WebApp() {
         return <CreateWalletScreen navigation={nav} route={route} />;
       case "ImportWallet":
         return <ImportWalletScreen navigation={nav} route={route} />;
+      case "CMSContent":
+        return <CMSContentScreen navigation={nav} route={route} />;
       case "RecoverWallet":
         return <RecoverWalletScreen navigation={nav} route={route} />;
       case "Earn":
