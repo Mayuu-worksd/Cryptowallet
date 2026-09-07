@@ -219,8 +219,11 @@ export async function POST(req: NextRequest) {
       if (targetNetwork.includes('Nile') || targetNetwork === 'TRON Nile' || targetNetwork === 'TRON') {
         console.log('[gasfree/route] Primary GasFree provider unavailable, rejected, or missing txHash. Executing Admin Relayer Fallback...');
         try {
-          const relayerKey = process.env.TRON_RELAYER_PRIVATE_KEY || '4a03df11e237d2d66f0ca1be7067b8ac6c11223605cf974f8bc63ff0a806dcfa';
-          const { user, receiver, value, token } = submitBody;
+          const relayerKey = process.env.TRON_RELAYER_PRIVATE_KEY;
+          if (!relayerKey) {
+            console.error('[gasfree/route] Admin relayer private key (TRON_RELAYER_PRIVATE_KEY) is missing. Skipping fallback execution.');
+          } else {
+            const { user, receiver, value, token } = submitBody;
           
           const base = targetNetwork === 'TRON' ? 'https://api.trongrid.io' : 'https://nile.trongrid.io';
           
@@ -299,10 +302,11 @@ export async function POST(req: NextRequest) {
               console.error('[gasfree/route] Admin sponsor broadcast failed:', broadcastJson);
             }
           }
-        } catch (adminErr: any) {
-          console.error('[gasfree/route] Admin sponsor execution error:', adminErr?.message || adminErr);
         }
+      } catch (adminErr: any) {
+        console.error('[gasfree/route] Admin sponsor execution error:', adminErr?.message || adminErr);
       }
+    }
 
       return NextResponse.json({
         success: false,
