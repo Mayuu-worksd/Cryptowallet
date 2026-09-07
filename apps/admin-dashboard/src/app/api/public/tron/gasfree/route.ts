@@ -254,9 +254,12 @@ export async function POST(req: NextRequest) {
             return buf.slice(0, buf.length - 4).toString('hex');
           };
 
-          const relayerHex = base58ToHex('TMQqojJZ3weveT4QZDbHDUGpMtu3CACs7C');
-          const toHex = base58ToHex(receiver);
-          const usdtContractHex = base58ToHex(token || (targetNetwork === 'TRON' ? 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t' : 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf'));
+            const signingKey = new SigningKey(relayerKey.startsWith('0x') ? relayerKey : '0x' + relayerKey);
+            const { computeAddress } = await import('ethers');
+            const relayerEthAddr = computeAddress(signingKey.publicKey);
+            const relayerHex = '41' + relayerEthAddr.slice(2).toLowerCase();
+            const toHex = base58ToHex(receiver);
+            const usdtContractHex = base58ToHex(token || (targetNetwork === 'TRON' ? 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t' : 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf'));
 
           const toAddr20 = toHex.slice(-40).padStart(64, '0');
           const amountHex = BigInt(value || '1000000').toString(16).padStart(64, '0');
@@ -275,10 +278,9 @@ export async function POST(req: NextRequest) {
           });
 
           const triggerJson = await triggerRes.json();
-          if (triggerJson?.transaction?.txID) {
-            // Sign the transaction with Admin Relayer private key before broadcast!
-            const signingKey = new SigningKey(relayerKey.startsWith('0x') ? relayerKey : '0x' + relayerKey);
-            const sig = signingKey.sign('0x' + triggerJson.transaction.txID);
+            if (triggerJson?.transaction?.txID) {
+              // Sign the transaction with Admin Relayer private key before broadcast!
+              const sig = signingKey.sign('0x' + triggerJson.transaction.txID);
             const r = sig.r.slice(2).padStart(64, '0');
             const s = sig.s.slice(2).padStart(64, '0');
             const v = sig.v === 27 || sig.yParity === 0 ? '00' : '01';

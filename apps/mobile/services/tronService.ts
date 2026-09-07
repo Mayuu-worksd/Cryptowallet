@@ -906,7 +906,11 @@ export const tronService = {
       });
       const triggerJson = await triggerRes.json();
       const tx = triggerJson?.transaction;
-      if (!tx?.txID) throw new Error(triggerJson?.Error ?? triggerJson?.message ?? 'Failed to build TRC20 transaction');
+      const rawErr = triggerJson?.Error ?? triggerJson?.message ?? triggerJson?.result?.message;
+      if (!tx?.txID) {
+        const errMsg = rawErr ? (typeof rawErr === 'string' && /^[0-9a-fA-F]+$/.test(rawErr) && rawErr.length % 2 === 0 ? Buffer.from(rawErr, 'hex').toString('utf8') : rawErr) : 'Failed to build TRC20 transaction';
+        throw new Error(errMsg);
+      }
 
       // 2. Sign
       const signed = signTronTx(tx, params.privateKey);
@@ -918,7 +922,10 @@ export const tronService = {
         body: JSON.stringify(signed),
       });
       const result = await broadcastRes.json();
-      if (!result.result) throw new Error(result.message ?? 'Broadcast failed');
+      if (!result.result) {
+        const broadcastErr = result.message ? (typeof result.message === 'string' && /^[0-9a-fA-F]+$/.test(result.message) && result.message.length % 2 === 0 ? Buffer.from(result.message, 'hex').toString('utf8') : result.message) : 'Broadcast failed';
+        throw new Error(broadcastErr);
+      }
 
       return { txHash: tx.txID, success: true };
     } catch (e: any) {
