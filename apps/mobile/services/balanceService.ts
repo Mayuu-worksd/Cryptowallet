@@ -98,14 +98,23 @@ const RELIABLE_RPCS: Record<string, { url: string; chainId: number; name: string
   Polygon:  { url: 'https://polygon-bor-rpc.publicnode.com',      chainId: 137,      name: 'matic' },
 };
 
+const ALIAS_MAP: Record<string, string> = {
+  'Sepolia Testnet':  'Sepolia',
+  'Ethereum (ERC20)': 'Ethereum',
+  'Polygon Network':  'Polygon',
+  'Arbitrum One':     'Arbitrum',
+  'BNB Smart Chain':  'BSC',
+};
+
 function makeProvider(network: string) {
-  const netCfg = NETWORK_CONFIG[network] ?? NETWORK_CONFIG['Sepolia'];
-  const reliable = RELIABLE_RPCS[network];
-  // Always prefer the configured RPC_URL, but if it's missing or matches a known-dead URL, use publicnode
-  const configuredUrl = RPC_URLS[network];
+  const netKey = ALIAS_MAP[network] || network;
+  const netCfg = NETWORK_CONFIG[netKey] ?? NETWORK_CONFIG['Sepolia'];
+  const reliable = RELIABLE_RPCS[netKey] || RELIABLE_RPCS['Sepolia'];
+  // Always prefer the configured RPC_URL, but if it's missing or matches a known-dead URL, use publicnode / Alchemy
+  const configuredUrl = RPC_URLS[netKey] || RPC_URLS[network];
   const DEAD_URLS = ['https://rpc.sepolia.org', 'https://cloudflare-eth.com'];
   const rpcUrl = (!configuredUrl || DEAD_URLS.includes(configuredUrl))
-    ? (reliable?.url ?? 'https://ethereum-sepolia-rpc.publicnode.com')
+    ? (reliable?.url ?? 'https://eth-sepolia.g.alchemy.com/v2/alch_qFLArkppX6O94tKMhIIUO')
     : configuredUrl;
   return new StaticJsonRpcProvider(rpcUrl, { chainId: netCfg.chainId, name: netCfg.name });
 }

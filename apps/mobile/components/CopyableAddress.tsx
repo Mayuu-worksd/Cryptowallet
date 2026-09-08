@@ -12,6 +12,7 @@ export interface CopyableAddressProps {
   type?: 'evm' | 'tron' | 'uid' | 'text';
   variant?: 'inline' | 'compact-pill' | 'box';
   showAddress?: boolean;
+  showCopyIcon?: boolean;
   iconSize?: number;
   style?: StyleProp<ViewStyle>;
   textStyle?: StyleProp<TextStyle>;
@@ -25,6 +26,7 @@ export default function CopyableAddress({
   type = 'text',
   variant = 'inline',
   showAddress = true,
+  showCopyIcon = true,
   iconSize = 14,
   style,
   textStyle,
@@ -83,6 +85,9 @@ export default function CopyableAddress({
           <Text style={[styles.compactPillText, { color: pillColor || T.primary }, textStyle]}>
             {displayText}
           </Text>
+          {showCopyIcon && (
+            <Feather name="copy" size={10} color={pillColor || T.primary} style={{ marginLeft: 2 }} />
+          )}
         </TouchableOpacity>
         <Toast
           visible={toastVisible}

@@ -14,10 +14,16 @@ async function rateLimitedFetch(url: string): Promise<Response> {
 }
 
 const CHAIN_ID: Record<string, string> = {
-  Ethereum: '1',
-  Sepolia:  '11155111',
-  Polygon:  '137',
-  Arbitrum: '42161',
+  Ethereum:           '1',
+  'Ethereum (ERC20)': '1',
+  Sepolia:            '11155111',
+  'Sepolia Testnet':  '11155111',
+  Polygon:            '137',
+  'Polygon Network':  '137',
+  Arbitrum:           '42161',
+  'Arbitrum One':     '42161',
+  BSC:                '56',
+  'BNB Smart Chain':  '56',
 };
 
 const EXPLORER_KEY = process.env.EXPO_PUBLIC_ETHERSCAN_KEY ?? '';

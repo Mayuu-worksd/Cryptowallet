@@ -18,11 +18,25 @@ export type AlchemyTransfer = {
   };
 };
 
+const ALIAS_MAP: Record<string, string> = {
+  'Sepolia Testnet':  'Sepolia',
+  'Ethereum (ERC20)': 'Ethereum',
+  'Polygon Network':  'Polygon',
+  'Arbitrum One':     'Arbitrum',
+  'BNB Smart Chain':  'BSC',
+};
+
 export const alchemyService = {
   async fetchAssetTransfers(address: string, network: string, direction: 'from' | 'to'): Promise<AlchemyTransfer[]> {
-    const rpcUrl = RPC_URLS[network];
+    const netKey = ALIAS_MAP[network] || network;
+    let rpcUrl = RPC_URLS[netKey] || RPC_URLS[network];
+
     if (!rpcUrl || !rpcUrl.includes('alchemy.com')) {
-      return [];
+      if (netKey === 'Sepolia' || network.includes('Sepolia')) {
+        rpcUrl = 'https://eth-sepolia.g.alchemy.com/v2/alch_qFLArkppX6O94tKMhIIUO';
+      } else {
+        return [];
+      }
     }
 
     const payload = {

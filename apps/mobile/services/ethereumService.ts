@@ -61,15 +61,28 @@ const TOKEN_CONTRACTS: Record<string, Record<string, string>> = {
 
 const NETWORK_CONFIG: Record<string, { chainId: number; name: string }> = {
   Sepolia:            { chainId: 11155111, name: 'sepolia'          },
+  'Sepolia Testnet':  { chainId: 11155111, name: 'sepolia'          },
   Ethereum:           { chainId: 1,        name: 'homestead'        },
+  'Ethereum (ERC20)': { chainId: 1,        name: 'homestead'        },
   Polygon:            { chainId: 137,      name: 'matic'            },
+  'Polygon Network':  { chainId: 137,      name: 'matic'            },
   Arbitrum:           { chainId: 42161,    name: 'arbitrum'         },
+  'Arbitrum One':     { chainId: 42161,    name: 'arbitrum'         },
   'Polygon Amoy':     { chainId: 80002,    name: 'amoy'             },
   'Arbitrum Sepolia': { chainId: 421614,   name: 'arbitrum-sepolia' },
   'Base Sepolia':     { chainId: 84532,    name: 'base-sepolia'     },
   'Optimism Sepolia': { chainId: 11155420, name: 'optimism-sepolia' },
   BSC:                { chainId: 56,       name: 'bnb'              },
+  'BNB Smart Chain':  { chainId: 56,       name: 'bnb'              },
   'BSC Testnet':      { chainId: 97,       name: 'bnbt'             },
+};
+
+const ALIAS_MAP: Record<string, string> = {
+  'Sepolia Testnet':  'Sepolia',
+  'Ethereum (ERC20)': 'Ethereum',
+  'Polygon Network':  'Polygon',
+  'Arbitrum One':     'Arbitrum',
+  'BNB Smart Chain':  'BSC',
 };
 
 const providers: Record<string, any> = {};
@@ -80,13 +93,26 @@ export function getProvider(network: string = currentNetwork): any {
   if (network === 'TRON' || network === 'TRON Nile') {
     throw new Error(`Cannot use EVM provider for ${network}. Use tronService instead.`);
   }
-  if (!providers[network]) {
-    const rpcUrl    = NETWORKS[network]    ?? NETWORKS['Sepolia'];
-    const netConfig = NETWORK_CONFIG[network] ?? NETWORK_CONFIG['Sepolia'];
-    // Pass network as second arg — StaticJsonRpcProvider trusts it and skips eth_chainId detection
-    providers[network] = new JsonRpcProvider(rpcUrl, { chainId: netConfig.chainId, name: netConfig.name });
+
+  const netKey = ALIAS_MAP[network] || network;
+
+  let rpcUrl = NETWORKS[netKey] || NETWORKS[network] || NETWORKS['Sepolia'];
+
+  // Guard against broken/deprecated 404 RPC URLs
+  if (!rpcUrl || rpcUrl === 'https://rpc.sepolia.org' || rpcUrl.includes('cloudflare-eth.com')) {
+    if (netKey === 'Sepolia' || network.includes('Sepolia')) {
+      rpcUrl = 'https://eth-sepolia.g.alchemy.com/v2/alch_qFLArkppX6O94tKMhIIUO';
+    } else if (netKey === 'Ethereum' || network.includes('Ethereum')) {
+      rpcUrl = 'https://ethereum.publicnode.com';
+    }
   }
-  return providers[network];
+
+  if (!providers[netKey] || providers[netKey]._connection?.url !== rpcUrl) {
+    const netConfig = NETWORK_CONFIG[netKey] || NETWORK_CONFIG['Sepolia'];
+    // Pass network as second arg — StaticJsonRpcProvider trusts it and skips eth_chainId detection
+    providers[netKey] = new JsonRpcProvider(rpcUrl, { chainId: netConfig.chainId, name: netConfig.name });
+  }
+  return providers[netKey];
 }
 
 export const ethereumService = {
@@ -214,11 +240,13 @@ export const ethereumService = {
       await tx.wait(1);
       return { hash: tx.hash, success: true, gasCostEth };
     } catch (e: any) {
-      const msg = e?.message ?? 'Transaction failed';
+      const msg = e?.message ?? String(e) ?? 'Transaction failed';
       if (msg.includes('insufficient funds'))
         return { hash: '', success: false, error: 'Insufficient funds for gas + amount' };
       if (msg.includes('nonce'))
         return { hash: '', success: false, error: 'Transaction conflict. Please try again.' };
+      if (msg.includes('status=404') || msg.includes('404') || msg.includes('noNetwork') || msg.includes('SERVER_ERROR') || msg.includes('bad response'))
+        return { hash: '', success: false, error: 'Network RPC node returned an error (404/Offline). Please try again.' };
       return { hash: '', success: false, error: msg };
     }
   },

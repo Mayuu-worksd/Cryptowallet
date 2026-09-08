@@ -1,0 +1,40 @@
+{
+  "lastProcessedBlock": {
+    "80002": 47041178,
+    "11155111": 11660220
+  },
+  "processedEvents": {
+    "11155111-undefined-undefined": {
+      "sourceChainId": 11155111,
+      "destChainId": 80002,
+      "tokenId": "0xe180a7c54025b5cdc639f291fceba569fa569e50b34951ff0be0e473a8edfc96",
+      "token": "0x451a80dE07d5ab6140A5272dC6F62742FAcC6BaB",
+      "sender": "0x7D828173126408B4Fbdd3CEf614698d452BE5a3e",
+      "recipient": "0x351028A22C876E0431b30921c0dD0a836a14899E",
+      "amount": "1000000",
+      "nonce": "1788859443476",
+      "deadline": "1788863043",
+      "status": "FAILED",
+      "detectedAt": "2026-09-08T09:24:16.665Z",
+      "retryCount": 1,
+      "error": "could not coalesce error (error={ \"code\": -32602, \"data\": \"invalid type: null, expected 32 bytes, represented as a hex string of length 64, an array of u8, or raw bytes at line 1 column 4\", \"message\": \"Invalid params\" }, payload={ \"id\": 540, \"jsonrpc\": \"2.0\", \"method\": \"eth_getTransactionReceipt\", \"params\": [ null ] }, code=UNKNOWN_ERROR, version=6.17.0)"
+    },
+    "11155111-0x01ba884267a2fff0b2b91cd5d3431fb1c63281e86aeba7c9d84647c78c6db7dd-73": {
+      "sourceChainId": 11155111,
+      "destChainId": 80002,
+      "tokenId": "0xe180a7c54025b5cdc639f291fceba569fa569e50b34951ff0be0e473a8edfc96",
+      "token": "0x451a80dE07d5ab6140A5272dC6F62742FAcC6BaB",
+      "sender": "0x7D828173126408B4Fbdd3CEf614698d452BE5a3e",
+      "recipient": "0x351028A22C876E0431b30921c0dD0a836a14899E",
+      "amount": "1000000",
+      "nonce": "1788859443476",
+      "deadline": "1788863043",
+      "sourceTxHash": "0x01ba884267a2fff0b2b91cd5d3431fb1c63281e86aeba7c9d84647c78c6db7dd",
+      "status": "FAILED",
+      "detectedAt": "2026-09-08T09:26:19.608Z",
+      "retryCount": 1,
+      "error": "execution reverted (no data present; likely require(false) occurred (action=\"call\", data=\"0x\", reason=\"require(false)\", transaction={ \"data\": \"0xe1cae6fee180a7c54025b5cdc639f291fceba569fa569e50b34951ff0be0e473a8edfc96\", \"to\": \"0xC18ff9369B9aa703716c975C1aB0fF8fd1Ef50c1\" }, invocation=null, revert=null, code=CALL_EXCEPTION, version=6.17.0)"
+    }
+  },
+  "failedEvents": {}
+}

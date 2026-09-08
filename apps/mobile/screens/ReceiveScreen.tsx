@@ -462,10 +462,12 @@ export default function ReceiveScreen({ navigation, route }: any) {
                     </Text>
                   </View>
                   {userUid && (
-                    <View style={[styles.uidChip, { backgroundColor: '#F59E0B15' }]}>
-                      <Feather name="hash" size={10} color="#F59E0B" />
-                      <Text style={{ color: '#F59E0B', fontSize: 11, fontFamily: Fonts.bold }}>{userUid}</Text>
-                    </View>
+                    <CopyableAddress
+                      address={userUid}
+                      type="uid"
+                      variant="compact-pill"
+                      pillColor="#F59E0B"
+                    />
                   )}
                 </View>
               </LinearGradient>

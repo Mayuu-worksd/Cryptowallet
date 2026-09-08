@@ -18,6 +18,7 @@ import { storageService } from '../services/storageService';
 import { CurrencyText } from '../components/CurrencyText';
 import { recipientService, RecipientInfo, RecentRecipient } from '../services/supabaseService';
 import * as Clipboard from 'expo-clipboard';
+import CopyableAddress from '../components/CopyableAddress';
 
 // ── Fallback Network Configurations ──
 const FALLBACK_NETWORKS = [
@@ -1138,10 +1139,12 @@ export default function SendScreen({ navigation, route }: any) {
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.recipientName, { color: T.text }]}>{recipient.wallet_name || 'Unknown User'}</Text>
                   {recipient.user_uid && (
-                    <View style={[styles.uidPill, { backgroundColor: '#F59E0B15' }]}>
-                      <Feather name="hash" size={9} color="#F59E0B" />
-                      <Text style={{ color: '#F59E0B', fontSize: 10, fontFamily: Fonts.bold }}>UID: {recipient.user_uid}</Text>
-                    </View>
+                    <CopyableAddress
+                      address={String(recipient.user_uid)}
+                      type="uid"
+                      variant="compact-pill"
+                      pillColor="#F59E0B"
+                    />
                   )}
                 </View>
                 <View style={[styles.foundBadge, { backgroundColor: T.success + '15' }]}>

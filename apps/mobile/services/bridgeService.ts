@@ -21,6 +21,7 @@ const FIAT_TOKEN_CONTRACTS: Record<string, string> = {
   VND: '0xC005804dE4d748eC57A637e3DC689F9038baDd59',
   IDR: '0xd255112177C674555983687A1FcfF8bC95a35443',
   PHP: '0x842ba319242f3F1598D7E2D26eBb4659A42F05Cc',
+  INRX: '0x451a80dE07d5ab6140A5272dC6F62742FAcC6BaB',
 };
 
 const TOKEN_CONTRACTS: Record<string, string> = {
@@ -52,18 +53,29 @@ const BRIDGE_ABI = [
 const parseUnits = (ethers as any).parseUnits ?? ethers.utils.parseUnits;
 
 export const bridgeService = {
+  normalizeNetwork(network: string): string {
+    if (!network) return 'Sepolia';
+    const lower = network.toLowerCase();
+    if (lower.includes('sepolia')) return 'Sepolia';
+    if (lower.includes('amoy') || lower.includes('polygon')) return 'Polygon Amoy';
+    if (lower.includes('bsc') || lower.includes('binance')) return 'BSC';
+    return network;
+  },
+
   getBridgeAddress(network: string, tokenSymbol: string = 'INRX'): string {
-    if (network === 'Sepolia' && FIAT_TOKEN_CONTRACTS[tokenSymbol]) {
+    const norm = this.normalizeNetwork(network);
+    if (norm === 'Sepolia' && (tokenSymbol === 'INRX' || FIAT_TOKEN_CONTRACTS[tokenSymbol])) {
       return FIAT_BRIDGE_SEPOLIA;
     }
-    return BRIDGE_CONTRACTS[network] ?? '';
+    return BRIDGE_CONTRACTS[norm] ?? '';
   },
 
   getTokenAddress(network: string, tokenSymbol: string = 'INRX'): string {
-    if (network === 'Sepolia' && FIAT_TOKEN_CONTRACTS[tokenSymbol]) {
-      return FIAT_TOKEN_CONTRACTS[tokenSymbol];
+    const norm = this.normalizeNetwork(network);
+    if (norm === 'Sepolia' && (tokenSymbol === 'INRX' || FIAT_TOKEN_CONTRACTS[tokenSymbol])) {
+      return FIAT_TOKEN_CONTRACTS[tokenSymbol] ?? TOKEN_CONTRACTS['Sepolia'];
     }
-    return TOKEN_CONTRACTS[network] ?? '';
+    return TOKEN_CONTRACTS[norm] ?? '';
   },
 
   async checkAllowance(

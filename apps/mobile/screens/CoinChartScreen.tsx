@@ -613,8 +613,9 @@ export default function CoinChartScreen({ route, navigation }: any) {
     return transactions.filter((tx: any) => 
       tx.coin === symbol || 
       tx.symbol === symbol || 
-      (tx.type === 'swap' && (tx.buyToken === symbol || tx.coin === symbol)) ||
-      (tx.type === 'SWAP' && (tx.buyToken === symbol || tx.coin === symbol))
+      tx.token === symbol || 
+      (tx.type === 'swap' && (tx.buyToken === symbol || tx.coin === symbol || tx.token === symbol)) ||
+      (tx.type === 'SWAP' && (tx.buyToken === symbol || tx.coin === symbol || tx.token === symbol))
     ).sort((a: any, b: any) => parseDateSafe(b.date).getTime() - parseDateSafe(a.date).getTime());
   }, [transactions, symbol]);
 
@@ -774,27 +775,28 @@ export default function CoinChartScreen({ route, navigation }: any) {
           ) : (
             <View style={{ gap: 16 }}>
               {tokenTxs.slice(0, 3).map((tx: any, i: number) => {
-                const isSent = tx.type === 'sent';
+                const isSent = tx.type === 'sent' || tx.type === 'send';
                 const isSwap = tx.type === 'swap' || tx.type === 'SWAP';
+                const coinName = tx.token || tx.coin || tx.symbol || symbol;
                 
                 let iconName = isSent ? 'arrow-up-right' : 'arrow-down-left';
                 let iconColor = isSent ? T.text : T.success;
                 let bgStyle = isSent ? T.surfaceLow : T.success + '15';
-                let title = isSent ? `Sent ${tx.coin}` : `Received ${tx.coin}`;
-                let amountText = `${isSent ? '-' : '+'}${tx.amount} ${tx.coin}`;
+                let title = isSent ? `Sent ${coinName}` : `Received ${coinName}`;
+                let amountText = `${isSent ? '-' : '+'}${tx.amount} ${coinName}`;
                 let amountColor = isSent ? T.text : T.success;
 
                 if (isSwap) {
                   iconName = 'refresh-cw';
                   iconColor = T.primary;
                   bgStyle = T.primary + '15';
-                  title = `Swapped ${tx.coin} to ${tx.buyToken}`;
+                  title = `Swapped ${coinName} to ${tx.swapToToken || tx.buyToken}`;
                   
-                  if (tx.coin === symbol) {
-                     amountText = `-${tx.amount} ${tx.coin}`;
+                  if (coinName === symbol) {
+                     amountText = `-${tx.amount} ${coinName}`;
                      amountColor = T.text;
                   } else {
-                     amountText = `+${tx.buyAmount ?? '?'} ${tx.buyToken}`;
+                     amountText = `+${tx.swapToAmount ?? tx.buyAmount ?? '?'} ${tx.swapToToken || tx.buyToken}`;
                      amountColor = T.success;
                   }
                 }

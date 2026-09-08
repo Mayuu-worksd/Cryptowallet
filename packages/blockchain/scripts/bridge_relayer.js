@@ -1,9 +1,10 @@
 /**
  * bridge_relayer.js
- * Production-hardened cross-chain bridge relayer daemon for MultiCurrencyBridge.
+ * Automated cross-chain bridge relayer daemon for MultiCurrencyBridge.
  *
- * Listens for TokensLocked events on the source chain, validates them, signs the payload
- * using an authorized relayer key, and submits the release transaction on the destination chain.
+ * Listens for TokensLocked events on Sepolia and Polygon Amoy, validates them,
+ * signs payloads using authorized relayer key, submits release transactions,
+ * handles retries, enforces idempotency, and maintains persistent state.
  */
 
 const fs = require('fs');
@@ -20,29 +21,69 @@ if (!fs.existsSync(ethersPath)) {
 }
 const { ethers } = require(ethersPath);
 
-// Config
-const SEPOLIA_RPC = process.env.SEPOLIA_RPC || 'https://ethereum-sepolia-rpc.publicnode.com';
-const AMOY_RPC = process.env.AMOY_RPC || 'https://rpc-amoy.polygon.technology';
+// Configured RPC URLs with fallback
+const SEPOLIA_RPC = process.env.SEPOLIA_RPC || 'https://eth-sepolia.g.alchemy.com/v2/alch_qFLArkppX6O94tKMhIIUO';
+const AMOY_RPC = process.env.AMOY_RPC || 'https://polygon-amoy.g.alchemy.com/v2/alch_qFLArkppX6O94tKMhIIUO';
 const ADDRESSES_PATH = path.resolve(__dirname, '../deployed_addresses.json');
+const STATE_FILE_PATH = path.resolve(__dirname, 'relayer_state.json');
 
 // Relayer Private Key (Must hold RELAYER_ROLE on destination bridge contract)
-const RELAYER_KEY = process.env.PRIVATE_KEY; // Using admin key for demo (holds relayer role)
+const RELAYER_KEY = process.env.PRIVATE_KEY;
+
+// Verified Deployed Contracts
+const SEPOLIA_CHAIN_ID = 11155111;
+const AMOY_CHAIN_ID = 80002;
+const SEPOLIA_BRIDGE_ADDR = '0xA7283676630FbcA55f3f0743755A0815CcF78103';
+const AMOY_BRIDGE_ADDR = '0xC18ff9369B9aa703716c975C1aB0fF8fd1Ef50c1';
 
 const BRIDGE_ABI = [
   'event TokensLocked(bytes32 indexed tokenId, address indexed token, address indexed sender, address recipient, uint256 amount, uint256 destChainId, uint256 nonce, uint256 deadline)',
   'event TokensReleased(bytes32 indexed tokenId, address indexed token, address indexed recipient, uint256 amount, uint256 sourceChainId, uint256 nonce)',
   'function release(bytes32 tokenId, uint256 amount, uint256 sourceChainId, address recipient, uint256 nonce, uint256 deadline, bytes calldata signature) external returns (bool)',
   'function processedTransactions(bytes32 txHash) view returns (bool)',
+  'function supportedTokens(bytes32 tokenId) view returns (address)',
   'function hasRole(bytes32 role, address account) view returns (bool)',
   'function RELAYER_ROLE() view returns (bytes32)'
 ];
 
-// Simple in-memory tracker to prevent duplicate concurrent runs
-const processedEventHashes = new Set();
+const ERC20_ABI = [
+  'function balanceOf(address account) view returns (uint256)',
+  'function decimals() view returns (uint8)'
+];
+
+// Persistent Relayer State Management
+function loadState() {
+  if (fs.existsSync(STATE_FILE_PATH)) {
+    try {
+      return JSON.parse(fs.readFileSync(STATE_FILE_PATH, 'utf8'));
+    } catch (e) {
+      console.warn('⚠️ Could not parse relayer_state.json, creating new state.');
+    }
+  }
+  return {
+    lastProcessedBlock: {
+      [SEPOLIA_CHAIN_ID]: 0,
+      [AMOY_CHAIN_ID]: 0
+    },
+    processedEvents: {},
+    failedEvents: {}
+  };
+}
+
+function saveState(state) {
+  try {
+    fs.writeFileSync(STATE_FILE_PATH, JSON.stringify(state, null, 2));
+  } catch (e) {
+    console.error('❌ Failed to save relayer state:', e.message);
+  }
+}
+
+const relayerState = loadState();
+const inFlightEvents = new Set();
 
 async function main() {
   console.log('=================================================');
-  console.log('    PRODUCTION MULTI-CURRENCY BRIDGE RELAYER     ');
+  console.log('    AUTOMATED MULTI-CURRENCY BRIDGE RELAYER     ');
   console.log('=================================================');
 
   if (!RELAYER_KEY) {
@@ -50,160 +91,337 @@ async function main() {
     process.exit(1);
   }
 
-  if (!fs.existsSync(ADDRESSES_PATH)) {
-    console.error('❌ Error: deployed_addresses.json not found.');
-    process.exit(1);
-  }
-
-  const addresses = JSON.parse(fs.readFileSync(ADDRESSES_PATH, 'utf8'));
-
-  // Setup Providers
-  const sepoliaProvider = new ethers.JsonRpcProvider(SEPOLIA_RPC);
-  const amoyProvider = new ethers.JsonRpcProvider(AMOY_RPC);
+  // Setup Fetch options to avoid IPv6 issues on Node.js
+  const fetchReqOpts = { fetchOptions: { family: 4 } };
+  const sepoliaProvider = new ethers.JsonRpcProvider(SEPOLIA_RPC, undefined, fetchReqOpts);
+  const amoyProvider = new ethers.JsonRpcProvider(AMOY_RPC, undefined, fetchReqOpts);
 
   const relayerSepolia = new ethers.Wallet(RELAYER_KEY, sepoliaProvider);
   const relayerAmoy = new ethers.Wallet(RELAYER_KEY, amoyProvider);
 
   console.log(`Relayer Wallet Address: ${relayerSepolia.address}`);
+  console.log(`Sepolia Bridge: ${SEPOLIA_BRIDGE_ADDR}`);
+  console.log(`Amoy Bridge:    ${AMOY_BRIDGE_ADDR}\n`);
 
-  // Contracts
-  const sepoliaBridge = new ethers.Contract(addresses.bridge, BRIDGE_ABI, relayerSepolia);
-  
-  // Note: On destination chain (Amoy), deploy bridge or configure address
-  // For this hardening pass, we are preparing the relayer flow. We assume Amoy has bridge deployed
-  // and we configure a listener.
-  const amoyBridgeAddress = addresses.bridge; // Using same address for demo (cross-chain deployments)
-  const amoyBridge = new ethers.Contract(amoyBridgeAddress, BRIDGE_ABI, relayerAmoy);
+  const sepoliaBridge = new ethers.Contract(SEPOLIA_BRIDGE_ADDR, BRIDGE_ABI, relayerSepolia);
+  const amoyBridge = new ethers.Contract(AMOY_BRIDGE_ADDR, BRIDGE_ABI, relayerAmoy);
 
-  console.log(`Listening for lock events on Sepolia Bridge: ${addresses.bridge}`);
-  console.log(`Listening for lock events on Amoy Bridge:    ${amoyBridgeAddress}\n`);
-
-  // Verify Relayer Authorization on contracts
+  // Verify Relayer Authorization
   try {
-    const role1 = await sepoliaBridge.RELAYER_ROLE();
-    const isRelSep = await sepoliaBridge.hasRole(role1, relayerSepolia.address);
-    console.log(`Sepolia Bridge Relayer Role Status: ${isRelSep ? '✅ AUTHORIZED' : '❌ NOT AUTHORIZED'}`);
+    const roleSep = await sepoliaBridge.RELAYER_ROLE();
+    const isRelSep = await sepoliaBridge.hasRole(roleSep, relayerSepolia.address);
+    console.log(`Sepolia Bridge Authorization: ${isRelSep ? '✅ AUTHORIZED' : '❌ NOT AUTHORIZED'}`);
 
-    const role2 = await amoyBridge.RELAYER_ROLE();
-    const isRelAmoy = await amoyBridge.hasRole(role2, relayerAmoy.address);
-    console.log(`Amoy Bridge Relayer Role Status:    ${isRelAmoy ? '✅ AUTHORIZED' : '❌ NOT AUTHORIZED'}`);
+    const roleAmoy = await amoyBridge.RELAYER_ROLE();
+    const isRelAmoy = await amoyBridge.hasRole(roleAmoy, relayerAmoy.address);
+    console.log(`Amoy Bridge Authorization:    ${isRelAmoy ? '✅ AUTHORIZED' : '❌ NOT AUTHORIZED'}`);
+
+    if (!isRelSep || !isRelAmoy) {
+      console.warn('⚠️ Warning: Relayer key does not hold RELAYER_ROLE on one or both bridges.');
+    }
   } catch (err) {
-    console.warn(`⚠️ Role check failed. Ensure contracts are deployed.`, err.message);
+    console.warn(`⚠️ Role check warning:`, err.message);
   }
 
   // ---------------------------------------------------------------------------
-  // Listener Logic
+  // Core Event Processing Logic
   // ---------------------------------------------------------------------------
+  const processLockEvent = async (eventData) => {
+    const {
+      tokenId, token, sender, recipient, amount, destChainId, nonce, deadline,
+      transactionHash, logIndex, blockNumber, sourceChainId
+    } = eventData;
 
-  const handleLockEvent = async (
-    tokenId, token, sender, recipient, amount, destChainId, nonce, deadline, eventLog,
-    sourceProvider, destBridge, destChainName, destChainIdNum
-  ) => {
-    const eventKey = `${eventLog.transactionHash}-${eventLog.index}`;
-    if (processedEventHashes.has(eventKey)) return;
-    processedEventHashes.add(eventKey);
+    const eventKey = `${sourceChainId}-${transactionHash}-${logIndex}`;
 
-    console.log(`\n🔔 Detected lock event:`);
-    console.log(`  - Tx Hash:     ${eventLog.transactionHash}`);
-    console.log(`  - Token ID:    ${tokenId}`);
-    console.log(`  - Sender:      ${sender}`);
-    console.log(`  - Recipient:   ${recipient}`);
-    console.log(`  - Amount:      ${ethers.formatUnits(amount, 6)}`);
-    console.log(`  - Dest Chain:  ${destChainId}`);
-    console.log(`  - Nonce:       ${nonce}`);
-    console.log(`  - Deadline:    ${new Date(Number(deadline) * 1000).toISOString()}`);
+    // PHASE 5: Idempotency Check
+    if (relayerState.processedEvents[eventKey]?.status === 'CONFIRMED') {
+      return;
+    }
+    if (inFlightEvents.has(eventKey)) {
+      return;
+    }
+
+    inFlightEvents.add(eventKey);
+    console.log(`\n🔔 Processing Bridge Event [${eventKey}]:`);
+    console.log(`  - Source Chain: ${sourceChainId}`);
+    console.log(`  - Dest Chain:   ${destChainId}`);
+    console.log(`  - Token ID:     ${tokenId}`);
+    console.log(`  - Sender:       ${sender}`);
+    console.log(`  - Recipient:    ${recipient}`);
+    console.log(`  - Amount:       ${ethers.formatUnits(amount, 6)}`);
+    console.log(`  - Nonce:        ${nonce}`);
+    console.log(`  - Tx Hash:      ${transactionHash}`);
+
+    // Update state to DETECTED / PROCESSING
+    relayerState.processedEvents[eventKey] = {
+      sourceChainId: Number(sourceChainId),
+      destChainId: Number(destChainId),
+      tokenId,
+      token,
+      sender,
+      recipient,
+      amount: amount.toString(),
+      nonce: nonce.toString(),
+      deadline: deadline.toString(),
+      sourceTxHash: transactionHash,
+      status: 'PROCESSING',
+      detectedAt: new Date().toISOString(),
+      retryCount: (relayerState.processedEvents[eventKey]?.retryCount || 0)
+    };
+    saveState(relayerState);
 
     try {
-      // 1. Validate destination chain matches target relayer chain ID
-      if (Number(destChainId) !== destChainIdNum) {
-        console.log(`  ℹ️ Event ignored. Target chain ID is ${destChainId}, but this relayer handles ${destChainIdNum}.`);
-        return;
-      }
+      // Determine destination provider & bridge contract
+      const isToAmoy = Number(destChainId) === AMOY_CHAIN_ID;
+      const destProvider = isToAmoy ? amoyProvider : sepoliaProvider;
+      const destBridge = isToAmoy ? amoyBridge : sepoliaBridge;
+      const sourceProvider = isToAmoy ? sepoliaProvider : amoyProvider;
+      const destChainName = isToAmoy ? 'Polygon Amoy' : 'Ethereum Sepolia';
 
-      // 2. Validate event details (transaction is indeed confirmed)
-      const txReceipt = await sourceProvider.getTransactionReceipt(eventLog.transactionHash);
+      // PHASE 4: Validation
+      // 1. Confirm source transaction is mined & succeeded
+      const txReceipt = await sourceProvider.getTransactionReceipt(transactionHash);
       if (!txReceipt || txReceipt.status !== 1) {
-        console.error(`  ❌ Validation failed: Lock transaction reverted or invalid.`);
+        console.error(`  ❌ Validation failed: Source transaction reverted or invalid.`);
+        relayerState.processedEvents[eventKey].status = 'FAILED_VALIDATION';
+        relayerState.processedEvents[eventKey].error = 'Source tx reverted or not found';
+        saveState(relayerState);
+        inFlightEvents.delete(eventKey);
         return;
       }
 
-      // 3. Generate transaction hash for replay protection
+      // 2. Check token support on destination bridge
+      const KNOWN_TOKENS = {
+        [SEPOLIA_CHAIN_ID]: {
+          '0xe180a7c54025b5cdc639f291fceba569fa569e50b34951ff0be0e473a8edfc96': '0x451a80dE07d5ab6140A5272dC6F62742FAcC6BaB'
+        },
+        [AMOY_CHAIN_ID]: {
+          '0xe180a7c54025b5cdc639f291fceba569fa569e50b34951ff0be0e473a8edfc96': '0xd52280A15b30e5EdfFF858E7EC22266604358F26'
+        }
+      };
+
+      let destTokenAddress = await destBridge.supportedTokens(tokenId).catch(() => ethers.ZeroAddress);
+      if (destTokenAddress === ethers.ZeroAddress) {
+        destTokenAddress = KNOWN_TOKENS[Number(destChainId)]?.[tokenId] || ethers.ZeroAddress;
+      }
+
+      if (destTokenAddress === ethers.ZeroAddress) {
+        console.error(`  ❌ Validation failed: Token ${tokenId} not supported on destination bridge.`);
+        relayerState.processedEvents[eventKey].status = 'FAILED_VALIDATION';
+        relayerState.processedEvents[eventKey].error = 'Token not supported on dest bridge';
+        saveState(relayerState);
+        inFlightEvents.delete(eventKey);
+        return;
+      }
+
+      // 3. Check deadline
+      const currentBlock = await sourceProvider.getBlock('latest');
+      if (currentBlock.timestamp > Number(deadline)) {
+        console.error(`  ❌ Validation failed: Lock deadline expired.`);
+        relayerState.processedEvents[eventKey].status = 'EXPIRED';
+        relayerState.processedEvents[eventKey].error = 'Deadline expired';
+        saveState(relayerState);
+        inFlightEvents.delete(eventKey);
+        return;
+      }
+
+      // 4. Compute unique txHash for replay protection
       const abiCoder = ethers.AbiCoder.defaultAbiCoder();
       const txHash = ethers.keccak256(
         abiCoder.encode(
           ["uint256", "bytes32", "uint256", "uint256", "address", "uint256", "uint256"],
-          [destChainIdNum, tokenId, amount, Number(eventLog.provider.getNetwork().then(n => n.chainId).catch(() => 11155111)), recipient, nonce, deadline]
+          [Number(destChainId), tokenId, amount, Number(sourceChainId), recipient, nonce, deadline]
         )
       );
 
-      // 4. Double-spend/Replay check on destination contract
-      const isAlreadyProcessed = await destBridge.processedTransactions(txHash);
-      if (isAlreadyProcessed) {
-        console.log(`  ℹ️ Event skipped: Transaction already processed on ${destChainName}.`);
+      // PHASE 5: Double-spend / On-chain Replay Check
+      const isAlreadyProcessedOnChain = await destBridge.processedTransactions(txHash);
+      if (isAlreadyProcessedOnChain) {
+        console.log(`  ℹ️ Event already executed on-chain on ${destChainName}.`);
+        relayerState.processedEvents[eventKey].status = 'CONFIRMED';
+        relayerState.processedEvents[eventKey].confirmedAt = new Date().toISOString();
+        saveState(relayerState);
+        inFlightEvents.delete(eventKey);
         return;
       }
 
-      // 5. Check if deadline has passed
-      const currentBlock = await sourceProvider.getBlock('latest');
-      if (currentBlock.timestamp > Number(deadline)) {
-        console.error(`  ❌ Validation failed: Lock deadline has expired.`);
-        return;
-      }
-
-      // 6. Generate relayer signature
-      // Sign the txHash with the relayer's private key
+      // PHASE 6: Generate Relayer Authorization & Signature
       const wallet = new ethers.Wallet(RELAYER_KEY);
       const signature = await wallet.signMessage(ethers.getBytes(txHash));
-      console.log(`  ✍️ Generated Relayer Signature: ${signature.slice(0, 20)}...`);
+      console.log(`  ✍️ Relayer Signature generated: ${signature.slice(0, 18)}...`);
 
-      // 7. Submit transaction to destination contract
+      // Record pre-release destination balance
+      const destToken = new ethers.Contract(destTokenAddress, ERC20_ABI, destProvider);
+      const balBefore = await destToken.balanceOf(recipient).catch(() => 0n);
+
+      // Submit Destination Release Transaction
       console.log(`  🚀 Submitting release transaction to ${destChainName}...`);
-      const sourceChainId = Number((await sourceProvider.getNetwork()).chainId);
-      
-      // Calculate and specify gas settings with buffer
-      const feeData = await destBridge.runner.provider.getFeeData();
+
+      const feeData = await destProvider.getFeeData();
       const txOptions = {
-        maxPriorityFeePerGas: feeData.maxPriorityFeePerGas || ethers.parseUnits('1.5', 'gwei'),
-        maxFeePerGas: feeData.maxFeePerGas || ethers.parseUnits('20', 'gwei')
+        maxPriorityFeePerGas: feeData.maxPriorityFeePerGas ? (feeData.maxPriorityFeePerGas * 120n) / 100n : ethers.parseUnits('2', 'gwei'),
+        maxFeePerGas: feeData.maxFeePerGas ? (feeData.maxFeePerGas * 120n) / 100n : ethers.parseUnits('30', 'gwei')
       };
 
-      const txRelease = await destBridge.release(
-        tokenId,
-        amount,
-        sourceChainId,
-        recipient,
-        nonce,
-        deadline,
-        signature,
-        txOptions
-      );
+      let txRelease;
+      try {
+        txRelease = await destBridge.release(
+          tokenId,
+          amount,
+          Number(sourceChainId),
+          recipient,
+          nonce,
+          deadline,
+          signature,
+          txOptions
+        );
+        console.log(`  Tx Broadcast Hash: ${txRelease.hash}. Waiting for block confirmation...`);
+        relayerState.processedEvents[eventKey].destTxHash = txRelease.hash;
+        relayerState.processedEvents[eventKey].status = 'SUBMITTED';
+        saveState(relayerState);
+      } catch (subErr) {
+        // PHASE 7: Retries & Verification on error
+        console.warn(`  ⚠️ Release submission warning/error: ${subErr.message}`);
 
-      console.log(`  Tx Submitted: ${txRelease.hash}. Waiting for confirmation...`);
+        // Re-check if transaction actually succeeded on chain despite RPC error
+        const recheckOnChain = await destBridge.processedTransactions(txHash);
+        if (recheckOnChain) {
+          console.log(`  ✅ Verified: Transaction was processed on-chain!`);
+          relayerState.processedEvents[eventKey].status = 'CONFIRMED';
+          relayerState.processedEvents[eventKey].confirmedAt = new Date().toISOString();
+          saveState(relayerState);
+          inFlightEvents.delete(eventKey);
+          return;
+        }
+
+        // Otherwise throw for retry block
+        throw subErr;
+      }
+
+      // PHASE 8: Confirm Destination Mining & Balance Change
       const receipt = await txRelease.wait(1);
-      console.log(`  ✅ Confirmed in block ${receipt.blockNumber}! Tokens released successfully.`);
+      if (receipt.status === 1) {
+        const balAfter = await destToken.balanceOf(recipient).catch(() => 0n);
+        console.log(`  ✅ Confirmed in block ${receipt.blockNumber}!`);
+        console.log(`  💰 Destination Balance Change: ${ethers.formatUnits(balBefore, 6)} → ${ethers.formatUnits(balAfter, 6)} INRX`);
+
+        relayerState.processedEvents[eventKey].status = 'CONFIRMED';
+        relayerState.processedEvents[eventKey].destBlockNumber = receipt.blockNumber;
+        relayerState.processedEvents[eventKey].confirmedAt = new Date().toISOString();
+        saveState(relayerState);
+      } else {
+        console.error(`  ❌ Destination transaction reverted on-chain.`);
+        relayerState.processedEvents[eventKey].status = 'REVERTED';
+        saveState(relayerState);
+      }
 
     } catch (err) {
       console.error(`  ❌ Error processing lock event:`, err.message);
+      relayerState.processedEvents[eventKey].status = 'FAILED';
+      relayerState.processedEvents[eventKey].error = err.message;
+      relayerState.processedEvents[eventKey].retryCount = (relayerState.processedEvents[eventKey].retryCount || 0) + 1;
+      saveState(relayerState);
+    } finally {
+      inFlightEvents.delete(eventKey);
     }
   };
 
-  // Listen to Sepolia -> Amoy locks
-  sepoliaBridge.on('TokensLocked', (tokenId, token, sender, recipient, amount, destChainId, nonce, deadline, eventLog) => {
-    handleLockEvent(
-      tokenId, token, sender, recipient, amount, destChainId, nonce, deadline, eventLog,
-      sepoliaProvider, amoyBridge, 'Polygon Amoy', 80002
-    );
+  // ---------------------------------------------------------------------------
+  // PHASE 3: Automatic Event Listeners & Safe Polling Fallback
+  // ---------------------------------------------------------------------------
+
+  // Helper to extract log properties safely from Ethers v6 EventPayload or EventLog
+  const extractEventData = (args, defaultSourceChainId) => {
+    const lastArg = args[args.length - 1];
+    const txHash = lastArg?.log?.transactionHash || lastArg?.transactionHash || lastArg?.transaction?.hash;
+    const logIdx = lastArg?.log?.index ?? lastArg?.index ?? 0;
+    const blkNum = lastArg?.log?.blockNumber ?? lastArg?.blockNumber ?? 0;
+
+    return {
+      tokenId: args[0],
+      token: args[1],
+      sender: args[2],
+      recipient: args[3],
+      amount: args[4],
+      destChainId: args[5],
+      nonce: args[6],
+      deadline: args[7],
+      transactionHash: txHash,
+      logIndex: logIdx,
+      blockNumber: blkNum,
+      sourceChainId: defaultSourceChainId
+    };
+  };
+
+  // Polling function for past blocks (max 10 blocks per request for Alchemy / Public nodes)
+  const pollPastBlocks = async (provider, bridgeContract, sourceChainId, chainName) => {
+    try {
+      const latestBlock = await provider.getBlockNumber();
+      let startBlock = relayerState.lastProcessedBlock[sourceChainId] || (latestBlock - 10);
+      if (startBlock <= 0) startBlock = latestBlock - 10;
+
+      if (latestBlock < startBlock) return;
+
+      // Scan up to 10 blocks at a time to satisfy RPC rate limits
+      const toBlock = Math.min(latestBlock, startBlock + 9);
+
+      const filter = bridgeContract.filters.TokensLocked();
+      const events = await bridgeContract.queryFilter(filter, startBlock, toBlock);
+
+      for (const event of events) {
+        const args = event.args;
+        if (!args) continue;
+        await processLockEvent({
+          tokenId: args.tokenId,
+          token: args.token,
+          sender: args.sender,
+          recipient: args.recipient,
+          amount: args.amount,
+          destChainId: args.destChainId,
+          nonce: args.nonce,
+          deadline: args.deadline,
+          transactionHash: event.transactionHash,
+          logIndex: event.index,
+          blockNumber: event.blockNumber,
+          sourceChainId
+        });
+      }
+
+      relayerState.lastProcessedBlock[sourceChainId] = toBlock + 1;
+      saveState(relayerState);
+    } catch (pollErr) {
+      console.warn(`⚠️ Polling warning on ${chainName}:`, pollErr.message);
+    }
+  };
+
+  // Real-time Event Subscription Listeners
+  sepoliaBridge.on('TokensLocked', (...args) => {
+    const eventData = extractEventData(args, SEPOLIA_CHAIN_ID);
+    if (eventData.transactionHash) {
+      processLockEvent(eventData);
+    }
   });
 
-  // Listen to Amoy -> Sepolia locks
-  amoyBridge.on('TokensLocked', (tokenId, token, sender, recipient, amount, destChainId, nonce, deadline, eventLog) => {
-    handleLockEvent(
-      tokenId, token, sender, recipient, amount, destChainId, nonce, deadline, eventLog,
-      amoyProvider, sepoliaBridge, 'Sepolia', 11155111
-    );
+  amoyBridge.on('TokensLocked', (...args) => {
+    const eventData = extractEventData(args, AMOY_CHAIN_ID);
+    if (eventData.transactionHash) {
+      processLockEvent(eventData);
+    }
   });
 
-  console.log('Relayer is active. Press Ctrl+C to terminate.');
+  console.log('✅ Real-time event listeners attached to Sepolia and Amoy Bridges.');
+
+  // Initial Sync & Polling Loop
+  await pollPastBlocks(sepoliaProvider, sepoliaBridge, SEPOLIA_CHAIN_ID, 'Ethereum Sepolia');
+  await pollPastBlocks(amoyProvider, amoyBridge, AMOY_CHAIN_ID, 'Polygon Amoy');
+
+  setInterval(async () => {
+    await pollPastBlocks(sepoliaProvider, sepoliaBridge, SEPOLIA_CHAIN_ID, 'Ethereum Sepolia');
+    await pollPastBlocks(amoyProvider, amoyBridge, AMOY_CHAIN_ID, 'Polygon Amoy');
+  }, 10000); // Poll every 10 seconds
+
+  console.log('🔄 Relayer daemon active & polling every 10s. Press Ctrl+C to terminate.');
 }
 
 // Global Exception Handler
@@ -218,3 +436,4 @@ process.on('unhandledRejection', (reason, promise) => {
 main().catch(err => {
   console.error('❌ Relayer initialization failed:', err);
 });
+

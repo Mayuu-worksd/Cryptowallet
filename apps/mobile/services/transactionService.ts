@@ -212,12 +212,12 @@ function fromAlchemyTx(tx: AlchemyTransfer, walletAddress: string, ethPriceUsd: 
 
   if (tx.value !== null) {
     const rawAmt = tx.value;
-    amountStr = rawAmt.toFixed(rawAmt < 1 ? 4 : 2);
+    amountStr = rawAmt < 0.01 ? rawAmt.toFixed(6) : rawAmt.toFixed(4);
     usd = (rawAmt * (tokenName === 'INRX' ? (1 / getCachedINRRate()) : (tokenName === 'ETH' ? ethPriceUsd : 1.0))).toFixed(2);
   } else if (tx.rawContract?.value && tx.rawContract?.decimal) {
     const decimals = parseInt(tx.rawContract.decimal, 16) || 18;
     const rawAmt = parseFloat(formatUnits(tx.rawContract.value, decimals));
-    amountStr = rawAmt.toFixed(rawAmt < 1 ? 4 : 2);
+    amountStr = rawAmt < 0.01 ? rawAmt.toFixed(6) : rawAmt.toFixed(4);
     usd = (rawAmt * (tokenName === 'INRX' ? (1 / getCachedINRRate()) : 1.0)).toFixed(2);
   }
 
