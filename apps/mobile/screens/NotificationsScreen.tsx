@@ -29,6 +29,8 @@ export default function NotificationsScreen() {
       navigation.navigate('Portfolio'); // or History if accessible
     } else if (notif.type === 'settings' || notif.type === 'update') {
       navigation.navigate('Profile');
+    } else if (notif.type === 'recovery') {
+      navigation.navigate('RecoveryCenter');
     }
   };
 
@@ -43,6 +45,7 @@ export default function NotificationsScreen() {
       case 'settings': return { name: 'settings', color: T.textDim };
       case 'update': return { name: 'download-cloud', color: T.primary };
       case 'news': return { name: 'globe', color: '#10B981' };
+      case 'recovery': return { name: 'shield', color: T.primary };
       default: return { name: 'bell', color: T.text };
     }
   };

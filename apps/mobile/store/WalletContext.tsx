@@ -325,10 +325,19 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const [recoverableAssets, setRecoverableAssets] = useState<DiscoveredAsset[]>([]);
   const [isScanningRecovery, setIsScanningRecovery] = useState(false);
+  const recoverableAssetsRef = useRef<DiscoveredAsset[]>([]);
+
+  useEffect(() => {
+    recoverableAssetsRef.current = recoverableAssets;
+  }, [recoverableAssets]);
 
   useEffect(() => {
     AsyncStorage.getItem('cw_recoverable_assets').then(val => {
-      if (val) setRecoverableAssets(JSON.parse(val));
+      if (val) {
+        const parsed = JSON.parse(val);
+        setRecoverableAssets(parsed);
+        recoverableAssetsRef.current = parsed;
+      }
     }).catch(() => {});
   }, []);
 
@@ -338,7 +347,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     try {
       const discovered = await assetDiscoveryService.autoScanAddress(walletAddress, network);
       
-      const currentIds = new Set(recoverableAssets.map(a => a.id));
+      const rawStored = await AsyncStorage.getItem('cw_recoverable_assets').catch(() => null);
+      const storedAssets: DiscoveredAsset[] = rawStored ? JSON.parse(rawStored) : recoverableAssetsRef.current;
+      const currentIds = new Set(storedAssets.map(a => a.id));
       const newAssets = discovered.filter(a => !currentIds.has(a.id));
 
       if (newAssets.length > 0) {
@@ -348,13 +359,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       }
 
       setRecoverableAssets(discovered);
+      recoverableAssetsRef.current = discovered;
       await AsyncStorage.setItem('cw_recoverable_assets', JSON.stringify(discovered));
     } catch (e) {
       console.warn('Recovery scan failed:', e);
     } finally {
       setIsScanningRecovery(false);
     }
-  }, [walletAddress, network, recoverableAssets, isScanningRecovery]);
+  }, [walletAddress, network, isScanningRecovery]);
 
   useEffect(() => {
     if (!walletAddress) return;

@@ -1105,6 +1105,7 @@ function MobileNavigator() {
             <Stack.Screen name="AccountStatement" component={AccountStatementScreen} />
             <Stack.Screen name="Portfolio" component={PortfolioScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen name="Notifications" component={NotificationsScreen} />
             <Stack.Screen name="Profile" component={SettingsScreen} />
             <Stack.Screen name="Support" component={SupportScreen} />
             <Stack.Screen name="ImportToken" component={ImportTokenScreen} />
@@ -1529,6 +1530,8 @@ export default function App() {
           navigationRef.navigate('History');
         } else if (data?.type === 'settings') {
           navigationRef.navigate('Settings');
+        } else if (data?.type === 'recovery') {
+          navigationRef.navigate('RecoveryCenter');
         } else if (data?.type === 'update') {
           Alert.alert(
             'Update Ready',
