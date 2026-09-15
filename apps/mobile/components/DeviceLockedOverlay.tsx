@@ -7,7 +7,9 @@ import { Feather } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useWallet } from "../store/WalletContext";
 import { Fonts } from "../constants";
-import { profileService } from "../services/supabaseService";
+import { Platform } from "react-native";
+import { profileService, deviceService } from "../services/supabaseService";
+import { storageService } from "../services/storageService";
 
 const SUPPORT_EMAIL = "support@cryptowallet.app";
 
@@ -19,8 +21,13 @@ export default function DeviceLockedOverlay() {
   const setSuspensionReason = wallet.setSuspensionReason;
 
   const [checking, setChecking] = React.useState(false);
+  const [deviceId, setDeviceId] = React.useState('');
   const glowScale   = useRef(new Animated.Value(1)).current;
   const glowOpacity = useRef(new Animated.Value(0.4)).current;
+
+  useEffect(() => {
+    storageService.getOrCreateDeviceId().then(setDeviceId).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!isSuspended) return;
@@ -42,36 +49,48 @@ export default function DeviceLockedOverlay() {
 
   if (!isSuspended) return null;
 
+  const isDeviceBlock = suspensionReason.startsWith('[DEVICE_BLOCK]');
+
   const handleRecheck = async () => {
-    if (!walletAddress) return;
     setChecking(true);
     try {
-      const profile = await profileService.get(walletAddress);
-      if (profile && !profile.is_suspended) {
+      const devId = deviceId || (await storageService.getOrCreateDeviceId());
+      const deviceRes = await deviceService.registerAndCheck(devId, walletAddress, Platform.OS);
+      const profileRes = walletAddress ? await profileService.get(walletAddress).catch(() => null) : null;
+
+      if (deviceRes?.is_blocked) {
+        const reason = deviceRes.block_reason || "Device blocked by administrator";
+        const formattedReason = `[DEVICE_BLOCK] ${reason}`;
+        await AsyncStorage.setItem("cw_is_suspended", "true");
+        await AsyncStorage.setItem("cw_suspension_reason", formattedReason);
+        setIsSuspended?.(true);
+        setSuspensionReason?.(formattedReason);
+        Alert.alert("Still Blocked", "This device installation remains blocked by an administrator.");
+      } else if (profileRes?.is_suspended) {
+        const reason = profileRes.suspension_reason || "Wallet suspended by administrator";
+        await AsyncStorage.setItem("cw_is_suspended", "true");
+        await AsyncStorage.setItem("cw_suspension_reason", reason);
+        setIsSuspended?.(true);
+        setSuspensionReason?.(reason);
+        Alert.alert("Still Suspended", "This wallet remains suspended. Contact support if you believe this is an error.");
+      } else {
         await AsyncStorage.multiRemove(["cw_is_suspended", "cw_suspension_reason"]);
         setIsSuspended?.(false);
         setSuspensionReason?.("");
-        Alert.alert("Access Restored", "Your wallet access has been reinstated.");
-      } else {
-        const reason = (profile as any)?.suspension_reason || suspensionReason || "";
-        if (reason) {
-          await AsyncStorage.setItem("cw_suspension_reason", reason);
-          setSuspensionReason?.(reason);
-        }
-        Alert.alert("Still Suspended", "This wallet remains suspended. Contact support if you believe this is an error.");
+        Alert.alert("Access Restored", "Your access has been reinstated.");
       }
     } catch {
       // Offline — keep cached lock, do NOT unlock
-      Alert.alert("Verification Failed", "Could not reach the server. Your wallet remains locked until connectivity is restored.");
+      Alert.alert("Verification Failed", "Could not reach the server. Your lock remains active until connectivity is restored.");
     } finally {
       setChecking(false);
     }
   };
 
   const handleContactSupport = () => {
-    const subject = encodeURIComponent("Wallet Suspension Appeal");
+    const subject = encodeURIComponent(isDeviceBlock ? "Device Block Appeal" : "Wallet Suspension Appeal");
     const body = encodeURIComponent(
-      `Wallet Address: ${walletAddress}\nSuspension Reason: ${suspensionReason || "Not specified"}\n\nPlease describe your issue:\n`
+      `Device ID: ${deviceId}\nWallet Address: ${walletAddress || "None"}\nReason: ${suspensionReason || "Not specified"}\n\nPlease describe your issue:\n`
     );
     Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`).catch(() => {
       Alert.alert("Contact Support", `Please email us at:\n${SUPPORT_EMAIL}`);
@@ -100,7 +119,9 @@ export default function DeviceLockedOverlay() {
   const formatAddr = (addr: string) =>
     addr ? `${addr.slice(0, 8)}...${addr.slice(-8)}` : "";
 
-  const displayReason = suspensionReason || "Unauthorized access detected";
+  const displayReason = isDeviceBlock
+    ? suspensionReason.replace('[DEVICE_BLOCK] ', '') || "Device blocked by administrator"
+    : suspensionReason || "Unauthorized access detected";
 
   return (
     <View style={styles.container}>
@@ -116,18 +137,22 @@ export default function DeviceLockedOverlay() {
           </View>
         </View>
 
-        <Text style={styles.title}>Wallet Access Suspended</Text>
+        <Text style={styles.title}>
+          {isDeviceBlock ? "Device Access Blocked" : "Wallet Access Suspended"}
+        </Text>
 
         {/* Reason box */}
         <View style={styles.reasonBox}>
-          <Text style={styles.reasonLabel}>REASON</Text>
+          <Text style={styles.reasonLabel}>{isDeviceBlock ? "DEVICE BLOCK REASON" : "SUSPENSION REASON"}</Text>
           <Text style={styles.reasonText}>{displayReason}</Text>
         </View>
 
-        {/* Wallet address */}
+        {/* Identifier info box */}
         <View style={styles.infoBox}>
-          <Text style={styles.infoLabel}>WALLET ADDRESS</Text>
-          <Text style={styles.infoAddress}>{formatAddr(walletAddress)}</Text>
+          <Text style={styles.infoLabel}>{isDeviceBlock ? "DEVICE ID" : "WALLET ADDRESS"}</Text>
+          <Text style={styles.infoAddress}>
+            {isDeviceBlock ? (deviceId ? `${deviceId.slice(0, 18)}...` : 'Device Identifier') : formatAddr(walletAddress)}
+          </Text>
         </View>
 
         {/* Actions */}

@@ -1388,4 +1388,41 @@ export const codegoFiatService = {
   },
 };
 
+// ─── Device Registration & Lock Service ──────────────────────────────────────
+
+export type DeviceRecord = {
+  device_id: string;
+  last_wallet_address?: string | null;
+  is_blocked: boolean;
+  block_reason?: string | null;
+  platform?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export const deviceService = {
+  async registerAndCheck(
+    deviceId: string,
+    walletAddress?: string | null,
+    platform: string = 'unknown'
+  ): Promise<DeviceRecord | null> {
+    try {
+      const { data, error } = await supabase.rpc('register_or_check_device', {
+        p_device_id: deviceId,
+        p_wallet:    walletAddress ?? null,
+        p_platform:  platform,
+      });
+      if (error) {
+        console.warn('[deviceService] register_or_check_device error:', error.message);
+        return null;
+      }
+      if (Array.isArray(data) && data.length > 0) return data[0] as DeviceRecord;
+      return data as DeviceRecord | null;
+    } catch (e: any) {
+      console.warn('[deviceService] device check failed:', e?.message);
+      return null;
+    }
+  },
+};
+
 

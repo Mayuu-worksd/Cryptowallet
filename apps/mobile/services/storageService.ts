@@ -12,6 +12,7 @@ const KEYS = {
   WALLET_NAME:    'wallet_name',
   VERIFIED_EMAIL: 'cw_verified_email',
   CUSTOM_TOKENS:  'cw_custom_tokens',
+  DEVICE_ID:      'cw_device_id',
 };
 
 // Web fallback logic
@@ -209,6 +210,46 @@ export const storageService = {
       await AsyncStorage.setItem(KEYS.VERIFIED_EMAIL, clean);
       await AsyncStorage.setItem('cw_device_verified', 'true');
       await AsyncStorage.setItem('cw_has_ever_verified', 'true');
+    }
+  },
+
+  /**
+   * Retrieves or creates a persistent device installation identifier.
+   * Saved in SecureStore (and AsyncStorage) so it survives wallet resets, logouts, and imports.
+   */
+  async getOrCreateDeviceId(): Promise<string> {
+    try {
+      let deviceId: string | null = null;
+      if (Platform.OS === 'web') {
+        deviceId = localStorage.getItem(KEYS.DEVICE_ID);
+      } else {
+        deviceId = await SecureStore.getItemAsync(KEYS.DEVICE_ID);
+        if (!deviceId) {
+          deviceId = await AsyncStorage.getItem(KEYS.DEVICE_ID);
+        }
+      }
+
+      if (!deviceId) {
+        // Generate a cryptographically secure random UUIDv4
+        const rand = new Uint8Array(16);
+        crypto.getRandomValues(rand);
+        rand[6] = (rand[6] & 0x0f) | 0x40; // version 4
+        rand[8] = (rand[8] & 0x3f) | 0x80; // variant 1
+        const hex = Array.from(rand).map(b => b.toString(16).padStart(2, '0')).join('');
+        deviceId = `dev_${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+
+        if (Platform.OS === 'web') {
+          localStorage.setItem(KEYS.DEVICE_ID, deviceId);
+        } else {
+          await Promise.all([
+            SecureStore.setItemAsync(KEYS.DEVICE_ID, deviceId).catch(() => {}),
+            AsyncStorage.setItem(KEYS.DEVICE_ID, deviceId).catch(() => {}),
+          ]);
+        }
+      }
+      return deviceId;
+    } catch {
+      return 'dev_fallback_' + Date.now();
     }
   },
 

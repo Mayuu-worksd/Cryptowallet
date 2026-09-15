@@ -10,7 +10,7 @@ import { assetDiscoveryService, DiscoveredAsset } from '../services/assetDiscove
 import getSymbolFromCurrency from 'currency-symbol-map';
 import { marketService, NewsItem } from '../services/marketService';
 import { hasPinSetup, clearPin } from '../services/pinService';
-import { kycService, KYCStatus, txService, dbCardService, vccService, cardVariantService, VCCCard, profileService, adminSettingsService, adminAlertsService } from '../services/supabaseService';
+import { kycService, KYCStatus, txService, dbCardService, vccService, cardVariantService, VCCCard, profileService, adminSettingsService, adminAlertsService, deviceService } from '../services/supabaseService';
 import { transactionService } from '../services/transactionService';
 import { cardService } from '../services/cardService';
 import { supabase, setWallet, clearWalletSession } from '../services/supabaseClient';
@@ -1071,6 +1071,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         }
 
         const address = await storageService.getWalletAddress();
+        // Register & check persistent device installation identifier
+        const deviceId = await storageService.getOrCreateDeviceId();
+        const devRecord = await deviceService.registerAndCheck(deviceId, address, Platform.OS);
+        if (devRecord?.is_blocked) {
+          const reason = devRecord.block_reason || 'Device blocked by administrator';
+          setIsSuspended(true);
+          setSuspensionReason(`[DEVICE_BLOCK] ${reason}`);
+          AsyncStorage.setItem('cw_is_suspended', 'true').catch(() => {});
+          AsyncStorage.setItem('cw_suspension_reason', `[DEVICE_BLOCK] ${reason}`).catch(() => {});
+        }
         if (address) {
           setWalletAddress(address);
           setHasWallet(true);
@@ -1541,6 +1551,62 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
+  }, [walletAddress]);
+
+  // ── Realtime: registered_devices live push (admin device block/unblock → mobile) ──
+  useEffect(() => {
+    let deviceChannel: any = null;
+    storageService.getOrCreateDeviceId().then(devId => {
+      if (!devId) return;
+      deviceChannel = supabase
+        .channel(`device_live_${devId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'registered_devices',
+            filter: `device_id=eq.${devId}`,
+          },
+          (payload: any) => {
+            const isBlocked = payload.new?.is_blocked;
+            const reason = payload.new?.block_reason || 'Device blocked by administrator';
+            if (isBlocked) {
+              setIsSuspended(true);
+              setSuspensionReason(`[DEVICE_BLOCK] ${reason}`);
+              AsyncStorage.setItem('cw_is_suspended', 'true').catch(() => {});
+              AsyncStorage.setItem('cw_suspension_reason', `[DEVICE_BLOCK] ${reason}`).catch(() => {});
+            } else {
+              // Re-check profile suspension to ensure we don't unlock if wallet itself is suspended
+              if (walletAddress) {
+                profileService.get(walletAddress).then(profile => {
+                  if (profile && profile.is_suspended) {
+                    setIsSuspended(true);
+                    setSuspensionReason(profile.suspension_reason || 'Wallet suspended by administrator');
+                  } else {
+                    setIsSuspended(false);
+                    setSuspensionReason('');
+                    AsyncStorage.multiRemove(['cw_is_suspended', 'cw_suspension_reason']).catch(() => {});
+                  }
+                }).catch(() => {
+                  setIsSuspended(false);
+                  setSuspensionReason('');
+                  AsyncStorage.multiRemove(['cw_is_suspended', 'cw_suspension_reason']).catch(() => {});
+                });
+              } else {
+                setIsSuspended(false);
+                setSuspensionReason('');
+                AsyncStorage.multiRemove(['cw_is_suspended', 'cw_suspension_reason']).catch(() => {});
+              }
+            }
+          }
+        )
+        .subscribe();
+    }).catch(() => {});
+
+    return () => {
+      if (deviceChannel) supabase.removeChannel(deviceChannel);
+    };
   }, [walletAddress]);
 
   // ── Realtime: vcc_cards live push (sandbox terminal events → mobile) ──
@@ -2132,6 +2198,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
       try {
         await setWallet(data.address);
+        const deviceId = await storageService.getOrCreateDeviceId();
+        const devRecord = await deviceService.registerAndCheck(deviceId, data.address, Platform.OS);
+        if (devRecord?.is_blocked) {
+          const reason = devRecord.block_reason || 'Device blocked by administrator';
+          setIsSuspended(true);
+          setSuspensionReason(`[DEVICE_BLOCK] ${reason}`);
+          AsyncStorage.setItem('cw_is_suspended', 'true').catch(() => {});
+          AsyncStorage.setItem('cw_suspension_reason', `[DEVICE_BLOCK] ${reason}`).catch(() => {});
+        }
 
         // ── Fetch everything from Supabase in parallel ──
         const [vcc, dbCard, dbTxs, variants, kycRecord, bizRecord] = await Promise.all([
