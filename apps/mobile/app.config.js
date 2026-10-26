@@ -34,6 +34,7 @@ module.exports = {
     },
     android: {
       package: "com.karthick.cryptowallet",
+      versionCode: 1,
       adaptiveIcon: {
         foregroundImage: "./assets/adaptive-icon.png",
         backgroundColor: "#101114",

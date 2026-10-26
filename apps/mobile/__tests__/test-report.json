@@ -1,0 +1,404 @@
+{
+  "timestamp": "2026-10-25T14:40:53.934Z",
+  "passed": 99,
+  "failed": 0,
+  "total": 99,
+  "results": [
+    {
+      "label": "AAB file exists",
+      "status": "PASS"
+    },
+    {
+      "label": "APK file exists",
+      "status": "PASS"
+    },
+    {
+      "label": "AAB size valid (73.6 MB)",
+      "status": "PASS"
+    },
+    {
+      "label": "APK size valid (111.8 MB)",
+      "status": "PASS"
+    },
+    {
+      "label": "Android package name correct",
+      "status": "PASS"
+    },
+    {
+      "label": "versionCode is 1",
+      "status": "PASS"
+    },
+    {
+      "label": "App version is 1.0.0",
+      "status": "PASS"
+    },
+    {
+      "label": "App name correct",
+      "status": "PASS"
+    },
+    {
+      "label": "EAS projectId present",
+      "status": "PASS"
+    },
+    {
+      "label": "Hermes JS engine enabled",
+      "status": "PASS"
+    },
+    {
+      "label": "Camera permission declared",
+      "status": "PASS"
+    },
+    {
+      "label": "Production builds AAB",
+      "status": "PASS"
+    },
+    {
+      "label": "production-apk builds APK",
+      "status": "PASS"
+    },
+    {
+      "label": "Production channel set",
+      "status": "PASS"
+    },
+    {
+      "label": "Address starts with 0x",
+      "status": "PASS"
+    },
+    {
+      "label": "Address is 42 chars",
+      "status": "PASS"
+    },
+    {
+      "label": "Mnemonic has 12 words",
+      "status": "PASS"
+    },
+    {
+      "label": "Private key is 66 chars",
+      "status": "PASS"
+    },
+    {
+      "label": "Known mnemonic → correct address",
+      "status": "PASS"
+    },
+    {
+      "label": "Imported private key valid",
+      "status": "PASS"
+    },
+    {
+      "label": "Invalid mnemonic throws error",
+      "status": "PASS"
+    },
+    {
+      "label": "Valid address accepted",
+      "status": "PASS"
+    },
+    {
+      "label": "Invalid address rejected",
+      "status": "PASS"
+    },
+    {
+      "label": "Empty string rejected",
+      "status": "PASS"
+    },
+    {
+      "label": "Random string rejected",
+      "status": "PASS"
+    },
+    {
+      "label": "Same PIN + salt → same hash",
+      "status": "PASS"
+    },
+    {
+      "label": "Different PIN → different hash",
+      "status": "PASS"
+    },
+    {
+      "label": "Hash is 64 hex chars",
+      "status": "PASS"
+    },
+    {
+      "label": "Hash is not raw PIN",
+      "status": "PASS"
+    },
+    {
+      "label": "5 attempts → 30s lockout",
+      "status": "PASS"
+    },
+    {
+      "label": "10 attempts → 1min lockout",
+      "status": "PASS"
+    },
+    {
+      "label": "15+ attempts → 5min lockout",
+      "status": "PASS"
+    },
+    {
+      "label": "parseEther 1.0 correct",
+      "status": "PASS"
+    },
+    {
+      "label": "formatEther correct",
+      "status": "PASS"
+    },
+    {
+      "label": "parseUnits USDT correct",
+      "status": "PASS"
+    },
+    {
+      "label": "formatUnits USDT correct",
+      "status": "PASS"
+    },
+    {
+      "label": "Gas cost positive",
+      "status": "PASS"
+    },
+    {
+      "label": "Gas cost reasonable (< 0.01 ETH)",
+      "status": "PASS"
+    },
+    {
+      "label": "Default gas ~0.00042 ETH",
+      "status": "PASS"
+    },
+    {
+      "label": "Sepolia RPC live (block #11991521)",
+      "status": "PASS"
+    },
+    {
+      "label": "getBalance returns non-negative",
+      "status": "PASS"
+    },
+    {
+      "label": "CoinGecko reachable (status 200)",
+      "status": "PASS"
+    },
+    {
+      "label": "ETH price > 0 ($2330.68)",
+      "status": "PASS"
+    },
+    {
+      "label": "BTC price > 0 ($80289)",
+      "status": "PASS"
+    },
+    {
+      "label": "SOL price > 0 ($100.76)",
+      "status": "PASS"
+    },
+    {
+      "label": "ETH 24h change is a number",
+      "status": "PASS"
+    },
+    {
+      "label": "ETH→USDC: 1 ETH = 3500 USDC",
+      "status": "PASS"
+    },
+    {
+      "label": "USDC→ETH: 3500 = 1 ETH",
+      "status": "PASS"
+    },
+    {
+      "label": "ETH→INRX returns positive",
+      "status": "PASS"
+    },
+    {
+      "label": "Sepolia chainId correct",
+      "status": "PASS"
+    },
+    {
+      "label": "Ethereum chainId correct",
+      "status": "PASS"
+    },
+    {
+      "label": "Polygon chainId correct",
+      "status": "PASS"
+    },
+    {
+      "label": "Arbitrum chainId correct",
+      "status": "PASS"
+    },
+    {
+      "label": "USDT Ethereum address valid",
+      "status": "PASS"
+    },
+    {
+      "label": "USDC Ethereum address valid",
+      "status": "PASS"
+    },
+    {
+      "label": "INRX Ethereum address valid",
+      "status": "PASS"
+    },
+    {
+      "label": "Supabase project URL configured",
+      "status": "PASS"
+    },
+    {
+      "label": "Supabase anon key configured",
+      "status": "PASS"
+    },
+    {
+      "label": "Supabase service role key configured",
+      "status": "PASS"
+    },
+    {
+      "label": "HomeScreen.tsx exists",
+      "status": "PASS"
+    },
+    {
+      "label": "SendScreen.tsx exists",
+      "status": "PASS"
+    },
+    {
+      "label": "ReceiveScreen.tsx exists",
+      "status": "PASS"
+    },
+    {
+      "label": "SwapScreen.tsx exists",
+      "status": "PASS"
+    },
+    {
+      "label": "CardScreen.tsx exists",
+      "status": "PASS"
+    },
+    {
+      "label": "HistoryScreen.tsx exists",
+      "status": "PASS"
+    },
+    {
+      "label": "SettingsScreen.tsx exists",
+      "status": "PASS"
+    },
+    {
+      "label": "PinScreen.tsx exists",
+      "status": "PASS"
+    },
+    {
+      "label": "LandingScreen.tsx exists",
+      "status": "PASS"
+    },
+    {
+      "label": "CreateWalletScreen.tsx exists",
+      "status": "PASS"
+    },
+    {
+      "label": "ImportWalletScreen.tsx exists",
+      "status": "PASS"
+    },
+    {
+      "label": "KYCIntroScreen.tsx exists",
+      "status": "PASS"
+    },
+    {
+      "label": "VCCVariantScreen.tsx exists",
+      "status": "PASS"
+    },
+    {
+      "label": "VCCSuccessScreen.tsx exists",
+      "status": "PASS"
+    },
+    {
+      "label": "P2PMarketplaceScreen.tsx exists",
+      "status": "PASS"
+    },
+    {
+      "label": "OnboardingScreen.tsx exists",
+      "status": "PASS"
+    },
+    {
+      "label": "BridgeScreen.tsx exists",
+      "status": "PASS"
+    },
+    {
+      "label": "walletService.ts exists",
+      "status": "PASS"
+    },
+    {
+      "label": "ethereumService.ts exists",
+      "status": "PASS"
+    },
+    {
+      "label": "pinService.ts exists",
+      "status": "PASS"
+    },
+    {
+      "label": "storageService.ts exists",
+      "status": "PASS"
+    },
+    {
+      "label": "marketService.ts exists",
+      "status": "PASS"
+    },
+    {
+      "label": "swapService.ts exists",
+      "status": "PASS"
+    },
+    {
+      "label": "supabaseService.ts exists",
+      "status": "PASS"
+    },
+    {
+      "label": "cardService.ts exists",
+      "status": "PASS"
+    },
+    {
+      "label": "escrowService.ts exists",
+      "status": "PASS"
+    },
+    {
+      "label": "tronService.ts exists",
+      "status": "PASS"
+    },
+    {
+      "label": "notificationService.ts exists",
+      "status": "PASS"
+    },
+    {
+      "label": ".env file exists",
+      "status": "PASS"
+    },
+    {
+      "label": "Alchemy key in .env",
+      "status": "PASS"
+    },
+    {
+      "label": "Supabase URL in .env",
+      "status": "PASS"
+    },
+    {
+      "label": "Etherscan key in .env",
+      "status": "PASS"
+    },
+    {
+      "label": "ZRX key in .env",
+      "status": "PASS"
+    },
+    {
+      "label": "Web salt in .env",
+      "status": "PASS"
+    },
+    {
+      "label": "release.keystore exists",
+      "status": "PASS"
+    },
+    {
+      "label": "Keystore has valid size",
+      "status": "PASS"
+    },
+    {
+      "label": "applicationId correct",
+      "status": "PASS"
+    },
+    {
+      "label": "versionCode is 1",
+      "status": "PASS"
+    },
+    {
+      "label": "Release uses release signing",
+      "status": "PASS"
+    },
+    {
+      "label": "Keystore path from gradle.properties",
+      "status": "PASS"
+    }
+  ]
+}

@@ -50,3 +50,8 @@ apps/mobile/android/app/release.keystore
 scratch/
 scratch_*
 .kilocode/
+
+# Android binary builds
+apps/mobile/builds/
+*.apk
+*.aab
