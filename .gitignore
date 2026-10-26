@@ -34,6 +34,10 @@ yarn-error.*
 .env.local
 .env.production
 
+# Android signing credentials
+apps/mobile/android/gradle.properties
+apps/mobile/android/app/release.keystore
+
 # typescript
 *.tsbuildinfo
 

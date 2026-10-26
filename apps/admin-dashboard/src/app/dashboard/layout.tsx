@@ -35,6 +35,7 @@ import {
   Code,
   FileText,
   Smartphone,
+  Activity,
 } from 'lucide-react';
 
 interface SidebarItem {
@@ -164,6 +165,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const navigation: SidebarItem[] = [
     { name: 'Overview', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Users', href: '/dashboard/users', icon: Users },
+    { name: 'Traffic Radar', href: '/dashboard/traffic', icon: Activity, badge: 'LIVE' },
     { name: 'Devices', href: '/dashboard/devices', icon: Smartphone },
     { name: 'KYC Reviews', href: '/dashboard/kyc', icon: ShieldCheck },
     { name: 'Merchant Hub', href: '/dashboard/merchants', icon: Store },

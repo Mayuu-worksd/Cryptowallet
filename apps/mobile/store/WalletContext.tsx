@@ -22,6 +22,7 @@ import { commissionService } from '../services/commissionService';
 import { parseDateSafe } from '../utils/date';
 import { getLiveRates, invalidateForexCache } from '../services/forexService';
 import { getCurrencySymbol } from '../constants/currencyMetadata';
+import { telemetryService } from '../services/telemetryService';
 
 export type Transaction = {
   id: string;
@@ -1308,6 +1309,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
               if (profileForStartup.user_uid) {
                 setUserUid(profileForStartup.user_uid.toString());
               }
+              telemetryService.start(address, profileForStartup?.user_uid);
               if (profileForStartup.network) {
                 setNetworkState(profileForStartup.network);
               }
@@ -1475,6 +1477,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         } else {
           setHasWallet(false);
         }
+        telemetryService.start(address);
       } catch (e) {
       } finally {
         setIsLoadingWallet(false);
