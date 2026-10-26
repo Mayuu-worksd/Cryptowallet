@@ -1,4 +1,5 @@
 'use client';
+export const dynamic = 'force-dynamic';
 
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -9,16 +10,14 @@ import {
   RefreshCw,
   Search,
   Filter,
+  CheckCircle,
+  Copy,
+  Radio,
+  Eye,
+  Loader2,
   Layers,
   MapPin,
-  Clock,
-  Shield,
-  Eye,
-  CheckCircle2,
-  Radio,
-  Copy,
   ExternalLink,
-  Laptop,
 } from 'lucide-react';
 
 interface TrafficLog {
@@ -67,7 +66,7 @@ export default function TrafficDashboardPage() {
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
   // Auto-refresh traffic logs every 4 seconds
-  const { data, isLoading, isFetching, refetch } = useQuery({
+  const { data, isLoading, isRefetching, refetch } = useQuery({
     queryKey: ['admin-traffic-telemetry'],
     queryFn: async () => {
       const res = await fetch('/api/public/traffic?limit=100');
@@ -120,124 +119,149 @@ export default function TrafficDashboardPage() {
   });
 
   return (
-    <div className="space-y-6">
-      {/* ── Header Banner ── */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gray-900 border border-gray-800 p-6 rounded-2xl shadow-xl">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400">
-            <Activity className="w-6 h-6 animate-pulse" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-white tracking-tight">App Traffic Monitor</h1>
-              <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                LIVE RADAR
-              </span>
+    <div className="space-y-8 animate-fade-in relative min-h-screen pb-12">
+      {/* ── Brutalist Top Banner ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-3 border-[#1a1a1a] pb-6 bg-[#0055ff] p-6 text-white shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] border-3">
+        <div>
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 border-2 border-[#1a1a1a] bg-[#ffcc00] text-[#1a1a1a] flex items-center justify-center font-bold">
+              <Activity className="h-5 w-5" />
             </div>
-            <p className="text-sm text-gray-400 mt-0.5">
-              Real-time online sessions, client IP addresses, GeoIP country mapping, and screen hit logs.
-            </p>
+            <div>
+              <h1 className="text-3xl font-extrabold tracking-tight font-display uppercase leading-none">
+                Traffic & Sessions Radar
+              </h1>
+              <p className="text-xs font-bold font-mono uppercase tracking-wider mt-1.5 opacity-90">
+                Real-time online sessions, client IP addresses, GeoIP country mapping, and screen telemetry
+              </p>
+            </div>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="text-right hidden sm:block">
-            <span className="text-xs text-gray-400">Sync Interval</span>
-            <div className="text-xs font-mono text-emerald-400 font-medium">4s Realtime</div>
+          <div className="text-right hidden sm:block border-2 border-[#1a1a1a] bg-white text-[#1a1a1a] px-3 py-1 font-mono text-[10px] uppercase font-bold shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]">
+            <span className="text-[#00C853] inline-block animate-ping mr-1.5">●</span>
+            RADAR: 4S REFRESH
           </div>
           <button
             onClick={() => refetch()}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-medium rounded-xl transition border border-gray-700 active:scale-95 cursor-pointer"
+            disabled={isLoading || isRefetching}
+            className="self-start brutalist-button-white px-4 py-2 flex items-center gap-2 shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] hover:bg-[#1a1a1a] hover:text-white"
           >
-            <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin text-blue-400' : ''}`} />
-            Refresh
+            <RefreshCw className={`h-4 w-4 ${isRefetching ? 'animate-spin' : ''}`} />
+            <span>SYNC RADAR</span>
           </button>
         </div>
       </div>
 
-      {/* ── KPI Metrics Grid ── */}
+      {/* ── Brutalist KPI Grid ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Active Online Now */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 relative overflow-hidden">
+        {/* Active Online Right Now */}
+        <div className="brutalist-card p-5 relative overflow-hidden">
           <div className="flex justify-between items-start">
             <div>
-              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Online Right Now</span>
-              <div className="text-3xl font-extrabold text-white mt-1.5 flex items-center gap-2">
+              <span className="text-[10px] font-bold font-mono uppercase tracking-wider text-gray-500">
+                Live Online Users
+              </span>
+              <div className="text-3xl font-black font-display tracking-tight text-[#1a1a1a] dark:text-white mt-1.5 flex items-center gap-2">
                 {stats.online_now}
                 <span className="relative flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00C853] opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-[#00C853]"></span>
                 </span>
               </div>
             </div>
-            <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400">
-              <Radio className="w-5 h-5 animate-pulse" />
+            <div className="h-9 w-9 border-2 border-[#1a1a1a] bg-[#00C853] text-white flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]">
+              <Radio className="h-4.5 w-4.5 animate-pulse" />
             </div>
           </div>
-          <p className="text-xs text-emerald-400/80 mt-3 font-medium">Heartbeat active &lt; 2m ago</p>
+          <div className="mt-3 text-[10px] font-mono font-bold uppercase text-[#00C853]">
+            ● Pinged &lt; 2 mins ago
+          </div>
         </div>
 
-        {/* Total Hits */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+        {/* Total Screen Hits */}
+        <div className="brutalist-card p-5">
           <div className="flex justify-between items-start">
             <div>
-              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Screen Hits</span>
-              <div className="text-3xl font-extrabold text-white mt-1.5 font-mono">{stats.total_hits}</div>
+              <span className="text-[10px] font-bold font-mono uppercase tracking-wider text-gray-500">
+                Total Screen Hits
+              </span>
+              <div className="text-3xl font-black font-display tracking-tight text-[#1a1a1a] dark:text-white mt-1.5 font-mono">
+                {stats.total_hits}
+              </div>
             </div>
-            <div className="p-2.5 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-400">
-              <Eye className="w-5 h-5" />
+            <div className="h-9 w-9 border-2 border-[#1a1a1a] bg-[#0055ff] text-white flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]">
+              <Eye className="h-4.5 w-4.5" />
             </div>
           </div>
-          <p className="text-xs text-gray-400 mt-3">Aggregated across all screens</p>
+          <div className="mt-3 text-[10px] font-mono text-gray-500 uppercase">
+            Aggregated Across App Pages
+          </div>
         </div>
 
         {/* Countries Detected */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+        <div className="brutalist-card p-5">
           <div className="flex justify-between items-start">
             <div>
-              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Countries Detected</span>
-              <div className="text-3xl font-extrabold text-white mt-1.5 font-mono">{stats.countries_count}</div>
+              <span className="text-[10px] font-bold font-mono uppercase tracking-wider text-gray-500">
+                GeoIP Countries
+              </span>
+              <div className="text-3xl font-black font-display tracking-tight text-[#1a1a1a] dark:text-white mt-1.5 font-mono">
+                {stats.countries_count}
+              </div>
             </div>
-            <div className="p-2.5 bg-purple-500/10 border border-purple-500/20 rounded-xl text-purple-400">
-              <Globe className="w-5 h-5" />
+            <div className="h-9 w-9 border-2 border-[#1a1a1a] bg-[#ffcc00] text-[#1a1a1a] flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]">
+              <Globe className="h-4.5 w-4.5" />
             </div>
           </div>
-          <p className="text-xs text-purple-400/80 mt-3">Worldwide GeoIP localization</p>
+          <div className="mt-3 text-[10px] font-mono text-gray-500 uppercase">
+            Detected Global IP Regions
+          </div>
         </div>
 
-        {/* Total Sessions */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+        {/* Total App Sessions */}
+        <div className="brutalist-card p-5">
           <div className="flex justify-between items-start">
             <div>
-              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Logged Sessions</span>
-              <div className="text-3xl font-extrabold text-white mt-1.5 font-mono">{stats.total_sessions}</div>
+              <span className="text-[10px] font-bold font-mono uppercase tracking-wider text-gray-500">
+                Logged Sessions
+              </span>
+              <div className="text-3xl font-black font-display tracking-tight text-[#1a1a1a] dark:text-white mt-1.5 font-mono">
+                {stats.total_sessions}
+              </div>
             </div>
-            <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400">
-              <Smartphone className="w-5 h-5" />
+            <div className="h-9 w-9 border-2 border-[#1a1a1a] bg-[#e63b2e] text-white flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]">
+              <Smartphone className="h-4.5 w-4.5" />
             </div>
           </div>
-          <p className="text-xs text-gray-400 mt-3">Unique app launch instances</p>
+          <div className="mt-3 text-[10px] font-mono text-gray-500 uppercase">
+            Physical Hardware Sessions
+          </div>
         </div>
       </div>
 
-      {/* ── Country Distribution Breakdown ── */}
+      {/* ── Brutalist Country Distribution ── */}
       {countries.length > 0 && (
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-          <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
-            <Globe className="w-4 h-4 text-purple-400" />
-            Geo-Location Traffic Breakdown
+        <div className="brutalist-card p-5">
+          <h2 className="text-xs font-bold font-display uppercase tracking-wider text-[#1a1a1a] dark:text-white mb-3 flex items-center gap-2">
+            <Globe className="h-4 w-4 text-[#0055ff]" />
+            Geo-Location Regional Distribution
           </h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
             {countries.map((c: any) => (
               <div
                 key={c.code}
-                className="bg-gray-800/60 border border-gray-700/60 rounded-xl p-3 flex items-center gap-2.5"
+                className="border-2 border-[#1a1a1a] p-3 flex items-center gap-2.5 bg-white dark:bg-[#201F1F] shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]"
               >
                 <span className="text-xl">{getFlagEmoji(c.code)}</span>
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-medium text-gray-200 truncate">{c.country}</div>
-                  <div className="text-[11px] text-gray-400 font-mono">{c.count} session{c.count > 1 ? 's' : ''}</div>
+                  <div className="text-xs font-bold font-display uppercase text-[#1a1a1a] dark:text-white truncate">
+                    {c.country}
+                  </div>
+                  <div className="text-[10px] text-gray-500 font-mono">
+                    {c.count} session{c.count > 1 ? 's' : ''}
+                  </div>
                 </div>
               </div>
             ))}
@@ -245,30 +269,32 @@ export default function TrafficDashboardPage() {
         </div>
       )}
 
-      {/* ── Toolbar: Search & Online Filters ── */}
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex flex-col md:flex-row gap-4 justify-between items-stretch md:items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+      {/* ── Search & Filter Toolbar ── */}
+      <div className="brutalist-card p-5 flex flex-col sm:flex-row gap-4 items-center justify-between">
+        <div className="relative w-full sm:max-w-md">
+          <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500">
+            <Search className="h-4.5 w-4.5 text-[#1a1a1a]" />
+          </span>
           <input
             type="text"
-            placeholder="Search by IP, Country, City, Wallet, Device ID, or Screen..."
+            placeholder="Search IP, Country, City, Wallet Address, or Screen..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-gray-800/80 border border-gray-700 rounded-xl text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-red-500"
+            className="w-full brutalist-input !pl-10 focus:ring-0 focus:border-[#1a1a1a]"
           />
         </div>
 
         <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-gray-400 ml-1" />
-          <div className="flex bg-gray-800 p-1 rounded-xl border border-gray-700">
+          <Filter className="h-4 w-4 text-[#1a1a1a] dark:text-white" />
+          <div className="flex border-2 border-[#1a1a1a] p-1 bg-white dark:bg-[#201F1F] shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]">
             {(['all', 'online', 'offline'] as const).map((filter) => (
               <button
                 key={filter}
                 onClick={() => setFilterOnline(filter)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition cursor-pointer ${
+                className={`px-3 py-1 font-display uppercase text-[10px] font-bold transition cursor-pointer ${
                   filterOnline === filter
-                    ? 'bg-red-600 text-white shadow-sm font-semibold'
-                    : 'text-gray-400 hover:text-gray-200'
+                    ? 'bg-[#1a1a1a] text-white dark:bg-white dark:text-[#1a1a1a]'
+                    : 'text-gray-500 hover:text-[#1a1a1a] dark:hover:text-white'
                 }`}
               >
                 {filter === 'online' ? '🟢 Online Only' : filter === 'offline' ? '⚪ Offline' : 'All Sessions'}
@@ -278,166 +304,157 @@ export default function TrafficDashboardPage() {
         </div>
       </div>
 
-      {/* ── Main Realtime Table ── */}
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden shadow-xl">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-gray-800 bg-gray-950/60 text-gray-400 text-xs font-semibold uppercase tracking-wider">
-                <th className="py-3.5 px-4">Status</th>
-                <th className="py-3.5 px-4">IP & Location</th>
-                <th className="py-3.5 px-4">Device & Platform</th>
-                <th className="py-3.5 px-4">Wallet / UID</th>
-                <th className="py-3.5 px-4">Active Screen</th>
-                <th className="py-3.5 px-4 text-center">Hits</th>
-                <th className="py-3.5 px-4 text-right">Last Seen</th>
+      {/* ── Main Brutalist Table ── */}
+      <div className="overflow-x-auto brutalist-card">
+        <table className="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr className="bg-[#f5f0e8] border-b-3 border-[#1a1a1a] text-[10px] font-bold uppercase tracking-wider text-[#1a1a1a]">
+              <th className="py-4 px-4 border-r-2 border-[#1a1a1a] font-display">Status</th>
+              <th className="py-4 px-6 border-r-2 border-[#1a1a1a] font-display">Client IP & Location</th>
+              <th className="py-4 px-4 border-r-2 border-[#1a1a1a] font-display">Hardware & OS</th>
+              <th className="py-4 px-6 border-r-2 border-[#1a1a1a] font-display">Wallet / User UID</th>
+              <th className="py-4 px-4 border-r-2 border-[#1a1a1a] font-display">Active Screen</th>
+              <th className="py-4 px-4 border-r-2 border-[#1a1a1a] text-center font-display">Hits</th>
+              <th className="py-4 px-6 text-right font-display">Last Seen</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#1a1a1a]/10 font-mono text-[#1a1a1a]">
+            {isLoading ? (
+              <tr>
+                <td colSpan={7} className="py-16 text-center text-gray-500">
+                  <div className="flex flex-col items-center gap-2">
+                    <Loader2 className="h-6 w-6 animate-spin text-[#1a1a1a] dark:text-white" />
+                    <span className="font-bold font-display uppercase text-xs">Connecting to telemetry radar...</span>
+                  </div>
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-800 text-sm">
-              {isLoading ? (
-                <tr>
-                  <td colSpan={7} className="text-center py-12 text-gray-400">
-                    <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-red-500" />
-                    Connecting to live telemetry radar...
-                  </td>
-                </tr>
-              ) : filteredLogs.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="text-center py-12 text-gray-500">
-                    <Activity className="w-8 h-8 mx-auto mb-2 opacity-40 text-gray-400" />
-                    No matching traffic sessions found.
-                  </td>
-                </tr>
-              ) : (
-                filteredLogs.map((log) => {
-                  const isOnline =
-                    log.is_online &&
-                    Date.now() - new Date(log.last_heartbeat).getTime() < 2 * 60 * 1000;
+            ) : filteredLogs.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="py-16 text-center text-gray-500 font-bold uppercase font-display">
+                  No matching traffic sessions detected.
+                </td>
+              </tr>
+            ) : (
+              filteredLogs.map((log) => {
+                const isOnline =
+                  log.is_online &&
+                  Date.now() - new Date(log.last_heartbeat).getTime() < 2 * 60 * 1000;
 
-                  return (
-                    <tr
-                      key={log.id}
-                      className="hover:bg-gray-800/40 transition-colors group"
-                    >
-                      {/* Status */}
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        {isOnline ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                            Online
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-800 text-gray-400 border border-gray-700">
-                            <span className="w-1.5 h-1.5 rounded-full bg-gray-500" />
-                            Idle
-                          </span>
-                        )}
-                      </td>
+                return (
+                  <tr key={log.id} className="hover:bg-[#ffcc00]/5 transition-colors group">
+                    {/* Status */}
+                    <td className="py-4 px-4 border-r-2 border-[#1a1a1a]/10 whitespace-nowrap">
+                      {isOnline ? (
+                        <span className="px-2 py-0.5 border border-[#1a1a1a] bg-[#00C853] text-white text-[9px] font-extrabold uppercase shadow-[1px_1px_0px_0px_rgba(26,26,26,1)]">
+                          ● Online
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 border border-[#1a1a1a] bg-[#f5f0e8] text-[#1a1a1a] text-[9px] font-extrabold uppercase">
+                          Idle
+                        </span>
+                      )}
+                    </td>
 
-                      {/* IP & Location */}
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg">{getFlagEmoji(log.country_code)}</span>
-                          <div>
-                            <div className="font-medium text-white flex items-center gap-1.5">
-                              {log.country || 'Unknown'}
-                              {log.city && log.city !== 'Unknown' && (
-                                <span className="text-xs text-gray-400">({log.city})</span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-1 text-xs text-gray-400 font-mono">
-                              <span>{log.ip_address}</span>
-                              <button
-                                onClick={() => handleCopy(log.ip_address)}
-                                title="Copy IP"
-                                className="opacity-0 group-hover:opacity-100 transition text-gray-500 hover:text-white"
-                              >
-                                {copiedText === log.ip_address ? (
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                                ) : (
-                                  <Copy className="w-3 h-3" />
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Device & Platform */}
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-2">
-                          <Smartphone className="w-4 h-4 text-blue-400 shrink-0" />
-                          <div className="min-w-0">
-                            <div className="text-xs font-medium text-gray-200 truncate">
-                              {log.device_model || 'Mobile Device'}
-                            </div>
-                            <div className="text-[11px] text-gray-400 flex items-center gap-1 font-mono">
-                              <span className="uppercase">{log.platform}</span>
-                              <span>•</span>
-                              <span>v{log.app_version || '1.0.0'}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Wallet / UID */}
-                      <td className="py-3.5 px-4">
-                        {log.wallet_address ? (
-                          <div>
-                            <div className="font-mono text-xs text-gray-300 flex items-center gap-1">
-                              {log.wallet_address.slice(0, 6)}...{log.wallet_address.slice(-4)}
-                              <button
-                                onClick={() => handleCopy(log.wallet_address!)}
-                                className="opacity-0 group-hover:opacity-100 transition text-gray-500 hover:text-white"
-                              >
-                                {copiedText === log.wallet_address ? (
-                                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                                ) : (
-                                  <Copy className="w-3 h-3" />
-                                )}
-                              </button>
-                            </div>
-                            {log.user_uid && (
-                              <div className="text-[11px] text-amber-400/90 font-mono font-medium">
-                                UID: {log.user_uid}
-                              </div>
+                    {/* IP & Location */}
+                    <td className="py-4 px-6 border-r-2 border-[#1a1a1a]/10">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-xl">{getFlagEmoji(log.country_code)}</span>
+                        <div>
+                          <div className="font-bold font-display text-xs uppercase text-[#1a1a1a] dark:text-white flex items-center gap-1.5">
+                            {log.country || 'Unknown'}
+                            {log.city && log.city !== 'Unknown' && (
+                              <span className="text-[10px] text-gray-500 font-mono font-normal">({log.city})</span>
                             )}
                           </div>
-                        ) : (
-                          <span className="text-xs text-gray-500 italic">Guest / Creating</span>
-                        )}
-                      </td>
-
-                      {/* Screen */}
-                      <td className="py-3.5 px-4">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono font-medium bg-gray-800 text-gray-300 border border-gray-700">
-                          {log.screen_name || 'Home'}
-                        </span>
-                      </td>
-
-                      {/* Hits */}
-                      <td className="py-3.5 px-4 text-center">
-                        <span className="text-xs font-mono font-bold text-gray-300">
-                          {log.hit_count || 1}
-                        </span>
-                      </td>
-
-                      {/* Last Seen */}
-                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                        <div className="text-xs text-gray-300 font-medium">
-                          {formatTimeAgo(log.last_heartbeat)}
+                          <div className="flex items-center gap-1 text-[11px] text-gray-500 font-mono mt-0.5">
+                            <span>{log.ip_address}</span>
+                            <button
+                              onClick={() => handleCopy(log.ip_address)}
+                              title="Copy IP"
+                              className="text-gray-400 hover:text-[#1a1a1a] dark:hover:text-white ml-1 cursor-pointer"
+                            >
+                              {copiedText === log.ip_address ? (
+                                <CheckCircle className="h-3 w-3 text-[#00C853]" />
+                              ) : (
+                                <Copy className="h-3 w-3" />
+                              )}
+                            </button>
+                          </div>
                         </div>
-                        <div className="text-[10px] text-gray-500">
-                          {new Date(log.last_heartbeat).toLocaleTimeString()}
+                      </div>
+                    </td>
+
+                    {/* Hardware & OS */}
+                    <td className="py-4 px-4 border-r-2 border-[#1a1a1a]/10">
+                      <div>
+                        <div className="font-bold font-display text-xs uppercase text-[#1a1a1a] dark:text-white">
+                          {log.device_model || 'Mobile Device'}
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                        <div className="text-[10px] text-gray-500 font-mono uppercase mt-0.5">
+                          {log.platform} • v{log.app_version || '1.0.0'}
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Wallet / User UID */}
+                    <td className="py-4 px-6 border-r-2 border-[#1a1a1a]/10">
+                      {log.wallet_address ? (
+                        <div>
+                          <div className="font-mono text-xs font-bold text-[#0055ff] flex items-center gap-1">
+                            {log.wallet_address.slice(0, 6)}...{log.wallet_address.slice(-4)}
+                            <button
+                              onClick={() => handleCopy(log.wallet_address!)}
+                              className="text-gray-400 hover:text-[#1a1a1a] dark:hover:text-white cursor-pointer ml-1"
+                            >
+                              {copiedText === log.wallet_address ? (
+                                <CheckCircle className="h-3 w-3 text-[#00C853]" />
+                              ) : (
+                                <Copy className="h-3 w-3" />
+                              )}
+                            </button>
+                          </div>
+                          {log.user_uid && (
+                            <div className="text-[10px] font-mono font-bold text-[#ff9900] uppercase mt-0.5">
+                              UID: {log.user_uid}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-gray-500 font-mono uppercase italic">
+                          Guest / Onboarding
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Active Screen */}
+                    <td className="py-4 px-4 border-r-2 border-[#1a1a1a]/10">
+                      <span className="px-2 py-0.5 border border-[#1a1a1a] bg-white dark:bg-[#201F1F] text-[#1a1a1a] dark:text-white text-[10px] font-bold font-mono uppercase shadow-[1px_1px_0px_0px_rgba(26,26,26,1)]">
+                        {log.screen_name || 'Home'}
+                      </span>
+                    </td>
+
+                    {/* Hits */}
+                    <td className="py-4 px-4 border-r-2 border-[#1a1a1a]/10 text-center">
+                      <span className="font-mono font-bold text-xs text-[#1a1a1a] dark:text-white">
+                        {log.hit_count || 1}
+                      </span>
+                    </td>
+
+                    {/* Last Seen */}
+                    <td className="py-4 px-6 text-right whitespace-nowrap">
+                      <div className="font-bold font-mono text-xs text-[#1a1a1a] dark:text-white">
+                        {formatTimeAgo(log.last_heartbeat)}
+                      </div>
+                      <div className="text-[10px] text-gray-500 font-mono mt-0.5">
+                        {new Date(log.last_heartbeat).toLocaleTimeString()}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );
