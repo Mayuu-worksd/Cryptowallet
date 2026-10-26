@@ -91,6 +91,30 @@ export default function TrafficDashboardPage() {
     setTimeout(() => setCopiedText(null), 2000);
   };
 
+  const [isPinging, setIsPinging] = useState(false);
+
+  const handleTestPing = async () => {
+    setIsPinging(true);
+    try {
+      await fetch('/api/public/traffic', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: `sess_test_${Date.now()}`,
+          device_id: `hw_radar_${Math.random().toString(36).slice(2, 8)}`,
+          platform: 'android',
+          device_model: 'Google Pixel 8 Pro',
+          screen_name: 'P2P Marketplace',
+          action: 'hit',
+        }),
+      });
+      refetch();
+    } catch {}
+    finally {
+      setIsPinging(false);
+    }
+  };
+
   // Filter logs
   const filteredLogs = logs.filter((log) => {
     const term = searchTerm.toLowerCase();
@@ -143,6 +167,14 @@ export default function TrafficDashboardPage() {
             <span className="text-[#00C853] inline-block animate-ping mr-1.5">●</span>
             RADAR: 4S REFRESH
           </div>
+          <button
+            onClick={handleTestPing}
+            disabled={isPinging}
+            className="self-start brutalist-button px-4 py-2 flex items-center gap-2 shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] hover:bg-[#1a1a1a] hover:text-white"
+          >
+            <Radio className={`h-4 w-4 ${isPinging ? 'animate-ping' : ''}`} />
+            <span>{isPinging ? 'PINGING...' : '+ TEST HIT'}</span>
+          </button>
           <button
             onClick={() => refetch()}
             disabled={isLoading || isRefetching}
