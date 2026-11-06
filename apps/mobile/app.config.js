@@ -43,6 +43,8 @@ module.exports = {
       permissions: [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
       ],
     },
     web: {
@@ -75,6 +77,8 @@ module.exports = {
       eas: {
         projectId: "ae4236e0-7cd5-4995-a9f1-afca7d6471e7",
       },
+      privacyPolicyUrl: "https://cryptowallet-dun.vercel.app/privacy",
+      termsOfServiceUrl: "https://cryptowallet-dun.vercel.app/terms",
     },
   },
 };

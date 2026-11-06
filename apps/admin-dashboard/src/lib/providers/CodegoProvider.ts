@@ -68,7 +68,7 @@ export class CodegoProvider implements CardProvider {
   private readonly headers: Record<string, string>;
 
   constructor() {
-    this.apiKey  = process.env.CODEGO_API_KEY  || 'vcck_sbx_f119144ea2221e4796778de28115c4cad97429da86e66552';
+    this.apiKey  = process.env.CODEGO_API_KEY  || '';
     this.baseUrl = process.env.CODEGO_API_URL  || 'https://vcc-sandbox.codegotech.com/api/v1';
     this.headers = {
       'X-Api-Key':     this.apiKey,

@@ -3,16 +3,18 @@ import { createHash, randomBytes } from 'crypto';
 
 // Sign a session token with ADMIN_SECRET so it can't be forged
 function signToken(token: string): string {
-  const secret = process.env.ADMIN_SECRET || 'cw_admin_fallback_secret_change_me';
+  const secret = process.env.ADMIN_SECRET;
+  if (!secret) throw new Error('ADMIN_SECRET not configured');
   const sig = createHash('sha256').update(token + secret).digest('hex').slice(0, 16);
   return `${token}.${sig}`;
 }
 
 export function verifyToken(signed: string): boolean {
+  const secret = process.env.ADMIN_SECRET;
+  if (!secret) return false;
   const parts = signed.split('.');
   if (parts.length !== 2) return false;
   const [token, sig] = parts;
-  const secret = process.env.ADMIN_SECRET || 'cw_admin_fallback_secret_change_me';
   const expected = createHash('sha256').update(token + secret).digest('hex').slice(0, 16);
   return sig === expected;
 }

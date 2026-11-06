@@ -23,6 +23,9 @@ function fmt(label: string, msg: any, extra?: any) {
 }
 
 export function setupLogger() {
+  // In production builds skip verbose interception — no log leakage in Play Store
+  if (!__DEV__) return;
+
   // ── Intercept console.error ──────────────────────────────────
   const _error = console.error.bind(console);
   console.error = (...args: any[]) => {

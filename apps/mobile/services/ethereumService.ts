@@ -100,8 +100,11 @@ export function getProvider(network: string = currentNetwork): any {
 
   // Guard against broken/deprecated 404 RPC URLs
   if (!rpcUrl || rpcUrl === 'https://rpc.sepolia.org' || rpcUrl.includes('cloudflare-eth.com')) {
+    const alchemyKey = process.env.EXPO_PUBLIC_ALCHEMY_KEY || '';
     if (netKey === 'Sepolia' || network.includes('Sepolia')) {
-      rpcUrl = 'https://eth-sepolia.g.alchemy.com/v2/alch_qFLArkppX6O94tKMhIIUO';
+      rpcUrl = alchemyKey
+        ? `https://eth-sepolia.g.alchemy.com/v2/${alchemyKey}`
+        : 'https://ethereum-sepolia-rpc.publicnode.com';
     } else if (netKey === 'Ethereum' || network.includes('Ethereum')) {
       rpcUrl = 'https://ethereum.publicnode.com';
     }

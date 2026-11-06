@@ -299,11 +299,12 @@ export const storageService = {
     if (Platform.OS === 'web') {
       localStorage.removeItem(KEYS.PRIVATE_KEY);
       localStorage.removeItem(KEYS.MNEMONIC);
-      localStorage.removeItem(KEYS.TRON_PRIV_KEY);    // ← fix: clear TRON private key too
+      localStorage.removeItem(KEYS.TRON_PRIV_KEY);
     } else {
       await Promise.all([
         SecureStore.deleteItemAsync(KEYS.PRIVATE_KEY),
         SecureStore.deleteItemAsync(KEYS.MNEMONIC),
+        SecureStore.deleteItemAsync(KEYS.TRON_PRIV_KEY).catch(() => {}),
       ]);
     }
   },

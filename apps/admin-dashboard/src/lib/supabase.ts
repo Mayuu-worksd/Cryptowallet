@@ -27,7 +27,7 @@ export async function getKYCSignedUrl(storagePath: string, expiresInSeconds = 36
     .from('kyc-docs')
     .createSignedUrl(storagePath, expiresInSeconds);
   if (error || !data?.signedUrl) {
-    console.error('Failed to get signed URL:', error);
+    console.error('Failed to get signed URL:', error?.message ?? 'unknown error');
     // Return standard public URL fallback in case signed URL fails
     const { data: publicData } = supabase.storage.from('kyc-docs').getPublicUrl(storagePath);
     return publicData.publicUrl;

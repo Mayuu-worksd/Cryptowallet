@@ -12,7 +12,7 @@ const COINGECKO_URL = `https://api.coingecko.com/api/v3/simple/price?ids=${COING
 const COINGECKO_NEWS_URL =
   'https://api.coingecko.com/api/v3/news?per_page=10';
 
-const ALLOWED_DOMAINS = ['api.rss2json.com', 'api.coingecko.com'];
+const ALLOWED_DOMAINS = ['api.rss2json.com', 'api.coingecko.com', 'api.binance.com'];
 
 function isSafeUrl(url: string): boolean {
   try {
@@ -338,18 +338,24 @@ async function saveChartToCache(symbol: string, timeframe: string, prices: numbe
 }
 
 async function fetchWithRetry(url: string, retries = 3, delay = 1000): Promise<Response> {
-  for (let i = 0; i < retries; i++) {
-    try {
-      const res = await fetch(url, { headers: { Accept: 'application/json' } });
-      if (res.ok) return res;
-      if (res.status === 429) {
-        await new Promise(r => setTimeout(r, delay * 2 * (i + 1)));
-        continue;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10000);
+  try {
+    for (let i = 0; i < retries; i++) {
+      try {
+        const res = await fetch(url, { headers: { Accept: 'application/json' }, signal: controller.signal });
+        if (res.ok) return res;
+        if (res.status === 429) {
+          await new Promise(r => setTimeout(r, delay * 2 * (i + 1)));
+          continue;
+        }
+      } catch (e) {
+        if (i === retries - 1) throw e;
       }
-    } catch (e) {
-      if (i === retries - 1) throw e;
+      await new Promise(r => setTimeout(r, delay * (i + 1)));
     }
-    await new Promise(r => setTimeout(r, delay * (i + 1)));
+    throw new Error(`Failed to fetch ${url} after ${retries} retries`);
+  } finally {
+    clearTimeout(timer);
   }
-  throw new Error(`Failed to fetch ${url} after ${retries} retries`);
 }

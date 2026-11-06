@@ -6,7 +6,8 @@ async function verifyToken(signed: string): Promise<boolean> {
   const parts = signed.split('.');
   if (parts.length !== 2) return false;
   const [token, sig] = parts;
-  const secret = process.env.ADMIN_SECRET || 'cw_admin_fallback_secret_change_me';
+  const secret = process.env.ADMIN_SECRET;
+  if (!secret) return false;
   
   const encoder = new TextEncoder();
   const data = encoder.encode(token + secret);

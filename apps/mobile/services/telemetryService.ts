@@ -62,13 +62,15 @@ export const telemetryService = {
       }, 40000);
 
       // Listen for app foreground / background
-      AppState.addEventListener('change', (nextState: AppStateStatus) => {
+      const appStateSub = AppState.addEventListener('change', (nextState: AppStateStatus) => {
         if (nextState === 'active') {
           sendTelemetry('heartbeat');
         } else if (nextState === 'background') {
           sendTelemetry('leave');
         }
       });
+      // Store subscription for potential cleanup
+      (telemetryService as any)._appStateSub = appStateSub;
     }
   },
 
