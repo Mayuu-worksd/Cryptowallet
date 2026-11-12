@@ -1,7 +1,7 @@
 {
   "name": "CryptoWallet",
-  "description": "Institutional Grade Multi-Device Crypto Wallet",
-  "license": "UNLICENSED",
+  "description": "Institutional-grade non-custodial crypto wallet",
+  "license": "MIT",
   "version": "1.0.0",
   "main": "index.ts",
   "type": "commonjs",
