@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.smart10x.cryptowallet'
+    namespace 'com.karthick.cryptowallet'
     defaultConfig {
-        applicationId 'com.smart10x.cryptowallet'
+        applicationId 'com.karthick.cryptowallet'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
