@@ -1,4 +1,4 @@
-package com.karthick.cryptowallet
+package com.smart10x.cryptowallet
 
 import android.os.Build
 import android.os.Bundle

@@ -23,7 +23,7 @@ module.exports = {
     },
     ios: {
       supportsTablet: true,
-      bundleIdentifier: "com.karthick.cryptowallet",
+      bundleIdentifier: "com.smart10x.cryptowallet",
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
         NSCameraUsageDescription: "CryptoWallet uses the camera to scan QR codes and record face verification video.",
@@ -33,7 +33,7 @@ module.exports = {
       },
     },
     android: {
-      package: "com.karthick.cryptowallet",
+      package: "com.smart10x.cryptowallet",
       versionCode: 1,
       adaptiveIcon: {
         foregroundImage: "./assets/adaptive-icon.png",
